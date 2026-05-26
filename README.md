@@ -1,6 +1,6 @@
 # Agent Mind Map
 
-Cursor / VS Code extension that **read-only** loads Agent chat transcripts from `~/.cursor/projects/<workspace-slug>/agent-transcripts/*.jsonl` and renders them as an interactive mind map (via [simple-mind-map](https://github.com/wanglin2/mind-map)).
+Cursor / VS Code extension that **read-only** loads Agent chat transcripts from `~/.cursor/projects/<workspace-slug>/agent-transcripts/*.jsonl` and renders them as an interactive mind map (via [mind-elixir](https://github.com/SSShooter/mind-elixir-core)).
 
 The mind map does **not** write back to Cursor chat storage or affect the Agent.
 

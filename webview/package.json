@@ -7,7 +7,7 @@
     "watch": "vite build --watch"
   },
   "dependencies": {
-    "simple-mind-map": "^0.14.0"
+    "mind-elixir": "^5.12.2"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
