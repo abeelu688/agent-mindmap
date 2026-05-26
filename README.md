@@ -86,7 +86,7 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 | Command | Description |
 |---------|-------------|
 | **Agent Mind Map: Open Latest Session** | Load the most recent transcript for the current workspace |
-| **Agent Mind Map: Choose Session…** | Pick a transcript by ID / time |
+| **Agent Mind Map: Choose Session…** | Pick a transcript by human-readable title + time (reads Cursor's sidebar composer name, falls back to the first user query, then to id prefix) |
 | **Agent Mind Map: Refresh** | Force re-analysis of the active session (overwrites the library record) |
 | **Agent Mind Map: Export Mind Map JSON** | Save to `docs/agent-mindmaps/<session-id>.json` |
 | **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
@@ -120,6 +120,7 @@ All loading commands show a cancellable progress notification while the LLM runs
 
 ### General
 - `agentMindmap.projectsDir` — override `~/.cursor/projects`
+- `agentMindmap.cursorStateDb` — override path to Cursor's `globalStorage/state.vscdb` (used to read sidebar composer names for the **Choose Session** list); empty = platform default
 - `agentMindmap.autoRefresh` — watch transcript file and refresh
 
 ### Fallback view only (deprecated)
