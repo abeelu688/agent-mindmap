@@ -1,0 +1,13 @@
+{
+  "name": "agent-mindmap-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "npm run build:webview && npm run build:extension",
+    "build:extension": "npm run build --prefix extension",
+    "build:webview": "npm run build --prefix webview",
+    "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
+    "test": "npm run build --prefix extension && npm run test --prefix extension",
+    "package": "npm run build && npm run package --prefix extension"
+  }
+}

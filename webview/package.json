@@ -1,0 +1,16 @@
+{
+  "name": "agent-mindmap-webview",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "vite build",
+    "watch": "vite build --watch"
+  },
+  "dependencies": {
+    "simple-mind-map": "^0.14.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.4.11"
+  }
+}

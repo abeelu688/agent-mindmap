@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# build artifacts
+dist/
+extension/dist/
+extension/media/
+
+# packaging
+*.vsix
+
+# logs
+npm-debug.log*
+npm-log.txt
+*.log
+
+# editor / OS
+.DS_Store
+.idea/
+*.swp

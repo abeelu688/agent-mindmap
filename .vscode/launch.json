@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/agent-mindmap/extension"
+      ],
+      "outFiles": ["${workspaceFolder}/agent-mindmap/extension/dist/**/*.js"],
+      "preLaunchTask": "agent-mindmap: build"
+    }
+  ]
+}
