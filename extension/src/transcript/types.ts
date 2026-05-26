@@ -41,8 +41,7 @@ export type MindMapNodeData = {
     expand?: boolean;
     /**
      * Optional reverse pointer(s) back to the originating transcript(s).
-     * simple-mind-map ignores unknown fields on `data`, so this rides along
-     * untouched and is read by the webview's `node_click` handler.
+     * Carried in mind-elixir `metadata` and read on `selectNodes` in the webview.
      */
     origin?: NodeOrigin;
   };

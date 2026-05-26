@@ -20,7 +20,13 @@ body,
   min-height: 0;
 }
 
-/* Hint that every rendered node is interactive (jump-to-chat on click). */
-#mindMapContainer svg .smm-node {
+/* Read-only browse: nodes with jump metadata look clickable. */
+#mindMapContainer me-tpc {
   cursor: pointer;
+}
+
+/* mind-elixir toolbar is disabled in options; hide any stray chrome. */
+#mindMapContainer .mind-elixir-toolbar,
+#mindMapContainer .toolbar {
+  display: none !important;
 }
