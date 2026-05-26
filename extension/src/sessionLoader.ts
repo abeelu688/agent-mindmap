@@ -178,10 +178,15 @@ export async function pickSession(
   const picked = await vscode.window.showQuickPick(
     sessions.map((s) => ({
       label: s.label,
-      description: s.id,
+      description: `${s.id.slice(0, 8)}…`,
+      detail: s.id,
       session: s,
     })),
-    { placeHolder: "Select an agent chat session" }
+    {
+      placeHolder: "Select an agent chat session",
+      matchOnDescription: true,
+      matchOnDetail: true,
+    }
   );
 
   if (!picked) {

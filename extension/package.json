@@ -7,7 +7,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Visualization", "Other"],
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
   "activationEvents": [
     "onCommand:agent-mindmap.openLatest",
     "onCommand:agent-mindmap.pickSession",
@@ -88,6 +91,11 @@
           "default": "",
           "description": "Override ~/.cursor/projects directory path."
         },
+        "agentMindmap.cursorStateDb": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to Cursor's globalStorage state.vscdb. Empty = platform default (Linux: ~/.config/Cursor/User/globalStorage/state.vscdb; macOS: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb; Windows: %APPDATA%/Cursor/User/globalStorage/state.vscdb). Used to read sidebar composer titles for human-readable session labels."
+        },
         "agentMindmap.includeToolCalls": {
           "type": "boolean",
           "default": true,
@@ -108,7 +116,9 @@
         },
         "agentMindmap.llm.provider": {
           "type": "string",
-          "enum": ["cursor-cli"],
+          "enum": [
+            "cursor-cli"
+          ],
           "default": "cursor-cli",
           "description": "LLM provider used to extract topics from the transcript. Only cursor-cli is supported today; openai/anthropic providers are planned."
         },
@@ -202,8 +212,12 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.85.0",
-    "esbuild": "^0.23.1",
-    "@vscode/vsce": "^3.2.1"
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.23.1"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
   }
 }
