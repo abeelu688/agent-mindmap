@@ -8,10 +8,10 @@ The mind map does **not** write back to Cursor chat storage or affect the Agent.
 
 | Mode | When used | Structure |
 |------|-----------|-----------|
-| **Topic** (default) | LLM summarization succeeds | Root → `核心 N: <title>` → knowledge points / references |
-| **Turn** (fallback) | LLM unavailable / cancelled / bad JSON | Root → `Q1`, `Q2`, … → `调研` / `结论` |
+| **Topic** (default) | LLM summarization succeeds | Root (LLM-induced overall theme) → `核心 N: <title>` → knowledge points / references |
+| **Turn** (fallback) | LLM unavailable / cancelled / bad JSON | Root (session label) → `Q1`, `Q2`, … → `调研` / `结论` |
 
-The topic view answers the "this chat is about what?" question instead of replaying it turn by turn.
+The topic view answers the "this chat is about what?" question instead of replaying it turn by turn. The root node itself is also LLM-induced (a 5-15 character noun phrase), so neither the agent UUID nor the timestamp appear as the central core. When the LLM is unavailable the fallback root keeps the session label (`<id-prefix>… · <date>`).
 
 ## How the LLM is called
 
@@ -31,14 +31,71 @@ Verify with `agent --version` (or `cursor-agent --version`). If the binary is mi
 
 A provider abstraction is in place (`extension/src/llm/`) so HTTP-based providers (OpenAI-compatible, Anthropic, etc.) can be added by dropping a new file alongside `cursorCliProvider.ts`.
 
+## Library (cross-agent, cross-project store)
+
+Every successful LLM analysis is persisted as a `SessionRecord` to a directory **outside any project**, so the same session opens instantly later (no LLM call) and so multiple agents / projects can be merged into a bigger mind map.
+
+Default location: `~/.agent-mindmap/`. Override with `agentMindmap.storeDir` — point it at a sync folder (iCloud / Dropbox) to share the library across machines.
+
+Layout:
+
+```
+<storeDir>/
+  schema.json                          # { schemaVersion, kind } marker
+  index.json                           # compact projection of all records for fast UI listing
+  sessions/
+    <projectSlug>/
+      <sessionId>.json                 # SessionRecord: meta + the TopicGraph the LLM returned
+  merges/
+    deterministic.json                 # auto-rebuilt cross-project mind map (no LLM)
+    llm-refined.json                   # most recent LLM-synthesised merge
+    cache/<selectionSha>.json          # LLM merge results keyed by selection set
+```
+
+`SessionRecord.meta` carries `projectSlug`, `projectPath`, `transcriptSha256`, prompt parameters, `promptVersion`, LLM provider + model, and `analyzedAt`. The freshness check uses `transcriptSha256` + prompt params + `promptVersion` + model: if any of those changed the session is re-analyzed and the record overwritten. `promptVersion` lets the library auto-invalidate after upgrades that change the LLM output schema (e.g. adding `conceptPath`).
+
+### Concept paths (cross-session merge meta)
+
+The LLM is asked to attach a `conceptPath` to every topic — an ordered, 3-5-segment path from broadest domain to finest concept, e.g.
+
+```
+title: "Binder 驱动调试"
+conceptPath: ["android", "ipc", "binder", "binder 驱动"]
+```
+
+`conceptPath` is stored in `SessionRecord.graph.topics[].conceptPath`. It is **not** rendered in the single-session mind map (it's metadata). When you run **Open Concept Mind Map**, all topics across all sessions are inserted into a trie keyed by canonicalised (lowercased, whitespace-collapsed) path segments and rendered:
+
+```
+Concept Mind Map · 全部
+└── android (5)
+    └── ipc (3)
+        ├── binder (2)
+        │   ├── binder 驱动 (1)
+        │   │   └── Binder 驱动调试 · [s2-label]
+        │   └── Binder 调研 · [s1-label]
+        └── aidl (1)
+            └── AIDL 代码生成 · [s3-label]
+```
+
+This is fully deterministic (no LLM call). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+
+The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `agentMindmap.cacheLlmResult`) remains as a secondary cache — harmless and useful when `library.enabled = false`.
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | **Agent Mind Map: Open Latest Session** | Load the most recent transcript for the current workspace |
 | **Agent Mind Map: Choose Session…** | Pick a transcript by ID / time |
-| **Agent Mind Map: Refresh** | Re-read the active transcript |
+| **Agent Mind Map: Refresh** | Force re-analysis of the active session (overwrites the library record) |
 | **Agent Mind Map: Export Mind Map JSON** | Save to `docs/agent-mindmaps/<session-id>.json` |
+| **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
+| **Agent Mind Map: Open Merged View (Current Project)** | Same, filtered to the current workspace |
+| **Agent Mind Map: Open Concept Mind Map (All Projects)** | Cross-session **concept trie**: groups topics by the longest common `conceptPath` prefix (e.g. `android → ipc → binder → binder 驱动`). Pure deterministic — uses the conceptPath meta the LLM already produced per session |
+| **Agent Mind Map: Open Concept Mind Map (Current Project)** | Same, filtered to the current workspace |
+| **Agent Mind Map: LLM Merge Refine…** | Pick a scope (current / all / select) and ask the LLM to dedupe + cluster topics across sessions. Receives the per-session `conceptPath` as a clustering hint. Cached by selection hash, so re-opening the same merge costs 0 tokens |
+| **Agent Mind Map: Browse Library…** | Cross-project quick-pick of any analyzed session — opens directly from the library, no transcript or workspace needed |
+| **Agent Mind Map: Open Store Directory** | Reveal `storeDir` in the OS file manager (for backup / sync setup) |
 
 All loading commands show a cancellable progress notification while the LLM runs.
 
@@ -48,10 +105,18 @@ All loading commands show a cancellable progress notification while the LLM runs
 - `agentMindmap.llm.provider` — currently only `cursor-cli`
 - `agentMindmap.llm.cliPath` — override the binary path; empty = auto-detect `agent` then `cursor-agent`
 - `agentMindmap.llm.model` — optional `--model` argument
-- `agentMindmap.llm.timeoutMs` — hard subprocess timeout, default `30000`
+- `agentMindmap.llm.timeoutMs` — hard timeout per cursor-agent attempt, default `90000` (max `600000`)
+- `agentMindmap.llm.maxAttempts` — total attempts per summarisation, default `3`. Retries trigger on `timeout / cli-failed / bad-json / bad-shape`. `cli-missing / cancelled / empty` are terminal.
+- `agentMindmap.llm.retryBackoffMs` — base backoff between retries, default `1000`. Actual wait is `base * 2^(attempt-1) ± 25%` jitter, capped at 10s.
 - `agentMindmap.maxTopics` — target topic count (default `6`)
 - `agentMindmap.maxItemsPerTopic` — sub-items per topic (default `6`)
-- `agentMindmap.cacheLlmResult` — cache the topic graph under `globalStorage/llm-cache/<sha256>.json` keyed by transcript content
+- `agentMindmap.cacheLlmResult` — secondary content-addressed cache under `globalStorage/llm-cache/<sha256>.json` (the library is the primary persistence layer)
+
+### Library / merge
+- `agentMindmap.storeDir` — path to the cross-project library; empty = `~/.agent-mindmap`. Supports a leading `~/`. Point at a sync folder to share the library across machines.
+- `agentMindmap.library.enabled` — persist each analysed session to the library and skip the LLM on reopen when the transcript is unchanged (default `true`)
+- `agentMindmap.merge.autoRebuildDeterministic` — rebuild `merges/deterministic.json` after each new session lands (default `true`)
+- `agentMindmap.merge.llm.maxTopics` / `maxItemsPerTopic` — target output size for the LLM merge command (defaults `8` / `6`)
 
 ### General
 - `agentMindmap.projectsDir` — override `~/.cursor/projects`
@@ -94,6 +159,8 @@ For `/home/example/cursor/aosp14` → `home-example-cursor-aosp14`.
 ## Privacy
 
 Transcripts may contain local file paths and code snippets. The extension sends transcript content to `cursor-agent`, which forwards it to Cursor's servers under your existing subscription terms. The exported JSON stays in your workspace unless you commit it.
+
+**Library contents** (`storeDir`) only contain the already-summarised `TopicGraph` and meta (session id, project slug / path, transcript hash, timestamps) — **not** the raw transcript. The **LLM Merge Refine** command sends the existing TopicGraphs of the selected sessions to `cursor-agent`; it does **not** re-send raw transcripts, so it costs far fewer tokens than the original per-session analysis.
 
 ## License
 

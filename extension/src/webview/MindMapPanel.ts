@@ -77,6 +77,10 @@ export class MindMapPanel {
     this.postData(data);
   }
 
+  public setTitle(title: string): void {
+    this.panel.title = title;
+  }
+
   public watchTranscript(filePath: string, onRefresh: () => void): void {
     this.unwatchTranscript();
     const autoRefresh = vscode.workspace

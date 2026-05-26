@@ -8,6 +8,10 @@ export type TranscriptSession = {
   filePath: string;
   mtimeMs: number;
   label: string;
+  /** Cursor project slug owning this transcript, when known. */
+  projectSlug?: string;
+  /** Original workspace filesystem path, when known. */
+  projectPath?: string;
 };
 
 export type MindMapNodeData = {

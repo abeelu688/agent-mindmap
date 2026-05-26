@@ -318,6 +318,75 @@ function parseTopicGraph(stdout: string): TopicGraph {
   return validateTopicGraph(parsed);
 }
 
+const MAX_ROOT_TITLE = 80;
+const MAX_ROOT_SUMMARY = 120;
+const MAX_CONCEPT_PATH_SEGMENTS = 6;
+const MAX_CONCEPT_SEGMENT_LEN = 24;
+
+/**
+ * Normalise a concept path returned by the LLM.
+ *
+ * Accepts an array of strings; returns up to {@link MAX_CONCEPT_PATH_SEGMENTS}
+ * trimmed, deduplicated segments (case-preserving but case-insensitive dedup
+ * to fold "android" / "Android"). Returns `undefined` when no usable segments
+ * remain, so consumers can `if (path)` to gate on its presence.
+ */
+function parseConceptPath(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== "string") {
+      continue;
+    }
+    const trimmed = raw.replace(/\s+/g, " ").trim();
+    if (!trimmed) {
+      continue;
+    }
+    const truncated =
+      trimmed.length > MAX_CONCEPT_SEGMENT_LEN
+        ? trimmed.slice(0, MAX_CONCEPT_SEGMENT_LEN - 3) + "..."
+        : trimmed;
+    const key = truncated.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(truncated);
+    if (out.length >= MAX_CONCEPT_PATH_SEGMENTS) {
+      break;
+    }
+  }
+  return out.length ? out : undefined;
+}
+
+/**
+ * Canonical key used to compare concept-path segments across sessions:
+ * lowercased + whitespace-collapsed + trimmed. Exposed so the merge layer
+ * can rebuild the same canonical mapping without re-implementing it.
+ */
+export function canonicalizeConceptSegment(segment: string): string {
+  return segment.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function pickString(
+  obj: Record<string, unknown>,
+  key: string,
+  maxLen: number
+): string | undefined {
+  const v = obj[key];
+  if (typeof v !== "string") {
+    return undefined;
+  }
+  const trimmed = v.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed.length > maxLen ? trimmed.slice(0, maxLen - 3) + "..." : trimmed;
+}
+
 export function validateTopicGraph(value: unknown): TopicGraph {
   if (!value || typeof value !== "object") {
     throw new LlmProviderError("bad-shape", "Expected object with topics[]");
@@ -327,7 +396,11 @@ export function validateTopicGraph(value: unknown): TopicGraph {
   if (!Array.isArray(topics)) {
     throw new LlmProviderError("bad-shape", "Missing or non-array `topics`");
   }
-  const result: TopicGraph = { topics: [] };
+  const result: TopicGraph = {
+    title: pickString(root, "title", MAX_ROOT_TITLE),
+    summary: pickString(root, "summary", MAX_ROOT_SUMMARY),
+    topics: [],
+  };
   for (const t of topics) {
     if (!t || typeof t !== "object") {
       continue;
@@ -368,12 +441,65 @@ export function validateTopicGraph(value: unknown): TopicGraph {
     if (!items.length) {
       continue;
     }
-    result.topics.push({ title, summary, items });
+    const conceptPath = parseConceptPath(obj.conceptPath);
+    result.topics.push({ title, summary, conceptPath, items });
   }
   if (!result.topics.length) {
     throw new LlmProviderError("bad-shape", "No usable topics returned");
   }
   return result;
+}
+
+/** Errors that don't benefit from retrying — bail out immediately. */
+function isRetryableError(err: LlmProviderError): boolean {
+  switch (err.code) {
+    case "timeout":
+    case "cli-failed":
+    case "bad-json":
+    case "bad-shape":
+      return true;
+    case "cli-missing":
+    case "cancelled":
+    case "empty":
+      return false;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Sleep that bails out promptly when the abort signal fires.
+ *
+ * Resolves on either (a) the timer firing or (b) the signal aborting; in the
+ * aborted case it throws a `cancelled` LlmProviderError so the caller can
+ * propagate the cancellation through the same channel as the actual run.
+ */
+function sleepWithCancel(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+const MAX_BACKOFF_MS = 10_000;
+
+function computeBackoff(base: number, attempt: number): number {
+  // attempt is 1-based: first retry waits `base`, second `2*base`, third `4*base`, ...
+  const exp = base * Math.pow(2, Math.max(0, attempt - 1));
+  // Up to ±25% jitter to avoid synchronised retries on shared backends.
+  const jitter = exp * 0.25 * (Math.random() * 2 - 1);
+  return Math.min(MAX_BACKOFF_MS, Math.max(0, Math.round(exp + jitter)));
 }
 
 export class CursorCliProvider implements LlmProvider {
@@ -396,31 +522,64 @@ export class CursorCliProvider implements LlmProvider {
 
     const candidates = uniq([this.options.cliPath, ...DEFAULT_BINARIES]);
     const args = buildArgs(this.options, input.prompt);
+    const maxAttempts = Math.max(1, this.options.maxAttempts || 1);
+    const backoffBase = Math.max(0, this.options.retryBackoffMs || 0);
 
-    let missing: LlmProviderError | undefined;
-    for (const bin of candidates) {
-      try {
-        const { stdout } = await runCli(
-          bin,
-          args,
-          signal,
-          this.options.timeoutMs
-        );
-        return parseTopicGraph(stdout);
-      } catch (err) {
-        if (err instanceof LlmProviderError && err.code === "cli-missing") {
-          missing = err;
-          continue;
+    let lastErr: LlmProviderError | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let allMissing: LlmProviderError | undefined;
+      let runErr: LlmProviderError | undefined;
+
+      for (const bin of candidates) {
+        try {
+          const { stdout } = await runCli(
+            bin,
+            args,
+            signal,
+            this.options.timeoutMs
+          );
+          if (attempt > 1) {
+            console.info(
+              `[agent-mindmap] LLM succeeded on attempt ${attempt}/${maxAttempts}`
+            );
+          }
+          return parseTopicGraph(stdout);
+        } catch (err) {
+          const lpe =
+            err instanceof LlmProviderError
+              ? err
+              : new LlmProviderError("cli-failed", String(err), err);
+          if (lpe.code === "cli-missing") {
+            allMissing = lpe;
+            continue;
+          }
+          runErr = lpe;
+          break;
         }
-        throw err;
       }
+
+      const attemptErr =
+        runErr ??
+        allMissing ??
+        new LlmProviderError(
+          "cli-missing",
+          "cursor-agent CLI not found. Install via: curl https://cursor.com/install -fsS | bash"
+        );
+
+      const isLastAttempt = attempt >= maxAttempts;
+      if (!isRetryableError(attemptErr) || isLastAttempt) {
+        throw attemptErr;
+      }
+
+      lastErr = attemptErr;
+      const delay = computeBackoff(backoffBase, attempt);
+      console.warn(
+        `[agent-mindmap] LLM attempt ${attempt}/${maxAttempts} failed (${attemptErr.code}); retrying in ${delay}ms…`
+      );
+      await sleepWithCancel(delay, signal);
     }
     throw (
-      missing ??
-      new LlmProviderError(
-        "cli-missing",
-        "cursor-agent CLI not found. Install via: curl https://cursor.com/install -fsS | bash"
-      )
+      lastErr ?? new LlmProviderError("cli-failed", "All attempts failed")
     );
   }
 }
@@ -429,4 +588,8 @@ export const __testing = {
   extractPayload,
   extractTopicsJson,
   parseTopicGraph,
+  parseConceptPath,
+  isRetryableError,
+  computeBackoff,
+  sleepWithCancel,
 };
