@@ -99,20 +99,20 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 
 All loading commands show a cancellable progress notification while the LLM runs.
 
-## Jump back to chat
+## Open transcript from the map
 
 Every rendered mind-map node — root, project / topic branch, and leaf — is clickable. The extension traces the node back to its originating `(session, question turn)` set and:
 
-1. Pops a quick-pick when the click resolves to more than one candidate (e.g. a `android` concept-trie branch covering 5 sessions, or a single item with `sourceTurnIndices = [0, 2]`). The picker shows `整段会话` rows for branch / root clicks and `Q3: <question preview>` rows for turn-specific leaves, grouped by session.
-2. If the chosen candidate's project slug differs from the current workspace, asks whether to open it in a new window, in the current window, or to just copy the question text to the clipboard.
-3. Opens the agent by id via Cursor's `composer.openComposer` (classic mode) or `glass.openAgentById` (newer "glass" mode), focuses the composer input via `composer.focusComposer`, copies the original `Q#` text to the clipboard (`粘贴即可继续`), and reveals that turn's line in the raw `.jsonl` in a side editor.
-4. For cross-window jumps the target is persisted to `globalState` under `agentMindmap.pendingJump` (60 s TTL) and drained by the new window's `activate()` (`onStartupFinished`).
+1. Pops a quick-pick when the click resolves to more than one candidate (e.g. a concept-trie branch covering several sessions, or a single item with `sourceTurnIndices = [0, 2]`). The picker shows `整段会话` rows for branch / root clicks and `Q3: <question preview>` rows for turn-specific leaves, grouped by session.
+2. Opens a readable Markdown transcript in the **same code-editor tab group** as the mind map. The map tab stays open but hidden behind the transcript until you close the Markdown tab.
+3. When the click targets a specific turn, scrolls to the matching `## Q#` heading in that document.
+4. Closing the Markdown tab (×) brings the mind map tab back to the front.
+
+The mind map opens as an **editor tab** in the code editor strip (not in the Activity Bar sidebar). Extensions cannot replace Cursor's Agent / chat panel.
 
 Known limitations:
 
 - The LLM-refined merge view (**LLM Merge Refine…**) does not carry per-item source refs back to the original `SessionRecord`, so its nodes are currently inert on click. The deterministic / concept-trie merges and the single-session view are fully wired.
-- Cursor exposes no public API to scroll an open agent's transcript to a particular `Q#`, so the "locate to question" step uses (a) clipboard + (b) `.jsonl` line reveal rather than scrolling inside the chat panel.
-- The cross-window handover relies on the Mind Map extension being installed in the target Cursor window.
 
 ## Settings
 

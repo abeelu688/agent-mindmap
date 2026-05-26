@@ -1,157 +1,78 @@
-import * as fs from "fs";
 import * as vscode from "vscode";
-import type { MindMapRoot, NodeOrigin } from "../transcript/types";
+import type { MindMapRoot } from "../transcript/types";
+import { MindMapHost, type NodeClickedListener } from "./MindMapHost";
 
-export type WebviewToExtensionMessage =
-  | { type: "ready" }
-  | { type: "log"; message: string }
-  | { type: "nodeClicked"; origin: NodeOrigin };
-
-export type ExtensionToWebviewMessage = {
-  type: "setData";
-  data: MindMapRoot;
-};
-
-export type NodeClickedListener = (origin: NodeOrigin) => void;
-
+/**
+ * Mind map as an editor-area {@link vscode.WebviewPanel} (code editor strip),
+ * not the activity-bar sidebar. Transcript markdown opens in the same column
+ * and covers the map tab until the user closes it.
+ */
 export class MindMapPanel {
   public static readonly viewType = "agentMindmap";
 
   private static current: MindMapPanel | undefined;
 
-  private readonly panel: vscode.WebviewPanel;
-  private disposables: vscode.Disposable[] = [];
-  private pendingData: MindMapRoot | undefined;
-  private webviewReady = false;
-  private fileWatcher: fs.FSWatcher | undefined;
-  private watchPath: string | undefined;
-  private refreshDebounce: ReturnType<typeof setTimeout> | undefined;
-  private nodeClickedListener: NodeClickedListener | undefined;
-
   private constructor(
-    panel: vscode.WebviewPanel,
-    private readonly extensionUri: vscode.Uri
+    private readonly panel: vscode.WebviewPanel,
+    private readonly host: MindMapHost
   ) {
-    this.panel = panel;
-    this.panel.webview.html = this.getHtml();
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-
-    this.panel.webview.onDidReceiveMessage(
-      (msg: WebviewToExtensionMessage) => {
-        if (msg.type === "ready") {
-          this.webviewReady = true;
-          if (this.pendingData) {
-            this.postData(this.pendingData);
-            this.pendingData = undefined;
-          }
-        }
-        if (msg.type === "log") {
-          MindMapPanel.log(`webview: ${msg.message}`);
-        }
-        if (msg.type === "nodeClicked") {
-          MindMapPanel.log(
-            `nodeClicked received (${msg.origin.refs.length} ref(s))`
-          );
-          if (!this.nodeClickedListener) {
-            MindMapPanel.log(
-              "WARN: no nodeClicked listener registered on the panel"
-            );
-          }
-          if (this.nodeClickedListener) {
-            try {
-              this.nodeClickedListener(msg.origin);
-            } catch (err) {
-              MindMapPanel.log(`nodeClicked listener threw: ${String(err)}`);
-            }
-          }
-        }
-      },
-      null,
-      this.disposables
-    );
-  }
-
-  private static statsForOriginCoverage(data: MindMapRoot): {
-    total: number;
-    withOrigin: number;
-    rootOrigin: number;
-  } {
-    let total = 0;
-    let withOrigin = 0;
-    const walk = (n: MindMapRoot): void => {
-      total += 1;
-      if (n.data.origin?.refs?.length) {
-        withOrigin += 1;
+    this.panel.onDidDispose(() => {
+      if (MindMapPanel.current === this) {
+        MindMapPanel.current = undefined;
       }
-      if (n.children) {
-        for (const c of n.children) walk(c);
-      }
-    };
-    walk(data);
-    return {
-      total,
-      withOrigin,
-      rootOrigin: data.data.origin?.refs?.length ?? 0,
-    };
-  }
-
-  private static channel: vscode.OutputChannel | undefined;
-
-  /**
-   * Lazily-created shared Output channel — surface webview <-> extension
-   * traffic to the user without forcing them into the webview DevTools.
-   * Read in Cursor / VS Code via View → Output → "Agent Mind Map".
-   */
-  public static log(message: string): void {
-    if (!MindMapPanel.channel) {
-      MindMapPanel.channel = vscode.window.createOutputChannel("Agent Mind Map");
-    }
-    const stamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-    MindMapPanel.channel.appendLine(`[${stamp}] ${message}`);
+      MindMapHost.disposeCurrent();
+    });
   }
 
   public static createOrShow(extensionUri: vscode.Uri): MindMapPanel {
     if (MindMapPanel.current) {
-      MindMapPanel.current.panel.reveal(vscode.ViewColumn.Beside);
+      MindMapPanel.current.reveal();
       return MindMapPanel.current;
     }
+
+    void vscode.commands.executeCommand(
+      "workbench.action.focusFirstEditorGroup"
+    );
 
     const panel = vscode.window.createWebviewPanel(
       MindMapPanel.viewType,
       "Agent Mind Map",
-      vscode.ViewColumn.Beside,
+      vscode.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(extensionUri, "media"),
-        ],
+        localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
       }
     );
 
-    MindMapPanel.current = new MindMapPanel(panel, extensionUri);
+    const host = MindMapHost.attach(panel.webview, extensionUri, panel);
+    MindMapPanel.current = new MindMapPanel(panel, host);
     return MindMapPanel.current;
-  }
-
-  /**
-   * Register a listener for click events on a mind-map node. Replaces any
-   * previous listener; the panel keeps a single active subscriber.
-   */
-  public onNodeClicked(listener: NodeClickedListener | undefined): void {
-    this.nodeClickedListener = listener;
   }
 
   public static getCurrent(): MindMapPanel | undefined {
     return MindMapPanel.current;
   }
 
+  public static onNodeClicked(listener: NodeClickedListener | undefined): void {
+    MindMapHost.onNodeClicked(listener);
+  }
+
+  public static queueBoot(data: MindMapRoot, title?: string): void {
+    MindMapHost.queueBoot(data, title);
+  }
+
+  /** Bring the map tab back to the front of the code editor group. */
+  public reveal(): void {
+    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Active);
+  }
+
+  public get viewColumn(): vscode.ViewColumn | undefined {
+    return this.panel.viewColumn;
+  }
+
   public setMindMapData(data: MindMapRoot): void {
-    if (this.webviewReady) {
-      this.postData(data);
-    } else {
-      // Webview not yet ready — buffer; the "ready" handler will drain it.
-      this.pendingData = data;
-    }
+    this.host.setMindMapData(data);
   }
 
   public setTitle(title: string): void {
@@ -159,87 +80,6 @@ export class MindMapPanel {
   }
 
   public watchTranscript(filePath: string, onRefresh: () => void): void {
-    this.unwatchTranscript();
-    const autoRefresh = vscode.workspace
-      .getConfiguration("agentMindmap")
-      .get<boolean>("autoRefresh", false);
-    if (!autoRefresh) {
-      return;
-    }
-
-    this.watchPath = filePath;
-    try {
-      this.fileWatcher = fs.watch(filePath, () => {
-        if (this.refreshDebounce) {
-          clearTimeout(this.refreshDebounce);
-        }
-        this.refreshDebounce = setTimeout(() => {
-          onRefresh();
-        }, 1500);
-      });
-      this.disposables.push({
-        dispose: () => this.unwatchTranscript(),
-      });
-    } catch {
-      // ignore watch errors
-    }
-  }
-
-  private unwatchTranscript(): void {
-    if (this.refreshDebounce) {
-      clearTimeout(this.refreshDebounce);
-      this.refreshDebounce = undefined;
-    }
-    if (this.fileWatcher) {
-      this.fileWatcher.close();
-      this.fileWatcher = undefined;
-    }
-    this.watchPath = undefined;
-  }
-
-  private postData(data: MindMapRoot): void {
-    const msg: ExtensionToWebviewMessage = { type: "setData", data };
-    // Diagnostic: count nodes carrying origin vs total. Lets us tell at a
-    // glance whether the renderer attached anything for this tree.
-    const stats = MindMapPanel.statsForOriginCoverage(data);
-    MindMapPanel.log(
-      `postData → total=${stats.total} withOrigin=${stats.withOrigin}` +
-        ` rootOrigin=${stats.rootOrigin}`
-    );
-    void this.panel.webview.postMessage(msg);
-  }
-
-  private getHtml(): string {
-    const scriptUri = this.panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, "media", "webview.js")
-    );
-    const styleUri = this.panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, "media", "webview.css")
-    );
-    const cspSource = this.panel.webview.cspSource;
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource}; img-src ${cspSource} data:;">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="${styleUri}" />
-  <title>Agent Mind Map</title>
-</head>
-<body>
-  <div id="app"><div id="mindMapContainer"></div></div>
-  <script type="module" src="${scriptUri}"></script>
-</body>
-</html>`;
-  }
-
-  private dispose(): void {
-    MindMapPanel.current = undefined;
-    this.unwatchTranscript();
-    while (this.disposables.length) {
-      const d = this.disposables.pop();
-      d?.dispose();
-    }
+    this.host.watchTranscript(filePath, onRefresh);
   }
 }

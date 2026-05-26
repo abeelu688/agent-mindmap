@@ -4,6 +4,7 @@ import {
   drainPendingJump,
   handleNodeClicked,
   tryOpenAgentShapes,
+  consumeTranscriptDocUriIfAutoReveal,
 } from "./jumpToOrigin";
 import {
   findKeysReferencingComposer,
@@ -12,6 +13,7 @@ import {
   loadGlassResumableIds,
   readStateDbKey,
 } from "./transcript/composerTitles";
+import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import {
   loadLatestSession,
@@ -79,18 +81,14 @@ async function withCancellableProgress<T>(
   );
 }
 
-function createOrShowPanel(): MindMapPanel {
-  const panel = MindMapPanel.createOrShow(extensionContext.extensionUri);
-  panel.onNodeClicked((origin) =>
-    void handleNodeClicked(origin, { context: extensionContext })
-  );
-  return panel;
+function createOrShowMindMap(): MindMapPanel {
+  return MindMapPanel.createOrShow(extensionContext.extensionUri);
 }
 
-async function showMindMap(loaded: LoadedSession): Promise<void> {
+function showMindMap(loaded: LoadedSession): void {
   activeSession = loaded;
 
-  const panel = createOrShowPanel();
+  const panel = createOrShowMindMap();
   panel.setMindMapData(loaded.mindMap);
   panel.watchTranscript(loaded.session.filePath, async () => {
     if (!activeSession) {
@@ -113,7 +111,7 @@ function showMindMapStandalone(
   title: string,
   data: import("./transcript/types").MindMapRoot
 ): void {
-  const panel = createOrShowPanel();
+  const panel = createOrShowMindMap();
   panel.setMindMapData(data);
   panel.setTitle(title);
 }
@@ -270,7 +268,7 @@ async function commandOpenMerged(): Promise<void> {
       "Agent Mind Map: 库为空。先用『Open Latest Session』等命令分析至少一个会话。"
     );
   }
-  showMindMapStandalone(`Agent Mind Map · 全部`, merge.mindMap);
+  await showMindMapStandalone(`Agent Mind Map · 全部`, merge.mindMap);
 }
 
 async function ensureConceptMerge(
@@ -308,7 +306,7 @@ async function commandOpenConceptMerged(): Promise<void> {
       `Agent Mind Map: ${stats.topicsWithoutPath} 个核心缺少 conceptPath，被放在「未分类」分支下。`
     );
   }
-  showMindMapStandalone("Concept Mind Map · 全部", merge.mindMap);
+  await showMindMapStandalone("Concept Mind Map · 全部", merge.mindMap);
 }
 
 async function commandOpenConceptMergedCurrentProject(): Promise<void> {
@@ -320,7 +318,7 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
     return;
   }
   const merge = await ensureConceptMerge(slug);
-  showMindMapStandalone(`Concept Mind Map · ${slug}`, merge.mindMap);
+  await showMindMapStandalone(`Concept Mind Map · ${slug}`, merge.mindMap);
 }
 
 async function commandOpenMergedCurrentProject(): Promise<void> {
@@ -337,7 +335,7 @@ async function commandOpenMergedCurrentProject(): Promise<void> {
       `Agent Mind Map: 当前项目 (${slug}) 库中暂无已分析的会话。`
     );
   }
-  showMindMapStandalone(`Agent Mind Map · ${slug}`, merge.mindMap);
+  await showMindMapStandalone(`Agent Mind Map · ${slug}`, merge.mindMap);
 }
 
 type PickScope =
@@ -461,7 +459,7 @@ async function commandLlmMergeRefine(): Promise<void> {
   if (!merge) {
     return;
   }
-  showMindMapStandalone("Agent Mind Map · LLM 合并", merge.mindMap);
+  await showMindMapStandalone("Agent Mind Map · LLM 合并", merge.mindMap);
 }
 
 // ---------------------------------------------------------------------------
@@ -574,7 +572,7 @@ async function commandSearchLibrary(): Promise<void> {
       sessionLabel: meta.sessionLabel,
       transcriptPath: meta.transcriptPath,
     });
-    showMindMapStandalone(`${meta.sessionLabel} (搜索结果)`, root);
+    void showMindMapStandalone(`${meta.sessionLabel} (搜索结果)`, root);
   });
 
   qp.onDidHide(() => qp.dispose());
@@ -621,7 +619,7 @@ async function commandBrowseLibrary(): Promise<void> {
       transcriptPath: meta.transcriptPath,
     }
   );
-  showMindMapStandalone(
+  await showMindMapStandalone(
     `${meta.sessionLabel} (库)`,
     root
   );
@@ -711,7 +709,7 @@ async function commandInspectComposerHeader(): Promise<void> {
     lines.push(JSON.stringify(info.ourEntry, null, 2));
   }
   const dump = lines.join("\n");
-  MindMapPanel.log("inspectComposerHeader:\n" + dump);
+  mindMapLog("inspectComposerHeader:\n" + dump);
   const doc = await vscode.workspace.openTextDocument({
     content: dump,
     language: "log",
@@ -748,7 +746,7 @@ async function commandDumpGlassState(): Promise<void> {
   }
 
   const dump = lines.join("\n");
-  MindMapPanel.log("Glass state dump:\n" + dump);
+  mindMapLog("Glass state dump:\n" + dump);
   // Show in a new untitled doc so the user can easily inspect/share.
   const doc = await vscode.workspace.openTextDocument({
     content: dump,
@@ -822,6 +820,19 @@ async function commandTestJump(): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
+
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      if (!consumeTranscriptDocUriIfAutoReveal(doc)) {
+        return;
+      }
+      MindMapPanel.getCurrent()?.reveal();
+    })
+  );
+
+  MindMapPanel.onNodeClicked((origin) =>
+    void handleNodeClicked(origin, { context: extensionContext })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -911,10 +922,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // doesn't pay the ~7s state.vscdb read cost. Fully best-effort.
   void loadGlassResumableIds().then(
     (ids) =>
-      MindMapPanel.log(
+      mindMapLog(
         `[activate] pre-warmed glass registry: ${ids.size} resumable ids`
       ),
-    (err) => MindMapPanel.log(`[activate] glass registry preload failed: ${err}`)
+    (err) => mindMapLog(`[activate] glass registry preload failed: ${err}`)
   );
 }
 
