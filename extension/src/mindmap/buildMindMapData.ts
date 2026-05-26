@@ -1,4 +1,5 @@
 import type { BuildOptions, ChatEvent, MindMapNodeData, MindMapRoot } from "../transcript/types";
+import { type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 
 const MAX_LABEL = 120;
 
@@ -94,7 +95,8 @@ function branch(text: string, children: MindMapNodeData[]): MindMapNodeData {
 export function buildTurnMindMap(
   events: ChatEvent[],
   options: BuildOptions,
-  sessionLabel?: string
+  sessionLabel?: string,
+  sessionMeta?: SessionMeta
 ): MindMapRoot {
   const turns = groupIntoTurns(events);
   const firstQuery = turns[0]?.query;
@@ -107,12 +109,17 @@ export function buildTurnMindMap(
   const children: MindMapNodeData[] = turns.map((turn, idx) => {
     const qLabel = `Q${idx + 1}: ${truncate(turn.query, 80)}`;
     const sub: MindMapNodeData[] = [];
+    const turnRef = sessionMeta
+      ? [{ ...sessionMeta, turnIndex: idx }]
+      : undefined;
 
     if (options.includeToolCalls && turn.tools.length > 0) {
-      const toolLeaves = turn.tools.map((t) =>
-        leaf(t.kind === "tool" ? t.label : "")
-      );
-      sub.push(branch("调研", toolLeaves));
+      const toolLeaves = turn.tools.map((t) => {
+        const node = leaf(t.kind === "tool" ? t.label : "");
+        return turnRef ? withOrigin(node, turnRef) : node;
+      });
+      const toolBranch = branch("调研", toolLeaves);
+      sub.push(turnRef ? withOrigin(toolBranch, turnRef) : toolBranch);
     }
 
     if (turn.summary && turn.summary.kind === "assistant_summary") {
@@ -130,25 +137,34 @@ export function buildTurnMindMap(
       }
 
       conclusionItems = conclusionItems.slice(0, options.maxConclusionItems);
+      const conclusionLeaves = conclusionItems.map((c) => {
+        const node = leaf(c);
+        return turnRef ? withOrigin(node, turnRef) : node;
+      });
+      const conclusionBranch = branch("结论", conclusionLeaves);
       sub.push(
-        branch(
-          "结论",
-          conclusionItems.map((c) => leaf(c))
-        )
+        turnRef ? withOrigin(conclusionBranch, turnRef) : conclusionBranch
       );
     }
 
     if (!sub.length) {
-      return leaf(qLabel);
+      const node = leaf(qLabel);
+      return turnRef ? withOrigin(node, turnRef) : node;
     }
 
-    return branch(qLabel, sub);
+    const node = branch(qLabel, sub);
+    return turnRef ? withOrigin(node, turnRef) : node;
   });
 
-  return {
+  const root: MindMapNodeData = {
     data: { text: rootText, expand: true },
     children: children.length ? children : undefined,
   };
+
+  if (!sessionMeta || !children.length) {
+    return root;
+  }
+  return withOrigin(root, unionChildRefs(children));
 }
 
 /** @deprecated Use `buildTurnMindMap` (fallback) or `buildTopicMindMap` (default). */

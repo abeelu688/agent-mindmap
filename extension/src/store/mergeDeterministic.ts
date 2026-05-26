@@ -1,4 +1,5 @@
 import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
+import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
@@ -23,13 +24,32 @@ function branch(text: string, children: MindMapNodeData[]): MindMapNodeData {
   };
 }
 
+function recordSessionMeta(record: SessionRecord): SessionMeta {
+  return {
+    sessionId: record.meta.sessionId,
+    projectSlug: record.meta.projectSlug,
+    projectPath: record.meta.projectPath,
+    sessionLabel: record.meta.sessionLabel,
+    transcriptPath: record.meta.transcriptPath,
+  };
+}
+
 function sessionBranch(record: SessionRecord): MindMapNodeData {
   // Reuse the per-session renderer so each session subtree looks identical to
   // the panel a user sees when they open that single session — just nested
   // under a project node.
-  const subtree = buildTopicMindMap(record.graph, record.meta.sessionLabel);
+  const sessionMeta = recordSessionMeta(record);
+  const subtree = buildTopicMindMap(
+    record.graph,
+    record.meta.sessionLabel,
+    sessionMeta
+  );
   return {
-    data: { text: subtree.data.text, expand: false },
+    data: {
+      text: subtree.data.text,
+      expand: false,
+      origin: subtree.data.origin,
+    },
     children: subtree.children,
   };
 }
@@ -76,7 +96,8 @@ export function buildDeterministicMergeMindMap(
     const display =
       sessions.find((s) => s.meta.projectPath)?.meta.projectPath ?? slug;
     const sessionNodes = sessions.map(sessionBranch);
-    return branch(`项目: ${display}`, sessionNodes);
+    const node = branch(`项目: ${display}`, sessionNodes);
+    return withOrigin(node, unionChildRefs(sessionNodes));
   });
 
   const title =
@@ -92,10 +113,11 @@ export function buildDeterministicMergeMindMap(
     };
   }
 
-  return {
+  const root: MindMapNodeData = {
     data: { text: title, expand: true },
     children: projectNodes,
   };
+  return withOrigin(root, unionChildRefs(projectNodes));
 }
 
 export function buildDeterministicMergeRecord(

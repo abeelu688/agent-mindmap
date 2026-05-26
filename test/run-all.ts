@@ -29,6 +29,12 @@ import {
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
 import { computeMergeCacheKey } from "../extension/src/store/mergeLlm";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
+import {
+  flattenCandidates,
+  formatPickerLabel,
+} from "../extension/src/jumpToOriginCore";
+import type { NodeOriginRef } from "../extension/src/transcript/types";
+import type { SessionMeta } from "../extension/src/mindmap/origin";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -93,6 +99,99 @@ async function main(): Promise<void> {
   assert(
     topicRoot.children?.[0]?.data.text.startsWith("核心1:") ?? false,
     "topic: 核心1 prefix"
+  );
+  // Back-compat: no sessionMeta => no origin metadata.
+  assert(
+    topicRoot.data.origin === undefined,
+    "topic: no origin when sessionMeta omitted"
+  );
+
+  // origin bubbling through buildTopicMindMap
+  const originGraph: TopicGraph = {
+    title: "Binder 调研",
+    topics: [
+      {
+        title: "tr.code",
+        items: [
+          { text: "tr.code 不在 Parcel 里", sourceTurnIndices: [0] },
+          { text: "BR_TRANSACTION 路径", sourceTurnIndices: [2] },
+        ],
+      },
+      {
+        title: "调研工具",
+        items: [{ text: "Grep binder_transaction", sourceTurnIndices: [0, 1] }],
+      },
+    ],
+  };
+  const originSessionMeta: SessionMeta = {
+    sessionId: "sess-X",
+    projectSlug: "proj-a",
+    projectPath: "/work/proj-a",
+    sessionLabel: "sess-X · now",
+    transcriptPath: "/tmp/sess-X.jsonl",
+  };
+  const originRoot = buildTopicMindMap(
+    originGraph,
+    "label",
+    originSessionMeta
+  );
+  const topic0Leaf = originRoot.children?.[0]?.children?.find((c) =>
+    c.data.text.includes("tr.code 不在 Parcel")
+  );
+  assert(
+    topic0Leaf?.data.origin?.refs.length === 1 &&
+      topic0Leaf!.data.origin!.refs[0].turnIndex === 0,
+    "origin: leaf refs single turnIndex"
+  );
+  const rootTurns = (originRoot.data.origin?.refs ?? [])
+    .map((r) => r.turnIndex)
+    .filter((n): n is number => typeof n === "number")
+    .sort((a, b) => a - b);
+  assert(
+    JSON.stringify(rootTurns) === JSON.stringify([0, 1, 2]),
+    "origin: root unions all turn indices"
+  );
+
+  // flattenCandidates + formatPickerLabel
+  const sessARef: Omit<NodeOriginRef, "turnIndex"> = {
+    sessionId: "A",
+    projectSlug: "p-a",
+    sessionLabel: "A",
+    transcriptPath: "/tmp/A.jsonl",
+  };
+  const sessBRef: Omit<NodeOriginRef, "turnIndex"> = {
+    sessionId: "B",
+    projectSlug: "p-b",
+    sessionLabel: "B",
+    transcriptPath: "/tmp/B.jsonl",
+  };
+  const flat = flattenCandidates([
+    { ...sessARef, turnIndex: 0 },
+    { ...sessARef, turnIndex: 0 },
+    { ...sessARef, turnIndex: 1 },
+    { ...sessBRef, turnIndex: 0 },
+    { ...sessBRef },
+  ]);
+  assert(flat.length === 4, "flatten: dedups identical pairs");
+  assert(
+    flat[0].sessionId === "A" && flat[0].turnIndex === 0,
+    "flatten: order preserved"
+  );
+  assert(
+    flat[3].sessionId === "B" && flat[3].turnIndex === undefined,
+    "flatten: branch row distinct from leaf"
+  );
+  assert(
+    formatPickerLabel({ ...sessARef, turnIndex: undefined }) === "整段会话",
+    "pickerLabel: branch label"
+  );
+  assert(
+    formatPickerLabel({
+      ...sessARef,
+      turnIndex: 2,
+      question: "Why does binder fail under load?",
+    }) === "Q3: Why does binder fail under load?",
+    "pickerLabel: turn label"
   );
 
   // summarizeSession happy + cache

@@ -11,6 +11,7 @@ import {
 } from "./llm/types";
 import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
+import type { SessionMeta } from "./mindmap/origin";
 import {
   getStoreDir,
   getTranscriptsDir,
@@ -235,6 +236,13 @@ export async function loadSession(
   const ctx = resolveSessionContext(session);
   const projectPath =
     ctx.projectPath ?? slugToWorkspacePath(ctx.projectSlug);
+  const sessionMeta: SessionMeta = {
+    sessionId: session.id,
+    projectSlug: ctx.projectSlug,
+    projectPath,
+    sessionLabel: session.label,
+    transcriptPath: session.filePath,
+  };
 
   // 1) Library hit — skip LLM entirely.
   if (settings.library.enabled && !options.forceRefresh) {
@@ -261,7 +269,11 @@ export async function loadSession(
       ) {
         return {
           session: { ...session, projectSlug: ctx.projectSlug, projectPath },
-          mindMap: buildTopicMindMap(existing.graph, session.label),
+          mindMap: buildTopicMindMap(
+            existing.graph,
+            session.label,
+            sessionMeta
+          ),
           source: "topic",
           fromLibrary: true,
         };
@@ -309,7 +321,8 @@ export async function loadSession(
       mindMap: buildTurnMindMap(
         events,
         settings.turnOptions,
-        session.label
+        session.label,
+        sessionMeta
       ),
       source: "turn",
     };
@@ -366,7 +379,7 @@ export async function loadSession(
 
   return {
     session: { ...session, projectSlug: ctx.projectSlug, projectPath },
-    mindMap: buildTopicMindMap(graph, session.label),
+    mindMap: buildTopicMindMap(graph, session.label, sessionMeta),
     source: "topic",
   };
 }

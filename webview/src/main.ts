@@ -2,8 +2,21 @@ import MindMap from "simple-mind-map";
 import "simple-mind-map/dist/simpleMindMap.esm.css";
 import "./styles.css";
 
+type NodeOriginRef = {
+  sessionId: string;
+  projectSlug: string;
+  projectPath?: string;
+  sessionLabel: string;
+  transcriptPath: string;
+  turnIndex?: number;
+};
+
+type NodeOrigin = {
+  refs: NodeOriginRef[];
+};
+
 type MindMapNodeData = {
-  data: { text: string; expand?: boolean };
+  data: { text: string; expand?: boolean; origin?: NodeOrigin };
   children?: MindMapNodeData[];
 };
 
@@ -12,8 +25,13 @@ type ExtensionMessage = {
   data: MindMapNodeData;
 };
 
+type WebviewToExtensionMessage =
+  | { type: "ready" }
+  | { type: "log"; message: string }
+  | { type: "nodeClicked"; origin: NodeOrigin };
+
 declare function acquireVsCodeApi(): {
-  postMessage(message: unknown): void;
+  postMessage(message: WebviewToExtensionMessage): void;
 };
 
 const vscode = acquireVsCodeApi();
@@ -83,7 +101,89 @@ function render(data: MindMapNodeData): void {
     isExpandByDefault: true,
   } as ConstructorParameters<typeof MindMap>[0]);
 
+  // simple-mind-map emits `node_click` on every node tap. We forward the
+  // (origin) ride-along to the extension so it can run the jump flow.
+  try {
+    (mindMap as unknown as {
+      on(event: string, cb: (node: unknown) => void): void;
+    }).on("node_click", (node) => {
+      const origin = readOrigin(node);
+      if (origin) {
+        vscode.postMessage({
+          type: "log",
+          message: `node_click: forwarding ${origin.refs.length} ref(s)`,
+        });
+        vscode.postMessage({ type: "nodeClicked", origin });
+        return;
+      }
+      // Diagnostic: dump what we actually see on the node so we can tell
+      // whether the renderer never attached origin vs. simple-mind-map
+      // dropping the field.
+      const n = node as { getData?: (key?: string) => unknown };
+      let dataKeys = "<no getData>";
+      let textValue = "<unknown>";
+      let originType = "<absent>";
+      if (typeof n.getData === "function") {
+        try {
+          const d = n.getData();
+          if (d && typeof d === "object") {
+            dataKeys = Object.keys(d as object).join(",");
+            const t = (d as { text?: unknown }).text;
+            if (typeof t === "string") {
+              textValue = t.length > 50 ? t.slice(0, 50) + "…" : t;
+            }
+            const o = (d as { origin?: unknown }).origin;
+            originType = `${typeof o}${o === null ? " (null)" : ""}`;
+          } else {
+            dataKeys = `<${typeof d}>`;
+          }
+        } catch (err) {
+          dataKeys = `<getData threw ${String(err)}>`;
+        }
+      }
+      vscode.postMessage({
+        type: "log",
+        message:
+          `node_click: no origin attached — text="${textValue}" ` +
+          `keys=[${dataKeys}] origin=${originType}`,
+      });
+    });
+    vscode.postMessage({ type: "log", message: "node_click listener bound" });
+  } catch (err) {
+    vscode.postMessage({
+      type: "log",
+      message: `failed to bind node_click: ${String(err)}`,
+    });
+  }
+
   handleResize();
+}
+
+function readOrigin(node: unknown): NodeOrigin | undefined {
+  if (!node || typeof node !== "object") {
+    return undefined;
+  }
+  const n = node as { getData?: (key?: string) => unknown };
+  let data: unknown;
+  if (typeof n.getData === "function") {
+    try {
+      data = n.getData();
+    } catch {
+      data = undefined;
+    }
+  }
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+  const origin = (data as { origin?: unknown }).origin;
+  if (!origin || typeof origin !== "object") {
+    return undefined;
+  }
+  const refs = (origin as { refs?: unknown }).refs;
+  if (!Array.isArray(refs) || refs.length === 0) {
+    return undefined;
+  }
+  return origin as NodeOrigin;
 }
 
 window.addEventListener("message", (event) => {

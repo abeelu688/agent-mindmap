@@ -19,3 +19,8 @@ body,
   flex: 1;
   min-height: 0;
 }
+
+/* Hint that every rendered node is interactive (jump-to-chat on click). */
+#mindMapContainer svg .smm-node {
+  cursor: pointer;
+}
