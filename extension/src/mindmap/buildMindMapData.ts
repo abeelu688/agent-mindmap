@@ -84,7 +84,14 @@ function branch(text: string, children: MindMapNodeData[]): MindMapNodeData {
   };
 }
 
-export function buildMindMapData(
+/**
+ * Build a chronological "turn-by-turn" mind map (Q1 / Q2 / Q3 …).
+ *
+ * As of the topic-clustering rewrite this is the *fallback* renderer used when
+ * the LLM provider is unavailable or returns unusable output. The default
+ * renderer is `buildTopicMindMap` in `./buildTopicMindMap.ts`.
+ */
+export function buildTurnMindMap(
   events: ChatEvent[],
   options: BuildOptions,
   sessionLabel?: string
@@ -143,3 +150,6 @@ export function buildMindMapData(
     children: children.length ? children : undefined,
   };
 }
+
+/** @deprecated Use `buildTurnMindMap` (fallback) or `buildTopicMindMap` (default). */
+export const buildMindMapData = buildTurnMindMap;
