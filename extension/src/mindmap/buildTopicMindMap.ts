@@ -1,5 +1,6 @@
 import type { TopicGraph } from "../llm/types";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
+import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 
 const MAX_LABEL = 120;
 
@@ -24,7 +25,8 @@ function branch(text: string, children: MindMapNodeData[]): MindMapNodeData {
 
 export function buildTopicMindMap(
   graph: TopicGraph,
-  sessionLabel?: string
+  sessionLabel?: string,
+  sessionMeta?: SessionMeta
 ): MindMapRoot {
   const llmTitle = graph.title?.trim();
   const rootText = llmTitle
@@ -38,24 +40,45 @@ export function buildTopicMindMap(
     const children: MindMapNodeData[] = [];
 
     if (topic.summary && topic.summary.trim()) {
-      children.push(leaf(`概述：${topic.summary}`));
+      // The "概述" line summarises the whole topic; carry the topic-level
+      // branch ref so it still jumps somewhere when clicked.
+      const summaryNode = leaf(`概述：${topic.summary}`);
+      children.push(
+        sessionMeta ? withOrigin(summaryNode, [{ ...sessionMeta }]) : summaryNode
+      );
     }
 
     for (const item of topic.items) {
       const refs = item.sourceTurnIndices?.length
         ? ` (Q${item.sourceTurnIndices.map((n) => n + 1).join("/Q")})`
         : "";
-      children.push(leaf(`${item.text}${refs}`));
+      const itemNode = leaf(`${item.text}${refs}`);
+      children.push(
+        sessionMeta
+          ? withOrigin(itemNode, leafRefs(sessionMeta, item.sourceTurnIndices))
+          : itemNode
+      );
     }
 
     if (!children.length) {
-      return leaf(title);
+      const titleLeaf = leaf(title);
+      return sessionMeta
+        ? withOrigin(titleLeaf, [{ ...sessionMeta }])
+        : titleLeaf;
     }
-    return branch(title, children);
+    const node = branch(title, children);
+    return sessionMeta
+      ? withOrigin(node, unionChildRefs(children))
+      : node;
   });
 
-  return {
+  const root: MindMapNodeData = {
     data: { text: rootText, expand: true },
     children: topicNodes.length ? topicNodes : undefined,
   };
+
+  if (!sessionMeta || !topicNodes.length) {
+    return root;
+  }
+  return withOrigin(root, unionChildRefs(topicNodes));
 }

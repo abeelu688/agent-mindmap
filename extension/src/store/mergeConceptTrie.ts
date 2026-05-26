@@ -1,5 +1,11 @@
 import { canonicalizeConceptSegment } from "../llm/cursorCliProvider";
 import type { Topic } from "../llm/types";
+import {
+  leafRefs,
+  type SessionMeta,
+  unionChildRefs,
+  withOrigin,
+} from "../mindmap/origin";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
@@ -83,20 +89,39 @@ function insertPath(
   node.topics.push(location);
 }
 
+function locSessionMeta(loc: TopicLocation): SessionMeta {
+  return {
+    sessionId: loc.record.meta.sessionId,
+    projectSlug: loc.record.meta.projectSlug,
+    projectPath: loc.record.meta.projectPath,
+    sessionLabel: loc.record.meta.sessionLabel,
+    transcriptPath: loc.record.meta.transcriptPath,
+  };
+}
+
 function topicBranch(loc: TopicLocation): MindMapNodeData {
   const sessionTag = `[${loc.record.meta.sessionLabel}]`;
   const heading = `${loc.topic.title} · ${sessionTag}`;
+  const sessionMeta = locSessionMeta(loc);
   const children: MindMapNodeData[] = [];
   if (loc.topic.summary && loc.topic.summary.trim()) {
-    children.push(leaf(`概述：${loc.topic.summary}`));
+    children.push(withOrigin(leaf(`概述：${loc.topic.summary}`), [
+      { ...sessionMeta },
+    ]));
   }
   for (const item of loc.topic.items) {
     const refs = item.sourceTurnIndices?.length
       ? ` (Q${item.sourceTurnIndices.map((n) => n + 1).join("/Q")})`
       : "";
-    children.push(leaf(`${item.text}${refs}`));
+    children.push(
+      withOrigin(
+        leaf(`${item.text}${refs}`),
+        leafRefs(sessionMeta, item.sourceTurnIndices)
+      )
+    );
   }
-  return branch(heading, children, false);
+  const node = branch(heading, children, false);
+  return withOrigin(node, unionChildRefs(children));
 }
 
 function renderNode(node: TrieNode): MindMapNodeData {
@@ -111,10 +136,12 @@ function renderNode(node: TrieNode): MindMapNodeData {
   for (const t of node.topics) {
     childNodes.push(topicBranch(t));
   }
-  return branch(`${node.label} (${node.occurrences || node.topics.length})`,
+  const trieNode = branch(
+    `${node.label} (${node.occurrences || node.topics.length})`,
     childNodes,
     childNodes.length <= 8
   );
+  return withOrigin(trieNode, unionChildRefs(childNodes));
 }
 
 export type ConceptMergeOptions = {
@@ -168,13 +195,13 @@ export function buildConceptTrieMindMap(
   );
   const topChildren = sortedTop.map(renderNode);
   if (orphans.length) {
-    topChildren.push(
-      branch(
-        `未分类 (${orphans.length})`,
-        orphans.map(topicBranch),
-        false
-      )
+    const orphanNodes = orphans.map(topicBranch);
+    const orphanBranch = branch(
+      `未分类 (${orphans.length})`,
+      orphanNodes,
+      false
     );
+    topChildren.push(withOrigin(orphanBranch, unionChildRefs(orphanNodes)));
   }
 
   const stats: ConceptMergeStats = {
@@ -196,11 +223,12 @@ export function buildConceptTrieMindMap(
     };
   }
 
+  const mindMap: MindMapRoot = {
+    data: { text: title, expand: true },
+    children: topChildren,
+  };
   return {
-    mindMap: {
-      data: { text: title, expand: true },
-      children: topChildren,
-    },
+    mindMap: withOrigin(mindMap, unionChildRefs(topChildren)),
     stats,
   };
 }

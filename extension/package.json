@@ -12,6 +12,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:agent-mindmap.openLatest",
     "onCommand:agent-mindmap.pickSession",
     "onCommand:agent-mindmap.refresh",
@@ -22,7 +23,8 @@
     "onCommand:agent-mindmap.openConceptMergedCurrentProject",
     "onCommand:agent-mindmap.llmMergeRefine",
     "onCommand:agent-mindmap.browseLibrary",
-    "onCommand:agent-mindmap.openStoreDir"
+    "onCommand:agent-mindmap.openStoreDir",
+    "onCommand:agent-mindmap.testJump"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -80,6 +82,11 @@
       {
         "command": "agent-mindmap.openStoreDir",
         "title": "Agent Mind Map: Open Store Directory",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.testJump",
+        "title": "Agent Mind Map: Test Jump (Debug)",
         "category": "Agent Mind Map"
       }
     ],
@@ -205,7 +212,7 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && ./node_modules/.bin/esbuild ../test/run-all.ts --bundle --platform=node --outfile=dist/test-run.js",
+    "build": "node esbuild.config.mjs && ./node_modules/.bin/esbuild ../test/run-all.ts --bundle --platform=node --external:vscode --outfile=dist/test-run.js",
     "watch": "node esbuild.config.mjs --watch",
     "test": "node dist/test-run.js",
     "package": "vsce package --no-dependencies"

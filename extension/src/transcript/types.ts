@@ -14,10 +14,37 @@ export type TranscriptSession = {
   projectPath?: string;
 };
 
+/**
+ * Reverse pointer from a mind-map node back to a specific spot in a
+ * transcript. Used by the click-to-jump flow: a node can carry many refs,
+ * one per (session, turnIndex) pair it summarises.
+ *
+ * `turnIndex` is omitted for branch / root nodes that aggregate multiple
+ * turns of a session — those are interpreted as "整段会话".
+ */
+export type NodeOriginRef = {
+  sessionId: string;
+  projectSlug: string;
+  projectPath?: string;
+  sessionLabel: string;
+  transcriptPath: string;
+  turnIndex?: number;
+};
+
+export type NodeOrigin = {
+  refs: NodeOriginRef[];
+};
+
 export type MindMapNodeData = {
   data: {
     text: string;
     expand?: boolean;
+    /**
+     * Optional reverse pointer(s) back to the originating transcript(s).
+     * simple-mind-map ignores unknown fields on `data`, so this rides along
+     * untouched and is read by the webview's `node_click` handler.
+     */
+    origin?: NodeOrigin;
   };
   children?: MindMapNodeData[];
 };

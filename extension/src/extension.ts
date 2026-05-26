@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { drainPendingJump, handleNodeClicked } from "./jumpToOrigin";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import {
   loadLatestSession,
@@ -66,10 +67,18 @@ async function withCancellableProgress<T>(
   );
 }
 
+function createOrShowPanel(): MindMapPanel {
+  const panel = MindMapPanel.createOrShow(extensionContext.extensionUri);
+  panel.onNodeClicked((origin) =>
+    void handleNodeClicked(origin, { context: extensionContext })
+  );
+  return panel;
+}
+
 async function showMindMap(loaded: LoadedSession): Promise<void> {
   activeSession = loaded;
 
-  const panel = MindMapPanel.createOrShow(extensionContext.extensionUri);
+  const panel = createOrShowPanel();
   panel.setMindMapData(loaded.mindMap);
   panel.watchTranscript(loaded.session.filePath, async () => {
     if (!activeSession) {
@@ -92,7 +101,7 @@ function showMindMapStandalone(
   title: string,
   data: import("./transcript/types").MindMapRoot
 ): void {
-  const panel = MindMapPanel.createOrShow(extensionContext.extensionUri);
+  const panel = createOrShowPanel();
   panel.setMindMapData(data);
   panel.setTitle(title);
 }
@@ -215,11 +224,32 @@ async function commandExportJson(): Promise<void> {
   );
 }
 
+function hasAnyOrigin(
+  node: import("./transcript/types").MindMapRoot
+): boolean {
+  if (node.data.origin?.refs?.length) {
+    return true;
+  }
+  if (node.children) {
+    for (const c of node.children) {
+      if (hasAnyOrigin(c)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 async function commandOpenMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   // Try cached deterministic.json first; if missing or stale, rebuild.
   let merge = await readMergeRecord(deterministicMergePath(storeDir));
+  // Old caches written before the click-to-jump rewrite have zero origin
+  // metadata on their nodes — detect and regenerate so leaf clicks resolve.
+  if (merge && !hasAnyOrigin(merge.mindMap)) {
+    merge = undefined;
+  }
   if (!merge) {
     merge = await ensureDeterministicMerge();
   }
@@ -247,6 +277,9 @@ async function commandOpenConceptMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   let merge = await readMergeRecord(conceptTrieMergePath(storeDir));
+  if (merge && !hasAnyOrigin(merge.mindMap)) {
+    merge = undefined;
+  }
   if (!merge) {
     merge = await ensureConceptMerge();
   }
@@ -447,12 +480,20 @@ async function commandBrowseLibrary(): Promise<void> {
   if (!picked) {
     return;
   }
+  const meta = picked.record.meta;
   const root = buildTopicMindMap(
     picked.record.graph,
-    picked.record.meta.sessionLabel
+    meta.sessionLabel,
+    {
+      sessionId: meta.sessionId,
+      projectSlug: meta.projectSlug,
+      projectPath: meta.projectPath,
+      sessionLabel: meta.sessionLabel,
+      transcriptPath: meta.transcriptPath,
+    }
   );
   showMindMapStandalone(
-    `${picked.record.meta.sessionLabel} (库)`,
+    `${meta.sessionLabel} (库)`,
     root
   );
 }
@@ -461,6 +502,52 @@ async function commandOpenStoreDir(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   await vscode.env.openExternal(vscode.Uri.file(storeDir));
+}
+
+/**
+ * Run the click-to-jump flow without clicking a node. Useful for verifying
+ * that the picker / agent-open / clipboard / line-reveal pipeline works
+ * when the user reports "the leaf doesn't respond" — the most common
+ * cause of that is a stale webview bundle, and this command bypasses the
+ * webview entirely.
+ */
+async function commandTestJump(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const records = await listRecords(storeDir);
+  if (!records.length) {
+    vscode.window.showWarningMessage(
+      "Agent Mind Map: 库为空，先用 Open Latest Session 等命令分析至少一个会话。"
+    );
+    return;
+  }
+  records.sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+  const pickedRecord = await vscode.window.showQuickPick(
+    records.map((r) => ({
+      label: r.meta.sessionLabel,
+      description: r.meta.projectPath ?? r.meta.projectSlug,
+      record: r,
+    })),
+    { placeHolder: "选择一个 session 作为模拟点击的目标" }
+  );
+  if (!pickedRecord) {
+    return;
+  }
+  const meta = pickedRecord.record.meta;
+  await handleNodeClicked(
+    {
+      refs: [
+        {
+          sessionId: meta.sessionId,
+          projectSlug: meta.projectSlug,
+          projectPath: meta.projectPath,
+          sessionLabel: meta.sessionLabel,
+          transcriptPath: meta.transcriptPath,
+        },
+      ],
+    },
+    { context: extensionContext }
+  );
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -510,12 +597,21 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.openStoreDir",
       commandOpenStoreDir
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.testJump",
+      commandTestJump
     )
   );
 
   // Quiet "unused" warning when transcripts dir is invalid in some shells.
   void getTranscriptsDir;
   void LlmProviderError;
+
+  // Drain any cross-window "pending jump" the previous window persisted
+  // when the user picked "open in new/current window". Runs once per
+  // activation; ignores expired or wrong-workspace records.
+  void drainPendingJump({ context });
 }
 
 export function deactivate(): void {
