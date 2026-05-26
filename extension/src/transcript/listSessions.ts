@@ -11,8 +11,14 @@ async function exists(dir: string): Promise<boolean> {
   }
 }
 
+export type ListSessionsContext = {
+  projectSlug?: string;
+  projectPath?: string;
+};
+
 export async function listSessions(
-  transcriptsDir: string
+  transcriptsDir: string,
+  ctx: ListSessionsContext = {}
 ): Promise<TranscriptSession[]> {
   if (!(await exists(transcriptsDir))) {
     return [];
@@ -39,6 +45,8 @@ export async function listSessions(
         filePath,
         mtimeMs: mtime,
         label: `${id.slice(0, 8)}… · ${date}`,
+        projectSlug: ctx.projectSlug,
+        projectPath: ctx.projectPath,
       });
     } catch {
       // skip missing jsonl

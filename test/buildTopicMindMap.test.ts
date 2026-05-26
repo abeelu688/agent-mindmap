@@ -20,8 +20,24 @@ const sampleGraph: TopicGraph = {
 };
 
 describe("buildTopicMindMap", () => {
-  it("uses session label as root", () => {
+  it("falls back to session label as root when graph has no title", () => {
     const root = buildTopicMindMap(sampleGraph, "abc12345…");
+    expect(root.data.text).toBe("abc12345…");
+  });
+
+  it("uses graph.title as root when present, ignoring session label", () => {
+    const root = buildTopicMindMap(
+      { ...sampleGraph, title: "Binder 命令字段调研" },
+      "abc12345…"
+    );
+    expect(root.data.text).toBe("Binder 命令字段调研");
+  });
+
+  it("falls back to session label when graph.title is blank", () => {
+    const root = buildTopicMindMap(
+      { ...sampleGraph, title: "   " },
+      "abc12345…"
+    );
     expect(root.data.text).toBe("abc12345…");
   });
 

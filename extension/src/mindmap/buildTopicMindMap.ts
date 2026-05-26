@@ -26,7 +26,12 @@ export function buildTopicMindMap(
   graph: TopicGraph,
   sessionLabel?: string
 ): MindMapRoot {
-  const rootText = sessionLabel ? truncate(sessionLabel, 80) : "Agent Session";
+  const llmTitle = graph.title?.trim();
+  const rootText = llmTitle
+    ? truncate(llmTitle, 60)
+    : sessionLabel
+      ? truncate(sessionLabel, 80)
+      : "Agent Session";
 
   const topicNodes: MindMapNodeData[] = graph.topics.map((topic, idx) => {
     const title = `核心${idx + 1}: ${truncate(topic.title, 60)}`;

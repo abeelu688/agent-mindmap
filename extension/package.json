@@ -12,7 +12,14 @@
     "onCommand:agent-mindmap.openLatest",
     "onCommand:agent-mindmap.pickSession",
     "onCommand:agent-mindmap.refresh",
-    "onCommand:agent-mindmap.exportJson"
+    "onCommand:agent-mindmap.exportJson",
+    "onCommand:agent-mindmap.openMerged",
+    "onCommand:agent-mindmap.openMergedCurrentProject",
+    "onCommand:agent-mindmap.openConceptMerged",
+    "onCommand:agent-mindmap.openConceptMergedCurrentProject",
+    "onCommand:agent-mindmap.llmMergeRefine",
+    "onCommand:agent-mindmap.browseLibrary",
+    "onCommand:agent-mindmap.openStoreDir"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -35,6 +42,41 @@
       {
         "command": "agent-mindmap.exportJson",
         "title": "Agent Mind Map: Export Mind Map JSON",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openMerged",
+        "title": "Agent Mind Map: Open Merged View (All Projects)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openMergedCurrentProject",
+        "title": "Agent Mind Map: Open Merged View (Current Project)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openConceptMerged",
+        "title": "Agent Mind Map: Open Concept Mind Map (All Projects)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openConceptMergedCurrentProject",
+        "title": "Agent Mind Map: Open Concept Mind Map (Current Project)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.llmMergeRefine",
+        "title": "Agent Mind Map: LLM Merge Refine…",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.browseLibrary",
+        "title": "Agent Mind Map: Browse Library…",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openStoreDir",
+        "title": "Agent Mind Map: Open Store Directory",
         "category": "Agent Mind Map"
       }
     ],
@@ -82,10 +124,24 @@
         },
         "agentMindmap.llm.timeoutMs": {
           "type": "number",
-          "default": 30000,
+          "default": 90000,
           "minimum": 1000,
-          "maximum": 300000,
-          "description": "Hard timeout (ms) for the cursor-agent subprocess."
+          "maximum": 600000,
+          "description": "Hard timeout (ms) for a single cursor-agent subprocess call. The total wall-clock budget for one summarisation is roughly timeoutMs * maxAttempts."
+        },
+        "agentMindmap.llm.maxAttempts": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of cursor-agent attempts per summarisation. Retries are triggered by timeout / cli-failed / bad-json / bad-shape; cli-missing / cancelled / empty are not retried."
+        },
+        "agentMindmap.llm.retryBackoffMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 30000,
+          "description": "Base backoff (ms) between retries. Effective wait is base * 2^(attempt-1) with ±25% jitter, capped at 10s."
         },
         "agentMindmap.maxTopics": {
           "type": "number",
@@ -104,7 +160,36 @@
         "agentMindmap.cacheLlmResult": {
           "type": "boolean",
           "default": true,
-          "description": "Cache the LLM topic graph under globalStorage keyed by transcript hash to avoid re-spending tokens."
+          "description": "Cache the LLM topic graph under globalStorage keyed by transcript hash to avoid re-spending tokens. This is a secondary content-addressed cache; the primary persistence layer is agentMindmap.library."
+        },
+        "agentMindmap.storeDir": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the cross-project analysis library directory. Empty = ~/.agent-mindmap. Supports a leading ~/. Point at a sync folder (iCloud / Dropbox) to share the library across machines."
+        },
+        "agentMindmap.library.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Persist each analysed session to storeDir as a SessionRecord with meta, and skip the LLM call on reopen if the transcript is unchanged. Disable to fall back to the old globalStorage hash-only cache."
+        },
+        "agentMindmap.merge.autoRebuildDeterministic": {
+          "type": "boolean",
+          "default": true,
+          "description": "After a session is analysed and written to the library, automatically rebuild storeDir/merges/deterministic.json so 'Open Merged View' opens instantly."
+        },
+        "agentMindmap.merge.llm.maxTopics": {
+          "type": "number",
+          "default": 8,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "Target number of top-level topic nodes the LLM merge command should produce across selected sessions."
+        },
+        "agentMindmap.merge.llm.maxItemsPerTopic": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Maximum sub-items per topic the LLM merge command should produce."
         }
       }
     }
