@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { buildMindMapData } from "../extension/src/mindmap/buildMindMapData";
+import { buildTurnMindMap } from "../extension/src/mindmap/buildMindMapData";
 import { parseJsonl } from "../extension/src/transcript/parseJsonl";
 
-describe("buildMindMapData", () => {
+// The "turn" view is the fallback renderer used when the LLM provider is
+// unavailable. The default renderer is buildTopicMindMap (see its own test).
+
+describe("buildTurnMindMap (fallback)", () => {
   it("builds tree with question branches", () => {
     const content = readFileSync(
       join(__dirname, "fixtures/sample.jsonl"),
       "utf8"
     );
     const events = parseJsonl(content);
-    const root = buildMindMapData(events, {
+    const root = buildTurnMindMap(events, {
       includeToolCalls: true,
       maxConclusionItems: 8,
     });
@@ -33,7 +36,7 @@ describe("buildMindMapData", () => {
       "utf8"
     );
     const events = parseJsonl(content);
-    const root = buildMindMapData(events, {
+    const root = buildTurnMindMap(events, {
       includeToolCalls: false,
       maxConclusionItems: 8,
     });

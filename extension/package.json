@@ -49,19 +49,62 @@
         "agentMindmap.includeToolCalls": {
           "type": "boolean",
           "default": true,
-          "description": "Include tool-call branches under each user question."
+          "description": "[Fallback view only] Include tool-call branches under each user question."
         },
         "agentMindmap.maxConclusionItems": {
           "type": "number",
           "default": 8,
           "minimum": 1,
           "maximum": 32,
-          "description": "Maximum conclusion sub-nodes per question."
+          "description": "[Fallback view only] Maximum conclusion sub-nodes per question.",
+          "deprecationMessage": "Used only when LLM summarization fails. Configure agentMindmap.maxTopics / maxItemsPerTopic for the default topic view."
         },
         "agentMindmap.autoRefresh": {
           "type": "boolean",
           "default": false,
           "description": "Watch the active transcript file and refresh the mind map."
+        },
+        "agentMindmap.llm.provider": {
+          "type": "string",
+          "enum": ["cursor-cli"],
+          "default": "cursor-cli",
+          "description": "LLM provider used to extract topics from the transcript. Only cursor-cli is supported today; openai/anthropic providers are planned."
+        },
+        "agentMindmap.llm.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the cursor-agent binary. Empty = auto-detect `agent` then `cursor-agent` from PATH."
+        },
+        "agentMindmap.llm.model": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model name passed to cursor-agent via --model. Empty uses the CLI default."
+        },
+        "agentMindmap.llm.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Hard timeout (ms) for the cursor-agent subprocess."
+        },
+        "agentMindmap.maxTopics": {
+          "type": "number",
+          "default": 6,
+          "minimum": 2,
+          "maximum": 12,
+          "description": "Target number of top-level topic nodes the LLM should produce."
+        },
+        "agentMindmap.maxItemsPerTopic": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Maximum sub-items (knowledge points / references) per topic."
+        },
+        "agentMindmap.cacheLlmResult": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache the LLM topic graph under globalStorage keyed by transcript hash to avoid re-spending tokens."
         }
       }
     }

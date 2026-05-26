@@ -8,6 +8,10 @@
     "build:webview": "npm run build --prefix webview",
     "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
     "test": "npm run build --prefix extension && npm run test --prefix extension",
+    "test:vitest": "vitest run",
     "package": "npm run build && npm run package --prefix extension"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
   }
 }
