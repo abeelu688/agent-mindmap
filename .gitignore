@@ -13,6 +13,7 @@ extension/media/
 npm-debug.log*
 npm-log.txt
 *.log
+out.txt
 
 # editor / OS
 .DS_Store

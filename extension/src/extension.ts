@@ -1,5 +1,17 @@
 import * as vscode from "vscode";
-import { drainPendingJump, handleNodeClicked } from "./jumpToOrigin";
+import {
+  diagnoseJumpCommands,
+  drainPendingJump,
+  handleNodeClicked,
+  tryOpenAgentShapes,
+} from "./jumpToOrigin";
+import {
+  findKeysReferencingComposer,
+  inspectComposerHeader,
+  listAgentRelatedKeys,
+  loadGlassResumableIds,
+  readStateDbKey,
+} from "./transcript/composerTitles";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import {
   loadLatestSession,
@@ -452,6 +464,123 @@ async function commandLlmMergeRefine(): Promise<void> {
   showMindMapStandalone("Agent Mind Map · LLM 合并", merge.mindMap);
 }
 
+// ---------------------------------------------------------------------------
+// Search library
+// ---------------------------------------------------------------------------
+
+type SearchHit = {
+  record: SessionRecord;
+  /** Highlighted match reason shown in the QuickPick detail line. */
+  matchSnippet: string;
+  score: number;
+};
+
+/**
+ * Score a single record against a lower-cased query string.
+ * Returns undefined when there is no match at all.
+ */
+function scoreRecord(record: SessionRecord, queryLc: string): SearchHit | undefined {
+  let score = 0;
+  const snippets: string[] = [];
+
+  const check = (text: string | undefined, weight: number, label: string) => {
+    if (!text) return;
+    if (text.toLowerCase().includes(queryLc)) {
+      score += weight;
+      snippets.push(`${label}: ${text.slice(0, 80).trim()}`);
+    }
+  };
+
+  check(record.meta.sessionLabel, 4, "会话");
+  check(record.graph.title, 3, "标题");
+  check(record.graph.summary, 2, "摘要");
+  for (const topic of record.graph.topics ?? []) {
+    check(topic.title, 2, "主题");
+    check(topic.summary, 1, "主题摘要");
+    for (const item of topic.items ?? []) {
+      check(item.text, 1, "要点");
+    }
+  }
+
+  if (score === 0) return undefined;
+  return { record, score, matchSnippet: snippets[0] ?? "" };
+}
+
+async function commandSearchLibrary(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const records = await listRecords(storeDir);
+  if (!records.length) {
+    vscode.window.showInformationMessage(
+      "Agent Mind Map: 库为空。先分析至少一个会话。"
+    );
+    return;
+  }
+
+  type PickItem = vscode.QuickPickItem & { record: SessionRecord };
+
+  const qp = vscode.window.createQuickPick<PickItem>();
+  qp.placeholder = "搜索主题、标题、要点关键词…";
+  qp.matchOnDescription = true;
+  qp.matchOnDetail = true;
+
+  const buildItems = (query: string): PickItem[] => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      // No query — show all, sorted by recency
+      return records
+        .slice()
+        .sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt)
+        .map((r) => ({
+          label: r.meta.sessionLabel,
+          description: r.meta.projectPath ?? slugToWorkspacePath(r.meta.projectSlug),
+          detail: r.graph.title
+            ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
+            : `${r.graph.topics.length} 个主题`,
+          record: r,
+        }));
+    }
+    const hits: SearchHit[] = [];
+    for (const r of records) {
+      const hit = scoreRecord(r, q);
+      if (hit) hits.push(hit);
+    }
+    hits.sort((a, b) => b.score - a.score);
+    return hits.map((h) => ({
+      label: h.record.meta.sessionLabel,
+      description:
+        h.record.meta.projectPath ??
+        slugToWorkspacePath(h.record.meta.projectSlug),
+      detail: h.matchSnippet,
+      record: h.record,
+    }));
+  };
+
+  qp.items = buildItems("");
+
+  qp.onDidChangeValue((value) => {
+    qp.items = buildItems(value);
+  });
+
+  qp.onDidAccept(() => {
+    const picked = qp.selectedItems[0];
+    qp.hide();
+    if (!picked) return;
+    const meta = picked.record.meta;
+    const root = buildTopicMindMap(picked.record.graph, meta.sessionLabel, {
+      sessionId: meta.sessionId,
+      projectSlug: meta.projectSlug,
+      projectPath: meta.projectPath,
+      sessionLabel: meta.sessionLabel,
+      transcriptPath: meta.transcriptPath,
+    });
+    showMindMapStandalone(`${meta.sessionLabel} (搜索结果)`, root);
+  });
+
+  qp.onDidHide(() => qp.dispose());
+  qp.show();
+}
+
 async function commandBrowseLibrary(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
@@ -511,6 +640,147 @@ async function commandOpenStoreDir(): Promise<void> {
  * cause of that is a stale webview bundle, and this command bypasses the
  * webview entirely.
  */
+async function commandDumpStateDbKey(): Promise<void> {
+  const candidates = [
+    "glass.localAgentProjects.v1",
+    "glass.localAgentProjectMembership.v1",
+    "composer.composerHeaders",
+    "agentLayout.shared.v6",
+  ];
+  const picked = await vscode.window.showQuickPick(
+    candidates.map((k) => ({ label: k })),
+    {
+      placeHolder: "选择一个 state.vscdb key 查看完整 value",
+    }
+  );
+  if (!picked) return;
+  const value = await readStateDbKey(picked.label);
+  if (value === undefined) {
+    vscode.window.showWarningMessage(`Agent Mind Map: key ${picked.label} 不存在或读取失败。`);
+    return;
+  }
+  let pretty = value;
+  try {
+    pretty = JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    // not JSON
+  }
+  const doc = await vscode.workspace.openTextDocument({
+    content: `// state.vscdb key: ${picked.label}\n// raw size: ${value.length} chars\n\n${pretty}`,
+    language: "json",
+  });
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+async function commandInspectComposerHeader(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const records = await listRecords(storeDir);
+  if (!records.length) {
+    vscode.window.showWarningMessage("Agent Mind Map: 库为空。");
+    return;
+  }
+  records.sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+  const picked = await vscode.window.showQuickPick(
+    records.map((r) => ({
+      label: r.meta.sessionLabel,
+      description: r.meta.sessionId,
+      detail: r.meta.projectPath ?? r.meta.projectSlug,
+      sessionId: r.meta.sessionId,
+    })),
+    { placeHolder: "选择一个 session 检查它在 composer.composerHeaders 里的条目" }
+  );
+  if (!picked) return;
+
+  const info = await inspectComposerHeader(picked.sessionId);
+  const lines: string[] = [];
+  lines.push(`=== composer.composerHeaders 概览 ===`);
+  lines.push(`总数: ${info.totalComposers}`);
+  lines.push(`按 type 统计:`);
+  for (const [t, n] of Object.entries(info.typeCounts).sort(
+    (a, b) => b[1] - a[1]
+  )) {
+    lines.push(`  ${t}: ${n}`);
+  }
+  lines.push("");
+  lines.push(`=== 你选的 session 在 allComposers 里的条目 ===`);
+  lines.push(`composerId: ${picked.sessionId}`);
+  if (info.ourEntry === undefined) {
+    lines.push(`<不在 allComposers 里>`);
+  } else {
+    lines.push(JSON.stringify(info.ourEntry, null, 2));
+  }
+  const dump = lines.join("\n");
+  MindMapPanel.log("inspectComposerHeader:\n" + dump);
+  const doc = await vscode.workspace.openTextDocument({
+    content: dump,
+    language: "log",
+  });
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+async function commandDumpGlassState(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const records = await listRecords(storeDir);
+  records.sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+
+  const allRelated = await listAgentRelatedKeys();
+  const lines: string[] = [];
+  lines.push(`==== All agent/composer/glass keys in state.vscdb ====`);
+  lines.push(`(${allRelated.length} rows)`);
+  for (const row of allRelated) {
+    lines.push(`  [${row.table}] ${row.key}  (${row.valueSize} bytes)`);
+  }
+  lines.push("");
+
+  if (records.length > 0) {
+    const newest = records[0]!;
+    lines.push(
+      `==== Keys referencing newest analyzed session ${newest.meta.sessionId} (${newest.meta.sessionLabel}) ====`
+    );
+    const hits = await findKeysReferencingComposer(newest.meta.sessionId);
+    lines.push(`(${hits.length} hits)`);
+    for (const hit of hits) {
+      lines.push(`  [${hit.table}] ${hit.key}`);
+      lines.push(`      preview: ${hit.valuePreview}`);
+    }
+  }
+
+  const dump = lines.join("\n");
+  MindMapPanel.log("Glass state dump:\n" + dump);
+  // Show in a new untitled doc so the user can easily inspect/share.
+  const doc = await vscode.workspace.openTextDocument({
+    content: dump,
+    language: "log",
+  });
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+async function commandTryOpenAgentShapes(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const records = await listRecords(storeDir);
+  if (!records.length) {
+    vscode.window.showWarningMessage(
+      "Agent Mind Map: 库为空，先用 Open Latest Session 等命令分析至少一个会话。"
+    );
+    return;
+  }
+  records.sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+  const picked = await vscode.window.showQuickPick(
+    records.map((r) => ({
+      label: r.meta.sessionLabel,
+      description: r.meta.sessionId,
+      detail: r.meta.projectPath ?? r.meta.projectSlug,
+      sessionId: r.meta.sessionId,
+    })),
+    { placeHolder: "选择一个 session 来调试 glass.openAgentById 的参数形态" }
+  );
+  if (!picked) return;
+  await tryOpenAgentShapes(picked.sessionId);
+}
+
 async function commandTestJump(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
@@ -591,6 +861,10 @@ export function activate(context: vscode.ExtensionContext): void {
       commandLlmMergeRefine
     ),
     vscode.commands.registerCommand(
+      "agent-mindmap.searchLibrary",
+      commandSearchLibrary
+    ),
+    vscode.commands.registerCommand(
       "agent-mindmap.browseLibrary",
       commandBrowseLibrary
     ),
@@ -601,6 +875,26 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.testJump",
       commandTestJump
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.diagnoseJump",
+      diagnoseJumpCommands
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.tryOpenAgentShapes",
+      commandTryOpenAgentShapes
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.dumpGlassState",
+      commandDumpGlassState
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.inspectComposerHeader",
+      commandInspectComposerHeader
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.dumpStateDbKey",
+      commandDumpStateDbKey
     )
   );
 
@@ -612,6 +906,16 @@ export function activate(context: vscode.ExtensionContext): void {
   // when the user picked "open in new/current window". Runs once per
   // activation; ignores expired or wrong-workspace records.
   void drainPendingJump({ context });
+
+  // Pre-warm the Glass resumable-ids cache so the first click-to-jump
+  // doesn't pay the ~7s state.vscdb read cost. Fully best-effort.
+  void loadGlassResumableIds().then(
+    (ids) =>
+      MindMapPanel.log(
+        `[activate] pre-warmed glass registry: ${ids.size} resumable ids`
+      ),
+    (err) => MindMapPanel.log(`[activate] glass registry preload failed: ${err}`)
+  );
 }
 
 export function deactivate(): void {

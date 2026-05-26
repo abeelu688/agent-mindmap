@@ -71,6 +71,17 @@ function destroyMindMap(): void {
     return;
   }
   try {
+    // Explicitly unbind any listeners we attached. simple-mind-map's
+    // destroy() *should* clean these up but the lib has been observed to
+    // leak `node_click` subscriptions across destroy+recreate cycles,
+    // which doubles every click. Cheap insurance.
+    (mindMap as unknown as { off?: (event: string) => void }).off?.(
+      "node_click"
+    );
+  } catch {
+    // ignore
+  }
+  try {
     // simple-mind-map exposes `destroy()`; if it isn't available for some
     // reason fall back to clearing the container DOM by hand.
     (mindMap as unknown as { destroy?: () => void }).destroy?.();
