@@ -1,0 +1,81 @@
+{
+  "name": "agent-mindmap",
+  "displayName": "Agent Mind Map",
+  "description": "Read Cursor agent chat transcripts and visualize them as an interactive mind map.",
+  "version": "0.1.0",
+  "publisher": "airecorder",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Visualization", "Other"],
+  "activationEvents": [
+    "onCommand:agent-mindmap.openLatest",
+    "onCommand:agent-mindmap.pickSession",
+    "onCommand:agent-mindmap.refresh",
+    "onCommand:agent-mindmap.exportJson"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agent-mindmap.openLatest",
+        "title": "Agent Mind Map: Open Latest Session",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.pickSession",
+        "title": "Agent Mind Map: Choose Session…",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.refresh",
+        "title": "Agent Mind Map: Refresh",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.exportJson",
+        "title": "Agent Mind Map: Export Mind Map JSON",
+        "category": "Agent Mind Map"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Mind Map",
+      "properties": {
+        "agentMindmap.projectsDir": {
+          "type": "string",
+          "default": "",
+          "description": "Override ~/.cursor/projects directory path."
+        },
+        "agentMindmap.includeToolCalls": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include tool-call branches under each user question."
+        },
+        "agentMindmap.maxConclusionItems": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 32,
+          "description": "Maximum conclusion sub-nodes per question."
+        },
+        "agentMindmap.autoRefresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "Watch the active transcript file and refresh the mind map."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs && ./node_modules/.bin/esbuild ../test/run-all.ts --bundle --platform=node --outfile=dist/test-run.js",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "node dist/test-run.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.23.1",
+    "@vscode/vsce": "^3.2.1"
+  }
+}
