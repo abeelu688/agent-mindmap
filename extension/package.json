@@ -22,9 +22,15 @@
     "onCommand:agent-mindmap.openConceptMerged",
     "onCommand:agent-mindmap.openConceptMergedCurrentProject",
     "onCommand:agent-mindmap.llmMergeRefine",
+    "onCommand:agent-mindmap.searchLibrary",
     "onCommand:agent-mindmap.browseLibrary",
     "onCommand:agent-mindmap.openStoreDir",
-    "onCommand:agent-mindmap.testJump"
+    "onCommand:agent-mindmap.testJump",
+    "onCommand:agent-mindmap.diagnoseJump",
+    "onCommand:agent-mindmap.tryOpenAgentShapes",
+    "onCommand:agent-mindmap.dumpGlassState",
+    "onCommand:agent-mindmap.inspectComposerHeader",
+    "onCommand:agent-mindmap.dumpStateDbKey"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -75,6 +81,11 @@
         "category": "Agent Mind Map"
       },
       {
+        "command": "agent-mindmap.searchLibrary",
+        "title": "Agent Mind Map: Search Library…",
+        "category": "Agent Mind Map"
+      },
+      {
         "command": "agent-mindmap.browseLibrary",
         "title": "Agent Mind Map: Browse Library…",
         "category": "Agent Mind Map"
@@ -87,6 +98,31 @@
       {
         "command": "agent-mindmap.testJump",
         "title": "Agent Mind Map: Test Jump (Debug)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.diagnoseJump",
+        "title": "Agent Mind Map: Diagnose Jump Commands",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.tryOpenAgentShapes",
+        "title": "Agent Mind Map: Try Open Agent Shapes (Debug)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.dumpGlassState",
+        "title": "Agent Mind Map: Dump Glass State (Debug)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.inspectComposerHeader",
+        "title": "Agent Mind Map: Inspect Composer Header (Debug)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.dumpStateDbKey",
+        "title": "Agent Mind Map: Dump state.vscdb Key (Debug)",
         "category": "Agent Mind Map"
       }
     ],

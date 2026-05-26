@@ -22,6 +22,7 @@ export class MindMapPanel {
   private readonly panel: vscode.WebviewPanel;
   private disposables: vscode.Disposable[] = [];
   private pendingData: MindMapRoot | undefined;
+  private webviewReady = false;
   private fileWatcher: fs.FSWatcher | undefined;
   private watchPath: string | undefined;
   private refreshDebounce: ReturnType<typeof setTimeout> | undefined;
@@ -37,8 +38,12 @@ export class MindMapPanel {
 
     this.panel.webview.onDidReceiveMessage(
       (msg: WebviewToExtensionMessage) => {
-        if (msg.type === "ready" && this.pendingData) {
-          this.postData(this.pendingData);
+        if (msg.type === "ready") {
+          this.webviewReady = true;
+          if (this.pendingData) {
+            this.postData(this.pendingData);
+            this.pendingData = undefined;
+          }
         }
         if (msg.type === "log") {
           MindMapPanel.log(`webview: ${msg.message}`);
@@ -141,8 +146,12 @@ export class MindMapPanel {
   }
 
   public setMindMapData(data: MindMapRoot): void {
-    this.pendingData = data;
-    this.postData(data);
+    if (this.webviewReady) {
+      this.postData(data);
+    } else {
+      // Webview not yet ready — buffer; the "ready" handler will drain it.
+      this.pendingData = data;
+    }
   }
 
   public setTitle(title: string): void {

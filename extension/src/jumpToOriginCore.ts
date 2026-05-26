@@ -16,7 +16,6 @@ export type PendingJump = {
   transcriptPath?: string;
   turnIndex?: number;
   question?: string;
-  lineIndex?: number;
   expiresAt: number;
 };
 
@@ -37,8 +36,6 @@ export type JumpCandidate = {
   turnIndex?: number;
   /** Original user query text for this turn; only set when known. */
   question?: string;
-  /** 0-based line index in the .jsonl for this turn's user message. */
-  lineIndex?: number;
 };
 
 /**
