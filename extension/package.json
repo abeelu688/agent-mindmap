@@ -306,6 +306,7 @@
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^20.14.10",
     "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.85.0",
@@ -313,6 +314,7 @@
     "esbuild": "^0.23.1"
   },
   "dependencies": {
+    "markdown-it": "^14.1.0",
     "sql.js": "^1.14.1"
   }
 }

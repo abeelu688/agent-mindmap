@@ -14,6 +14,7 @@ const SQL_WASM_SRC = path.join(
   "sql-wasm.wasm"
 );
 const SQL_WASM_DST = path.join(HERE, "dist", "sql-wasm.wasm");
+const TRANSCRIPT_MD_OUT = path.join(HERE, "media", "transcript-markdown.js");
 
 async function copySqlWasm() {
   try {
@@ -45,14 +46,32 @@ const extensionBuild = {
   plugins: [copySqlWasmPlugin],
 };
 
+const transcriptMarkdownBuild = {
+  entryPoints: [path.join(HERE, "src/export/transcriptMarkdownBrowser.ts")],
+  bundle: true,
+  outfile: TRANSCRIPT_MD_OUT,
+  format: "iife",
+  platform: "browser",
+  target: "es2020",
+  logLevel: "info",
+};
+
 async function main() {
   if (watch) {
-    const ctx = await esbuild.context(extensionBuild);
-    await ctx.watch();
-    console.log("watching extension...");
+    const ctx = await esbuild.context({
+      ...extensionBuild,
+      plugins: [copySqlWasmPlugin],
+    });
+    const mdCtx = await esbuild.context(transcriptMarkdownBuild);
+    await Promise.all([ctx.watch(), mdCtx.watch()]);
+    console.log("watching extension + transcript-markdown...");
     return;
   }
-  await esbuild.build(extensionBuild);
+  await fs.mkdir(path.dirname(TRANSCRIPT_MD_OUT), { recursive: true });
+  await Promise.all([
+    esbuild.build(extensionBuild),
+    esbuild.build(transcriptMarkdownBuild),
+  ]);
 }
 
 main().catch((err) => {
