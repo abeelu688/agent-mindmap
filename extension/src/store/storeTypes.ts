@@ -46,6 +46,8 @@ export type SessionRecordMeta = {
   sessionLabel: string;
   /** AI product that produced this transcript; absent = cursor (legacy). */
   hostId?: AgentHostId;
+  /** User-query turn count in transcriptPath when analyzed (for jump validation). */
+  userQueryCount?: number;
 };
 
 /**

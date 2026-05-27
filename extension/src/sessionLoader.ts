@@ -7,6 +7,10 @@ import { getProvider } from "./llm";
 import { PROMPT_VERSION } from "./llm/prompt";
 import { summarizeSession } from "./llm/summarizeSession";
 import {
+  countUserQueries,
+  sanitizeTopicGraph,
+} from "./llm/sanitizeTopicGraph";
+import {
   LlmProviderError,
   type LlmProviderId,
   type LlmProviderOptions,
@@ -16,8 +20,8 @@ import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import type { SessionMeta } from "./mindmap/origin";
 import { getStoreDir } from "./paths";
-import { buildDeterministicMergeRecord } from "./store/mergeDeterministic";
-import { buildConceptMergeRecord } from "./store/mergeConceptTrie";
+import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
+import { buildConceptMergeRecordAsync } from "./store/mergeConceptTrie";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -282,6 +286,7 @@ export async function loadSession(
           hostId: host.id,
         })
       ) {
+        const userQueryCount = countUserQueries(events);
         return {
           session: {
             ...session,
@@ -290,7 +295,7 @@ export async function loadSession(
             projectPath,
           },
           mindMap: buildTopicMindMap(
-            existing.graph,
+            sanitizeTopicGraph(existing.graph, userQueryCount),
             session.label,
             sessionMeta
           ),
@@ -347,6 +352,9 @@ export async function loadSession(
     };
   }
 
+  const userQueryCount = countUserQueries(events);
+  graph = sanitizeTopicGraph(graph, userQueryCount);
+
   if (settings.library.enabled) {
     try {
       const meta = buildRecordMeta({
@@ -367,6 +375,7 @@ export async function loadSession(
         promptVersion: PROMPT_VERSION,
         sessionLabel: session.label,
         hostId: host.id,
+        userQueryCount,
       });
       const record = buildSessionRecord(meta, graph);
       const storeDir = getStoreDir();
@@ -377,9 +386,9 @@ export async function loadSession(
           try {
             const all = await listRecords(storeDir);
             await rebuildIndex(storeDir, all);
-            const merge = buildDeterministicMergeRecord(all);
+            const merge = await buildDeterministicMergeRecordAsync(all);
             await writeMergeRecord(deterministicMergePath(storeDir), merge);
-            const concept = buildConceptMergeRecord(all);
+            const concept = await buildConceptMergeRecordAsync(all);
             await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
           } catch (err) {
             console.warn(

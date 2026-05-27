@@ -2,6 +2,7 @@ import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
 import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
+import { sanitizeSessionRecord } from "./sanitizeRecords";
 
 const MAX_LABEL = 120;
 
@@ -37,7 +38,7 @@ function recordSessionMeta(record: SessionRecord): SessionMeta {
 function sessionBranch(record: SessionRecord): MindMapNodeData {
   // Reuse the per-session renderer so each session subtree looks identical to
   // the panel a user sees when they open that single session — just nested
-  // under a project node.
+  // under a project node. Caller must pass records sanitized via sanitizeRecordsForMerge.
   const sessionMeta = recordSessionMeta(record);
   const subtree = buildTopicMindMap(
     record.graph,
@@ -118,6 +119,14 @@ export function buildDeterministicMergeMindMap(
     children: projectNodes,
   };
   return withOrigin(root, unionChildRefs(projectNodes));
+}
+
+export async function buildDeterministicMergeRecordAsync(
+  records: SessionRecord[],
+  options: DeterministicMergeOptions = {}
+): Promise<MergeRecord> {
+  const sanitized = await Promise.all(records.map((r) => sanitizeSessionRecord(r)));
+  return buildDeterministicMergeRecord(sanitized, options);
 }
 
 export function buildDeterministicMergeRecord(
