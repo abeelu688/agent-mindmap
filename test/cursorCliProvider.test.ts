@@ -141,6 +141,19 @@ describe("validateTopicGraph", () => {
     expect(g.topics[0].items[0].sourceTurnIndices).toEqual([0, 3]);
   });
 
+  it("folds android/runtime/art in conceptPath", () => {
+    const g = validateTopicGraph({
+      topics: [
+        {
+          title: "T",
+          conceptPath: ["android", "runtime", "art", "jit"],
+          items: [{ text: "x" }],
+        },
+      ],
+    });
+    expect(g.topics[0].conceptPath).toEqual(["android", "art", "jit"]);
+  });
+
   it("parses and normalises conceptPath", () => {
     const g = validateTopicGraph({
       topics: [

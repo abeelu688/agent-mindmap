@@ -1,3 +1,4 @@
+import { normalizeConceptPath } from "./normalizeConceptPath";
 import { LlmProviderError, type TopicGraph } from "./types";
 
 const MAX_ROOT_TITLE = 80;
@@ -33,7 +34,7 @@ function parseConceptPath(value: unknown): string[] | undefined {
       break;
     }
   }
-  return out.length ? out : undefined;
+  return out.length ? normalizeConceptPath(out) : undefined;
 }
 
 export function canonicalizeConceptSegment(segment: string): string {

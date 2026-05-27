@@ -86,7 +86,9 @@ Concept Mind Map · 全部
             └── AIDL 代码生成 · [s3-label]
 ```
 
-This is fully deterministic (no LLM call). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (e.g. `android → runtime → art` is folded to `android → art` so JIT and Hook sessions share one `art` branch). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+
+**Open Merged View** vs **Open Concept Mind Map**: the former stitches by **project → session → topic** (good for replaying each chat as analyzed). The latter is the cross-session **concept hierarchy** — use it when you want topics like ART JIT and ART instrumentation under the same `android → art` tree.
 
 The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `agentMindmap.cacheLlmResult`) remains as a secondary cache — harmless and useful when `library.enabled = false`.
 

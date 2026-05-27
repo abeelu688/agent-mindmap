@@ -1,4 +1,5 @@
 import { canonicalizeConceptSegment } from "../llm/cursorCliProvider";
+import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import type { Topic } from "../llm/types";
 import {
   leafRefs,
@@ -68,8 +69,9 @@ function insertPath(
   path: string[],
   location: TopicLocation
 ): void {
+  const normalized = normalizeConceptPath(path);
   let node = root;
-  for (const segment of path) {
+  for (const segment of normalized) {
     const key = canonicalizeConceptSegment(segment);
     if (!key) {
       continue;
@@ -173,9 +175,9 @@ export function buildConceptTrieMindMap(
   for (const record of filtered) {
     for (const topic of record.graph.topics) {
       total += 1;
-      const path = topic.conceptPath?.filter(
-        (s) => canonicalizeConceptSegment(s).length > 0
-      );
+      const path = topic.conceptPath?.length
+        ? normalizeConceptPath(topic.conceptPath)
+        : undefined;
       const location: TopicLocation = { record, topic };
       if (path && path.length) {
         insertPath(root, path, location);

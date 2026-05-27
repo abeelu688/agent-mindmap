@@ -154,6 +154,42 @@ describe("buildConceptTrieMindMap", () => {
     expect(mindMap.children?.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("merges android/runtime/art and android/art under one art node", () => {
+    const records = [
+      makeRecord("jit-session", "aosp", {
+        topics: [
+          topic("JIT概念", ["android", "runtime", "art", "jit"], ["x"]),
+          topic("编译模型", ["android", "runtime", "art", "compilation modes"], [
+            "y",
+          ]),
+        ],
+      }),
+      makeRecord("hook-session", "aosp", {
+        topics: [
+          topic("MethodEntered", ["android", "art", "instrumentation"], ["z"]),
+          topic("Deopt", ["android", "art", "deoptimization"], ["w"]),
+        ],
+      }),
+    ];
+
+    const { mindMap } = buildConceptTrieMindMap(records);
+    const android = mindMap.children?.find((c) =>
+      c.data.text.startsWith("android (")
+    );
+    expect(android).toBeDefined();
+    const androidChildren = android!.children?.map((c) => c.data.text) ?? [];
+    expect(androidChildren.filter((l) => l.startsWith("art ("))).toHaveLength(1);
+    expect(androidChildren.some((l) => l.startsWith("runtime ("))).toBe(false);
+
+    const art = android!.children!.find((c) => c.data.text.startsWith("art ("));
+    expect(art).toBeDefined();
+    const artChildKeys = art!.children?.map((c) => c.data.text) ?? [];
+    expect(artChildKeys.some((l) => l.startsWith("jit ("))).toBe(true);
+    expect(artChildKeys.some((l) => l.startsWith("instrumentation ("))).toBe(
+      true
+    );
+  });
+
   it("buildConceptMergeRecord captures meta", () => {
     const records = [
       makeRecord("a", "proj-a", {
