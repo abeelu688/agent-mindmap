@@ -57,9 +57,25 @@ Layout:
       <sessionId>.json                 # SessionRecord: meta + the TopicGraph the LLM returned
   merges/
     deterministic.json                 # auto-rebuilt cross-project mind map (no LLM)
+    concept-trie.json                  # concept-path trie merge (all projects)
     llm-refined.json                   # most recent LLM-synthesised merge
     cache/<selectionSha>.json          # LLM merge results keyed by selection set
+  ontology/
+    index.json                         # cache index for concept ontology memory
+    cache/<selectionSha>.json        # ontology + topicPaths + segmentEquivalences
 ```
+
+### Concept ontology memory (LLM + cache)
+
+Opening **Concept Mind Map** runs a three-step LLM pipeline (cached under `ontology/cache/`):
+
+1. **Ontology** — domain concepts, aliases, parent keys
+2. **Topic paths** — per-topic `conceptPath` for trie merge
+3. **Refine** — contextual **segment equivalences** (e.g. under `android` + ART evidence, `runtime` / `androidruntime` → canonical `art`)
+
+`segmentEquivalences` are applied when merging (not hardcoded): each rule has `scope.pathPrefix`, optional `evidenceKeywords`, and `confidence`. Results are reused until transcripts or prompt versions change.
+
+Command: **Agent Mind Map: Rebuild Concept Ontology Cache** clears `ontology/cache/` to force a full refresh.
 
 `SessionRecord.meta` carries `hostId`, `projectSlug`, `projectPath`, `transcriptSha256`, prompt parameters, `promptVersion`, LLM provider + model, and `analyzedAt`. The freshness check uses `transcriptSha256` + prompt params + `promptVersion` + `hostId` + model: if any of those changed the session is re-analyzed and the record overwritten. `promptVersion` lets the library auto-invalidate after upgrades that change the LLM output schema (e.g. adding `conceptPath`).
 

@@ -1,6 +1,7 @@
 import { canonicalizeConceptSegment } from "../llm/cursorCliProvider";
-import { normalizeConceptPath } from "../llm/normalizeConceptPath";
-import type { Topic } from "../llm/types";
+import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
+import type { SegmentEquivalence, Topic } from "../llm/types";
+import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
 import {
   leafRefs,
   type SessionMeta,
@@ -67,9 +68,19 @@ function makeNode(canonical: string, label: string): TrieNode {
 function insertPath(
   root: TrieNode,
   path: string[],
-  location: TopicLocation
+  location: TopicLocation,
+  equivalences: SegmentEquivalence[] | undefined
 ): void {
-  const normalized = normalizeConceptPath(path);
+  const ctx = {
+    title: location.topic.title,
+    items: location.topic.items?.map((i) => i.text),
+    projectSlug: location.record.meta.projectSlug,
+  };
+  const normalized = resolveConceptPathWithEquivalences(
+    path,
+    equivalences,
+    ctx
+  );
   let node = root;
   for (const segment of normalized) {
     const key = canonicalizeConceptSegment(segment);
@@ -150,6 +161,7 @@ function renderNode(node: TrieNode): MindMapNodeData {
 export type ConceptMergeOptions = {
   title?: string;
   projectSlug?: string;
+  segmentEquivalences?: SegmentEquivalence[];
 };
 
 /** Stats useful for UI / tests / progress messages. */
@@ -175,17 +187,17 @@ export function buildConceptTrieMindMap(
   for (const record of filtered) {
     for (const topic of record.graph.topics) {
       total += 1;
-      const path = topic.conceptPath?.length
-        ? normalizeConceptPath(topic.conceptPath)
-        : undefined;
+      const path = topic.conceptPath?.length ? topic.conceptPath : undefined;
       const location: TopicLocation = { record, topic };
       if (path && path.length) {
-        insertPath(root, path, location);
+        insertPath(root, path, location, options.segmentEquivalences);
       } else {
         orphans.push(location);
       }
     }
   }
+
+  mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
 
   const title =
     options.title ??

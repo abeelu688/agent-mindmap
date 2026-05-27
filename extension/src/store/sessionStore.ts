@@ -29,6 +29,9 @@ export const STORE_LAYOUT = {
   deterministicFile: "merges/deterministic.json",
   conceptTrieFile: "merges/concept-trie.json",
   llmRefinedFile: "merges/llm-refined.json",
+  ontologyDir: "ontology",
+  ontologyIndexFile: "ontology/index.json",
+  ontologyCacheDir: "ontology/cache",
 } as const;
 
 export function sha256Hex(data: string | Buffer): string {
@@ -70,6 +73,14 @@ export function llmMergeCachePath(storeDir: string, key: string): string {
   return path.join(storeDir, STORE_LAYOUT.mergeCacheDir, `${key}.json`);
 }
 
+export function ontologyIndexPath(storeDir: string): string {
+  return path.join(storeDir, STORE_LAYOUT.ontologyIndexFile);
+}
+
+export function ontologyCachePath(storeDir: string, key: string): string {
+  return path.join(storeDir, STORE_LAYOUT.ontologyCacheDir, `${key}.json`);
+}
+
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
 }
@@ -106,6 +117,8 @@ export async function ensureStore(storeDir: string): Promise<void> {
   await ensureDir(path.join(storeDir, STORE_LAYOUT.sessionsDir));
   await ensureDir(path.join(storeDir, STORE_LAYOUT.mergesDir));
   await ensureDir(path.join(storeDir, STORE_LAYOUT.mergeCacheDir));
+  await ensureDir(path.join(storeDir, STORE_LAYOUT.ontologyDir));
+  await ensureDir(path.join(storeDir, STORE_LAYOUT.ontologyCacheDir));
   const schemaFile = path.join(storeDir, STORE_LAYOUT.schemaFile);
   if (!(await pathExists(schemaFile))) {
     await writeJsonAtomic(schemaFile, {
