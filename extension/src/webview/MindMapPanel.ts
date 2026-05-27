@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import type { MindMapRoot } from "../transcript/types";
-import { MindMapHost, type NodeClickedListener } from "./MindMapHost";
+import {
+  MindMapHost,
+  type DownloadRequestedListener,
+  type NodeClickedListener,
+} from "./MindMapHost";
 
 /**
  * Mind map as an editor-area {@link vscode.WebviewPanel} (code editor strip),
@@ -58,6 +62,12 @@ export class MindMapPanel {
     MindMapHost.onNodeClicked(listener);
   }
 
+  public static onDownloadRequested(
+    listener: DownloadRequestedListener | undefined
+  ): void {
+    MindMapHost.onDownloadRequested(listener);
+  }
+
   public static queueBoot(data: MindMapRoot, title?: string): void {
     MindMapHost.queueBoot(data, title);
   }
@@ -73,6 +83,10 @@ export class MindMapPanel {
 
   public setMindMapData(data: MindMapRoot): void {
     this.host.setMindMapData(data);
+  }
+
+  public getMindMapData(): MindMapRoot | undefined {
+    return this.host.getMindMapData();
   }
 
   public setTitle(title: string): void {

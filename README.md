@@ -100,6 +100,7 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 | **Agent Mind Map: Choose Session…** | Pick a transcript by human-readable title + time (Cursor: sidebar composer name from `state.vscdb`; Claude: `sessions-index.json`; else first user query) |
 | **Agent Mind Map: Refresh** | Force re-analysis of the active session (overwrites the library record) |
 | **Agent Mind Map: Export Mind Map JSON** | Save to `docs/agent-mindmaps/<session-id>.json` |
+| **Agent Mind Map: Download Mind Map Package…** | Pick a folder; writes an offline bundle (`index.html`, `mindmap.json`, `transcripts/*.md`, `assets/`) |
 | **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
 | **Agent Mind Map: Open Merged View (Current Project)** | Same, filtered to the current workspace |
 | **Agent Mind Map: Open Concept Mind Map (All Projects)** | Cross-session **concept trie**: groups topics by the longest common `conceptPath` prefix (e.g. `android → ipc → binder → binder 驱动`). Pure deterministic — uses the conceptPath meta the LLM already produced per session |
@@ -118,6 +119,8 @@ Every rendered mind-map node — root, project / topic branch, and leaf — is c
 2. Opens a readable Markdown transcript in the **same code-editor tab group** as the mind map. The map tab stays open but hidden behind the transcript until you close the Markdown tab.
 3. When the click targets a specific turn, scrolls to the matching `## Q#` heading in that document.
 4. Closing the Markdown tab (×) brings the mind map tab back to the front.
+
+**Download offline package:** right-click the blank canvas → **下载思维导图与对话…** (or run **Download Mind Map Package…**). Choose a destination folder. The export includes a self-contained `index.html` mind map plus every transcript referenced by the current view as Markdown under `transcripts/`. Clicking nodes in the exported map opens the matching `.md` file at the `#q-N` anchor. If your browser blocks `file://` navigation, open the transcripts in an editor or serve the folder with a local static server (see `README.md` in the export).
 
 The mind map opens as an **editor tab** in the code editor strip (not in the Activity Bar sidebar). Extensions cannot replace Cursor's Agent / chat panel.
 

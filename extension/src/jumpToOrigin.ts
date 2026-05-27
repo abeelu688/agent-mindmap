@@ -17,6 +17,7 @@ import { getActiveHost } from "./host";
 import { getHostById } from "./host/registry";
 import type { AgentHostId } from "./host/types";
 import { slugToWorkspacePath } from "./paths";
+import { renderTranscriptMarkdown } from "./export/renderTranscriptMarkdown";
 import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
@@ -365,52 +366,17 @@ async function openTranscriptAsMarkdown(
     ? await getActiveHost(opts.context)
     : hostForTranscriptPath(transcriptPath);
   const events = host.parseTranscript(content);
-  const lines: string[] = [];
   const title = opts.label ?? path.basename(transcriptPath);
-  lines.push(`# ${title}`);
-  lines.push("");
-
-  let userQueryOrdinal = -1;
-  let displayQ = 0;
+  const rendered = renderTranscriptMarkdown(events, title);
   let focusLine = -1;
-  let skipNextAssistant = false;
-  for (const ev of events) {
-    if (ev.kind === "user_query") {
-      userQueryOrdinal += 1;
-      if (isMetaSearchUserQuery(ev.text)) {
-        skipNextAssistant = true;
-        continue;
-      }
-      skipNextAssistant = false;
-      displayQ += 1;
-      if (opts.focusTurnIndex === userQueryOrdinal) {
-        focusLine = lines.length;
-      }
-      lines.push(`## Q${displayQ}`);
-      lines.push("");
-      for (const t of ev.text.split(/\r?\n/)) {
-        lines.push(`> ${t}`);
-      }
-      lines.push("");
-    } else if (ev.kind === "assistant_summary") {
-      if (skipNextAssistant) {
-        skipNextAssistant = false;
-        continue;
-      }
-      if (displayQ === 0) {
-        continue;
-      }
-      lines.push(`### A${displayQ}`);
-      lines.push("");
-      lines.push(ev.text);
-      lines.push("");
-    }
+  if (opts.focusTurnIndex !== undefined) {
+    focusLine = rendered.turnIndexToLine.get(opts.focusTurnIndex) ?? -1;
   }
 
   const editorColumn = transcriptViewColumn();
 
   const doc = await vscode.workspace.openTextDocument({
-    content: lines.join("\n"),
+    content: rendered.markdown,
     language: "markdown",
   });
 

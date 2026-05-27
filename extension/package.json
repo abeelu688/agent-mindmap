@@ -17,6 +17,7 @@
     "onCommand:agent-mindmap.pickSession",
     "onCommand:agent-mindmap.refresh",
     "onCommand:agent-mindmap.exportJson",
+    "onCommand:agent-mindmap.downloadPackage",
     "onCommand:agent-mindmap.openMerged",
     "onCommand:agent-mindmap.openMergedCurrentProject",
     "onCommand:agent-mindmap.openConceptMerged",
@@ -53,6 +54,11 @@
       {
         "command": "agent-mindmap.exportJson",
         "title": "Agent Mind Map: Export Mind Map JSON",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.downloadPackage",
+        "title": "Agent Mind Map: Download Mind Map Package…",
         "category": "Agent Mind Map"
       },
       {

@@ -15,7 +15,8 @@ export type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
-  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
+  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
+  | { type: "requestDownload" };
 
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
@@ -26,6 +27,8 @@ export type NodeClickedListener = (payload: {
   nodeLabel?: string;
 }) => void;
 
+export type DownloadRequestedListener = () => void;
+
 /**
  * Shared mind-map webview logic for editor panels and other hosts. Keeps
  * state across hide/show when the host enables retainContextWhenHidden.
@@ -33,11 +36,13 @@ export type NodeClickedListener = (payload: {
 export class MindMapHost {
   private static current: MindMapHost | undefined;
   private static nodeClickedListener: NodeClickedListener | undefined;
+  private static downloadRequestedListener: DownloadRequestedListener | undefined;
   private static bootData: MindMapRoot | undefined;
   private static bootTitle: string | undefined;
 
   private webviewReady = false;
   private pendingData: MindMapRoot | undefined;
+  private lastMindMapData: MindMapRoot | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
   private themeFileWatcher: vscode.FileSystemWatcher | undefined;
   private themeFsWatcher: fs.FSWatcher | undefined;
@@ -104,6 +109,13 @@ export class MindMapHost {
         if (msg.type === "updateUiSetting") {
           void this.handleUpdateUiSetting(msg.key, msg.value);
         }
+        if (msg.type === "requestDownload") {
+          if (MindMapHost.downloadRequestedListener) {
+            MindMapHost.downloadRequestedListener();
+          } else {
+            mindMapLog("WARN: requestDownload with no listener registered");
+          }
+        }
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("agentMindmap.ui")) {
@@ -116,6 +128,16 @@ export class MindMapHost {
 
   public static onNodeClicked(listener: NodeClickedListener | undefined): void {
     MindMapHost.nodeClickedListener = listener;
+  }
+
+  public static onDownloadRequested(
+    listener: DownloadRequestedListener | undefined
+  ): void {
+    MindMapHost.downloadRequestedListener = listener;
+  }
+
+  public getMindMapData(): MindMapRoot | undefined {
+    return this.lastMindMapData;
   }
 
   public static getCurrent(): MindMapHost | undefined {
@@ -150,6 +172,7 @@ export class MindMapHost {
   }
 
   public setMindMapData(data: MindMapRoot): void {
+    this.lastMindMapData = data;
     if (this.webviewReady) {
       this.postData(data);
     } else {
@@ -230,6 +253,7 @@ export class MindMapHost {
   }
 
   private postData(data: MindMapRoot): void {
+    this.lastMindMapData = data;
     this.postUi();
     const msg: ExtensionToWebviewMessage = { type: "setData", data };
     const stats = MindMapHost.statsForOriginCoverage(data);

@@ -49,6 +49,7 @@ import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
 import { getProvider } from "./llm";
 import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
+import { exportMindMapPackage } from "./export/exportPackage";
 
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
@@ -230,6 +231,58 @@ async function commandRefresh(): Promise<void> {
     activeSession = refreshed;
     MindMapPanel.getCurrent()?.setMindMapData(refreshed.mindMap);
     vscode.window.showInformationMessage("Agent Mind Map refreshed.");
+  }
+}
+
+async function commandDownloadPackage(): Promise<void> {
+  const panel = MindMapPanel.getCurrent();
+  const mindMap = panel?.getMindMapData();
+  if (!mindMap) {
+    vscode.window.showWarningMessage(
+      "Agent Mind Map: 请先打开思维导图。"
+    );
+    return;
+  }
+
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: "选择下载目录",
+  });
+  if (!picked?.length) {
+    return;
+  }
+
+  const outDir = picked[0]!.fsPath;
+
+  try {
+    const result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Agent Mind Map: 正在导出…",
+        cancellable: false,
+      },
+      async () =>
+        exportMindMapPackage({
+          outDir,
+          mindMap,
+          extensionUri: extensionContext.extensionUri,
+        })
+    );
+
+    const open = "在资源管理器中显示";
+    const choice = await vscode.window.showInformationMessage(
+      `已导出思维导图与 ${result.transcriptCount} 个对话 Markdown 到所选目录。`,
+      open
+    );
+    if (choice === open) {
+      await vscode.env.openExternal(vscode.Uri.file(result.outDir));
+    }
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `Agent Mind Map: 导出失败: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -927,6 +980,10 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  MindMapPanel.onDownloadRequested(() => {
+    void commandDownloadPackage();
+  });
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "agent-mindmap.openLatest",
@@ -943,6 +1000,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.exportJson",
       commandExportJson
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.downloadPackage",
+      commandDownloadPackage
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.openMerged",
