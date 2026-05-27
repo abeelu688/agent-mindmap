@@ -1,11 +1,16 @@
 import { HeadlessCliProvider } from "./headlessCli";
-import type { LlmProvider, LlmProviderOptions, TopicGraph } from "./types";
+import type {
+  LlmProvider,
+  LlmProviderOptions,
+  LlmSummarizeResult,
+} from "./types";
 import type { SummarizeInput } from "./types";
 
 export {
   canonicalizeConceptSegment,
   validateTopicGraph,
 } from "./topicGraphValidate";
+export { validateSessionOutline, validateMergedOutline } from "./outlineValidate";
 
 const DEFAULT_BINARIES = ["agent", "cursor-agent"];
 
@@ -34,7 +39,10 @@ export class CursorCliProvider implements LlmProvider {
     }, options);
   }
 
-  summarize(input: SummarizeInput, signal: AbortSignal): Promise<TopicGraph> {
+  summarize(
+    input: SummarizeInput,
+    signal: AbortSignal
+  ): Promise<LlmSummarizeResult> {
     return this.inner.summarize(input, signal);
   }
 }

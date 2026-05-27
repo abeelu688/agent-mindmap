@@ -2,12 +2,16 @@ import { readFileSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { buildTurnMindMap } from "../extension/src/mindmap/buildMindMapData";
+import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { validateTopicGraph } from "../extension/src/llm/cursorCliProvider";
 import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import { LlmProviderError } from "../extension/src/llm/types";
 import type {
   LlmProvider,
+  LlmSummarizeResult,
+  SessionOutline,
   SummarizeInput,
   TopicGraph,
 } from "../extension/src/llm/types";
@@ -94,20 +98,25 @@ async function main(): Promise<void> {
   }
   assert(threwOnEmptyTopics, "validate: rejects empty topics");
 
-  // topic mind map
+  // outline mind map
+  const validOutline: SessionOutline = {
+    title: "Binder session",
+    outline: [
+      {
+        title: "Binder",
+        details: [{ text: "tr.code" }],
+      },
+    ],
+  };
+  const outlineRoot = buildOutlineMindMap(validOutline, "session-label");
+  assert(outlineRoot.data.text === "Binder session", "outline: root title");
+  assert(outlineRoot.children?.[0]?.data.text === "Binder", "outline: branch title");
+
+  // topic mind map (legacy renderer)
   const topicRoot = buildTopicMindMap(validGraph, "session-label");
   assert(topicRoot.data.text === "session-label", "topic: root label");
-  assert(
-    topicRoot.children?.[0]?.data.text.startsWith("核心1:") ?? false,
-    "topic: 核心1 prefix"
-  );
-  // Back-compat: no sessionMeta => no origin metadata.
-  assert(
-    topicRoot.data.origin === undefined,
-    "topic: no origin when sessionMeta omitted"
-  );
 
-  // origin bubbling through buildTopicMindMap
+  // origin bubbling through buildOutlineMindMap
   const originGraph: TopicGraph = {
     title: "Binder 调研",
     topics: [
@@ -131,8 +140,9 @@ async function main(): Promise<void> {
     sessionLabel: "sess-X · now",
     transcriptPath: "/tmp/sess-X.jsonl",
   };
-  const originRoot = buildTopicMindMap(
-    originGraph,
+  const originOutline = topicGraphToOutline(originGraph);
+  const originRoot = buildOutlineMindMap(
+    originOutline,
     "label",
     originSessionMeta
   );
@@ -199,16 +209,16 @@ async function main(): Promise<void> {
   let cacheCalls = 0;
   const fakeProvider: LlmProvider = {
     id: "fake",
-    async summarize(_input: SummarizeInput): Promise<TopicGraph> {
+    async summarize(_input: SummarizeInput): Promise<LlmSummarizeResult> {
       cacheCalls += 1;
-      return validGraph;
+      return validOutline;
     },
   };
 
   const cacheDir = mkdtempSync(join(tmpdir(), "agent-mindmap-runall-"));
   try {
     const opts = {
-      prompt: { maxTopics: 6, maxItemsPerTopic: 6 },
+      prompt: { maxBranches: 6, maxDetailsPerNode: 6 },
       cacheDir,
       cache: true,
     };
@@ -240,7 +250,7 @@ async function main(): Promise<void> {
         sessionLabel: "sess-1 · now",
         ...overrides,
       });
-    const recordA = buildSessionRecord(baseMeta(), validGraph);
+    const recordA = buildSessionRecord(baseMeta(), validOutline);
     const recordB = buildSessionRecord(
       baseMeta({
         sessionId: "sess-2",
@@ -249,7 +259,7 @@ async function main(): Promise<void> {
         sessionLabel: "sess-2 · now",
         analyzedAt: Date.now() + 1,
       }),
-      validGraph
+      validOutline
     );
     await writeRecord(storeDir, recordA);
     await writeRecord(storeDir, recordB);
@@ -323,7 +333,7 @@ async function main(): Promise<void> {
         promptVersion: 2,
         sessionLabel: "concept-sess",
       }),
-      {
+      topicGraphToOutline({
         topics: [
           {
             title: "Binder",
@@ -331,7 +341,7 @@ async function main(): Promise<void> {
             items: [{ text: "tr.code" }],
           },
         ],
-      }
+      })
     );
     const trie = buildConceptTrieMindMap([conceptRecord]);
     assert(trie.stats.topicsWithPath === 1, "trie: 1 topic with path");
@@ -360,7 +370,7 @@ async function main(): Promise<void> {
         promptVersion: 2,
         sessionLabel: "jit",
       }),
-      {
+      topicGraphToOutline({
         topics: [
           {
             title: "JIT",
@@ -368,7 +378,7 @@ async function main(): Promise<void> {
             items: [{ text: "a" }],
           },
         ],
-      }
+      })
     );
     const artHook = buildSessionRecord(
       buildRecordMeta({
@@ -382,7 +392,7 @@ async function main(): Promise<void> {
         promptVersion: 2,
         sessionLabel: "hook",
       }),
-      {
+      topicGraphToOutline({
         topics: [
           {
             title: "Hook",
@@ -390,7 +400,7 @@ async function main(): Promise<void> {
             items: [{ text: "b" }],
           },
         ],
-      }
+      })
     );
     const artTrie = buildConceptTrieMindMap([artJit, artHook]);
     const artAndroid = artTrie.mindMap.children?.find((c) =>

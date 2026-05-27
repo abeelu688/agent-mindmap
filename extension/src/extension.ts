@@ -45,7 +45,7 @@ import {
   buildConceptTrieMindMap,
 } from "./store/mergeConceptTrie";
 import { mergeWithLlm } from "./store/mergeLlm";
-import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
+import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { getProvider } from "./llm";
 import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
@@ -448,9 +448,9 @@ async function pickRecordsManually(
   const items = records.map((r) => ({
     label: r.meta.sessionLabel,
     description: r.meta.projectPath ?? r.meta.projectSlug,
-    detail: r.graph.title
-      ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
-      : `${r.graph.topics.length} 个主题`,
+    detail: r.outline.title
+      ? `${r.outline.title} · ${r.outline.outline.length} 条大纲`
+      : `${r.outline.outline.length} 条大纲`,
     record: r,
     picked: true,
   }));
@@ -561,15 +561,21 @@ function scoreRecord(record: SessionRecord, queryLc: string): SearchHit | undefi
   };
 
   check(record.meta.sessionLabel, 4, "会话");
-  check(record.graph.title, 3, "标题");
-  check(record.graph.summary, 2, "摘要");
-  for (const topic of record.graph.topics ?? []) {
-    check(topic.title, 2, "主题");
-    check(topic.summary, 1, "主题摘要");
-    for (const item of topic.items ?? []) {
-      check(item.text, 1, "要点");
+  check(record.outline.title, 3, "标题");
+  check(record.outline.summary, 2, "摘要");
+  const walk = (nodes: typeof record.outline.outline) => {
+    for (const node of nodes) {
+      check(node.title, 2, "大纲");
+      check(node.summary, 1, "摘要");
+      for (const detail of node.details ?? []) {
+        check(detail.text, 1, "细节");
+      }
+      if (node.children?.length) {
+        walk(node.children);
+      }
     }
-  }
+  };
+  walk(record.outline.outline);
 
   if (score === 0) return undefined;
   return { record, score, matchSnippet: snippets[0] ?? "" };
@@ -603,9 +609,9 @@ async function commandSearchLibrary(): Promise<void> {
         .map((r) => ({
           label: r.meta.sessionLabel,
           description: metaProjectPath(r.meta),
-          detail: r.graph.title
-            ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
-            : `${r.graph.topics.length} 个主题`,
+          detail: r.outline.title
+            ? `${r.outline.title} · ${r.outline.outline.length} 条大纲`
+            : `${r.outline.outline.length} 条大纲`,
           record: r,
         }));
     }
@@ -636,13 +642,17 @@ async function commandSearchLibrary(): Promise<void> {
     qp.hide();
     if (!picked) return;
     const meta = picked.record.meta;
-    const root = buildTopicMindMap(picked.record.graph, meta.sessionLabel, {
-      sessionId: meta.sessionId,
-      projectSlug: meta.projectSlug,
-      projectPath: meta.projectPath,
-      sessionLabel: meta.sessionLabel,
-      transcriptPath: meta.transcriptPath,
-    });
+    const root = buildOutlineMindMap(
+      picked.record.outline,
+      meta.sessionLabel,
+      {
+        sessionId: meta.sessionId,
+        projectSlug: meta.projectSlug,
+        projectPath: meta.projectPath,
+        sessionLabel: meta.sessionLabel,
+        transcriptPath: meta.transcriptPath,
+      }
+    );
     void showMindMapStandalone(`${meta.sessionLabel} (搜索结果)`, root);
   });
 
@@ -665,9 +675,9 @@ async function commandBrowseLibrary(): Promise<void> {
     label: r.meta.sessionLabel,
     description:
       metaProjectPath(r.meta),
-    detail: r.graph.title
-      ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
-      : `${r.graph.topics.length} 个主题`,
+    detail: r.outline.title
+      ? `${r.outline.title} · ${r.outline.outline.length} 条大纲`
+      : `${r.outline.outline.length} 条大纲`,
     record: r,
   }));
   const picked = await vscode.window.showQuickPick(items, {
@@ -679,8 +689,8 @@ async function commandBrowseLibrary(): Promise<void> {
     return;
   }
   const meta = picked.record.meta;
-  const root = buildTopicMindMap(
-    picked.record.graph,
+  const root = buildOutlineMindMap(
+    picked.record.outline,
     meta.sessionLabel,
     {
       sessionId: meta.sessionId,

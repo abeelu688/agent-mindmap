@@ -1,5 +1,9 @@
 import { HeadlessCliProvider } from "./headlessCli";
-import type { LlmProvider, LlmProviderOptions, TopicGraph } from "./types";
+import type {
+  LlmProvider,
+  LlmProviderOptions,
+  LlmSummarizeResult,
+} from "./types";
 import type { SummarizeInput } from "./types";
 
 const DEFAULT_BINARIES = ["claude"];
@@ -34,7 +38,10 @@ export class ClaudeCliProvider implements LlmProvider {
     }, options);
   }
 
-  summarize(input: SummarizeInput, signal: AbortSignal): Promise<TopicGraph> {
+  summarize(
+    input: SummarizeInput,
+    signal: AbortSignal
+  ): Promise<LlmSummarizeResult> {
     return this.inner.summarize(input, signal);
   }
 }

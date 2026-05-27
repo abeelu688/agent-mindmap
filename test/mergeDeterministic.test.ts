@@ -9,6 +9,7 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { TopicGraph } from "../extension/src/llm/types";
 
 const graphA: TopicGraph = {
@@ -41,7 +42,7 @@ function makeRecord(
       promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
       sessionLabel: `${sessionId.slice(0, 4)}…`,
     }),
-    graph
+    topicGraphToOutline(graph)
   );
 }
 
