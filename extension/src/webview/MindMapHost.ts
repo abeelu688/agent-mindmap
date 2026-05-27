@@ -14,14 +14,17 @@ import { mindMapLog } from "./MindMapLog";
 export type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
-  | { type: "nodeClicked"; origin: NodeOrigin }
+  | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
   | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
 
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
   | { type: "setUi"; ui: MindMapUiOptions };
 
-export type NodeClickedListener = (origin: NodeOrigin) => void;
+export type NodeClickedListener = (payload: {
+  origin: NodeOrigin;
+  nodeLabel?: string;
+}) => void;
 
 /**
  * Shared mind-map webview logic for editor panels and other hosts. Keeps
@@ -89,7 +92,10 @@ export class MindMapHost {
           }
           if (MindMapHost.nodeClickedListener) {
             try {
-              MindMapHost.nodeClickedListener(msg.origin);
+              MindMapHost.nodeClickedListener({
+                origin: msg.origin,
+                nodeLabel: msg.nodeLabel,
+              });
             } catch (err) {
               mindMapLog(`nodeClicked listener threw: ${String(err)}`);
             }

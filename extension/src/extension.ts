@@ -39,9 +39,9 @@ import {
   rebuildIndex,
   writeMergeRecord,
 } from "./store/sessionStore";
-import { buildDeterministicMergeRecord } from "./store/mergeDeterministic";
+import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import {
-  buildConceptMergeRecord,
+  buildConceptMergeRecordAsync,
   buildConceptTrieMindMap,
 } from "./store/mergeConceptTrie";
 import { mergeWithLlm } from "./store/mergeLlm";
@@ -182,7 +182,7 @@ async function ensureDeterministicMerge(
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const storeDir = getStoreDir();
   const records = await loadLibraryRecords();
-  const merge = buildDeterministicMergeRecord(records, { projectSlug });
+  const merge = await buildDeterministicMergeRecordAsync(records, { projectSlug });
   if (!projectSlug) {
     // Persist the canonical "全部" merge for cheap subsequent opens.
     await writeMergeRecord(deterministicMergePath(storeDir), merge);
@@ -282,16 +282,7 @@ function hasAnyOrigin(
 async function commandOpenMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
-  // Try cached deterministic.json first; if missing or stale, rebuild.
-  let merge = await readMergeRecord(deterministicMergePath(storeDir));
-  // Old caches written before the click-to-jump rewrite have zero origin
-  // metadata on their nodes — detect and regenerate so leaf clicks resolve.
-  if (merge && !hasAnyOrigin(merge.mindMap)) {
-    merge = undefined;
-  }
-  if (!merge) {
-    merge = await ensureDeterministicMerge();
-  }
+  const merge = await ensureDeterministicMerge();
   if (!merge.meta.sessionIds.length) {
     vscode.window.showInformationMessage(
       "Agent Mind Map: 库为空。先用『Open Latest Session』等命令分析至少一个会话。"
@@ -305,7 +296,7 @@ async function ensureConceptMerge(
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const storeDir = getStoreDir();
   const records = await loadLibraryRecords();
-  const merge = buildConceptMergeRecord(records, { projectSlug });
+  const merge = await buildConceptMergeRecordAsync(records, { projectSlug });
   if (!projectSlug) {
     await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
   }
@@ -315,13 +306,7 @@ async function ensureConceptMerge(
 async function commandOpenConceptMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
-  let merge = await readMergeRecord(conceptTrieMergePath(storeDir));
-  if (merge && !hasAnyOrigin(merge.mindMap)) {
-    merge = undefined;
-  }
-  if (!merge) {
-    merge = await ensureConceptMerge();
-  }
+  const merge = await ensureConceptMerge();
   // Show a hint when many records still lack conceptPath (e.g. produced
   // before the prompt v2 upgrade) so users know why the trie looks sparse.
   const records = await loadLibraryRecords();
@@ -931,8 +916,15 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
-  MindMapPanel.onNodeClicked((origin) =>
-    void handleNodeClicked(origin, { context: extensionContext })
+  MindMapPanel.onNodeClicked((payload) =>
+    void handleNodeClicked(payload, {
+      context: extensionContext,
+      listSessionRecords: async () => {
+        const storeDir = getStoreDir();
+        await ensureStore(storeDir);
+        return listRecords(storeDir);
+      },
+    })
   );
 
   context.subscriptions.push(

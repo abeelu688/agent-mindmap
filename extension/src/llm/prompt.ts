@@ -18,8 +18,9 @@ const MAX_TOOL_LABELS_PER_TURN = 8;
  *
  * v1: title / summary / topics[].{title, summary, items[]}
  * v2: + topics[].conceptPath  (for cross-session concept-trie merging)
+ * v3: stricter sourceTurnIndices — only [Q#] in this transcript
  */
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 3;
 
 export type PromptOptions = {
   maxTopics: number;
@@ -119,7 +120,8 @@ export function buildPrompt(
     "- title: 5-15 字名词性短语",
     "- summary: ≤50 字一句话，可省",
     `- items: 1-${maxItems} 条要点 / 知识点 / 关键提问，每条 ≤40 字`,
-    "- items 若引用某轮对话附 sourceTurnIndices（0-based）",
+    "- items 若引用【本 transcript 内】某轮用户提问，附 sourceTurnIndices（0-based，对应上文 [Q1]→0、[Q2]→1）",
+    "- 禁止把助理回复里提到的其他会话/其他 thread 的轮次号写入 sourceTurnIndices；若要点来自助理归纳的其他会话，省略该字段",
     "- conceptPath: 3-5 段，从【最泛领域】到【最细概念】，每段 ≤12 字、小写英文/通用术语，用于跨会话合并按公共前缀聚类；本会话单图不显示。",
     "  示例：「Binder 驱动调试」→ [\"android\",\"ipc\",\"binder\",\"binder 驱动\"]；「AIDL 代码生成」→ [\"android\",\"ipc\",\"aidl\"]；「React hooks 用法」→ [\"frontend\",\"react\",\"hooks\"]。",
     "  规则：第一段优先用业界通用领域名（android / linux / frontend / backend / build / ai 等）；同会话内同领域核心共享前缀。",

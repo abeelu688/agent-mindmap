@@ -20,7 +20,7 @@ type ExtensionMessage =
 type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
-  | { type: "nodeClicked"; origin: NodeOrigin }
+  | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
   | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
 
 declare function acquireVsCodeApi(): {
@@ -56,15 +56,20 @@ function createMind(ui: MindMapUiOptions): MindElixirInstance {
   });
 
   onSelectNodes = (nodes) => {
+    const withOrigin = nodes.filter((n) => readOriginFromNodeObj(n));
     const picked =
-      nodes.find((n) => readOriginFromNodeObj(n)) ?? nodes[nodes.length - 1];
+      withOrigin[withOrigin.length - 1] ?? nodes[nodes.length - 1];
     const origin = readOriginFromNodeObj(picked);
     if (origin) {
       vscode.postMessage({
         type: "log",
         message: `selectNodes: forwarding ${origin.refs.length} ref(s)`,
       });
-      vscode.postMessage({ type: "nodeClicked", origin });
+      vscode.postMessage({
+        type: "nodeClicked",
+        origin,
+        nodeLabel: picked?.topic,
+      });
       return;
     }
     const topic = picked?.topic ?? "<unknown>";

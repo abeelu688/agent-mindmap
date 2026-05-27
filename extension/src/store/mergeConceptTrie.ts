@@ -8,6 +8,7 @@ import {
 } from "../mindmap/origin";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
+import { sanitizeSessionRecord } from "./sanitizeRecords";
 
 const MAX_LABEL = 120;
 
@@ -231,6 +232,14 @@ export function buildConceptTrieMindMap(
     mindMap: withOrigin(mindMap, unionChildRefs(topChildren)),
     stats,
   };
+}
+
+export async function buildConceptMergeRecordAsync(
+  records: SessionRecord[],
+  options: ConceptMergeOptions = {}
+): Promise<MergeRecord> {
+  const sanitized = await Promise.all(records.map((r) => sanitizeSessionRecord(r)));
+  return buildConceptMergeRecord(sanitized, options);
 }
 
 export function buildConceptMergeRecord(

@@ -2,12 +2,17 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import {
+  extractCitedSessionIds,
+  findBestTurnIndex,
   flattenCandidates,
   formatPickerLabel,
+  isMetaSearchUserQuery,
+  parseQTagsFromNodeLabel,
   type JumpCandidate,
   type PendingJump,
   PENDING_JUMP_KEY,
 } from "./jumpToOriginCore";
+import type { SessionRecord } from "./store/storeTypes";
 import { getActiveHost } from "./host";
 import { getHostById } from "./host/registry";
 import type { AgentHostId } from "./host/types";
@@ -300,16 +305,37 @@ function transcriptViewColumn(): vscode.ViewColumn {
   return col;
 }
 
-async function openChosenTranscript(candidate: JumpCandidate): Promise<void> {
+async function openChosenTranscript(
+  candidate: JumpCandidate,
+  context?: vscode.ExtensionContext
+): Promise<void> {
   if (!candidate.transcriptPath) {
     vscode.window.showErrorMessage(
       "Agent Mind Map: 无法打开对话记录（缺少 transcript 路径）。"
     );
     return;
   }
+  const cache = new Map<string, ChatEvent[]>();
+  const events = await resolveTurnEvents(
+    candidate.transcriptPath,
+    cache,
+    context
+  );
+  const userQueryCount = events.filter((e) => e.kind === "user_query").length;
+  let focusTurnIndex = candidate.turnIndex;
+  if (
+    focusTurnIndex !== undefined &&
+    focusTurnIndex >= userQueryCount
+  ) {
+    vscode.window.showWarningMessage(
+      `Agent Mind Map: 该节点标注的 Q${focusTurnIndex + 1} 在当前 transcript 中不存在（共 ${userQueryCount} 轮用户提问）。已打开整段会话。`
+    );
+    focusTurnIndex = undefined;
+  }
   await openTranscriptAsMarkdown(candidate.transcriptPath, {
     label: candidate.sessionLabel,
-    focusTurnIndex: candidate.turnIndex,
+    focusTurnIndex,
+    context,
   });
 }
 
@@ -343,30 +369,41 @@ async function openTranscriptAsMarkdown(
   const title = opts.label ?? path.basename(transcriptPath);
   lines.push(`# ${title}`);
   lines.push("");
-  lines.push(`_transcript: \`${transcriptPath}\`_`);
-  lines.push("");
 
-  let turnIdx = 0;
+  let userQueryOrdinal = -1;
+  let displayQ = 0;
   let focusLine = -1;
+  let skipNextAssistant = false;
   for (const ev of events) {
     if (ev.kind === "user_query") {
-      turnIdx += 1;
-      if (opts.focusTurnIndex !== undefined && turnIdx === opts.focusTurnIndex + 1) {
+      userQueryOrdinal += 1;
+      if (isMetaSearchUserQuery(ev.text)) {
+        skipNextAssistant = true;
+        continue;
+      }
+      skipNextAssistant = false;
+      displayQ += 1;
+      if (opts.focusTurnIndex === userQueryOrdinal) {
         focusLine = lines.length;
       }
-      lines.push(`## Q${turnIdx}`);
+      lines.push(`## Q${displayQ}`);
       lines.push("");
       for (const t of ev.text.split(/\r?\n/)) {
         lines.push(`> ${t}`);
       }
       lines.push("");
     } else if (ev.kind === "assistant_summary") {
-      lines.push(`### A${turnIdx}`);
+      if (skipNextAssistant) {
+        skipNextAssistant = false;
+        continue;
+      }
+      if (displayQ === 0) {
+        continue;
+      }
+      lines.push(`### A${displayQ}`);
       lines.push("");
       lines.push(ev.text);
       lines.push("");
-    } else if (ev.kind === "tool") {
-      lines.push(`- *tool:* \`${ev.label}\``);
     }
   }
 
@@ -480,12 +517,151 @@ export async function diagnoseJumpCommands(): Promise<void> {
 
 export type JumpDeps = {
   context: vscode.ExtensionContext;
+  listSessionRecords?: () => Promise<SessionRecord[]>;
 };
 
+export type NodeClickPayload = {
+  origin: NodeOrigin;
+  /** Mind-map node label (used to resolve cross-session jumps). */
+  nodeLabel?: string;
+};
+
+function normalizeClick(
+  payload: NodeOrigin | NodeClickPayload
+): NodeClickPayload {
+  if ("origin" in payload) {
+    return payload;
+  }
+  return { origin: payload };
+}
+
+function recordToJumpCandidate(
+  meta: SessionRecord["meta"],
+  turnIndex?: number
+): JumpCandidate {
+  return {
+    sessionId: meta.sessionId,
+    projectSlug: meta.projectSlug,
+    projectPath: meta.projectPath,
+    sessionLabel: meta.sessionLabel,
+    transcriptPath: meta.transcriptPath,
+    turnIndex,
+  };
+}
+
+async function resolveJumpCandidate(
+  candidate: JumpCandidate,
+  opts: {
+    nodeLabel?: string;
+    context?: vscode.ExtensionContext;
+    listSessionRecords?: () => Promise<SessionRecord[]>;
+    eventCache: Map<string, ChatEvent[]>;
+  }
+): Promise<JumpCandidate> {
+  const qTags = opts.nodeLabel ? parseQTagsFromNodeLabel(opts.nodeLabel) : [];
+  const hintText = opts.nodeLabel ?? "";
+  const desiredTurn = candidate.turnIndex ?? qTags[0];
+
+  const events = await resolveTurnEvents(
+    candidate.transcriptPath,
+    opts.eventCache,
+    opts.context
+  );
+  const userQueries = events.filter(
+    (e): e is Extract<ChatEvent, { kind: "user_query" }> => e.kind === "user_query"
+  );
+
+  const turnValid =
+    desiredTurn !== undefined &&
+    desiredTurn < userQueries.length &&
+    !isMetaSearchUserQuery(userQueries[desiredTurn].text);
+
+  if (turnValid) {
+    return { ...candidate, turnIndex: desiredTurn };
+  }
+
+  const onlyMetaSearch =
+    userQueries.length > 0 &&
+    userQueries.every((q) => isMetaSearchUserQuery(q.text));
+
+  const needsCrossSession =
+    Boolean(opts.listSessionRecords) &&
+    Boolean(hintText) &&
+    !hintText.startsWith("概述") &&
+    (onlyMetaSearch ||
+      (desiredTurn !== undefined && desiredTurn >= userQueries.length));
+
+  if (!needsCrossSession) {
+    if (desiredTurn !== undefined && desiredTurn >= userQueries.length) {
+      return { ...candidate, turnIndex: undefined };
+    }
+    return candidate;
+  }
+
+  const citedIds = new Set<string>();
+  for (const ev of events) {
+    const blob =
+      ev.kind === "assistant_summary"
+        ? ev.text
+        : ev.kind === "tool"
+          ? ev.label
+          : "";
+    for (const id of extractCitedSessionIds(blob)) {
+      if (id !== candidate.sessionId.toLowerCase()) {
+        citedIds.add(id);
+      }
+    }
+  }
+
+  const records = await opts.listSessionRecords!();
+  const tryRecords: SessionRecord[] = [];
+  for (const id of citedIds) {
+    const rec = records.find((r) => r.meta.sessionId.toLowerCase() === id);
+    if (rec) {
+      tryRecords.push(rec);
+    }
+  }
+
+  let best: { rec: SessionRecord; turn: number } | undefined;
+  for (const rec of tryRecords) {
+    const citedEvents = await resolveTurnEvents(
+      rec.meta.transcriptPath,
+      opts.eventCache,
+      opts.context
+    );
+    const queries = citedEvents
+      .filter((e) => e.kind === "user_query")
+      .map((e) => e.text);
+    let turn = findBestTurnIndex(queries, hintText);
+    if (
+      turn === undefined &&
+      qTags[0] !== undefined &&
+      qTags[0] < queries.length &&
+      !isMetaSearchUserQuery(queries[qTags[0]])
+    ) {
+      turn = qTags[0];
+    }
+    if (turn !== undefined) {
+      best = { rec, turn };
+      break;
+    }
+  }
+
+  if (best) {
+    mindMapLog(
+      `resolveJump: redirect ${candidate.sessionId} → ${best.rec.meta.sessionId} Q${best.turn + 1}`
+    );
+    return recordToJumpCandidate(best.rec.meta, best.turn);
+  }
+
+  return { ...candidate, turnIndex: undefined };
+}
+
 export async function handleNodeClicked(
-  origin: NodeOrigin,
+  payload: NodeOrigin | NodeClickPayload,
   _deps?: JumpDeps
 ): Promise<void> {
+  const { origin, nodeLabel } = normalizeClick(payload);
   if (!origin?.refs?.length) {
     mindMapLog("handleNodeClicked: empty origin, nothing to do");
     return;
@@ -509,10 +685,17 @@ export async function handleNodeClicked(
     mindMapLog("handleNodeClicked: user dismissed picker");
     return;
   }
+  const eventCache = new Map<string, ChatEvent[]>();
+  const resolved = await resolveJumpCandidate(chosen, {
+    nodeLabel,
+    context: _deps?.context,
+    listSessionRecords: _deps?.listSessionRecords,
+    eventCache,
+  });
   mindMapLog(
-    `handleNodeClicked: chose session=${chosen.sessionId} turnIndex=${chosen.turnIndex ?? "<branch>"} → opening markdown`
+    `handleNodeClicked: open session=${resolved.sessionId} turnIndex=${resolved.turnIndex ?? "<branch>"}`
   );
-  await openChosenTranscript(chosen);
+  await openChosenTranscript(resolved, _deps?.context);
 }
 
 /**
