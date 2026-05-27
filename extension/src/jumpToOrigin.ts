@@ -20,6 +20,59 @@ import { MindMapPanel } from "./webview/MindMapPanel";
 // When the user closes one, reveal the mind map editor tab again.
 const transcriptDocUrisToAutoReveal = new Set<string>();
 
+const MARKDOWN_PREVIEW_EDITOR = "vscode.markdown.preview.editor";
+
+type OpenPreviewOpts = {
+  viewColumn: vscode.ViewColumn;
+  selection?: vscode.Range;
+};
+
+/** Cursor's extension host may lack `vscode.openWith`; use command fallbacks. */
+async function openMarkdownPreviewEditor(
+  uri: vscode.Uri,
+  opts: OpenPreviewOpts
+): Promise<{ ok: boolean; method: string; error?: string }> {
+  const openOpts = {
+    viewColumn: opts.viewColumn,
+    selection: opts.selection,
+  };
+
+  if (typeof vscode.openWith === "function") {
+    try {
+      await vscode.openWith(uri, MARKDOWN_PREVIEW_EDITOR, openOpts);
+      return { ok: true, method: "api.openWith" };
+    } catch (err) {
+      return {
+        ok: false,
+        method: "api.openWith",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  try {
+    await vscode.commands.executeCommand(
+      "vscode.openWith",
+      uri,
+      MARKDOWN_PREVIEW_EDITOR,
+      openOpts
+    );
+    return { ok: true, method: "command.vscode.openWith" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    try {
+      await vscode.commands.executeCommand("markdown.showPreview", uri);
+      return { ok: true, method: "command.markdown.showPreview" };
+    } catch (err2) {
+      return {
+        ok: false,
+        method: "command.markdown.showPreview",
+        error: `${msg}; ${err2 instanceof Error ? err2.message : String(err2)}`,
+      };
+    }
+  }
+}
+
 export {
   flattenCandidates,
   formatPickerLabel,
@@ -327,17 +380,32 @@ async function openTranscriptAsMarkdown(
   // Mark this doc so `onDidCloseTextDocument` can auto-reveal the map.
   transcriptDocUrisToAutoReveal.add(doc.uri.toString());
 
+  const selection =
+    focusLine >= 0
+      ? new vscode.Range(
+          new vscode.Position(focusLine, 0),
+          new vscode.Position(focusLine, 0)
+        )
+      : undefined;
+
+  const previewResult = await openMarkdownPreviewEditor(doc.uri, {
+    viewColumn: editorColumn,
+    selection,
+  });
+  if (previewResult.ok) {
+    return;
+  }
+  mindMapLog(
+    `openTranscriptAsMarkdown: preview failed (${previewResult.method}): ${previewResult.error ?? "unknown"}`
+  );
+
   const editor = await vscode.window.showTextDocument(doc, {
     viewColumn: editorColumn,
     preview: false,
   });
-  if (focusLine >= 0) {
-    const pos = new vscode.Position(focusLine, 0);
-    editor.selections = [new vscode.Selection(pos, pos)];
-    editor.revealRange(
-      new vscode.Range(pos, pos),
-      vscode.TextEditorRevealType.AtTop
-    );
+  if (selection) {
+    editor.selections = [new vscode.Selection(selection.start, selection.end)];
+    editor.revealRange(selection, vscode.TextEditorRevealType.AtTop);
   }
 }
 

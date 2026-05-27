@@ -271,6 +271,14 @@
           "description": "Optional JSON file overriding palette and CSS variables (cssVar). Empty = no file. Supports workspace-relative paths, ~/..., or absolute paths."
         }
       }
+    },
+    "configurationDefaults": {
+      "workbench.editorAssociations": {
+        "*.md": "vscode.markdown.preview.editor"
+      },
+      "workbench.diffEditorAssociations": {
+        "*.md": "default"
+      }
     }
   },
   "scripts": {
