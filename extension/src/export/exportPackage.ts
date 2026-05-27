@@ -10,6 +10,10 @@ import {
   anchorForTurnIndex,
   renderTranscriptMarkdown,
 } from "./renderTranscriptMarkdown";
+import {
+  buildTranscriptPageHtml,
+  markdownToTranscriptHtmlBody,
+} from "./renderTranscriptHtml";
 
 function hostForTranscriptPath(
   transcriptPath: string
@@ -20,33 +24,35 @@ function hostForTranscriptPath(
   return getHostById("claude-code");
 }
 
-function buildJumpHref(
-  mdRelPath: string,
+/** Build offline jump href to a pre-rendered transcript HTML page. */
+export function buildTranscriptJumpHref(
+  htmlRelPath: string,
   turnIndex: number | undefined,
   turnIndexToDisplayQ: Map<number, number>
 ): string {
   const fragment = anchorForTurnIndex(turnIndex, turnIndexToDisplayQ);
-  const encoded = encodeURIComponent(mdRelPath);
-  // Put file path into hash to survive browser/server query-stripping.
-  // Use short keys to avoid any tooling that mishandles hash tokens.
   if (fragment) {
-    return `transcript-viewer.html#f=${encoded}&a=${encodeURIComponent(fragment)}`;
+    return `${htmlRelPath}#${fragment}`;
   }
-  return `transcript-viewer.html#f=${encoded}`;
+  return htmlRelPath;
 }
 
 function cloneWithJumpHrefs(
   root: MindMapRoot,
-  sessionMdPath: Map<string, string>,
+  sessionHtmlPath: Map<string, string>,
   turnMaps: Map<string, Map<number, number>>
 ): MindMapRoot {
   const rewriteRef = (ref: NodeOriginRef): NodeOriginRef => {
-    const mdRel = sessionMdPath.get(ref.sessionId);
-    if (!mdRel) {
+    const htmlRel = sessionHtmlPath.get(ref.sessionId);
+    if (!htmlRel) {
       return ref;
     }
     const turnMap = turnMaps.get(ref.sessionId) ?? new Map();
-    const jumpHref = buildJumpHref(mdRel, ref.turnIndex, turnMap);
+    const jumpHref = buildTranscriptJumpHref(
+      htmlRel,
+      ref.turnIndex,
+      turnMap
+    );
     return { ...ref, jumpHref };
   };
 
@@ -217,8 +223,6 @@ function buildTranscriptViewerHtml(): string {
         app.innerHTML = renderMarkdown(md);
         const rawHash = (window.location.hash || "").replace(/^#/, "");
         if (rawHash) {
-          // New scheme: hash contains file=...&anchor=q-6
-          // Old scheme: hash is q-6
           let anchorId = null;
           if (rawHash.includes("=")) {
             const params = new URLSearchParams(rawHash);
@@ -234,7 +238,7 @@ function buildTranscriptViewerHtml(): string {
         }
       } catch (err) {
         app.innerHTML = '<p class="error">Failed to load markdown: ' + escHtml(String(err)) + '</p>' +
-          '<p>Tip: run <code>npx serve .</code> in this folder and open via http://localhost</p>';
+          '<p>Tip: open pre-rendered <code>transcripts/*.html</code> from the mind map, or use Markdown files in an editor.</p>';
       }
     })();
   </script>
@@ -246,28 +250,50 @@ const README_ZH = `# Agent Mind Map 离线包
 
 ## 打开思维导图
 
-**推荐：** 在本目录运行本地服务器后访问（跳转也更可靠）：
+任选其一（无需安装 Node 或运行 \`npx serve\`）：
 
-\`\`\`bash
-npx serve .
-\`\`\`
+- **双击** \`index.html\`（推荐 Chrome / Edge）
+- **Windows：** 双击 \`open.cmd\`
+- **macOS / Linux：** 在终端执行 \`sh open.sh\`
 
-然后在浏览器打开提示的地址（通常是 http://localhost:3000），点击 \`index.html\`。
-
-**直接双击 \`index.html\`：** 新版导出包已兼容 Chrome 本地打开。若仍为空白页，请用上面的 \`npx serve\` 方式。
+从扩展导出后，也可在提示框中选择 **在浏览器中打开**。
 
 ## 跳转到对话
 
-点击思维导图节点，会打开内置的 Transcript Viewer，以渲染后的网页形式展示 Markdown，并定位到对应问题（\`#q-N\` 锚点）。
+点击思维导图节点，会在新标签页打开 \`transcripts/*.html\` 中预渲染的对话网页，并定位到对应问题（\`#q-N\` 锚点）。
 
-若浏览器阻止本地文件跳转，可以：
-
-- 用 VS Code / Cursor 打开 \`transcripts/*.md\`，在文件中搜索 \`## Q\` 标题
-- 使用 \`npx serve .\` 通过 http:// 访问（推荐）
+若需用编辑器查看原始 Markdown，可打开 \`transcripts/*.md\`。
 
 ## 隐私
 
 本目录包含完整 Agent 对话记录，请勿将敏感内容提交到公共仓库。
+`;
+
+const OPEN_SH = `#!/usr/bin/env sh
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+INDEX="$DIR/index.html"
+if [ ! -f "$INDEX" ]; then
+  echo "Missing index.html in $DIR" >&2
+  exit 1
+fi
+if command -v xdg-open >/dev/null 2>&1; then
+  exec xdg-open "$INDEX"
+elif command -v open >/dev/null 2>&1; then
+  exec open "$INDEX"
+else
+  echo "Open this file in your browser: $INDEX" >&2
+  exit 1
+fi
+`;
+
+const OPEN_CMD = `@echo off
+set "INDEX=%~dp0index.html"
+if not exist "%INDEX%" (
+  echo Missing index.html in %~dp0
+  exit /b 1
+)
+start "" "%INDEX%"
 `;
 
 export type ExportPackageOptions = {
@@ -298,14 +324,16 @@ export async function exportMindMapPackage(
   }
 
   const sessionRefs = collectOriginRefs(mindMap);
-  const sessionMdPath = new Map<string, string>();
+  const sessionHtmlPath = new Map<string, string>();
   const turnMaps = new Map<string, Map<number, number>>();
   const failures: string[] = [];
 
   for (const ref of sessionRefs) {
     const baseName = sanitizeSessionFileName(ref.sessionId);
     const mdRel = `transcripts/${baseName}.md`;
+    const htmlRel = `transcripts/${baseName}.html`;
     const mdAbs = path.join(outDir, mdRel);
+    const htmlAbs = path.join(outDir, htmlRel);
 
     try {
       const content = await fs.readFile(ref.transcriptPath, "utf8");
@@ -313,7 +341,13 @@ export async function exportMindMapPackage(
       const events = host.parseTranscript(content);
       const rendered = renderTranscriptMarkdown(events, ref.sessionLabel);
       await fs.writeFile(mdAbs, rendered.markdown, "utf8");
-      sessionMdPath.set(ref.sessionId, mdRel);
+      const bodyHtml = markdownToTranscriptHtmlBody(rendered.markdown);
+      await fs.writeFile(
+        htmlAbs,
+        buildTranscriptPageHtml(ref.sessionLabel, bodyHtml),
+        "utf8"
+      );
+      sessionHtmlPath.set(ref.sessionId, htmlRel);
       turnMaps.set(ref.sessionId, rendered.turnIndexToDisplayQ);
     } catch (err) {
       failures.push(
@@ -322,7 +356,7 @@ export async function exportMindMapPackage(
     }
   }
 
-  if (sessionRefs.length > 0 && sessionMdPath.size === 0) {
+  if (sessionRefs.length > 0 && sessionHtmlPath.size === 0) {
     throw new Error(
       failures.length
         ? `无法导出任何对话记录：\n${failures.join("\n")}`
@@ -336,7 +370,7 @@ export async function exportMindMapPackage(
     );
   }
 
-  const exportData = cloneWithJumpHrefs(mindMap, sessionMdPath, turnMaps);
+  const exportData = cloneWithJumpHrefs(mindMap, sessionHtmlPath, turnMaps);
   const ui = readMindMapUiConfig();
   const uiForExport: MindMapUiOptions = {
     ...ui,
@@ -359,9 +393,13 @@ export async function exportMindMapPackage(
     "utf8"
   );
   await fs.writeFile(path.join(outDir, "README.md"), README_ZH, "utf8");
+  await fs.writeFile(path.join(outDir, "open.sh"), OPEN_SH, {
+    mode: 0o755,
+  });
+  await fs.writeFile(path.join(outDir, "open.cmd"), OPEN_CMD, "utf8");
 
   return {
-    transcriptCount: sessionMdPath.size,
+    transcriptCount: sessionHtmlPath.size,
     outDir,
   };
 }

@@ -18,6 +18,7 @@
     "onCommand:agent-mindmap.refresh",
     "onCommand:agent-mindmap.exportJson",
     "onCommand:agent-mindmap.downloadPackage",
+    "onCommand:agent-mindmap.openDownloadedPackage",
     "onCommand:agent-mindmap.openMerged",
     "onCommand:agent-mindmap.openMergedCurrentProject",
     "onCommand:agent-mindmap.rebuildOntologyCache",
@@ -60,6 +61,11 @@
       {
         "command": "agent-mindmap.downloadPackage",
         "title": "Agent Mind Map: Download Mind Map Package…",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.openDownloadedPackage",
+        "title": "Agent Mind Map: Open Downloaded Package in Browser…",
         "category": "Agent Mind Map"
       },
       {
