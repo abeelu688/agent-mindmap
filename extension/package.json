@@ -20,6 +20,7 @@
     "onCommand:agent-mindmap.downloadPackage",
     "onCommand:agent-mindmap.openMerged",
     "onCommand:agent-mindmap.openMergedCurrentProject",
+    "onCommand:agent-mindmap.rebuildOntologyCache",
     "onCommand:agent-mindmap.openConceptMerged",
     "onCommand:agent-mindmap.openConceptMergedCurrentProject",
     "onCommand:agent-mindmap.llmMergeRefine",
@@ -69,6 +70,11 @@
       {
         "command": "agent-mindmap.openMergedCurrentProject",
         "title": "Agent Mind Map: Open Merged View (Current Project)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.rebuildOntologyCache",
+        "title": "Agent Mind Map: Rebuild Concept Ontology Cache",
         "category": "Agent Mind Map"
       },
       {

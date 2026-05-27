@@ -31,4 +31,28 @@ describe("normalizeConceptPath", () => {
     const long = ["a", "b", "c", "d", "e", "f", "g", "h"];
     expect(normalizeConceptPath(long).length).toBe(6);
   });
+
+  it("folds aosp domain into android and drops redundant aosp segment", () => {
+    expect(normalizeConceptPath(["aosp", "art", "jit"])).toEqual([
+      "android",
+      "art",
+      "jit",
+    ]);
+    expect(normalizeConceptPath(["android", "aosp", "zygote"])).toEqual([
+      "android",
+      "zygote",
+    ]);
+  });
+
+  it("inserts art before jni when jni is directly under android", () => {
+    expect(normalizeConceptPath(["android", "jni", "startvm"])).toEqual([
+      "android",
+      "art",
+      "jni",
+      "startvm",
+    ]);
+    expect(
+      normalizeConceptPath(["aosp", "jni", "libnativehelper"])
+    ).toEqual(["android", "art", "jni", "libnativehelper"]);
+  });
 });

@@ -47,6 +47,11 @@ import {
 import { mergeWithLlm } from "./store/mergeLlm";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { getProvider } from "./llm";
+import {
+  clearOntologyCache,
+  ensureOntologyMemory,
+} from "./store/ontologyStore";
+import { applyTopicPathsFromOntology } from "./store/applyOntology";
 import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
 import { exportMindMapPackage } from "./export/exportPackage";
@@ -349,11 +354,47 @@ async function ensureConceptMerge(
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const storeDir = getStoreDir();
   const records = await loadLibraryRecords();
-  const merge = await buildConceptMergeRecordAsync(records, { projectSlug });
+  // Best-effort: infer/patch conceptPath using persisted ontology memory.
+  // Falls back to deterministic behavior when LLM is unavailable.
+  let enriched = records;
+  try {
+    const llmOpts = await readLlmOptions(extensionContext);
+    const provider = getProvider(llmOpts);
+    const ac = new AbortController();
+    const memory = await ensureOntologyMemory(
+      records,
+      { model: llmOpts.model, hostId: llmOpts.hostId },
+      provider,
+      storeDir,
+      ac.signal
+    );
+    enriched = applyTopicPathsFromOntology(records, memory);
+    const merge = await buildConceptMergeRecordAsync(enriched, {
+      projectSlug,
+      segmentEquivalences: memory.segmentEquivalences,
+    });
+    if (!projectSlug) {
+      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
+    }
+    return merge;
+  } catch {
+    // ignore; deterministic merge still works
+  }
+
+  const merge = await buildConceptMergeRecordAsync(enriched, { projectSlug });
   if (!projectSlug) {
     await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
   }
   return merge;
+}
+
+async function commandRebuildOntologyCache(): Promise<void> {
+  const storeDir = getStoreDir();
+  await ensureStore(storeDir);
+  const removed = await clearOntologyCache(storeDir);
+  vscode.window.showInformationMessage(
+    `Agent Mind Map: 已清除 ${removed} 个 ontology 缓存文件。下次打开 Concept Mind Map 将重新抽取并精炼同义段。`
+  );
 }
 
 async function commandOpenConceptMerged(): Promise<void> {
@@ -1022,6 +1063,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.openMergedCurrentProject",
       commandOpenMergedCurrentProject
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.rebuildOntologyCache",
+      commandRebuildOntologyCache
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.openConceptMerged",

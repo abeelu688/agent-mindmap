@@ -4,6 +4,12 @@ import {
   validateSessionOutline,
 } from "./outlineValidate";
 import {
+  validateConceptOntology,
+  validateOntologyRefine,
+  validateReattachMoves,
+  validateTopicPaths,
+} from "./ontologyValidate";
+import {
   LlmProviderError,
   type LlmProviderOptions,
   type LlmResponseSchema,
@@ -328,16 +334,49 @@ export function parseMergedOutlineFromStdout(
   return validateMergedOutline(parseJsonFromStdout(stdout, providerLabel));
 }
 
+export function parseConceptOntologyFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateConceptOntology(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseTopicPathsFromStdout(stdout: string, providerLabel: string) {
+  return validateTopicPaths(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseReattachMovesFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateReattachMoves(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseOntologyRefineFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateOntologyRefine(parseJsonFromStdout(stdout, providerLabel));
+}
+
 function parseBySchema(
   stdout: string,
   providerLabel: string,
   schema: LlmResponseSchema
-): TopicGraph | SessionOutline | MergedOutline {
+): TopicGraph | SessionOutline | MergedOutline | unknown {
   switch (schema) {
     case "topic-graph":
       return parseTopicGraphFromStdout(stdout, providerLabel);
     case "merged-outline":
       return parseMergedOutlineFromStdout(stdout, providerLabel);
+    case "concept-ontology":
+      return parseConceptOntologyFromStdout(stdout, providerLabel);
+    case "topic-paths":
+      return parseTopicPathsFromStdout(stdout, providerLabel);
+    case "reattach-moves":
+      return parseReattachMovesFromStdout(stdout, providerLabel);
+    case "ontology-refine":
+      return parseOntologyRefineFromStdout(stdout, providerLabel);
     case "session-outline":
     default:
       return parseSessionOutlineFromStdout(stdout, providerLabel);
@@ -394,7 +433,7 @@ export class HeadlessCliProvider {
   async summarize(
     input: SummarizeInput,
     signal: AbortSignal
-  ): Promise<TopicGraph | SessionOutline | MergedOutline> {
+  ): Promise<import("./types").LlmSummarizeResult> {
     const responseSchema = input.responseSchema ?? "session-outline";
     const promptBytes = Buffer.byteLength(input.prompt, "utf8");
     if (promptBytes > MAX_PROMPT_BYTES) {

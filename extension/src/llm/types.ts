@@ -74,10 +74,72 @@ export type MergedOutline = {
   outline: MergedOutlineNode[];
 };
 
+export type ConceptOntologyNode = {
+  key: string;
+  label: string;
+  aliases?: string[];
+  parentKeys?: string[];
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type ConceptOntologyMapping = {
+  mention: string;
+  key: string;
+  confidence?: number;
+};
+
+export type TopicPathDecision = {
+  topicId: string;
+  sessionId: string;
+  projectSlug: string;
+  conceptPath: string[];
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type ReattachMove = {
+  from: string;
+  toPath: string[];
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type SegmentEquivalenceScope = {
+  /** Apply only when path segments before the alias match this prefix. */
+  pathPrefix?: string[];
+  projectSlugs?: string[];
+  evidenceKeywords?: string[];
+};
+
+export type SegmentEquivalence = {
+  canonical: string;
+  aliases: string[];
+  scope: SegmentEquivalenceScope;
+  confidence?: number;
+  rationale?: string;
+};
+
+export type OntologyRefineResult = {
+  segmentEquivalences: SegmentEquivalence[];
+};
+
+export type ConceptOntology = {
+  nodes: ConceptOntologyNode[];
+  mappings: ConceptOntologyMapping[];
+  topicPaths: TopicPathDecision[];
+  reattachMoves?: ReattachMove[];
+  segmentEquivalences?: SegmentEquivalence[];
+};
+
 export type LlmResponseSchema =
   | "session-outline"
   | "topic-graph"
-  | "merged-outline";
+  | "merged-outline"
+  | "concept-ontology"
+  | "topic-paths"
+  | "reattach-moves"
+  | "ontology-refine";
 
 export type SummarizeInput = {
   events: ChatEvent[];
@@ -106,7 +168,14 @@ export type LlmProviderOptions = {
   hostId?: AgentHostId;
 };
 
-export type LlmSummarizeResult = TopicGraph | SessionOutline | MergedOutline;
+export type LlmSummarizeResult =
+  | TopicGraph
+  | SessionOutline
+  | MergedOutline
+  | ConceptOntology
+  | { topicPaths: TopicPathDecision[] }
+  | { moves: ReattachMove[] }
+  | OntologyRefineResult;
 
 export type LlmProvider = {
   readonly id: string;
