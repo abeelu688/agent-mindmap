@@ -22,12 +22,16 @@ function refKey(ref: NodeOriginRef): string {
   return `${ref.sessionId}#${ref.turnIndex ?? ""}`;
 }
 
-function hasViewerFileParam(href: string | undefined): boolean {
+function hasOfflineJumpHref(href: string | undefined): boolean {
   if (!href) {
     return false;
   }
-  // Export bundles may encode the transcript path into the hash.
-  return href.includes("file=") || href.includes("#f=");
+  // Legacy viewer: transcript path in hash (transcript-viewer.html#f=...)
+  if (href.includes("file=") || href.includes("#f=")) {
+    return true;
+  }
+  // Current export: pre-rendered static HTML (transcripts/foo.html#q-N)
+  return href.includes("transcripts/") && href.includes(".html");
 }
 
 function pickRef(
@@ -42,11 +46,11 @@ function pickRef(
     const match = refs.find(
       (r) => r.turnIndex !== undefined && qTags.includes(r.turnIndex)
     );
-    if (hasViewerFileParam(match?.jumpHref)) {
+    if (hasOfflineJumpHref(match?.jumpHref)) {
       return match;
     }
   }
-  return refs.find((r) => hasViewerFileParam(r.jumpHref)) ?? refs[0];
+  return refs.find((r) => hasOfflineJumpHref(r.jumpHref)) ?? refs[0];
 }
 
 /** Resolve offline jump href from node origin (export bundles only). */
@@ -54,7 +58,7 @@ export function resolveOfflineJumpHref(
   origin: NodeOrigin,
   nodeLabel?: string
 ): string | undefined {
-  const refs = origin.refs.filter((r) => hasViewerFileParam(r.jumpHref));
+  const refs = origin.refs.filter((r) => hasOfflineJumpHref(r.jumpHref));
   if (!refs.length) {
     return undefined;
   }

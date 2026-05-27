@@ -5,10 +5,12 @@ import {
   collectOriginRefs,
   sanitizeSessionFileName,
 } from "../extension/src/export/collectOriginRefs";
+import { buildTranscriptJumpHref } from "../extension/src/export/exportPackage";
 import {
   anchorForTurnIndex,
   renderTranscriptMarkdown,
 } from "../extension/src/export/renderTranscriptMarkdown";
+import { markdownToTranscriptHtmlBody } from "../extension/src/export/renderTranscriptHtml";
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
 import { validateTopicGraph } from "../extension/src/llm/topicGraphValidate";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
@@ -60,5 +62,47 @@ describe("collectOriginRefs", () => {
 describe("sanitizeSessionFileName", () => {
   it("replaces unsafe characters", () => {
     expect(sanitizeSessionFileName("abc/def")).toBe("abc_def");
+  });
+
+  it("produces safe html file base names", () => {
+    const base = sanitizeSessionFileName("abc/def");
+    expect(`transcripts/${base}.html`).toBe("transcripts/abc_def.html");
+  });
+});
+
+describe("markdownToTranscriptHtmlBody", () => {
+  it("preserves anchors and headings", () => {
+    const md = [
+      "# Title",
+      "",
+      '<a id="q-1"></a>',
+      "## Q1",
+      "",
+      "> question",
+      "",
+      "### A1",
+      "",
+      "answer",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain('<a id="q-1"></a>');
+    expect(html).toContain("<h2>Q1</h2>");
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("<h3>A1</h3>");
+  });
+});
+
+describe("buildTranscriptJumpHref", () => {
+  it("points to pre-rendered html with anchor fragment", () => {
+    const turnMap = new Map([[0, 1], [1, 2]]);
+    expect(
+      buildTranscriptJumpHref("transcripts/sess.html", 0, turnMap)
+    ).toBe("transcripts/sess.html#q-1");
+    expect(
+      buildTranscriptJumpHref("transcripts/sess.html", 1, turnMap)
+    ).toBe("transcripts/sess.html#q-2");
+    expect(
+      buildTranscriptJumpHref("transcripts/sess.html", undefined, turnMap)
+    ).toBe("transcripts/sess.html");
   });
 });

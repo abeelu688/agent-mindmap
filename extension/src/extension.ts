@@ -55,6 +55,7 @@ import { applyTopicPathsFromOntology } from "./store/applyOntology";
 import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
 import { exportMindMapPackage } from "./export/exportPackage";
+import { openMindMapPackage } from "./export/openMindMapPackage";
 
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
@@ -276,12 +277,16 @@ async function commandDownloadPackage(): Promise<void> {
         })
     );
 
-    const open = "在资源管理器中显示";
+    const openBrowser = "在浏览器中打开";
+    const showFolder = "在资源管理器中显示";
     const choice = await vscode.window.showInformationMessage(
-      `已导出思维导图与 ${result.transcriptCount} 个对话 Markdown 到所选目录。`,
-      open
+      `已导出思维导图与 ${result.transcriptCount} 个对话到所选目录。`,
+      openBrowser,
+      showFolder
     );
-    if (choice === open) {
+    if (choice === openBrowser) {
+      await openMindMapPackage(result.outDir);
+    } else if (choice === showFolder) {
       await vscode.env.openExternal(vscode.Uri.file(result.outDir));
     }
   } catch (err) {
@@ -289,6 +294,19 @@ async function commandDownloadPackage(): Promise<void> {
       `Agent Mind Map: 导出失败: ${err instanceof Error ? err.message : String(err)}`
     );
   }
+}
+
+async function commandOpenDownloadedPackage(): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: "选择离线包目录",
+  });
+  if (!picked?.length) {
+    return;
+  }
+  await openMindMapPackage(picked[0]!.fsPath);
 }
 
 async function commandExportJson(): Promise<void> {
@@ -1055,6 +1073,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.downloadPackage",
       commandDownloadPackage
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.openDownloadedPackage",
+      commandOpenDownloadedPackage
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.openMerged",
