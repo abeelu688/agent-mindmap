@@ -4,7 +4,7 @@ import MarkdownIt from "markdown-it";
 const CITATION_FENCE_RE = /^(\d+):(\d+):(.+)$/;
 
 export const TRANSCRIPT_MARKDOWN_STYLES = `
-    :root { color-scheme: light dark; }
+    :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f8fa; color: #24292f; }
     .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
     .card { background: white; border: 1px solid #d0d7de; border-radius: 10px; padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -13,7 +13,10 @@ export const TRANSCRIPT_MARKDOWN_STYLES = `
     h2 { font-size: 1.35rem; border-bottom: 1px solid #d8dee4; padding-bottom: 6px; }
     h3 { font-size: 1.1rem; }
     p { line-height: 1.65; margin: 10px 0; }
-    blockquote { margin: 10px 0; padding: 0 14px; border-left: 4px solid #d0d7de; color: #57606a; }
+    blockquote {
+      margin: 10px 0; padding: 8px 14px; border-left: 4px solid #d0d7de;
+      background: #f6f8fa; color: #24292f;
+    }
   p > code, li > code, td > code, th > code {
     background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 2px 6px; font-size: 0.9em;
   }
@@ -86,16 +89,48 @@ function renderCitationFence(
   );
 }
 
-function isGfmTableRow(line: string): boolean {
+function splitTabCells(line: string): string[] {
+  return line.split("\t").map((c) => c.trim());
+}
+
+function isTabTableRow(line: string): boolean {
+  return line.includes("\t") && splitTabCells(line).length >= 2;
+}
+
+function isStrictPipeTableRow(line: string): boolean {
   const t = line.trim();
   return t.startsWith("|") && t.endsWith("|") && t.length > 2;
+}
+
+function isLoosePipeTableRow(line: string): boolean {
+  if (isStrictPipeTableRow(line)) {
+    return true;
+  }
+  const t = line.trim();
+  if (!t.includes("|")) {
+    return false;
+  }
+  const cells = t.split("|").map((c) => c.trim());
+  return cells.length >= 2 && cells.every((c) => c.length > 0);
+}
+
+function splitTableCells(line: string): string[] {
+  const t = line.trim();
+  if (t.startsWith("|") && t.endsWith("|")) {
+    return splitPipeCells(line);
+  }
+  return t.split("|").map((c) => c.trim());
+}
+
+function isGfmTableRow(line: string): boolean {
+  return isStrictPipeTableRow(line);
 }
 
 function isGfmTableSeparator(line: string): boolean {
   return /^\|[\s\-:|]+\|$/.test(line.trim());
 }
 
-function splitTableCells(line: string): string[] {
+function splitPipeCells(line: string): string[] {
   return line
     .trim()
     .slice(1, -1)
@@ -103,10 +138,18 @@ function splitTableCells(line: string): string[] {
     .map((c) => c.trim());
 }
 
-function renderGfmTableHtml(header: string[], rows: string[][]): string {
+function renderCellInline(md: MarkdownIt, cell: string): string {
+  return md.renderInline(cell.trim(), {});
+}
+
+function renderTableHtml(
+  md: MarkdownIt,
+  header: string[],
+  rows: string[][]
+): string {
   const head =
     "<thead><tr>" +
-    header.map((c) => `<th>${escHtml(c)}</th>`).join("") +
+    header.map((c) => `<th>${renderCellInline(md, c)}</th>`).join("") +
     "</tr></thead>";
   const body =
     rows.length > 0
@@ -114,7 +157,9 @@ function renderGfmTableHtml(header: string[], rows: string[][]): string {
         rows
           .map(
             (row) =>
-              "<tr>" + row.map((c) => `<td>${escHtml(c)}</td>`).join("") + "</tr>"
+              "<tr>" +
+              row.map((c) => `<td>${renderCellInline(md, c)}</td>`).join("") +
+              "</tr>"
           )
           .join("") +
         "</tbody>"
@@ -122,32 +167,107 @@ function renderGfmTableHtml(header: string[], rows: string[][]): string {
   return `<table>\n${head}\n${body}\n</table>\n`;
 }
 
-/** Convert GFM pipe tables to HTML so markdown-it passes them through (html: true). */
-export function preprocessGfmTables(md: string): string {
+type TableBlock = { header: string[]; rows: string[][]; end: number };
+
+function readGfmPipeTable(
+  lines: string[],
+  start: number
+): TableBlock | undefined {
+  if (!isGfmTableRow(lines[start]!)) {
+    return undefined;
+  }
+  if (
+    start + 1 >= lines.length ||
+    !isGfmTableSeparator(lines[start + 1]!)
+  ) {
+    return undefined;
+  }
+  const header = splitTableCells(lines[start]!);
+  const rows: string[][] = [];
+  let i = start + 2;
+  while (i < lines.length && isGfmTableRow(lines[i]!)) {
+    rows.push(splitPipeCells(lines[i]!));
+    i += 1;
+  }
+  return { header, rows, end: i };
+}
+
+function readPipeTableNoSeparator(
+  lines: string[],
+  start: number
+): TableBlock | undefined {
+  if (!isLoosePipeTableRow(lines[start]!)) {
+    return undefined;
+  }
+  if (
+    start + 1 < lines.length &&
+    isGfmTableSeparator(lines[start + 1]!)
+  ) {
+    return undefined;
+  }
+  const header = splitTableCells(lines[start]!);
+  const rows: string[][] = [];
+  let i = start + 1;
+  while (i < lines.length && isLoosePipeTableRow(lines[i]!)) {
+    const cells = splitTableCells(lines[i]!);
+    if (cells.length !== header.length) {
+      break;
+    }
+    rows.push(cells);
+    i += 1;
+  }
+  if (rows.length === 0) {
+    return undefined;
+  }
+  return { header, rows, end: i };
+}
+
+function readTabTable(lines: string[], start: number): TableBlock | undefined {
+  if (!isTabTableRow(lines[start]!)) {
+    return undefined;
+  }
+  const header = splitTabCells(lines[start]!);
+  const rows: string[][] = [];
+  let i = start + 1;
+  while (i < lines.length && isTabTableRow(lines[i]!)) {
+    const cells = splitTabCells(lines[i]!);
+    if (cells.length !== header.length) {
+      break;
+    }
+    rows.push(cells);
+    i += 1;
+  }
+  if (rows.length === 0) {
+    return undefined;
+  }
+  return { header, rows, end: i };
+}
+
+/** Convert pipe / tab tables to HTML (markdown-it html:true passes them through). */
+export function preprocessTables(md: string, renderer: MarkdownIt): string {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i]!;
-    if (
-      isGfmTableRow(line) &&
-      i + 1 < lines.length &&
-      isGfmTableSeparator(lines[i + 1]!)
-    ) {
-      const header = splitTableCells(line);
-      const rows: string[][] = [];
-      i += 2;
-      while (i < lines.length && isGfmTableRow(lines[i]!)) {
-        rows.push(splitTableCells(lines[i]!));
-        i += 1;
-      }
-      out.push(renderGfmTableHtml(header, rows));
+    const block =
+      readGfmPipeTable(lines, i) ??
+      readPipeTableNoSeparator(lines, i) ??
+      readTabTable(lines, i);
+    if (block) {
+      out.push(renderTableHtml(renderer, block.header, block.rows));
+      i = block.end;
       continue;
     }
-    out.push(line);
+    out.push(lines[i]!);
     i += 1;
   }
   return out.join("\n");
+}
+
+/** @deprecated Use preprocessTables */
+export function preprocessGfmTables(md: string): string {
+  const mdInst = createTranscriptMarkdownRenderer();
+  return preprocessTables(md, mdInst);
 }
 
 export function createTranscriptMarkdownRenderer(): MarkdownIt {
@@ -185,6 +305,9 @@ export function renderTranscriptMarkdownHtml(md: string): string {
   if (!sharedRenderer) {
     sharedRenderer = createTranscriptMarkdownRenderer();
   }
-  const normalized = preprocessGfmTables(md.replace(/\r\n/g, "\n"));
+  const normalized = preprocessTables(
+    md.replace(/\r\n/g, "\n"),
+    sharedRenderer
+  );
   return sharedRenderer.render(normalized);
 }
