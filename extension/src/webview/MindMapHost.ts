@@ -1,18 +1,25 @@
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import type { MindMapRoot, NodeOrigin } from "../transcript/types";
+import { applyUiSettingToWorkspace } from "../ui/applyUiSettingWorkspace";
+import {
+  readMindMapUiConfig,
+  resolveThemeFilePath,
+} from "../ui/mindMapUiConfig";
+import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 
 export type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
-  | { type: "nodeClicked"; origin: NodeOrigin };
+  | { type: "nodeClicked"; origin: NodeOrigin }
+  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
 
-export type ExtensionToWebviewMessage = {
-  type: "setData";
-  data: MindMapRoot;
-};
+export type ExtensionToWebviewMessage =
+  | { type: "setData"; data: MindMapRoot }
+  | { type: "setUi"; ui: MindMapUiOptions };
 
 export type NodeClickedListener = (origin: NodeOrigin) => void;
 
@@ -29,8 +36,11 @@ export class MindMapHost {
   private webviewReady = false;
   private pendingData: MindMapRoot | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
+  private themeFileWatcher: vscode.FileSystemWatcher | undefined;
+  private themeFsWatcher: fs.FSWatcher | undefined;
   private watchPath: string | undefined;
   private refreshDebounce: ReturnType<typeof setTimeout> | undefined;
+  private themeFileDebounce: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   private constructor(
@@ -58,6 +68,8 @@ export class MindMapHost {
       webview.onDidReceiveMessage((msg: WebviewToExtensionMessage) => {
         if (msg.type === "ready") {
           this.webviewReady = true;
+          this.postUi();
+          this.updateThemeFileWatcher();
           if (this.pendingData) {
             this.postData(this.pendingData);
             this.pendingData = undefined;
@@ -82,6 +94,15 @@ export class MindMapHost {
               mindMapLog(`nodeClicked listener threw: ${String(err)}`);
             }
           }
+        }
+        if (msg.type === "updateUiSetting") {
+          void this.handleUpdateUiSetting(msg.key, msg.value);
+        }
+      }),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("agentMindmap.ui")) {
+          this.postUi();
+          this.updateThemeFileWatcher();
         }
       })
     );
@@ -175,7 +196,35 @@ export class MindMapHost {
     this.watchPath = undefined;
   }
 
+  private async handleUpdateUiSetting(
+    key: string,
+    value: string
+  ): Promise<void> {
+    const result = await applyUiSettingToWorkspace(key, value);
+    if (result.ok) {
+      mindMapLog(`ui: updated ${key}=${value} (workspace)`);
+      return;
+    }
+    if (result.reason === "no_workspace") {
+      void vscode.window.showWarningMessage(
+        "Agent Mind Map: 请先打开文件夹工作区，才能将样式写入 .vscode/settings.json。"
+      );
+      return;
+    }
+    mindMapLog(`ui: rejected invalid setting ${key}=${value}`);
+  }
+
+  private postUi(): void {
+    if (!this.webviewReady) {
+      return;
+    }
+    const ui = readMindMapUiConfig();
+    const msg: ExtensionToWebviewMessage = { type: "setUi", ui };
+    void this.webview.postMessage(msg);
+  }
+
   private postData(data: MindMapRoot): void {
+    this.postUi();
     const msg: ExtensionToWebviewMessage = { type: "setData", data };
     const stats = MindMapHost.statsForOriginCoverage(data);
     mindMapLog(
@@ -183,6 +232,75 @@ export class MindMapHost {
         ` rootOrigin=${stats.rootOrigin}`
     );
     void this.webview.postMessage(msg);
+  }
+
+  private updateThemeFileWatcher(): void {
+    if (this.themeFileWatcher) {
+      this.themeFileWatcher.dispose();
+      this.themeFileWatcher = undefined;
+    }
+    if (this.themeFsWatcher) {
+      this.themeFsWatcher.close();
+      this.themeFsWatcher = undefined;
+    }
+    if (this.themeFileDebounce) {
+      clearTimeout(this.themeFileDebounce);
+      this.themeFileDebounce = undefined;
+    }
+
+    const raw = vscode.workspace
+      .getConfiguration("agentMindmap")
+      .get<string>("ui.themeFile", "")
+      .trim();
+    if (!raw) {
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = folder?.uri.fsPath;
+    const resolved = resolveThemeFilePath(raw, workspaceRoot);
+    if (!resolved) {
+      return;
+    }
+
+    const onThemeFileChange = (): void => {
+      if (this.themeFileDebounce) {
+        clearTimeout(this.themeFileDebounce);
+      }
+      this.themeFileDebounce = setTimeout(() => {
+        this.themeFileDebounce = undefined;
+        this.postUi();
+      }, 200);
+    };
+
+    const inWorkspace =
+      workspaceRoot && MindMapHost.isPathInside(resolved, workspaceRoot);
+
+    if (inWorkspace && folder) {
+      const rel = path.relative(workspaceRoot!, resolved);
+      const pattern = new vscode.RelativePattern(folder, rel);
+      this.themeFileWatcher = vscode.workspace.createFileSystemWatcher(
+        pattern,
+        false,
+        false,
+        false
+      );
+      this.themeFileWatcher.onDidChange(onThemeFileChange);
+      this.themeFileWatcher.onDidCreate(onThemeFileChange);
+      return;
+    }
+
+    try {
+      this.themeFsWatcher = fs.watch(resolved, onThemeFileChange);
+    } catch (err) {
+      mindMapLog(
+        `ui.themeFile: could not watch ${resolved}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  private static isPathInside(filePath: string, dir: string): boolean {
+    const rel = path.relative(dir, filePath);
+    return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
   }
 
   private static statsForOriginCoverage(data: MindMapRoot): {
@@ -214,6 +332,18 @@ export class MindMapHost {
       MindMapHost.current = undefined;
     }
     this.unwatchTranscript();
+    if (this.themeFileWatcher) {
+      this.themeFileWatcher.dispose();
+      this.themeFileWatcher = undefined;
+    }
+    if (this.themeFsWatcher) {
+      this.themeFsWatcher.close();
+      this.themeFsWatcher = undefined;
+    }
+    if (this.themeFileDebounce) {
+      clearTimeout(this.themeFileDebounce);
+      this.themeFileDebounce = undefined;
+    }
     while (this.disposables.length) {
       const d = this.disposables.pop();
       d?.dispose();

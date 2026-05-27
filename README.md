@@ -133,6 +133,17 @@ Known limitations:
 - `agentMindmap.merge.autoRebuildDeterministic` — rebuild `merges/deterministic.json` after each new session lands (default `true`)
 - `agentMindmap.merge.llm.maxTopics` / `maxItemsPerTopic` — target output size for the LLM merge command (defaults `8` / `6`)
 
+### UI / theme
+- `agentMindmap.ui.preset` — `auto` (follow editor colors, default), `dark`, or `light` (mind-elixir built-in themes)
+- `agentMindmap.ui.direction` — `side` (default, both sides; first branch on the right, then left), `right`, or `left`
+- `agentMindmap.ui.themeFile` — optional JSON file for advanced overrides (`cssVar`, `palette`). Empty = none. Supports workspace-relative paths, `~/...`, or absolute paths. See [`docs/theme.example.json`](docs/theme.example.json).
+
+Preset merge order: built-in or VS Code–mapped base → theme file overrides. Invalid theme files are ignored (warning in **Agent Mind Map** output).
+
+Suggested locations: `.agent-mindmap/theme.json` in the workspace, or `~/.agent-mindmap/theme.json` next to the analysis library.
+
+**Canvas context menu:** right-click empty canvas (not on a node) to change theme preset or layout direction. Choices are saved to workspace settings (`.vscode/settings.json`). Requires an open folder workspace.
+
 ### General
 - `agentMindmap.projectsDir` — override `~/.cursor/projects`
 - `agentMindmap.cursorStateDb` — override path to Cursor's `globalStorage/state.vscdb` (used to read sidebar composer names for the **Choose Session** list); empty = platform default

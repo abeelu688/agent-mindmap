@@ -1,10 +1,8 @@
-import MindElixir, {
-  DARK_THEME,
-  type MindElixirInstance,
-  type NodeObj,
-} from "mind-elixir";
+import MindElixir, { type MindElixirInstance, type NodeObj } from "mind-elixir";
 import "mind-elixir/style.css";
 import "./styles.css";
+import { assignSideDirectionsPreferRight } from "./sideLayout";
+import { directionFromUi, resolveTheme } from "./theme";
 import {
   readOriginFromNodeObj,
   toMindElixirData,
@@ -12,16 +10,18 @@ import {
   type NodeMetadata,
   type NodeOrigin,
 } from "./toMindElixir";
+import { isBlankCanvasTarget, showUiContextMenu } from "./uiContextMenu";
+import type { MindMapUiOptions } from "./uiTypes";
 
-type ExtensionMessage = {
-  type: "setData";
-  data: MindMapNodeData;
-};
+type ExtensionMessage =
+  | { type: "setData"; data: MindMapNodeData }
+  | { type: "setUi"; ui: MindMapUiOptions };
 
 type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
-  | { type: "nodeClicked"; origin: NodeOrigin };
+  | { type: "nodeClicked"; origin: NodeOrigin }
+  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
 
 declare function acquireVsCodeApi(): {
   postMessage(message: WebviewToExtensionMessage): void;
@@ -37,35 +37,14 @@ if (!container) {
 let mind: MindElixirInstance | undefined;
 let resizeRaf: number | undefined;
 let onSelectNodes: ((nodes: NodeObj<NodeMetadata>[]) => void) | undefined;
+let currentUi: MindMapUiOptions | undefined;
+let pendingData: MindMapNodeData | undefined;
+let lastRenderedData: MindMapNodeData | undefined;
 
-function vscodeTheme(): typeof DARK_THEME {
-  const theme = { ...DARK_THEME, cssVar: { ...DARK_THEME.cssVar } };
-  const bg =
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--vscode-editor-background"
-    ) || "#1e1e1e";
-  const fg =
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--vscode-editor-foreground"
-    ) || "#cccccc";
-  const accent =
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--vscode-focusBorder"
-    ) || "#007fd4";
-  theme.cssVar["--bgcolor"] = bg.trim() || "#1e1e1e";
-  theme.cssVar["--color"] = fg.trim() || "#cccccc";
-  theme.cssVar["--selected"] = accent.trim() || "#007fd4";
-  theme.cssVar["--root-color"] = fg.trim() || "#cccccc";
-  theme.cssVar["--root-bgcolor"] = bg.trim() || "#1e1e1e";
-  theme.cssVar["--main-color"] = fg.trim() || "#cccccc";
-  theme.cssVar["--main-bgcolor"] = bg.trim() || "#1e1e1e";
-  return theme;
-}
-
-function createMind(): MindElixirInstance {
+function createMind(ui: MindMapUiOptions): MindElixirInstance {
   const instance = new MindElixir({
     el: container,
-    direction: MindElixir.SIDE,
+    direction: directionFromUi(ui),
     editable: false,
     toolBar: false,
     contextMenu: false,
@@ -73,7 +52,7 @@ function createMind(): MindElixirInstance {
     allowUndo: false,
     overflowHidden: false,
     alignment: "nodes",
-    theme: vscodeTheme(),
+    theme: resolveTheme(ui),
   });
 
   onSelectNodes = (nodes) => {
@@ -118,6 +97,34 @@ function destroyMindMap(): void {
   container.innerHTML = "";
 }
 
+function applyUi(ui: MindMapUiOptions): void {
+  currentUi = ui;
+  if (!mind) {
+    return;
+  }
+  const nextDirection = directionFromUi(ui);
+  const directionChanged = mind.direction !== nextDirection;
+  mind.changeTheme(resolveTheme(ui), true);
+  if (directionChanged) {
+    mind.direction = nextDirection;
+    try {
+      mind.layout();
+    } catch {
+      // ignore
+    }
+  }
+  handleResize();
+}
+
+function tryRender(): void {
+  if (!pendingData || !currentUi) {
+    return;
+  }
+  const data = pendingData;
+  pendingData = undefined;
+  render(data);
+}
+
 function handleResize(): void {
   if (!mind) {
     return;
@@ -140,9 +147,17 @@ function handleResize(): void {
 }
 
 function render(data: MindMapNodeData): void {
+  if (!currentUi) {
+    pendingData = data;
+    return;
+  }
+  const ui = currentUi;
   const meiData = toMindElixirData(data);
+  if (directionFromUi(ui) === 2) {
+    assignSideDirectionsPreferRight(meiData.nodeData);
+  }
   if (!mind) {
-    mind = createMind();
+    mind = createMind(ui);
     const err = mind.init(meiData);
     if (err) {
       vscode.postMessage({
@@ -153,13 +168,39 @@ function render(data: MindMapNodeData): void {
   } else {
     mind.refresh(meiData);
     mind.clearHistory?.();
+    applyUi(ui);
   }
+  lastRenderedData = data;
   handleResize();
+}
+
+function rebuildMindFromLastData(): void {
+  if (!lastRenderedData || !currentUi) {
+    return;
+  }
+  const data = lastRenderedData;
+  destroyMindMap();
+  render(data);
 }
 
 window.addEventListener("message", (event) => {
   const msg = event.data as ExtensionMessage;
+  if (msg?.type === "setUi" && msg.ui) {
+    const prev = currentUi;
+    currentUi = msg.ui;
+    if (mind && prev && prev.direction !== msg.ui.direction) {
+      rebuildMindFromLastData();
+    } else {
+      applyUi(msg.ui);
+    }
+    tryRender();
+    return;
+  }
   if (msg?.type === "setData" && msg.data) {
+    if (!currentUi) {
+      pendingData = msg.data;
+      return;
+    }
     render(msg.data);
   }
 });
@@ -179,6 +220,23 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     handleResize();
   }
+});
+
+container.addEventListener("contextmenu", (event) => {
+  if (!isBlankCanvasTarget(event.target, container)) {
+    return;
+  }
+  if (!currentUi) {
+    return;
+  }
+  event.preventDefault();
+  showUiContextMenu(event.clientX, event.clientY, currentUi, (pick) => {
+    vscode.postMessage({
+      type: "updateUiSetting",
+      key: pick.key,
+      value: pick.value,
+    });
+  });
 });
 
 vscode.postMessage({ type: "ready" });
