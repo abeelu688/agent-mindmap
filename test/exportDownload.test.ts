@@ -90,6 +90,51 @@ describe("markdownToTranscriptHtmlBody", () => {
     expect(html).toContain("<blockquote>");
     expect(html).toContain("<h3>A1</h3>");
   });
+
+  it("renders inline code", () => {
+    const html = markdownToTranscriptHtmlBody(
+      "正常开机在 `on late-init` 里会 `trigger zygote-start`："
+    );
+    expect(html).toContain("<code>on late-init</code>");
+    expect(html).toContain("<code>trigger zygote-start</code>");
+    expect(html).not.toContain("`on late-init`");
+  });
+
+  it("renders GFM tables", () => {
+    const md = [
+      "| 步骤 | 说明 |",
+      "|------|------|",
+      "| a | b |",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<table>");
+    expect(html).toContain("<th>");
+    expect(html).toContain("步骤");
+  });
+
+  it("renders fenced code blocks", () => {
+    const md = ["```javascript", "const x = 1;", "```"].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<pre>");
+    expect(html).toContain("const x = 1;");
+  });
+
+  it("renders Cursor citation fences with file header", () => {
+    const md = [
+      "```1071:1078:system/core/rootdir/init.rc",
+      "on zygote-start && property:ro.crypto.state=unencrypted",
+      "    start zygote",
+      "```",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain('class="code-citation"');
+    expect(html).toContain('class="code-citation-header"');
+    expect(html).toContain("system/core/rootdir/init.rc");
+    expect(html).toContain("L1071");
+    expect(html).toContain("1078");
+    expect(html).toContain("<pre>");
+    expect(html).toContain("start zygote");
+  });
 });
 
 describe("buildTranscriptJumpHref", () => {

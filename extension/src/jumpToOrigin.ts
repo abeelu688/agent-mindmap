@@ -17,7 +17,14 @@ import { getActiveHost } from "./host";
 import { getHostById } from "./host/registry";
 import type { AgentHostId } from "./host/types";
 import { slugToWorkspacePath } from "./paths";
-import { renderTranscriptMarkdown } from "./export/renderTranscriptMarkdown";
+import {
+  anchorForTurnIndex,
+  renderTranscriptMarkdown,
+} from "./export/renderTranscriptMarkdown";
+import {
+  buildTranscriptPageHtml,
+  markdownToTranscriptHtmlBody,
+} from "./export/renderTranscriptHtml";
 import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
@@ -298,7 +305,40 @@ async function ensureAgentsViewVisible(): Promise<void> {
   }
 }
 
-/** Column where the mind map tab lives (same group → markdown covers the map). */
+const TRANSCRIPT_WEBVIEW_VIEW_TYPE = "agentMindmapTranscript";
+
+/** Open transcript HTML in a webview (same renderer as offline export). */
+async function openTranscriptWebview(opts: {
+  title: string;
+  bodyHtml: string;
+  anchorId?: string;
+  viewColumn: vscode.ViewColumn;
+}): Promise<boolean> {
+  try {
+    const panel = vscode.window.createWebviewPanel(
+      TRANSCRIPT_WEBVIEW_VIEW_TYPE,
+      opts.title.length > 60 ? `${opts.title.slice(0, 57)}…` : opts.title,
+      opts.viewColumn,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+    panel.webview.html = buildTranscriptPageHtml(
+      opts.title,
+      opts.bodyHtml,
+      opts.anchorId
+    );
+    panel.onDidDispose(() => {
+      MindMapPanel.getCurrent()?.reveal();
+    });
+    return true;
+  } catch (err) {
+    mindMapLog(
+      `openTranscriptWebview failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return false;
+  }
+}
+
+/** Column where the mind map tab lives (same group → transcript covers the map). */
 function transcriptViewColumn(): vscode.ViewColumn {
   const map = MindMapPanel.getCurrent();
   const col = map?.viewColumn ?? vscode.ViewColumn.Active;
@@ -368,12 +408,27 @@ async function openTranscriptAsMarkdown(
   const events = host.parseTranscript(content);
   const title = opts.label ?? path.basename(transcriptPath);
   const rendered = renderTranscriptMarkdown(events, title);
+  const bodyHtml = markdownToTranscriptHtmlBody(rendered.markdown);
+  const anchorId = anchorForTurnIndex(
+    opts.focusTurnIndex,
+    rendered.turnIndexToDisplayQ
+  );
+  const editorColumn = transcriptViewColumn();
+
+  const webviewOpened = await openTranscriptWebview({
+    title,
+    bodyHtml,
+    anchorId,
+    viewColumn: editorColumn,
+  });
+  if (webviewOpened) {
+    return;
+  }
+
   let focusLine = -1;
   if (opts.focusTurnIndex !== undefined) {
     focusLine = rendered.turnIndexToLine.get(opts.focusTurnIndex) ?? -1;
   }
-
-  const editorColumn = transcriptViewColumn();
 
   const doc = await vscode.workspace.openTextDocument({
     content: rendered.markdown,
