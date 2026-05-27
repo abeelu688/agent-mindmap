@@ -1,7 +1,14 @@
 import { spawn } from "child_process";
 import {
+  validateMergedOutline,
+  validateSessionOutline,
+} from "./outlineValidate";
+import {
   LlmProviderError,
   type LlmProviderOptions,
+  type LlmResponseSchema,
+  type MergedOutline,
+  type SessionOutline,
   type SummarizeInput,
   type TopicGraph,
 } from "./types";
@@ -282,19 +289,15 @@ function extractTopicsJson(payload: string): string {
   return cleaned;
 }
 
-export function parseTopicGraphFromStdout(
-  stdout: string,
-  providerLabel: string
-): TopicGraph {
+function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
   const payload = extractPayload(stdout);
   if (!payload.trim()) {
     throw new LlmProviderError("empty", `${providerLabel} returned empty output`);
   }
   const jsonText = extractTopicsJson(payload);
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    return JSON.parse(jsonText);
   } catch (err) {
     throw new LlmProviderError(
       "bad-json",
@@ -302,8 +305,43 @@ export function parseTopicGraphFromStdout(
       err
     );
   }
+}
 
-  return validateTopicGraph(parsed);
+export function parseTopicGraphFromStdout(
+  stdout: string,
+  providerLabel: string
+): TopicGraph {
+  return validateTopicGraph(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionOutlineFromStdout(
+  stdout: string,
+  providerLabel: string
+): SessionOutline {
+  return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseMergedOutlineFromStdout(
+  stdout: string,
+  providerLabel: string
+): MergedOutline {
+  return validateMergedOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+function parseBySchema(
+  stdout: string,
+  providerLabel: string,
+  schema: LlmResponseSchema
+): TopicGraph | SessionOutline | MergedOutline {
+  switch (schema) {
+    case "topic-graph":
+      return parseTopicGraphFromStdout(stdout, providerLabel);
+    case "merged-outline":
+      return parseMergedOutlineFromStdout(stdout, providerLabel);
+    case "session-outline":
+    default:
+      return parseSessionOutlineFromStdout(stdout, providerLabel);
+  }
 }
 
 function isRetryableError(err: LlmProviderError): boolean {
@@ -356,7 +394,8 @@ export class HeadlessCliProvider {
   async summarize(
     input: SummarizeInput,
     signal: AbortSignal
-  ): Promise<TopicGraph> {
+  ): Promise<TopicGraph | SessionOutline | MergedOutline> {
+    const responseSchema = input.responseSchema ?? "session-outline";
     const promptBytes = Buffer.byteLength(input.prompt, "utf8");
     if (promptBytes > MAX_PROMPT_BYTES) {
       throw new LlmProviderError(
@@ -393,7 +432,11 @@ export class HeadlessCliProvider {
               `[agent-mindmap] LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`
             );
           }
-          return parseTopicGraphFromStdout(stdout, this.config.providerLabel);
+          return parseBySchema(
+            stdout,
+            this.config.providerLabel,
+            responseSchema
+          );
         } catch (err) {
           const lpe =
             err instanceof LlmProviderError
@@ -434,7 +477,10 @@ export class HeadlessCliProvider {
 export const __testing = {
   extractPayload,
   extractTopicsJson,
+  parseJsonFromStdout,
   parseTopicGraphFromStdout,
+  parseSessionOutlineFromStdout,
+  parseMergedOutlineFromStdout,
   isRetryableError,
   computeBackoff,
   sleepWithCancel,

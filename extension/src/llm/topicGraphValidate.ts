@@ -6,7 +6,7 @@ const MAX_ROOT_SUMMARY = 120;
 const MAX_CONCEPT_PATH_SEGMENTS = 6;
 const MAX_CONCEPT_SEGMENT_LEN = 24;
 
-function parseConceptPath(value: unknown): string[] | undefined {
+export function parseConceptPath(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }

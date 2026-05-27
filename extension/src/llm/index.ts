@@ -23,8 +23,14 @@ export type {
   LlmProvider,
   LlmProviderId,
   LlmProviderOptions,
+  LlmSummarizeResult,
+  MergedOutline,
+  OutlineDetail,
+  OutlineNode,
+  SessionOutline,
   SummarizeInput,
   Topic,
   TopicGraph,
   TopicItem,
 } from "./types";
+export { PROMPT_VERSION } from "./promptOutline";

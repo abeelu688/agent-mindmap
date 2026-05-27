@@ -31,12 +31,62 @@ export type TopicGraph = {
   topics: Topic[];
 };
 
+export type OutlineDetail = {
+  text: string;
+  sourceTurnIndices?: number[];
+};
+
+export type OutlineNode = {
+  title: string;
+  summary?: string;
+  /** Cross-session merge metadata (not shown in single-session map). */
+  conceptPath?: string[];
+  children?: OutlineNode[];
+  details?: OutlineDetail[];
+};
+
+export type SessionOutline = {
+  title?: string;
+  summary?: string;
+  outline: OutlineNode[];
+};
+
+export type MergedOutlineSource = {
+  sessionIndex: number;
+  turnIndex?: number;
+};
+
+export type MergedOutlineDetail = {
+  text: string;
+  sources?: MergedOutlineSource[];
+};
+
+export type MergedOutlineNode = {
+  title: string;
+  summary?: string;
+  children?: MergedOutlineNode[];
+  details?: MergedOutlineDetail[];
+};
+
+export type MergedOutline = {
+  title?: string;
+  summary?: string;
+  outline: MergedOutlineNode[];
+};
+
+export type LlmResponseSchema =
+  | "session-outline"
+  | "topic-graph"
+  | "merged-outline";
+
 export type SummarizeInput = {
   events: ChatEvent[];
   prompt: string;
   model?: string;
   maxTopics: number;
   maxItemsPerTopic: number;
+  /** Which JSON schema to validate CLI output against. */
+  responseSchema?: LlmResponseSchema;
 };
 
 export type LlmProviderOptions = {
@@ -56,9 +106,14 @@ export type LlmProviderOptions = {
   hostId?: AgentHostId;
 };
 
+export type LlmSummarizeResult = TopicGraph | SessionOutline | MergedOutline;
+
 export type LlmProvider = {
   readonly id: string;
-  summarize(input: SummarizeInput, signal: AbortSignal): Promise<TopicGraph>;
+  summarize(
+    input: SummarizeInput,
+    signal: AbortSignal
+  ): Promise<LlmSummarizeResult>;
 };
 
 export type LlmErrorCode =

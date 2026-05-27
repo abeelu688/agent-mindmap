@@ -1,15 +1,19 @@
 import type { AgentHostId } from "../host/types";
+import type { OutlineDetail, OutlineNode } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
+import { PROMPT_VERSION } from "./promptOutline";
 
 const HOST_MERGE_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
   "claude-code": "Claude Code Agent",
 };
 
-const MAX_ITEMS_PER_TOPIC_INPUT = 6;
-const MAX_TOPIC_TITLE = 60;
-const MAX_ITEM_TEXT = 60;
+const MAX_DETAILS_PER_NODE = 8;
+const MAX_NODE_TITLE = 60;
+const MAX_DETAIL_TEXT = 60;
 const MAX_TOTAL_CHARS = 30000;
+
+export const MERGE_PROMPT_VERSION = PROMPT_VERSION;
 
 export type MergePromptOptions = {
   maxTopics: number;
@@ -24,32 +28,54 @@ function clip(text: string, max: number): string {
   return t.slice(0, max - 3) + "...";
 }
 
+function formatDetail(detail: OutlineDetail, indent: string): string {
+  const q =
+    detail.sourceTurnIndices?.length
+      ? ` @Q${detail.sourceTurnIndices.map((n) => n + 1).join("/Q")}`
+      : "";
+  return `${indent}· ${clip(detail.text, MAX_DETAIL_TEXT)}${q}`;
+}
+
+function renderOutlineNode(
+  node: OutlineNode,
+  indent: string,
+  detailBudget: { remaining: number }
+): string[] {
+  const lines: string[] = [];
+  lines.push(`${indent}- ${clip(node.title, MAX_NODE_TITLE)}`);
+  if (node.summary?.trim()) {
+    lines.push(`${indent}  (${clip(node.summary, MAX_NODE_TITLE)})`);
+  }
+  for (const detail of node.details ?? []) {
+    if (detailBudget.remaining <= 0) {
+      break;
+    }
+    lines.push(formatDetail(detail, `${indent}    `));
+    detailBudget.remaining--;
+  }
+  for (const child of node.children ?? []) {
+    lines.push(...renderOutlineNode(child, indent + "  ", detailBudget));
+  }
+  return lines;
+}
+
 /**
- * Serialise a SessionRecord as a compact text block the LLM can read. We feed
- * it already-summarised topic graphs rather than raw transcripts, so the
- * merge prompt is dramatically cheaper than the per-session analysis.
+ * Serialise persisted SessionOutline trees for LLM merge (not raw transcripts).
  */
 function renderRecord(record: SessionRecord, idx: number): string {
   const meta = record.meta;
   const lines: string[] = [];
   lines.push(`[S${idx + 1}] sessionId=${meta.sessionId}`);
   lines.push(`     project=${meta.projectPath ?? meta.projectSlug}`);
-  if (record.graph.title) {
-    lines.push(`     title=${clip(record.graph.title, MAX_TOPIC_TITLE)}`);
+  if (record.outline.title) {
+    lines.push(`     title=${clip(record.outline.title, MAX_NODE_TITLE)}`);
   }
-  if (record.graph.summary) {
-    lines.push(`     summary=${clip(record.graph.summary, MAX_TOPIC_TITLE)}`);
+  if (record.outline.summary) {
+    lines.push(`     summary=${clip(record.outline.summary, MAX_NODE_TITLE)}`);
   }
-  for (const topic of record.graph.topics) {
-    const pathSuffix =
-      topic.conceptPath && topic.conceptPath.length
-        ? `  @ ${topic.conceptPath.join(" / ")}`
-        : "";
-    lines.push(`     - ${clip(topic.title, MAX_TOPIC_TITLE)}${pathSuffix}`);
-    const items = topic.items.slice(0, MAX_ITEMS_PER_TOPIC_INPUT);
-    for (const item of items) {
-      lines.push(`         · ${clip(item.text, MAX_ITEM_TEXT)}`);
-    }
+  const budget = { remaining: MAX_DETAILS_PER_NODE * 4 };
+  for (const node of record.outline.outline) {
+    lines.push(...renderOutlineNode(node, "     ", budget));
   }
   return lines.join("\n");
 }
@@ -76,27 +102,21 @@ export function buildMergePrompt(
   }
 
   return [
-    `你是「多会话主题合并」助手。下面是若干个 ${agentLabel} 会话已经被分析过的主题图，每段以 [S#] 开头。`,
-    "每个核心后面如果有 `@ a / b / c` 字样，表示其概念路径（从最泛领域到最细概念）。优先按这些路径的公共前缀去合并/聚类同类主题。",
-    "请把它们合并成一张统一的思维导图，要求：",
-    "- title: 5-15 字，名词性短语，概括跨会话的总主题（用作根节点）",
-    "- summary: 一句话（≤ 50 字）整体概述，可省略",
-    `- 抽取 5-${maxTopics} 个跨会话「核心主题」，重点是合并/去重同义主题、并保留差异点`,
-    "- 每个核心主题给出：",
-    "  - title: 5-15 字，名词性短语",
-    "  - summary: 一句话（≤ 50 字），可省略",
-    "  - conceptPath: 3-5 段概念路径，从最泛领域到最细概念（与单会话同字段语义一致，用于以后再合并）",
-    "    Android ART 主题：第 2 段统一 art，例如 [\"android\",\"art\",\"jit\"]；禁止 android/runtime/art 夹层",
-    `  - items: 1-${maxItems} 条要点，每条 ≤ 40 字`,
-    "- 不要保留时间顺序、不要逐会话罗列；以主题为中心组织内容",
-    "- 在每个 item 里如果某条要点显著来自某些会话，在 sourceTurnIndices 字段写入这些会话在输入里的下标（0-based，对应 [S1] 是 0，[S2] 是 1，依此类推）",
+    `你是「多会话大纲合并」助手。下面是若干个 ${agentLabel} 会话已翻译的分级大纲（每段以 [S#] 开头；@Q# 表示该会话内的用户提问轮次）。`,
+    "请合并成一张统一的分级大纲 + 叶子细节，要求：",
+    "- title: 5-15 字，名词性短语，跨会话总主题（根节点）",
+    "- summary: ≤50 字，可省略",
+    `- outline: 2-4 层，顶层 3-${maxTopics} 条分支；中间层只有 children，最细层放 details[]`,
+    `  - 每个 details 节点 1-${maxItems} 条，≤40 字`,
+    "  - 若要点来自某些输入会话，在 sources 写入 [{ sessionIndex, turnIndex? }]（0-based，[S1]→0，@Q1→turnIndex 0）",
+    "- 以主题为中心组织，不要按时间或逐会话罗列",
     "",
     "只输出严格 JSON，不要 markdown、不要解释、不要 ```：",
-    '{"title":"...","summary":"...","topics":[{"title":"...","summary":"...","conceptPath":["...","..."],"items":[{"text":"...","sourceTurnIndices":[0,2]}]}]}',
+    '{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","details":[{"text":"...","sources":[{"sessionIndex":0,"turnIndex":0}]}]}]}]}',
     "",
     "===",
     blocks.join("\n\n") || "(空)",
   ].join("\n");
 }
 
-export const __testing = { renderRecord, clip };
+export const __testing = { renderRecord, clip, renderOutlineNode };

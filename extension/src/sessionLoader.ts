@@ -4,19 +4,17 @@ import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
-import { PROMPT_VERSION } from "./llm/prompt";
+import { PROMPT_VERSION } from "./llm/promptOutline";
+import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
 import { summarizeSession } from "./llm/summarizeSession";
-import {
-  countUserQueries,
-  sanitizeTopicGraph,
-} from "./llm/sanitizeTopicGraph";
+import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
   type LlmProviderId,
   type LlmProviderOptions,
-  type TopicGraph,
+  type SessionOutline,
 } from "./llm/types";
-import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
+import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import type { SessionMeta } from "./mindmap/origin";
 import { getStoreDir } from "./paths";
@@ -287,6 +285,10 @@ export async function loadSession(
         })
       ) {
         const userQueryCount = countUserQueries(events);
+        const outline = sanitizeSessionOutline(
+          existing.outline,
+          userQueryCount
+        );
         return {
           session: {
             ...session,
@@ -294,11 +296,7 @@ export async function loadSession(
             projectSlug: ctx.projectSlug,
             projectPath,
           },
-          mindMap: buildTopicMindMap(
-            sanitizeTopicGraph(existing.graph, userQueryCount),
-            session.label,
-            sessionMeta
-          ),
+          mindMap: buildOutlineMindMap(outline, session.label, sessionMeta),
           source: "topic",
           fromLibrary: true,
         };
@@ -308,15 +306,15 @@ export async function loadSession(
     }
   }
 
-  let graph: TopicGraph | undefined;
+  let outline: SessionOutline | undefined;
   try {
     const provider = getProvider(settings.llm);
-    graph = await summarizeSession(
+    outline = await summarizeSession(
       events,
       {
         prompt: {
-          maxTopics: settings.llm.maxTopics,
-          maxItemsPerTopic: settings.llm.maxItemsPerTopic,
+          maxBranches: settings.llm.maxTopics,
+          maxDetailsPerNode: settings.llm.maxItemsPerTopic,
         },
         modelHint: settings.llm.model || undefined,
         cacheDir: getCacheDir(deps.context),
@@ -353,7 +351,7 @@ export async function loadSession(
   }
 
   const userQueryCount = countUserQueries(events);
-  graph = sanitizeTopicGraph(graph, userQueryCount);
+  outline = sanitizeSessionOutline(outline, userQueryCount);
 
   if (settings.library.enabled) {
     try {
@@ -377,7 +375,7 @@ export async function loadSession(
         hostId: host.id,
         userQueryCount,
       });
-      const record = buildSessionRecord(meta, graph);
+      const record = buildSessionRecord(meta, outline);
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
 
@@ -410,7 +408,7 @@ export async function loadSession(
       projectSlug: ctx.projectSlug,
       projectPath,
     },
-    mindMap: buildTopicMindMap(graph, session.label, sessionMeta),
+    mindMap: buildOutlineMindMap(outline, session.label, sessionMeta),
     source: "topic",
   };
 }

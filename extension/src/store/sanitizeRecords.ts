@@ -1,10 +1,18 @@
 import * as fs from "fs/promises";
-import { getHostById } from "../host/registry";
+import { claudeHost } from "../host/claudeHost";
+import { cursorHost } from "../host/cursorHost";
+import type { AgentHostId } from "../host/types";
 import {
   countUserQueries,
   sanitizeTopicGraph,
 } from "../llm/sanitizeTopicGraph";
+import { sanitizeSessionOutline } from "../llm/sanitizeOutline";
+import { outlineToTopicGraph } from "../llm/outlineToTopicGraph";
 import type { SessionRecord } from "./storeTypes";
+
+function hostFor(id?: AgentHostId) {
+  return id === "claude-code" ? claudeHost : cursorHost;
+}
 
 export async function resolveUserQueryCount(
   record: SessionRecord
@@ -14,7 +22,7 @@ export async function resolveUserQueryCount(
   }
   try {
     const content = await fs.readFile(record.meta.transcriptPath, "utf8");
-    const host = getHostById(record.meta.hostId ?? "cursor");
+    const host = hostFor(record.meta.hostId);
     const events = host.parseTranscript(content);
     return countUserQueries(events);
   } catch {
@@ -26,8 +34,13 @@ export async function sanitizeSessionRecord(
   record: SessionRecord
 ): Promise<SessionRecord> {
   const userQueryCount = await resolveUserQueryCount(record);
-  const graph = sanitizeTopicGraph(record.graph, userQueryCount);
+  const outline = sanitizeSessionOutline(record.outline, userQueryCount);
+  const graph = sanitizeTopicGraph(
+    outlineToTopicGraph(outline),
+    userQueryCount
+  );
   if (
+    outline === record.outline &&
     graph === record.graph &&
     record.meta.userQueryCount === userQueryCount
   ) {
@@ -36,6 +49,7 @@ export async function sanitizeSessionRecord(
   return {
     ...record,
     meta: { ...record.meta, userQueryCount },
+    outline,
     graph,
   };
 }

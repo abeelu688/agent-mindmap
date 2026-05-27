@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { TopicGraph } from "../llm/types";
+import type { SessionOutline, TopicGraph } from "../llm/types";
 import type { MindMapRoot } from "../transcript/types";
 
 /**
@@ -7,13 +7,13 @@ import type { MindMapRoot } from "../transcript/types";
  *
  * Lives at `<storeDir>/sessions/<projectSlug>/<sessionId>.json`.
  *
- * The `graph` field is exactly what `summarizeSession` produced (no
- * structural changes), so legacy `globalStorage/llm-cache/<sha>.json`
- * payloads remain shape-compatible with `record.graph`.
+ * `outline` is the primary LLM translation (hierarchical outline + leaf
+ * details). `graph` is derived via `outlineToTopicGraph` for legacy merges.
  */
 export type SessionRecord = {
   schemaVersion: 1;
   meta: SessionRecordMeta;
+  outline: SessionOutline;
   graph: TopicGraph;
 };
 

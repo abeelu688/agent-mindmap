@@ -10,6 +10,7 @@ import {
 } from "../extension/src/store/sessionStore";
 import { canonicalizeConceptSegment } from "../extension/src/llm/cursorCliProvider";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { Topic, TopicGraph } from "../extension/src/llm/types";
 
 function topic(
@@ -44,7 +45,7 @@ function makeRecord(
       promptVersion: 2,
       sessionLabel: `${sessionId}-label`,
     }),
-    graph
+    topicGraphToOutline(graph)
   );
 }
 

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
 import type { TopicGraph } from "../extension/src/llm/types";
@@ -45,11 +47,13 @@ const sessionMeta: SessionMeta = {
   transcriptPath: "/tmp/sess-X.jsonl",
 };
 
-describe("buildTopicMindMap origin bubbling", () => {
+describe("buildOutlineMindMap origin bubbling", () => {
+  const outline = topicGraphToOutline(graph);
+
   it("attaches per-leaf refs from sourceTurnIndices", () => {
-    const root = buildTopicMindMap(graph, "label", sessionMeta);
-    const firstTopicChildren = root.children?.[0].children ?? [];
-    const itemNode = firstTopicChildren.find((c) =>
+    const root = buildOutlineMindMap(outline, "label", sessionMeta);
+    const leaves = collectLeaves(root);
+    const itemNode = leaves.find((c) =>
       c.data.text.includes("tr.code 不在 Parcel")
     );
     expect(itemNode?.data.origin?.refs).toEqual([
@@ -58,7 +62,7 @@ describe("buildTopicMindMap origin bubbling", () => {
   });
 
   it("topic branch carries the union of its leaves' refs", () => {
-    const root = buildTopicMindMap(graph, "label", sessionMeta);
+    const root = buildOutlineMindMap(outline, "label", sessionMeta);
     const topic0 = root.children?.[0];
     const turns = (topic0?.data.origin?.refs ?? [])
       .map((r) => r.turnIndex)
@@ -70,7 +74,7 @@ describe("buildTopicMindMap origin bubbling", () => {
   });
 
   it("root carries the union across all topics", () => {
-    const root = buildTopicMindMap(graph, "label", sessionMeta);
+    const root = buildOutlineMindMap(outline, "label", sessionMeta);
     const turns = (root.data.origin?.refs ?? [])
       .map((r) => r.turnIndex)
       .filter((n): n is number => typeof n === "number")
@@ -79,7 +83,7 @@ describe("buildTopicMindMap origin bubbling", () => {
   });
 
   it("emits no origin when sessionMeta is omitted (back-compat)", () => {
-    const root = buildTopicMindMap(graph, "label");
+    const root = buildOutlineMindMap(outline, "label");
     expect(root.data.origin).toBeUndefined();
     for (const leaf of collectLeaves(root)) {
       expect(leaf.data.origin).toBeUndefined();
@@ -106,7 +110,7 @@ describe("buildConceptTrieMindMap origin bubbling", () => {
         promptVersion: 2,
         sessionLabel: sessionId,
       }),
-      { topics }
+      topicGraphToOutline({ topics })
     );
   }
 

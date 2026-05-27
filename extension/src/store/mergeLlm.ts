@@ -1,11 +1,12 @@
 import type { AgentHostId } from "../host/types";
-import { buildMergePrompt } from "../llm/promptMerge";
+import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
+import { PROMPT_VERSION } from "../llm/promptOutline";
 import {
   LlmProviderError,
   type LlmProvider,
-  type TopicGraph,
+  type MergedOutline,
 } from "../llm/types";
-import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
+import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
 import type { MindMapRoot } from "../transcript/types";
 import {
   llmMergeCachePath,
@@ -29,11 +30,8 @@ export type MergeLlmOptions = {
 /**
  * Cache key = sha256 of:
  *   - sorted session ids
- *   - prompt parameters
+ *   - prompt parameters + schema version
  *   - provider id + model
- *
- * The selection set + LLM config fully determines the merge output, so the
- * same selection can be reopened later without spending tokens.
  */
 export function computeMergeCacheKey(
   records: SessionRecord[],
@@ -47,6 +45,8 @@ export function computeMergeCacheKey(
       maxTopics: opts.maxTopics,
       maxItemsPerTopic: opts.maxItemsPerTopic,
     },
+    promptVersion: MERGE_PROMPT_VERSION,
+    outlineSchema: PROMPT_VERSION,
     provider: providerId,
     model: opts.model?.trim() || "",
   });
@@ -58,24 +58,15 @@ function projectSlugsFor(records: SessionRecord[]): string[] {
 }
 
 function buildRefinedMindMap(
-  graph: TopicGraph,
+  merged: MergedOutline,
+  records: SessionRecord[],
   rootTitleOverride?: string
 ): MindMapRoot {
-  // Reuse buildTopicMindMap so the rendered tree looks consistent with
-  // single-session views; allow caller to override the root label.
-  const root = buildTopicMindMap(graph, rootTitleOverride);
-  return root;
+  return buildMergedOutlineMindMap(merged, records, rootTitleOverride);
 }
 
 /**
- * Run an LLM merge across the given session records.
- *
- * On success:
- *   - writes the result to `<storeDir>/merges/cache/<key>.json`
- *   - mirrors it to `<storeDir>/merges/llm-refined.json`
- *
- * If the same selection set + config has been merged before, returns the
- * cached MergeRecord without contacting the LLM.
+ * Run an LLM merge across the given session records (using persisted outlines).
  */
 export async function mergeWithLlm(
   records: SessionRecord[],
@@ -92,15 +83,12 @@ export async function mergeWithLlm(
   const cacheFile = llmMergeCachePath(storeDir, cacheKey);
   const cached = await readMergeRecord(cacheFile);
   if (cached) {
-    // Refresh the llm-refined.json pointer to whatever was loaded.
     await writeMergeRecord(llmRefinedMergePath(storeDir), cached);
     return cached;
   }
 
   const hostId =
-    opts.hostId ??
-    records[0]?.meta.hostId ??
-    "cursor";
+    opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
   const prompt = buildMergePrompt(
     records,
     {
@@ -110,18 +98,28 @@ export async function mergeWithLlm(
     hostId
   );
 
-  const graph = await provider.summarize(
+  const result = await provider.summarize(
     {
       events: [],
       prompt,
       model: opts.model,
       maxTopics: opts.maxTopics,
       maxItemsPerTopic: opts.maxItemsPerTopic,
+      responseSchema: "merged-outline",
     },
     signal
   );
 
-  const mindMap = buildRefinedMindMap(graph, opts.title ?? graph.title);
+  if (!result || typeof result !== "object" || !("outline" in result)) {
+    throw new LlmProviderError("bad-shape", "Provider did not return MergedOutline");
+  }
+  const merged = result as MergedOutline;
+
+  const mindMap = buildRefinedMindMap(
+    merged,
+    records,
+    opts.title ?? merged.title
+  );
   const record: MergeRecord = {
     schemaVersion: 1,
     meta: {

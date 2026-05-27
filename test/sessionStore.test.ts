@@ -19,14 +19,14 @@ import type {
   SessionRecord,
   SessionRecordMeta,
 } from "../extension/src/store/storeTypes";
-import type { TopicGraph } from "../extension/src/llm/types";
+import type { SessionOutline } from "../extension/src/llm/types";
 
-const sampleGraph: TopicGraph = {
+const sampleOutline: SessionOutline = {
   title: "Binder",
-  topics: [
+  outline: [
     {
       title: "Transaction code",
-      items: [{ text: "tr.code 才是真正的命令字段" }],
+      details: [{ text: "tr.code 才是真正的命令字段" }],
     },
   ],
 };
@@ -71,12 +71,12 @@ describe("sessionStore", () => {
 
   it("round-trips a session record", async () => {
     const meta = makeMeta();
-    const record = buildSessionRecord(meta, sampleGraph);
+    const record = buildSessionRecord(meta, sampleOutline);
     await writeRecord(dir, record);
     const loaded = await readRecord(dir, meta.projectSlug, meta.sessionId);
     expect(loaded).toBeDefined();
     expect(loaded!.meta.sessionId).toBe(meta.sessionId);
-    expect(loaded!.graph.topics[0].title).toBe("Transaction code");
+    expect(loaded!.outline.outline[0].title).toBe("Transaction code");
     expect(recordPath(dir, meta.projectSlug, meta.sessionId)).toContain(
       meta.projectSlug
     );
@@ -88,14 +88,14 @@ describe("sessionStore", () => {
         sessionId: "aaa",
         projectSlug: "proj-a",
       }),
-      sampleGraph
+      sampleOutline
     );
     const b = buildSessionRecord(
       makeMeta({
         sessionId: "bbb",
         projectSlug: "proj-b",
       }),
-      sampleGraph
+      sampleOutline
     );
     await writeRecord(dir, a);
     await writeRecord(dir, b);
@@ -108,11 +108,11 @@ describe("sessionStore", () => {
   it("rebuildIndex writes a compact projection sorted by analyzedAt desc", async () => {
     const older = buildSessionRecord(
       makeMeta({ sessionId: "older", analyzedAt: 100 }),
-      sampleGraph
+      sampleOutline
     );
     const newer = buildSessionRecord(
       makeMeta({ sessionId: "newer", analyzedAt: 200 }),
-      sampleGraph
+      sampleOutline
     );
     await writeRecord(dir, older);
     await writeRecord(dir, newer);
@@ -128,7 +128,7 @@ describe("sessionStore", () => {
 
   it("isRecordFresh detects transcript / param / model / promptVersion changes", () => {
     const meta = makeMeta({ promptVersion: 2 });
-    const record: SessionRecord = buildSessionRecord(meta, sampleGraph);
+    const record: SessionRecord = buildSessionRecord(meta, sampleOutline);
 
     expect(
       isRecordFresh(record, {
@@ -189,7 +189,7 @@ describe("sessionStore", () => {
     // as v1 and become stale once the current prompt is bumped to v2+.
     const legacy = buildSessionRecord(
       makeMeta({ promptVersion: undefined }),
-      sampleGraph
+      sampleOutline
     );
     expect(
       isRecordFresh(legacy, {
@@ -203,7 +203,7 @@ describe("sessionStore", () => {
 
   it("readRecord rejects schemaVersion mismatch", async () => {
     const meta = makeMeta();
-    const record = buildSessionRecord(meta, sampleGraph);
+    const record = buildSessionRecord(meta, sampleOutline);
     await writeRecord(dir, record);
     const file = recordPath(dir, meta.projectSlug, meta.sessionId);
     const { writeFile } = await import("fs/promises");

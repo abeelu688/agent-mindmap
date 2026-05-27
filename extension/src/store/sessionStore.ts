@@ -1,8 +1,15 @@
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { validateTopicGraph } from "../llm/cursorCliProvider";
-import type { TopicGraph } from "../llm/types";
+import {
+  validateSessionOutline,
+  validateTopicGraph,
+} from "../llm/cursorCliProvider";
+import {
+  outlineToTopicGraph,
+  topicGraphToOutline,
+} from "../llm/outlineToTopicGraph";
+import type { SessionOutline, TopicGraph } from "../llm/types";
 import type {
   MergeRecord,
   SessionIndex,
@@ -128,10 +135,17 @@ function isSessionRecord(value: unknown): value is SessionRecord {
   ) {
     return false;
   }
-  if (!r.graph || typeof r.graph !== "object") {
+  if (!r.outline && !r.graph) {
     return false;
   }
   return true;
+}
+
+function ensureRecordGraph(record: SessionRecord): SessionRecord {
+  if (record.outline) {
+    return { ...record, graph: outlineToTopicGraph(record.outline) };
+  }
+  return record;
 }
 
 export async function readRecord(
@@ -148,12 +162,22 @@ export async function readRecord(
     return undefined;
   }
   try {
-    // Re-validate graph shape (legacy cache files may have looser invariants).
-    parsed.graph = validateTopicGraph(parsed.graph);
+    const raw = parsed as SessionRecord;
+    if (raw.outline) {
+      raw.outline = validateSessionOutline(raw.outline);
+      raw.graph = raw.graph
+        ? validateTopicGraph(raw.graph)
+        : outlineToTopicGraph(raw.outline);
+    } else if (raw.graph) {
+      raw.graph = validateTopicGraph(raw.graph);
+      raw.outline = topicGraphToOutline(raw.graph);
+    } else {
+      return undefined;
+    }
+    return ensureRecordGraph(raw);
   } catch {
     return undefined;
   }
-  return parsed;
 }
 
 export async function writeRecord(
@@ -180,9 +204,10 @@ export function buildRecordMeta(
 
 export function buildSessionRecord(
   meta: SessionRecordMeta,
-  graph: TopicGraph
+  outline: SessionOutline
 ): SessionRecord {
-  return { schemaVersion: SCHEMA_VERSION, meta, graph };
+  const graph = outlineToTopicGraph(outline);
+  return { schemaVersion: SCHEMA_VERSION, meta, outline, graph };
 }
 
 /**
@@ -219,11 +244,22 @@ export async function listRecords(
         continue;
       }
       try {
-        parsed.graph = validateTopicGraph(parsed.graph);
+        const raw = parsed as SessionRecord;
+        if (raw.outline) {
+          raw.outline = validateSessionOutline(raw.outline);
+          raw.graph = raw.graph
+            ? validateTopicGraph(raw.graph)
+            : outlineToTopicGraph(raw.outline);
+        } else if (raw.graph) {
+          raw.graph = validateTopicGraph(raw.graph);
+          raw.outline = topicGraphToOutline(raw.graph);
+        } else {
+          continue;
+        }
+        out.push(ensureRecordGraph(raw));
       } catch {
         continue;
       }
-      out.push(parsed);
     }
   }
   return out;
@@ -237,8 +273,8 @@ function toIndexEntry(record: SessionRecord): SessionIndexEntry {
     sessionLabel: record.meta.sessionLabel,
     analyzedAt: record.meta.analyzedAt,
     transcriptMtimeMs: record.meta.transcriptMtimeMs,
-    topicCount: record.graph.topics.length,
-    rootTitle: record.graph.title,
+    topicCount: record.outline.outline.length,
+    rootTitle: record.outline.title ?? record.graph.title,
   };
 }
 

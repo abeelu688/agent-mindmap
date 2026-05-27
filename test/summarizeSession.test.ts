@@ -6,8 +6,9 @@ import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import {
   LlmProviderError,
   type LlmProvider,
+  type LlmSummarizeResult,
+  type SessionOutline,
   type SummarizeInput,
-  type TopicGraph,
 } from "../extension/src/llm/types";
 import type { ChatEvent } from "../extension/src/transcript/types";
 
@@ -27,11 +28,17 @@ const events: ChatEvent[] = [
   },
 ];
 
-const goodGraph: TopicGraph = {
-  topics: [
+const goodOutline: SessionOutline = {
+  title: "Binder",
+  outline: [
     {
-      title: "Binder",
-      items: [{ text: "tr.code" }],
+      title: "IPC",
+      children: [
+        {
+          title: "Binder",
+          details: [{ text: "tr.code", sourceTurnIndices: [0] }],
+        },
+      ],
     },
   ],
 };
@@ -42,9 +49,9 @@ class FakeProvider implements LlmProvider {
   constructor(
     private readonly impl: (
       input: SummarizeInput
-    ) => Promise<TopicGraph> | TopicGraph
+    ) => Promise<LlmSummarizeResult> | LlmSummarizeResult
   ) {}
-  async summarize(input: SummarizeInput): Promise<TopicGraph> {
+  async summarize(input: SummarizeInput): Promise<LlmSummarizeResult> {
     this.calls += 1;
     return this.impl(input);
   }
@@ -65,19 +72,19 @@ afterEach(() => {
 });
 
 describe("summarizeSession", () => {
-  it("returns provider output on happy path", async () => {
-    const provider = new FakeProvider(() => goodGraph);
+  it("returns provider outline on happy path", async () => {
+    const provider = new FakeProvider(() => goodOutline);
     const out = await summarizeSession(
       events,
       {
-        prompt: { maxTopics: 6, maxItemsPerTopic: 6 },
+        prompt: { maxBranches: 6, maxDetailsPerNode: 6 },
         cacheDir,
         cache: false,
       },
       provider,
       new AbortController().signal
     );
-    expect(out.topics[0].title).toBe("Binder");
+    expect(out.outline[0].title).toBe("IPC");
     expect(provider.calls).toBe(1);
   });
 
@@ -85,12 +92,12 @@ describe("summarizeSession", () => {
     let receivedPrompt = "";
     const provider = new FakeProvider((input) => {
       receivedPrompt = input.prompt;
-      return goodGraph;
+      return goodOutline;
     });
     await summarizeSession(
       events,
       {
-        prompt: { maxTopics: 6, maxItemsPerTopic: 6 },
+        prompt: { maxBranches: 6, maxDetailsPerNode: 6 },
         cache: false,
       },
       provider,
@@ -98,6 +105,7 @@ describe("summarizeSession", () => {
     );
     expect(receivedPrompt).toContain("[Q1]");
     expect(receivedPrompt).toContain("[A1]");
+    expect(receivedPrompt).toContain("分级大纲");
     expect(receivedPrompt).toContain("How does binder work?");
   });
 
@@ -108,7 +116,7 @@ describe("summarizeSession", () => {
     await expect(
       summarizeSession(
         events,
-        { prompt: { maxTopics: 6, maxItemsPerTopic: 6 }, cache: false },
+        { prompt: { maxBranches: 6, maxDetailsPerNode: 6 }, cache: false },
         provider,
         new AbortController().signal
       )
@@ -116,24 +124,24 @@ describe("summarizeSession", () => {
   });
 
   it("does not call provider on cache hit", async () => {
-    const provider = new FakeProvider(() => goodGraph);
+    const provider = new FakeProvider(() => goodOutline);
     const opts = {
-      prompt: { maxTopics: 6, maxItemsPerTopic: 6 },
+      prompt: { maxBranches: 6, maxDetailsPerNode: 6 },
       cacheDir,
       cache: true,
     };
     await summarizeSession(events, opts, provider, new AbortController().signal);
     expect(provider.calls).toBe(1);
     await summarizeSession(events, opts, provider, new AbortController().signal);
-    expect(provider.calls).toBe(1); // second call served from disk
+    expect(provider.calls).toBe(1);
   });
 
   it("misses cache when prompt options change", async () => {
-    const provider = new FakeProvider(() => goodGraph);
+    const provider = new FakeProvider(() => goodOutline);
     await summarizeSession(
       events,
       {
-        prompt: { maxTopics: 6, maxItemsPerTopic: 6 },
+        prompt: { maxBranches: 6, maxDetailsPerNode: 6 },
         cacheDir,
         cache: true,
       },
@@ -143,7 +151,7 @@ describe("summarizeSession", () => {
     await summarizeSession(
       events,
       {
-        prompt: { maxTopics: 4, maxItemsPerTopic: 6 },
+        prompt: { maxBranches: 4, maxDetailsPerNode: 6 },
         cacheDir,
         cache: true,
       },
@@ -154,11 +162,11 @@ describe("summarizeSession", () => {
   });
 
   it("throws empty when events are empty", async () => {
-    const provider = new FakeProvider(() => goodGraph);
+    const provider = new FakeProvider(() => goodOutline);
     await expect(
       summarizeSession(
         [],
-        { prompt: { maxTopics: 6, maxItemsPerTopic: 6 }, cache: false },
+        { prompt: { maxBranches: 6, maxDetailsPerNode: 6 }, cache: false },
         provider,
         new AbortController().signal
       )
