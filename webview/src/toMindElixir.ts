@@ -7,6 +7,7 @@ export type NodeOriginRef = {
   sessionLabel: string;
   transcriptPath: string;
   turnIndex?: number;
+  jumpHref?: string;
 };
 
 export type NodeOrigin = {

@@ -118,7 +118,8 @@ export function showUiContextMenu(
   clientX: number,
   clientY: number,
   currentUi: MindMapUiOptions,
-  onPick: (pick: UiSettingPick) => void
+  onPick: (pick: UiSettingPick) => void,
+  options?: { onDownload?: () => void; showDownload?: boolean }
 ): void {
   hideUiContextMenu();
   bindDismissListeners();
@@ -154,6 +155,31 @@ export function showUiContextMenu(
     })),
     (value) => onPick({ key: "direction", value })
   );
+
+  if (options?.showDownload && options.onDownload) {
+    const sep2 = document.createElement("div");
+    sep2.className = "mindmap-ui-menu__sep";
+    root.appendChild(sep2);
+
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "mindmap-ui-menu__item";
+    downloadBtn.setAttribute("role", "menuitem");
+    const downloadMark = document.createElement("span");
+    downloadMark.className = "mindmap-ui-menu__check";
+    downloadMark.textContent = "";
+    const downloadLabel = document.createElement("span");
+    downloadLabel.className = "mindmap-ui-menu__label";
+    downloadLabel.textContent = "下载思维导图与对话…";
+    downloadBtn.appendChild(downloadMark);
+    downloadBtn.appendChild(downloadLabel);
+    downloadBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      options.onDownload?.();
+      hideUiContextMenu();
+    });
+    root.appendChild(downloadBtn);
+  }
 
   document.body.appendChild(root);
   menuEl = root;

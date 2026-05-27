@@ -1,6 +1,8 @@
 import MindElixir, { type MindElixirInstance, type NodeObj } from "mind-elixir";
 import "mind-elixir/style.css";
 import "./styles.css";
+import { readExportBootstrap } from "./exportBootstrap";
+import { resolveOfflineJumpHref } from "./offlineJump";
 import { assignSideDirectionsPreferRight } from "./sideLayout";
 import { directionFromUi, resolveTheme } from "./theme";
 import {
@@ -21,13 +23,23 @@ type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
-  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string };
+  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
+  | { type: "requestDownload" };
 
-declare function acquireVsCodeApi(): {
+type VsCodeApi = {
   postMessage(message: WebviewToExtensionMessage): void;
 };
 
-const vscode = acquireVsCodeApi();
+declare function acquireVsCodeApi(): VsCodeApi;
+
+const exportBootstrap = readExportBootstrap();
+const offlineMode = exportBootstrap !== undefined;
+
+const vscode: VsCodeApi | undefined =
+  !offlineMode && typeof acquireVsCodeApi === "function"
+    ? acquireVsCodeApi()
+    : undefined;
+
 const container = document.getElementById("mindMapContainer");
 
 if (!container) {
@@ -40,6 +52,49 @@ let onSelectNodes: ((nodes: NodeObj<NodeMetadata>[]) => void) | undefined;
 let currentUi: MindMapUiOptions | undefined;
 let pendingData: MindMapNodeData | undefined;
 let lastRenderedData: MindMapNodeData | undefined;
+
+function postToExtension(message: WebviewToExtensionMessage): void {
+  vscode?.postMessage(message);
+}
+
+function handleNodeSelection(
+  nodes: NodeObj<NodeMetadata>[],
+  picked: NodeObj<NodeMetadata> | undefined
+): void {
+  const withOrigin = nodes.filter((n) => readOriginFromNodeObj(n));
+  const node =
+    picked ??
+    withOrigin[withOrigin.length - 1] ??
+    nodes[nodes.length - 1];
+  const origin = readOriginFromNodeObj(node);
+  if (!origin) {
+    const topic = node?.topic ?? "<unknown>";
+    const label = topic.length > 50 ? topic.slice(0, 50) + "…" : topic;
+    postToExtension({
+      type: "log",
+      message: `selectNodes: no origin on "${label}"`,
+    });
+    return;
+  }
+
+  if (offlineMode) {
+    const href = resolveOfflineJumpHref(origin, node?.topic);
+    if (href) {
+      window.open(href, "_blank");
+    }
+    return;
+  }
+
+  postToExtension({
+    type: "log",
+    message: `selectNodes: forwarding ${origin.refs.length} ref(s)`,
+  });
+  postToExtension({
+    type: "nodeClicked",
+    origin,
+    nodeLabel: node?.topic,
+  });
+}
 
 function createMind(ui: MindMapUiOptions): MindElixirInstance {
   const instance = new MindElixir({
@@ -59,28 +114,10 @@ function createMind(ui: MindMapUiOptions): MindElixirInstance {
     const withOrigin = nodes.filter((n) => readOriginFromNodeObj(n));
     const picked =
       withOrigin[withOrigin.length - 1] ?? nodes[nodes.length - 1];
-    const origin = readOriginFromNodeObj(picked);
-    if (origin) {
-      vscode.postMessage({
-        type: "log",
-        message: `selectNodes: forwarding ${origin.refs.length} ref(s)`,
-      });
-      vscode.postMessage({
-        type: "nodeClicked",
-        origin,
-        nodeLabel: picked?.topic,
-      });
-      return;
-    }
-    const topic = picked?.topic ?? "<unknown>";
-    const label = topic.length > 50 ? topic.slice(0, 50) + "…" : topic;
-    vscode.postMessage({
-      type: "log",
-      message: `selectNodes: no origin on "${label}"`,
-    });
+    handleNodeSelection(nodes, picked);
   };
   instance.bus.addListener("selectNodes", onSelectNodes);
-  vscode.postMessage({ type: "log", message: "selectNodes listener bound" });
+  postToExtension({ type: "log", message: "selectNodes listener bound" });
   return instance;
 }
 
@@ -165,7 +202,7 @@ function render(data: MindMapNodeData): void {
     mind = createMind(ui);
     const err = mind.init(meiData);
     if (err) {
-      vscode.postMessage({
+      postToExtension({
         type: "log",
         message: `mind.init failed: ${String(err)}`,
       });
@@ -188,27 +225,29 @@ function rebuildMindFromLastData(): void {
   render(data);
 }
 
-window.addEventListener("message", (event) => {
-  const msg = event.data as ExtensionMessage;
-  if (msg?.type === "setUi" && msg.ui) {
-    const prev = currentUi;
-    currentUi = msg.ui;
-    if (mind && prev && prev.direction !== msg.ui.direction) {
-      rebuildMindFromLastData();
-    } else {
-      applyUi(msg.ui);
-    }
-    tryRender();
-    return;
-  }
-  if (msg?.type === "setData" && msg.data) {
-    if (!currentUi) {
-      pendingData = msg.data;
+if (!offlineMode) {
+  window.addEventListener("message", (event) => {
+    const msg = event.data as ExtensionMessage;
+    if (msg?.type === "setUi" && msg.ui) {
+      const prev = currentUi;
+      currentUi = msg.ui;
+      if (mind && prev && prev.direction !== msg.ui.direction) {
+        rebuildMindFromLastData();
+      } else {
+        applyUi(msg.ui);
+      }
+      tryRender();
       return;
     }
-    render(msg.data);
-  }
-});
+    if (msg?.type === "setData" && msg.data) {
+      if (!currentUi) {
+        pendingData = msg.data;
+        return;
+      }
+      render(msg.data);
+    }
+  });
+}
 
 window.addEventListener("resize", handleResize);
 
@@ -227,21 +266,37 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-container.addEventListener("contextmenu", (event) => {
-  if (!isBlankCanvasTarget(event.target, container)) {
-    return;
-  }
-  if (!currentUi) {
-    return;
-  }
-  event.preventDefault();
-  showUiContextMenu(event.clientX, event.clientY, currentUi, (pick) => {
-    vscode.postMessage({
-      type: "updateUiSetting",
-      key: pick.key,
-      value: pick.value,
-    });
+if (!offlineMode) {
+  container.addEventListener("contextmenu", (event) => {
+    if (!isBlankCanvasTarget(event.target, container)) {
+      return;
+    }
+    if (!currentUi) {
+      return;
+    }
+    event.preventDefault();
+    showUiContextMenu(
+      event.clientX,
+      event.clientY,
+      currentUi,
+      (pick) => {
+        postToExtension({
+          type: "updateUiSetting",
+          key: pick.key,
+          value: pick.value,
+        });
+      },
+      {
+        showDownload: true,
+        onDownload: () => {
+          postToExtension({ type: "requestDownload" });
+        },
+      }
+    );
   });
-});
 
-vscode.postMessage({ type: "ready" });
+  postToExtension({ type: "ready" });
+} else if (exportBootstrap) {
+  currentUi = exportBootstrap.ui;
+  render(exportBootstrap.data);
+}

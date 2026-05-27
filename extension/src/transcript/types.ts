@@ -33,6 +33,8 @@ export type NodeOriginRef = {
   sessionLabel: string;
   transcriptPath: string;
   turnIndex?: number;
+  /** Relative href for offline export bundles (e.g. transcripts/foo.md#q-2). */
+  jumpHref?: string;
 };
 
 export type NodeOrigin = {
