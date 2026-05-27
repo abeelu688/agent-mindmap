@@ -1,3 +1,4 @@
+import type { AgentHostId } from "../host/types";
 import { buildMergePrompt } from "../llm/promptMerge";
 import {
   LlmProviderError,
@@ -22,6 +23,7 @@ export type MergeLlmOptions = {
   title?: string;
   /** Model hint, propagated to provider and folded into the cache key. */
   model?: string;
+  hostId?: AgentHostId;
 };
 
 /**
@@ -95,10 +97,18 @@ export async function mergeWithLlm(
     return cached;
   }
 
-  const prompt = buildMergePrompt(records, {
-    maxTopics: opts.maxTopics,
-    maxItemsPerTopic: opts.maxItemsPerTopic,
-  });
+  const hostId =
+    opts.hostId ??
+    records[0]?.meta.hostId ??
+    "cursor";
+  const prompt = buildMergePrompt(
+    records,
+    {
+      maxTopics: opts.maxTopics,
+      maxItemsPerTopic: opts.maxItemsPerTopic,
+    },
+    hostId
+  );
 
   const graph = await provider.summarize(
     {

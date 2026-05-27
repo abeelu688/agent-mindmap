@@ -8,6 +8,7 @@ import {
   type LlmProvider,
   type TopicGraph,
 } from "./types";
+import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 
 export type SummarizeOptions = {
@@ -15,6 +16,7 @@ export type SummarizeOptions = {
   modelHint?: string;
   cacheDir?: string;
   cache: boolean;
+  hostId?: AgentHostId;
 };
 
 function computeCacheKey(
@@ -25,6 +27,8 @@ function computeCacheKey(
 ): string {
   const hash = createHash("sha256");
   hash.update(providerId);
+  hash.update("\0");
+  hash.update(opts.hostId ?? "cursor");
   hash.update("\0");
   hash.update(JSON.stringify(opts.prompt));
   hash.update("\0");
@@ -74,7 +78,7 @@ export async function summarizeSession(
     throw new LlmProviderError("empty", "Transcript has no events to summarize");
   }
 
-  const prompt = buildPrompt(events, opts.prompt);
+  const prompt = buildPrompt(events, opts.prompt, opts.hostId ?? "cursor");
   const cacheKey = computeCacheKey(events, opts, provider.id, prompt);
   const useCache = opts.cache && !!opts.cacheDir;
 

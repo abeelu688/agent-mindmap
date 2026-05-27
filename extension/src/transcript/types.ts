@@ -3,12 +3,16 @@ export type ChatEvent =
   | { kind: "tool"; name: string; label: string; lineIndex: number }
   | { kind: "assistant_summary"; text: string; preview: string; lineIndex: number };
 
+import type { AgentHostId } from "../host/types";
+
 export type TranscriptSession = {
   id: string;
   filePath: string;
   mtimeMs: number;
   label: string;
-  /** Cursor project slug owning this transcript, when known. */
+  /** Host that owns this transcript file. */
+  hostId?: AgentHostId;
+  /** Encoded project directory name under the host projects root. */
   projectSlug?: string;
   /** Original workspace filesystem path, when known. */
   projectPath?: string;

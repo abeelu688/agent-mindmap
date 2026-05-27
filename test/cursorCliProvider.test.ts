@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  __testing,
-  validateTopicGraph,
-} from "../extension/src/llm/cursorCliProvider";
+import { __testing } from "../extension/src/llm/cursorCliProvider";
+import { validateTopicGraph } from "../extension/src/llm/topicGraphValidate";
 import { LlmProviderError } from "../extension/src/llm/types";
 
 describe("isRetryableError", () => {

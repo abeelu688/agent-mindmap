@@ -1,4 +1,10 @@
+import type { AgentHostId } from "../host/types";
 import type { SessionRecord } from "../store/storeTypes";
+
+const HOST_MERGE_LABELS: Record<AgentHostId, string> = {
+  cursor: "Cursor Agent",
+  "claude-code": "Claude Code Agent",
+};
 
 const MAX_ITEMS_PER_TOPIC_INPUT = 6;
 const MAX_TOPIC_TITLE = 60;
@@ -50,8 +56,10 @@ function renderRecord(record: SessionRecord, idx: number): string {
 
 export function buildMergePrompt(
   records: SessionRecord[],
-  options: MergePromptOptions
+  options: MergePromptOptions,
+  hostId: AgentHostId = "cursor"
 ): string {
+  const agentLabel = HOST_MERGE_LABELS[hostId];
   const maxTopics = Math.max(2, options.maxTopics);
   const maxItems = Math.max(1, options.maxItemsPerTopic);
 
@@ -68,7 +76,7 @@ export function buildMergePrompt(
   }
 
   return [
-    "你是「多会话主题合并」助手。下面是若干个 Cursor Agent 会话已经被分析过的主题图，每段以 [S#] 开头。",
+    `你是「多会话主题合并」助手。下面是若干个 ${agentLabel} 会话已经被分析过的主题图，每段以 [S#] 开头。`,
     "每个核心后面如果有 `@ a / b / c` 字样，表示其概念路径（从最泛领域到最细概念）。优先按这些路径的公共前缀去合并/聚类同类主题。",
     "请把它们合并成一张统一的思维导图，要求：",
     "- title: 5-15 字，名词性短语，概括跨会话的总主题（用作根节点）",
