@@ -1,24 +1,21 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
+import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
+import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
 import { PROMPT_VERSION } from "./llm/prompt";
 import { summarizeSession } from "./llm/summarizeSession";
 import {
   LlmProviderError,
+  type LlmProviderId,
   type LlmProviderOptions,
   type TopicGraph,
 } from "./llm/types";
 import { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import type { SessionMeta } from "./mindmap/origin";
-import {
-  getStoreDir,
-  getTranscriptsDir,
-  getWorkspacePath,
-  getWorkspaceSlug,
-  slugToWorkspacePath,
-} from "./paths";
+import { getStoreDir } from "./paths";
 import { buildDeterministicMergeRecord } from "./store/mergeDeterministic";
 import { buildConceptMergeRecord } from "./store/mergeConceptTrie";
 import {
@@ -34,8 +31,7 @@ import {
   writeMergeRecord,
   writeRecord,
 } from "./store/sessionStore";
-import { listSessions, readSessionFile } from "./transcript/listSessions";
-import { parseJsonl } from "./transcript/parseJsonl";
+import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
 
 export type LoadedSession = {
@@ -54,9 +50,7 @@ export type LoadDeps = {
 
 type Settings = {
   llm: LlmProviderOptions;
-  /** Legacy globalStorage hash cache (still useful as 2nd-tier). */
   cache: boolean;
-  /** Library (`storeDir`) layer — primary persistence + cross-agent store. */
   library: {
     enabled: boolean;
     autoRebuildDeterministic: boolean;
@@ -64,11 +58,26 @@ type Settings = {
   turnOptions: { includeToolCalls: boolean; maxConclusionItems: number };
 };
 
-function readSettings(): Settings {
+function resolveLlmProviderId(
+  setting: string,
+  hostDefault: LlmProviderId
+): LlmProviderId {
+  if (setting === "auto") {
+    return hostDefault;
+  }
+  if (setting === "cursor-cli" || setting === "claude-cli") {
+    return setting;
+  }
+  return hostDefault;
+}
+
+async function readSettings(host: AgentHost): Promise<Settings> {
   const config = vscode.workspace.getConfiguration("agentMindmap");
-  const providerSetting = config.get<string>("llm.provider", "cursor-cli");
-  const provider: LlmProviderOptions["provider"] =
-    providerSetting === "cursor-cli" ? "cursor-cli" : "cursor-cli";
+  const providerSetting = config.get<string>("llm.provider", "auto");
+  const provider = resolveLlmProviderId(
+    providerSetting,
+    host.defaultLlmProvider
+  );
 
   return {
     llm: {
@@ -92,6 +101,7 @@ function readSettings(): Settings {
         1,
         config.get<number>("maxItemsPerTopic", 6) ?? 6
       ),
+      hostId: host.id,
     },
     cache: config.get<boolean>("cacheLlmResult", true) ?? true,
     library: {
@@ -125,54 +135,61 @@ function isCancellation(err: unknown): boolean {
   return err instanceof LlmProviderError && err.code === "cancelled";
 }
 
-export async function loadLatestSession(
-  deps: LoadDeps
-): Promise<LoadedSession | undefined> {
-  const dir = getTranscriptsDir();
-  if (!dir) {
+async function listWorkspaceSessions(
+  host: AgentHost
+): Promise<{ scanDir: string; sessions: TranscriptSession[] } | undefined> {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
     vscode.window.showWarningMessage(
       "Agent Mind Map: Open a workspace folder first."
     );
     return undefined;
   }
 
-  const slug = getWorkspaceSlug();
-  const projectPath = getWorkspacePath();
-  const sessions = await listSessions(dir, {
-    projectSlug: slug,
-    projectPath,
-  });
-  if (!sessions.length) {
+  const scanDir = host.getSessionsScanDir(workspacePath);
+  if (!scanDir) {
     vscode.window.showWarningMessage(
-      `Agent Mind Map: No agent transcripts in ${dir}`
+      "Agent Mind Map: Open a workspace folder first."
     );
     return undefined;
   }
 
-  return loadSession(sessions[0], deps);
+  const slug = getWorkspaceSlug(host);
+  const sessions = await host.listSessions(scanDir, {
+    projectSlug: slug,
+    projectPath: workspacePath,
+  });
+  return { scanDir, sessions };
+}
+
+export async function loadLatestSession(
+  deps: LoadDeps
+): Promise<LoadedSession | undefined> {
+  const host = await getActiveHost(deps.context);
+  const listed = await listWorkspaceSessions(host);
+  if (!listed) {
+    return undefined;
+  }
+  const { scanDir, sessions } = listed;
+  if (!sessions.length) {
+    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
+    return undefined;
+  }
+
+  return loadSession(sessions[0], deps, {}, host);
 }
 
 export async function pickSession(
   deps: LoadDeps
 ): Promise<LoadedSession | undefined> {
-  const dir = getTranscriptsDir();
-  if (!dir) {
-    vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder first."
-    );
+  const host = await getActiveHost(deps.context);
+  const listed = await listWorkspaceSessions(host);
+  if (!listed) {
     return undefined;
   }
-
-  const slug = getWorkspaceSlug();
-  const projectPath = getWorkspacePath();
-  const sessions = await listSessions(dir, {
-    projectSlug: slug,
-    projectPath,
-  });
+  const { scanDir, sessions } = listed;
   if (!sessions.length) {
-    vscode.window.showWarningMessage(
-      `Agent Mind Map: No agent transcripts in ${dir}`
-    );
+    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
     return undefined;
   }
 
@@ -184,7 +201,7 @@ export async function pickSession(
       session: s,
     })),
     {
-      placeHolder: "Select an agent chat session",
+      placeHolder: `Select a ${host.displayName} chat session`,
       matchOnDescription: true,
       matchOnDetail: true,
     }
@@ -194,10 +211,13 @@ export async function pickSession(
     return undefined;
   }
 
-  return loadSession(picked.session, deps);
+  return loadSession(picked.session, deps, {}, host);
 }
 
-function resolveSessionContext(session: TranscriptSession): {
+function resolveSessionContext(
+  session: TranscriptSession,
+  host: AgentHost
+): {
   projectSlug: string;
   projectPath?: string;
 } {
@@ -207,14 +227,7 @@ function resolveSessionContext(session: TranscriptSession): {
       projectPath: session.projectPath,
     };
   }
-  // Best-effort fallback: derive slug from transcript path
-  // `<...>/<slug>/agent-transcripts/<id>/<id>.jsonl` → grandgrandparent name
-  const transcriptsParent = path.dirname(path.dirname(session.filePath));
-  const slugDir = path.dirname(transcriptsParent);
-  return {
-    projectSlug: path.basename(slugDir),
-    projectPath: session.projectPath,
-  };
+  return host.inferProjectFromTranscriptPath(session.filePath);
 }
 
 export type LoadSessionOptions = {
@@ -225,17 +238,19 @@ export type LoadSessionOptions = {
 export async function loadSession(
   session: TranscriptSession,
   deps: LoadDeps,
-  options: LoadSessionOptions = {}
+  options: LoadSessionOptions = {},
+  hostArg?: AgentHost
 ): Promise<LoadedSession> {
+  const host = hostArg ?? (await getActiveHost(deps.context));
   const content = await readSessionFile(session.filePath);
-  const events = parseJsonl(content);
-  const settings = readSettings();
+  const events = host.parseTranscript(content);
+  const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
   const transcriptSha256 = sha256Hex(content);
   const transcriptMtimeMs = await tryStatMtime(session.filePath, session.mtimeMs);
-  const ctx = resolveSessionContext(session);
+  const ctx = resolveSessionContext(session, host);
   const projectPath =
-    ctx.projectPath ?? slugToWorkspacePath(ctx.projectSlug);
+    ctx.projectPath ?? host.slugToWorkspacePath(ctx.projectSlug);
   const sessionMeta: SessionMeta = {
     sessionId: session.id,
     projectSlug: ctx.projectSlug,
@@ -244,7 +259,6 @@ export async function loadSession(
     transcriptPath: session.filePath,
   };
 
-  // 1) Library hit — skip LLM entirely.
   if (settings.library.enabled && !options.forceRefresh) {
     try {
       const existing = await readRecord(
@@ -265,10 +279,16 @@ export async function loadSession(
             provider: settings.llm.provider,
             model: settings.llm.model || undefined,
           },
+          hostId: host.id,
         })
       ) {
         return {
-          session: { ...session, projectSlug: ctx.projectSlug, projectPath },
+          session: {
+            ...session,
+            hostId: host.id,
+            projectSlug: ctx.projectSlug,
+            projectPath,
+          },
           mindMap: buildTopicMindMap(
             existing.graph,
             session.label,
@@ -279,12 +299,10 @@ export async function loadSession(
         };
       }
     } catch (err) {
-      // Library read failures are non-fatal — fall through to LLM.
       console.warn("[agent-mindmap] library read failed:", err);
     }
   }
 
-  // 2) LLM call (with 2nd-tier hash cache in globalStorage).
   let graph: TopicGraph | undefined;
   try {
     const provider = getProvider(settings.llm);
@@ -298,6 +316,7 @@ export async function loadSession(
         modelHint: settings.llm.model || undefined,
         cacheDir: getCacheDir(deps.context),
         cache: settings.cache,
+        hostId: host.id,
       },
       provider,
       signal
@@ -310,14 +329,14 @@ export async function loadSession(
     const cliMissing =
       err instanceof LlmProviderError && err.code === "cli-missing";
     const action = cliMissing
-      ? "Install cursor-agent CLI: curl https://cursor.com/install -fsS | bash"
+      ? host.cliMissingHint()
       : "Falling back to chronological view.";
     vscode.window.showWarningMessage(
       `Agent Mind Map: LLM summarization failed (${detail}). ${action}`
     );
     console.warn("[agent-mindmap] LLM failure, using turn fallback:", err);
     return {
-      session,
+      session: { ...session, hostId: host.id },
       mindMap: buildTurnMindMap(
         events,
         settings.turnOptions,
@@ -328,7 +347,6 @@ export async function loadSession(
     };
   }
 
-  // 3) Persist to library on success.
   if (settings.library.enabled) {
     try {
       const meta = buildRecordMeta({
@@ -348,14 +366,13 @@ export async function loadSession(
         },
         promptVersion: PROMPT_VERSION,
         sessionLabel: session.label,
+        hostId: host.id,
       });
       const record = buildSessionRecord(meta, graph);
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
 
       if (settings.library.autoRebuildDeterministic) {
-        // Rebuild index, deterministic merge, and concept-trie merge in the
-        // background. Failures here are non-fatal and never block the view.
         void (async () => {
           try {
             const all = await listRecords(storeDir);
@@ -378,7 +395,12 @@ export async function loadSession(
   }
 
   return {
-    session: { ...session, projectSlug: ctx.projectSlug, projectPath },
+    session: {
+      ...session,
+      hostId: host.id,
+      projectSlug: ctx.projectSlug,
+      projectPath,
+    },
     mindMap: buildTopicMindMap(graph, session.label, sessionMeta),
     source: "topic",
   };
@@ -393,4 +415,13 @@ async function tryStatMtime(filePath: string, fallback: number): Promise<number>
   }
 }
 
-export { listSessions, getTranscriptsDir };
+export async function getTranscriptsDir(
+  context?: vscode.ExtensionContext
+): Promise<string | undefined> {
+  const host = await getActiveHost(context);
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    return undefined;
+  }
+  return host.getSessionsScanDir(workspacePath);
+}

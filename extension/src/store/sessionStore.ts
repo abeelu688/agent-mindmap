@@ -285,6 +285,7 @@ export function isRecordFresh(
     promptParams: { maxTopics: number; maxItemsPerTopic: number };
     promptVersion: number;
     llm: { provider: string; model?: string };
+    hostId?: string;
   }
 ): boolean {
   if (record.meta.transcriptSha256 !== current.transcriptSha256) {
@@ -303,6 +304,11 @@ export function isRecordFresh(
     return false;
   }
   if (record.meta.llm.provider !== current.llm.provider) {
+    return false;
+  }
+  const recHost = record.meta.hostId ?? "cursor";
+  const curHost = current.hostId ?? "cursor";
+  if (recHost !== curHost) {
     return false;
   }
   // Empty / undefined model are treated as equivalent (CLI default).

@@ -1,8 +1,17 @@
 # Agent Mind Map
 
-Cursor / VS Code extension that **read-only** loads Agent chat transcripts from `~/.cursor/projects/<workspace-slug>/agent-transcripts/*.jsonl` and renders them as an interactive mind map (via [mind-elixir](https://github.com/SSShooter/mind-elixir-core)).
+VS Code extension that **read-only** loads AI agent chat transcripts from on-disk storage and renders them as an interactive mind map (via [mind-elixir](https://github.com/SSShooter/mind-elixir-core)).
 
-The mind map does **not** write back to Cursor chat storage or affect the Agent.
+**Supported products (v1):**
+
+| Product | Transcript location | LLM CLI |
+|---------|---------------------|---------|
+| **Cursor** | `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` | `agent` / `cursor-agent` |
+| **Claude Code** | `~/.claude/projects/<encoded-path>/*.jsonl` | `claude -p` |
+
+Set `agentMindmap.host` to `auto` (default), `cursor`, or `claude-code`. In `auto` mode the extension picks Cursor when running inside Cursor, otherwise scans both folders for the workspace and uses whichever has transcripts (newest session wins; you can pick once when both exist).
+
+The mind map does **not** write back to chat storage or affect the Agent panel.
 
 ## Two rendering modes
 
@@ -15,21 +24,21 @@ The topic view answers the "this chat is about what?" question instead of replay
 
 ## How the LLM is called
 
-The extension spawns the official [`cursor-agent` headless CLI](https://cursor.com/docs/cli/headless) as a subprocess and feeds it the transcript:
+The extension spawns the matching **headless CLI** as a subprocess (`extension/src/llm/`):
 
-```
-agent -p --force --trust --output-format json
-```
+| Host | Command shape |
+|------|----------------|
+| Cursor | `agent -p --force --trust --output-format json <prompt>` |
+| Claude Code | `claude -p --bare --output-format json --max-turns 1 <prompt>` |
 
-This reuses your existing Cursor subscription — **no separate API key is required**. The Cursor CLI must be installed once:
+This reuses your existing product subscription — **no separate API key is required**.
 
-```bash
-curl https://cursor.com/install -fsS | bash
-```
+- **Cursor:** install via `curl https://cursor.com/install -fsS | bash`, verify with `agent --version`.
+- **Claude Code:** install the [Claude Code CLI](https://code.claude.com/docs/en/headless), verify with `claude --version`.
 
-Verify with `agent --version` (or `cursor-agent --version`). If the binary is missing the extension falls back to the chronological "turn" view and surfaces the install command in a notification.
+If the binary is missing the extension falls back to the chronological "turn" view and surfaces install guidance in a notification.
 
-A provider abstraction is in place (`extension/src/llm/`) so HTTP-based providers (OpenAI-compatible, Anthropic, etc.) can be added by dropping a new file alongside `cursorCliProvider.ts`.
+`agentMindmap.llm.provider` defaults to `auto`, which follows `agentMindmap.host`.
 
 ## Library (cross-agent, cross-project store)
 
@@ -52,7 +61,7 @@ Layout:
     cache/<selectionSha>.json          # LLM merge results keyed by selection set
 ```
 
-`SessionRecord.meta` carries `projectSlug`, `projectPath`, `transcriptSha256`, prompt parameters, `promptVersion`, LLM provider + model, and `analyzedAt`. The freshness check uses `transcriptSha256` + prompt params + `promptVersion` + model: if any of those changed the session is re-analyzed and the record overwritten. `promptVersion` lets the library auto-invalidate after upgrades that change the LLM output schema (e.g. adding `conceptPath`).
+`SessionRecord.meta` carries `hostId`, `projectSlug`, `projectPath`, `transcriptSha256`, prompt parameters, `promptVersion`, LLM provider + model, and `analyzedAt`. The freshness check uses `transcriptSha256` + prompt params + `promptVersion` + `hostId` + model: if any of those changed the session is re-analyzed and the record overwritten. `promptVersion` lets the library auto-invalidate after upgrades that change the LLM output schema (e.g. adding `conceptPath`).
 
 ### Concept paths (cross-session merge meta)
 
@@ -86,7 +95,7 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 | Command | Description |
 |---------|-------------|
 | **Agent Mind Map: Open Latest Session** | Load the most recent transcript for the current workspace |
-| **Agent Mind Map: Choose Session…** | Pick a transcript by human-readable title + time (reads Cursor's sidebar composer name, falls back to the first user query, then to id prefix) |
+| **Agent Mind Map: Choose Session…** | Pick a transcript by human-readable title + time (Cursor: sidebar composer name from `state.vscdb`; Claude: `sessions-index.json`; else first user query) |
 | **Agent Mind Map: Refresh** | Force re-analysis of the active session (overwrites the library record) |
 | **Agent Mind Map: Export Mind Map JSON** | Save to `docs/agent-mindmaps/<session-id>.json` |
 | **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
@@ -116,11 +125,17 @@ Known limitations:
 
 ## Settings
 
+### Host / transcripts
+- `agentMindmap.host` — `auto` | `cursor` | `claude-code` (default `auto`)
+- `agentMindmap.projectsDir` — [Cursor] override `~/.cursor/projects`
+- `agentMindmap.claudeProjectsDir` — [Claude] override `~/.claude/projects`
+- `agentMindmap.cursorStateDb` — [Cursor] override `state.vscdb` for composer titles
+
 ### LLM / topic view
-- `agentMindmap.llm.provider` — currently only `cursor-cli`
-- `agentMindmap.llm.cliPath` — override the binary path; empty = auto-detect `agent` then `cursor-agent`
+- `agentMindmap.llm.provider` — `auto` | `cursor-cli` | `claude-cli` (default `auto`, follows host)
+- `agentMindmap.llm.cliPath` — override CLI binary; empty = auto-detect per provider
 - `agentMindmap.llm.model` — optional `--model` argument
-- `agentMindmap.llm.timeoutMs` — hard timeout per cursor-agent attempt, default `90000` (max `600000`)
+- `agentMindmap.llm.timeoutMs` — hard timeout per CLI attempt, default `90000` (max `600000`)
 - `agentMindmap.llm.maxAttempts` — total attempts per summarisation, default `3`. Retries trigger on `timeout / cli-failed / bad-json / bad-shape`. `cli-missing / cancelled / empty` are terminal.
 - `agentMindmap.llm.retryBackoffMs` — base backoff between retries, default `1000`. Actual wait is `base * 2^(attempt-1) ± 25%` jitter, capped at 10s.
 - `agentMindmap.maxTopics` — target topic count (default `6`)
@@ -145,8 +160,6 @@ Suggested locations: `.agent-mindmap/theme.json` in the workspace, or `~/.agent-
 **Canvas context menu:** right-click empty canvas (not on a node) to change theme preset or layout direction. Choices are saved to workspace settings (`.vscode/settings.json`). Requires an open folder workspace.
 
 ### General
-- `agentMindmap.projectsDir` — override `~/.cursor/projects`
-- `agentMindmap.cursorStateDb` — override path to Cursor's `globalStorage/state.vscdb` (used to read sidebar composer names for the **Choose Session** list); empty = platform default
 - `agentMindmap.autoRefresh` — watch transcript file and refresh
 
 ### Fallback view only (deprecated)
@@ -175,19 +188,23 @@ Open the `airecorder` folder as workspace, run at least one Agent chat, then exe
 3. In the Extension Development Host, open the Output panel → "Agent Mind Map" / DevTools console — `[agent-mindmap]` lines log LLM failures with the underlying error code (`cli-missing`, `cli-failed`, `timeout`, `bad-json`, `bad-shape`, `cancelled`, `empty`).
 4. Cache lives in `~/.config/Code/User/globalStorage/airecorder.agent-mindmap/llm-cache/` (path varies by platform); delete the `.json` file or toggle `agentMindmap.cacheLlmResult` to force a re-summarization.
 
-## Workspace slug
+## On-disk paths
 
-For path `/home/example/cursor/airecorder`, Cursor uses slug `home-example-cursor-airecorder` (path without leading `/`, slashes → `-`):
+**Cursor** — for `/home/example/cursor/airecorder`, slug `home-example-cursor-airecorder` (strip leading `/`, `/` → `-`):
 
 `~/.cursor/projects/home-example-cursor-airecorder/agent-transcripts/<uuid>/<uuid>.jsonl`
 
-For `/home/example/cursor/aosp14` → `home-example-cursor-aosp14`.
+**Claude Code** — same path encodes to `-home-example-cursor-airecorder` (`/ \ : space _` → `-`):
+
+`~/.claude/projects/-home-example-cursor-airecorder/<session-id>.jsonl`
+
+Claude's VS Code extension has had reports of **main chats not persisting** to disk; CLI sessions under `~/.claude/projects/` are the reliable source. The extension shows a one-time hint when `host=claude-code` and the project folder is empty.
 
 ## Privacy
 
-Transcripts may contain local file paths and code snippets. The extension sends transcript content to `cursor-agent`, which forwards it to Cursor's servers under your existing subscription terms. The exported JSON stays in your workspace unless you commit it.
+Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The exported JSON stays in your workspace unless you commit it.
 
-**Library contents** (`storeDir`) only contain the already-summarised `TopicGraph` and meta (session id, project slug / path, transcript hash, timestamps) — **not** the raw transcript. The **LLM Merge Refine** command sends the existing TopicGraphs of the selected sessions to `cursor-agent`; it does **not** re-send raw transcripts, so it costs far fewer tokens than the original per-session analysis.
+**Library contents** (`storeDir`) only contain the already-summarised `TopicGraph` and meta (session id, host, project slug / path, transcript hash, timestamps) — **not** the raw transcript. The **LLM Merge Refine** command sends existing TopicGraphs only; it does **not** re-send raw transcripts.
 
 ## License
 

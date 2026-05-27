@@ -1,3 +1,4 @@
+import type { AgentHostId } from "../host/types";
 import type { TopicGraph } from "../llm/types";
 import type { MindMapRoot } from "../transcript/types";
 
@@ -43,6 +44,8 @@ export type SessionRecordMeta = {
   promptVersion?: number;
   /** Same `label` produced by `listSessions`, kept for UI. */
   sessionLabel: string;
+  /** AI product that produced this transcript; absent = cursor (legacy). */
+  hostId?: AgentHostId;
 };
 
 /**

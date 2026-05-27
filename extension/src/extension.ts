@@ -22,11 +22,14 @@ import {
   type LoadedSession,
 } from "./sessionLoader";
 import {
-  getStoreDir,
-  getTranscriptsDir,
+  getActiveHost,
+  getHostById,
   getWorkspaceSlug,
-  slugToWorkspacePath,
-} from "./paths";
+  resetHostCache,
+  resolveHostId,
+} from "./host";
+import { getStoreDir } from "./paths";
+import type { LlmProviderId } from "./llm/types";
 import {
   conceptTrieMergePath,
   deterministicMergePath,
@@ -116,10 +119,27 @@ function showMindMapStandalone(
   panel.setTitle(title);
 }
 
-function readLlmOptions(): LlmProviderOptions {
+function resolveLlmProviderId(
+  setting: string,
+  hostDefault: LlmProviderId
+): LlmProviderId {
+  if (setting === "auto") {
+    return hostDefault;
+  }
+  if (setting === "cursor-cli" || setting === "claude-cli") {
+    return setting;
+  }
+  return hostDefault;
+}
+
+async function readLlmOptions(
+  context: vscode.ExtensionContext
+): Promise<LlmProviderOptions> {
+  const host = await getActiveHost(context);
   const config = vscode.workspace.getConfiguration("agentMindmap");
+  const providerSetting = config.get<string>("llm.provider", "auto");
   return {
-    provider: "cursor-cli",
+    provider: resolveLlmProviderId(providerSetting, host.defaultLlmProvider),
     cliPath: config.get<string>("llm.cliPath", "").trim(),
     model: config.get<string>("llm.model", "").trim(),
     timeoutMs: Math.max(
@@ -139,7 +159,16 @@ function readLlmOptions(): LlmProviderOptions {
       1,
       config.get<number>("merge.llm.maxItemsPerTopic", 6) ?? 6
     ),
+    hostId: host.id,
   };
+}
+
+function metaProjectPath(meta: SessionRecord["meta"]): string {
+  if (meta.projectPath) {
+    return meta.projectPath;
+  }
+  const host = getHostById(meta.hostId ?? "cursor");
+  return host.slugToWorkspacePath(meta.projectSlug);
 }
 
 async function loadLibraryRecords(): Promise<SessionRecord[]> {
@@ -310,7 +339,8 @@ async function commandOpenConceptMerged(): Promise<void> {
 }
 
 async function commandOpenConceptMergedCurrentProject(): Promise<void> {
-  const slug = getWorkspaceSlug();
+  const host = await getActiveHost(extensionContext);
+  const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
       "Agent Mind Map: Open a workspace folder first."
@@ -322,7 +352,8 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
 }
 
 async function commandOpenMergedCurrentProject(): Promise<void> {
-  const slug = getWorkspaceSlug();
+  const host = await getActiveHost(extensionContext);
+  const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
       "Agent Mind Map: Open a workspace folder first."
@@ -402,7 +433,8 @@ async function commandLlmMergeRefine(): Promise<void> {
     );
     return;
   }
-  const scope = await pickMergeScope(getWorkspaceSlug());
+  const mergeHost = await getActiveHost(extensionContext);
+  const scope = await pickMergeScope(getWorkspaceSlug(mergeHost));
   if (!scope) {
     return;
   }
@@ -430,7 +462,7 @@ async function commandLlmMergeRefine(): Promise<void> {
     }
   }
 
-  const llmOpts = readLlmOptions();
+  const llmOpts = await readLlmOptions(extensionContext);
   const config = vscode.workspace.getConfiguration("agentMindmap");
   const maxTopics = Math.max(
     2,
@@ -449,6 +481,7 @@ async function commandLlmMergeRefine(): Promise<void> {
         maxTopics,
         maxItemsPerTopic,
         model: llmOpts.model || undefined,
+        hostId: mergeHost.id,
       },
       provider,
       storeDir,
@@ -531,7 +564,7 @@ async function commandSearchLibrary(): Promise<void> {
         .sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt)
         .map((r) => ({
           label: r.meta.sessionLabel,
-          description: r.meta.projectPath ?? slugToWorkspacePath(r.meta.projectSlug),
+          description: metaProjectPath(r.meta),
           detail: r.graph.title
             ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
             : `${r.graph.topics.length} 个主题`,
@@ -548,7 +581,7 @@ async function commandSearchLibrary(): Promise<void> {
       label: h.record.meta.sessionLabel,
       description:
         h.record.meta.projectPath ??
-        slugToWorkspacePath(h.record.meta.projectSlug),
+        metaProjectPath(h.record.meta),
       detail: h.matchSnippet,
       record: h.record,
     }));
@@ -593,7 +626,7 @@ async function commandBrowseLibrary(): Promise<void> {
   const items = records.map((r) => ({
     label: r.meta.sessionLabel,
     description:
-      r.meta.projectPath ?? slugToWorkspacePath(r.meta.projectSlug),
+      metaProjectPath(r.meta),
     detail: r.graph.title
       ? `${r.graph.title} · ${r.graph.topics.length} 个主题`
       : `${r.graph.topics.length} 个主题`,
@@ -639,6 +672,9 @@ async function commandOpenStoreDir(): Promise<void> {
  * webview entirely.
  */
 async function commandDumpStateDbKey(): Promise<void> {
+  if (!(await requireCursorHostForDebug())) {
+    return;
+  }
   const candidates = [
     "glass.localAgentProjects.v1",
     "glass.localAgentProjectMembership.v1",
@@ -671,6 +707,9 @@ async function commandDumpStateDbKey(): Promise<void> {
 }
 
 async function commandInspectComposerHeader(): Promise<void> {
+  if (!(await requireCursorHostForDebug())) {
+    return;
+  }
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   const records = await listRecords(storeDir);
@@ -717,7 +756,21 @@ async function commandInspectComposerHeader(): Promise<void> {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+async function requireCursorHostForDebug(): Promise<boolean> {
+  const host = await getActiveHost(extensionContext);
+  if (host.id !== "cursor") {
+    vscode.window.showInformationMessage(
+      "Agent Mind Map: 此调试命令仅在 agentMindmap.host 为 Cursor 时可用。"
+    );
+    return false;
+  }
+  return true;
+}
+
 async function commandDumpGlassState(): Promise<void> {
+  if (!(await requireCursorHostForDebug())) {
+    return;
+  }
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   const records = await listRecords(storeDir);
@@ -818,8 +871,56 @@ async function commandTestJump(): Promise<void> {
   );
 }
 
+async function maybeWarnEmptyClaudeTranscripts(
+  context: vscode.ExtensionContext
+): Promise<void> {
+  const host = await getActiveHost(context);
+  if (host.id !== "claude-code") {
+    return;
+  }
+  const key = "agentMindmap.claudeEmptyWarned";
+  if (context.globalState.get<boolean>(key)) {
+    return;
+  }
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspacePath) {
+    return;
+  }
+  const scanDir = host.getSessionsScanDir(workspacePath);
+  if (!scanDir) {
+    return;
+  }
+  const slug = getWorkspaceSlug(host);
+  const sessions = await host.listSessions(scanDir, {
+    projectSlug: slug,
+    projectPath: workspacePath,
+  });
+  if (sessions.length) {
+    return;
+  }
+  await context.globalState.update(key, true);
+  vscode.window.showInformationMessage(
+    "Agent Mind Map: No Claude Code transcripts on disk for this workspace. " +
+      "The VS Code extension may not persist main chats — CLI sessions are more reliable."
+  );
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration("agentMindmap.host") ||
+        e.affectsConfiguration("agentMindmap.projectsDir") ||
+        e.affectsConfiguration("agentMindmap.claudeProjectsDir")
+      ) {
+        resetHostCache();
+      }
+    })
+  );
+
+  void maybeWarnEmptyClaudeTranscripts(context);
 
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument((doc) => {
@@ -909,8 +1010,6 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-  // Quiet "unused" warning when transcripts dir is invalid in some shells.
-  void getTranscriptsDir;
   void LlmProviderError;
 
   // Drain any cross-window "pending jump" the previous window persisted
@@ -918,15 +1017,18 @@ export function activate(context: vscode.ExtensionContext): void {
   // activation; ignores expired or wrong-workspace records.
   void drainPendingJump({ context });
 
-  // Pre-warm the Glass resumable-ids cache so the first click-to-jump
-  // doesn't pay the ~7s state.vscdb read cost. Fully best-effort.
-  void loadGlassResumableIds().then(
-    (ids) =>
-      mindMapLog(
-        `[activate] pre-warmed glass registry: ${ids.size} resumable ids`
-      ),
-    (err) => mindMapLog(`[activate] glass registry preload failed: ${err}`)
-  );
+  void resolveHostId(context).then((hostId) => {
+    if (hostId !== "cursor") {
+      return;
+    }
+    void loadGlassResumableIds().then(
+      (ids) =>
+        mindMapLog(
+          `[activate] pre-warmed glass registry: ${ids.size} resumable ids`
+        ),
+      (err) => mindMapLog(`[activate] glass registry preload failed: ${err}`)
+    );
+  });
 }
 
 export function deactivate(): void {

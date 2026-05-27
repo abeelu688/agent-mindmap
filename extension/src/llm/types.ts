@@ -1,4 +1,7 @@
 import type { ChatEvent } from "../transcript/types";
+import type { AgentHostId } from "../host/types";
+
+export type LlmProviderId = "cursor-cli" | "claude-cli";
 
 export type TopicItem = {
   text: string;
@@ -37,7 +40,7 @@ export type SummarizeInput = {
 };
 
 export type LlmProviderOptions = {
-  provider: "cursor-cli";
+  provider: LlmProviderId;
   cliPath: string;
   model: string;
   timeoutMs: number;
@@ -50,6 +53,7 @@ export type LlmProviderOptions = {
   retryBackoffMs: number;
   maxTopics: number;
   maxItemsPerTopic: number;
+  hostId?: AgentHostId;
 };
 
 export type LlmProvider = {

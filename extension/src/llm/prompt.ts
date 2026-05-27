@@ -1,4 +1,10 @@
+import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
+
+const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
+  cursor: "Cursor Agent",
+  "claude-code": "Claude Code Agent",
+};
 
 const MAX_TEXT_PER_BLOCK = 2000;
 const MAX_TOTAL_CHARS = 30000;
@@ -94,15 +100,17 @@ function renderTurns(turns: Turn[]): string {
 
 export function buildPrompt(
   events: ChatEvent[],
-  options: PromptOptions
+  options: PromptOptions,
+  hostId: AgentHostId = "cursor"
 ): string {
+  const chatLabel = HOST_CHAT_LABELS[hostId];
   const turns = groupTurns(events);
   const body = renderTurns(turns);
   const maxTopics = Math.max(1, options.maxTopics);
   const maxItems = Math.max(1, options.maxItemsPerTopic);
 
   return [
-    "你是会话主题分析助手。下面是 Cursor Agent 聊天记录（已脱敏），段标记 [Q#]/[T#]/[A#]。",
+    `你是会话主题分析助手。下面是 ${chatLabel} 聊天记录（已脱敏），段标记 [Q#]/[T#]/[A#]。`,
     "归纳整段总主题（用作思维导图根节点，不含日期/ID）：",
     "- title: 5-15 字名词性短语",
     "- summary: ≤50 字一句话，可省",

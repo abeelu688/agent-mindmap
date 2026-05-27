@@ -8,8 +8,10 @@ import {
   type PendingJump,
   PENDING_JUMP_KEY,
 } from "./jumpToOriginCore";
+import { getActiveHost } from "./host";
+import { getHostById } from "./host/registry";
+import type { AgentHostId } from "./host/types";
 import { slugToWorkspacePath } from "./paths";
-import { parseJsonl } from "./transcript/parseJsonl";
 import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
@@ -32,9 +34,17 @@ export function consumeTranscriptDocUriIfAutoReveal(
   return transcriptDocUrisToAutoReveal.delete(doc.uri.toString());
 }
 
+function hostForTranscriptPath(transcriptPath: string): import("./host/types").AgentHost {
+  if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {
+    return getHostById("cursor");
+  }
+  return getHostById("claude-code");
+}
+
 async function resolveTurnEvents(
   transcriptPath: string,
-  cache: Map<string, ChatEvent[]>
+  cache: Map<string, ChatEvent[]>,
+  context?: vscode.ExtensionContext
 ): Promise<ChatEvent[]> {
   const cached = cache.get(transcriptPath);
   if (cached) {
@@ -42,7 +52,10 @@ async function resolveTurnEvents(
   }
   try {
     const content = await fs.readFile(transcriptPath, "utf8");
-    const events = parseJsonl(content);
+    const host = context
+      ? await getActiveHost(context)
+      : hostForTranscriptPath(transcriptPath);
+    const events = host.parseTranscript(content);
     cache.set(transcriptPath, events);
     return events;
   } catch (err) {
@@ -56,7 +69,8 @@ async function resolveTurnEvents(
 }
 
 async function enrichWithTurnData(
-  candidates: JumpCandidate[]
+  candidates: JumpCandidate[],
+  context?: vscode.ExtensionContext
 ): Promise<JumpCandidate[]> {
   const cache = new Map<string, ChatEvent[]>();
   // Pre-resolve transcripts once per file.
@@ -66,7 +80,7 @@ async function enrichWithTurnData(
       .map((c) => c.transcriptPath)
   );
   for (const p of transcriptPaths) {
-    await resolveTurnEvents(p, cache);
+    await resolveTurnEvents(p, cache, context);
   }
   return candidates.map((c) => {
     if (c.turnIndex === undefined) {
@@ -138,28 +152,34 @@ async function pickCandidate(
  * Keywords used to filter vscode.commands.getCommands() when diagnosing
  * which agent-open commands are available in the current Cursor build.
  */
-const AGENT_CMD_KEYWORDS = ["glass", "composer", "agent", "chat"];
+const AGENT_CMD_KEYWORDS = [
+  "glass",
+  "composer",
+  "agent",
+  "chat",
+  "claude",
+  "anthropic",
+];
 
 /** Cached result of probing which open-by-id command actually works. */
-let _openByIdCmd: string | null | undefined = undefined; // undefined = not yet probed
+let _openByIdCmd:
+  | { hostId: AgentHostId; cmd: string | null }
+  | undefined = undefined;
 
-async function probeOpenByIdCommand(): Promise<string | null> {
-  if (_openByIdCmd !== undefined) {
-    return _openByIdCmd;
+async function probeOpenByIdCommand(
+  context?: vscode.ExtensionContext
+): Promise<string | null> {
+  const host = await getActiveHost(context);
+  if (_openByIdCmd?.hostId === host.id) {
+    return _openByIdCmd.cmd;
   }
-  // Priority list: most specific first.
-  const candidates = [
-    "glass.openAgentById",
-    "cursor.openAgentById",
-    "composer.openComposerWithSession",
-    "composer.openComposer",
-  ];
+  const candidates = host.jumpCommandCandidates;
   const all = await vscode.commands.getCommands(true);
   const allSet = new Set(all);
   for (const cmd of candidates) {
     if (allSet.has(cmd)) {
       mindMapLog(`[openAgentById] will use command: ${cmd}`);
-      _openByIdCmd = cmd;
+      _openByIdCmd = { hostId: host.id, cmd };
       return cmd;
     }
   }
@@ -169,7 +189,7 @@ async function probeOpenByIdCommand(): Promise<string | null> {
         .filter((c) => AGENT_CMD_KEYWORDS.some((k) => c.toLowerCase().includes(k)))
         .join(", ")
   );
-  _openByIdCmd = null;
+  _openByIdCmd = { hostId: host.id, cmd: null };
   return null;
 }
 
@@ -246,7 +266,11 @@ async function openChosenTranscript(candidate: JumpCandidate): Promise<void> {
  */
 async function openTranscriptAsMarkdown(
   transcriptPath: string,
-  opts: { label?: string; focusTurnIndex?: number } = {}
+  opts: {
+    label?: string;
+    focusTurnIndex?: number;
+    context?: vscode.ExtensionContext;
+  } = {}
 ): Promise<void> {
   let content: string;
   try {
@@ -258,7 +282,10 @@ async function openTranscriptAsMarkdown(
     return;
   }
 
-  const events = parseJsonl(content);
+  const host = opts.context
+    ? await getActiveHost(opts.context)
+    : hostForTranscriptPath(transcriptPath);
+  const events = host.parseTranscript(content);
   const lines: string[] = [];
   const title = opts.label ?? path.basename(transcriptPath);
   lines.push(`# ${title}`);
@@ -321,11 +348,15 @@ async function openTranscriptAsMarkdown(
  * intended agent. Designed for the case where the default (string)
  * form fails silently.
  */
-export async function tryOpenAgentShapes(sessionId: string): Promise<void> {
-  const cmd = await probeOpenByIdCommand();
+export async function tryOpenAgentShapes(
+  sessionId: string,
+  context?: vscode.ExtensionContext
+): Promise<void> {
+  const host = await getActiveHost(context);
+  const cmd = await probeOpenByIdCommand(context);
   if (!cmd) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: 当前 Cursor 不支持按 ID 打开 Agent。"
+      `Agent Mind Map: 当前 ${host.displayName} 环境不支持按 ID 打开原生 Agent 面板。`
     );
     return;
   }
@@ -394,7 +425,10 @@ export async function handleNodeClicked(
   mindMapLog(
     `handleNodeClicked: ${origin.refs.length} ref(s) → flattening + enriching`
   );
-  const candidates = await enrichWithTurnData(flattenCandidates(origin.refs));
+  const candidates = await enrichWithTurnData(
+    flattenCandidates(origin.refs),
+    _deps?.context
+  );
   if (!candidates.length) {
     mindMapLog("handleNodeClicked: no candidates after flatten");
     return;
@@ -431,5 +465,6 @@ export async function drainPendingJump(
   }
   await openTranscriptAsMarkdown(pending.transcriptPath, {
     focusTurnIndex: pending.turnIndex,
+    context: deps.context,
   });
 }

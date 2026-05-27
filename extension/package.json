@@ -1,7 +1,7 @@
 {
   "name": "agent-mindmap",
   "displayName": "Agent Mind Map",
-  "description": "Read Cursor agent chat transcripts and visualize them as an interactive mind map.",
+  "description": "Read Cursor or Claude Code agent chat transcripts and visualize them as an interactive mind map.",
   "version": "0.1.0",
   "publisher": "airecorder",
   "engines": {
@@ -129,10 +129,21 @@
     "configuration": {
       "title": "Agent Mind Map",
       "properties": {
+        "agentMindmap.host": {
+          "type": "string",
+          "enum": ["auto", "cursor", "claude-code"],
+          "default": "auto",
+          "description": "Which AI product's on-disk transcripts to read. auto = detect from app name and existing transcript folders."
+        },
         "agentMindmap.projectsDir": {
           "type": "string",
           "default": "",
-          "description": "Override ~/.cursor/projects directory path."
+          "description": "[Cursor] Override ~/.cursor/projects directory path."
+        },
+        "agentMindmap.claudeProjectsDir": {
+          "type": "string",
+          "default": "",
+          "description": "[Claude Code] Override ~/.claude/projects directory path."
         },
         "agentMindmap.cursorStateDb": {
           "type": "string",
@@ -159,28 +170,26 @@
         },
         "agentMindmap.llm.provider": {
           "type": "string",
-          "enum": [
-            "cursor-cli"
-          ],
-          "default": "cursor-cli",
-          "description": "LLM provider used to extract topics from the transcript. Only cursor-cli is supported today; openai/anthropic providers are planned."
+          "enum": ["auto", "cursor-cli", "claude-cli"],
+          "default": "auto",
+          "description": "LLM provider for topic extraction. auto follows agentMindmap.host (cursor-cli or claude-cli)."
         },
         "agentMindmap.llm.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the cursor-agent binary. Empty = auto-detect `agent` then `cursor-agent` from PATH."
+          "description": "Path to the headless CLI binary. Empty = auto-detect (Cursor: agent/cursor-agent; Claude: claude)."
         },
         "agentMindmap.llm.model": {
           "type": "string",
           "default": "",
-          "description": "Optional model name passed to cursor-agent via --model. Empty uses the CLI default."
+          "description": "Optional model name passed to the CLI via --model. Empty uses the CLI default."
         },
         "agentMindmap.llm.timeoutMs": {
           "type": "number",
           "default": 90000,
           "minimum": 1000,
           "maximum": 600000,
-          "description": "Hard timeout (ms) for a single cursor-agent subprocess call. The total wall-clock budget for one summarisation is roughly timeoutMs * maxAttempts."
+          "description": "Hard timeout (ms) for a single CLI subprocess call. Total budget per summarisation is roughly timeoutMs * maxAttempts."
         },
         "agentMindmap.llm.maxAttempts": {
           "type": "number",

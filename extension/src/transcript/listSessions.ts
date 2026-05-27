@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { loadComposerTitles } from "./composerTitles";
+import type { AgentHostId } from "../host/types";
 import { extractUserQuery } from "./parseJsonl";
 import type { TranscriptSession } from "./types";
 
@@ -16,6 +16,13 @@ async function exists(dir: string): Promise<boolean> {
 export type ListSessionsContext = {
   projectSlug?: string;
   projectPath?: string;
+  hostId?: AgentHostId;
+  /** Pre-loaded id → title map (Cursor composer DB or Claude sessions-index). */
+  titles?: Map<string, string>;
+  /** Subdirectory names to skip when scanning flat layouts (Claude). */
+  skipDirNames?: Set<string>;
+  /** Skip top-level jsonl files matching these patterns (Claude sidechains). */
+  skipFilePatterns?: RegExp[];
 };
 
 const PREVIEW_MAX_LEN = 40;
@@ -23,11 +30,9 @@ const PREVIEW_READ_BYTES = 8 * 1024;
 
 /**
  * Peek at the first ~8KB of a transcript jsonl and return a short preview of
- * the first user query — used as a fallback when Cursor's sidebar title is
- * unavailable. Returns `undefined` if no usable user query is found in the
- * peeked region.
+ * the first user query — used as a fallback when sidebar titles are unavailable.
  */
-async function readFirstUserQueryPreview(
+export async function readFirstUserQueryPreview(
   filePath: string,
   maxLen = PREVIEW_MAX_LEN
 ): Promise<string | undefined> {
@@ -40,8 +45,6 @@ async function readFirstUserQueryPreview(
       return undefined;
     }
     const text = buffer.subarray(0, bytesRead).toString("utf8");
-    // Walk newline-delimited rows until we find a user message with text.
-    // The last line may be truncated (partial JSON) — we just skip parse errors.
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -82,7 +85,6 @@ async function readFirstUserQueryPreview(
 }
 
 function shortenPreview(text: string, maxLen: number): string {
-  // Collapse whitespace and take the first non-empty line for tidy display.
   const firstLine =
     text
       .split(/\r?\n/)
@@ -95,7 +97,8 @@ function shortenPreview(text: string, maxLen: number): string {
   return collapsed.slice(0, maxLen - 1) + "…";
 }
 
-export async function listSessions(
+/** Cursor: `agent-transcripts/<id>/<id>.jsonl` */
+export async function listCursorSessions(
   transcriptsDir: string,
   ctx: ListSessionsContext = {}
 ): Promise<TranscriptSession[]> {
@@ -103,10 +106,10 @@ export async function listSessions(
     return [];
   }
 
-  const entries = await fs.readdir(transcriptsDir, { withFileTypes: true });
-  const titles = await loadComposerTitles();
+  const titles = ctx.titles ?? new Map();
   const sessions: TranscriptSession[] = [];
 
+  const entries = await fs.readdir(transcriptsDir, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
@@ -129,6 +132,7 @@ export async function listSessions(
         filePath,
         mtimeMs: mtime,
         label: `${title} · ${date}`,
+        hostId: ctx.hostId ?? "cursor",
         projectSlug: ctx.projectSlug,
         projectPath: ctx.projectPath,
       });
@@ -139,6 +143,70 @@ export async function listSessions(
 
   sessions.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return sessions;
+}
+
+/** Claude Code: flat `*.jsonl` in the project directory. */
+export async function listFlatJsonlSessions(
+  projectDir: string,
+  ctx: ListSessionsContext = {}
+): Promise<TranscriptSession[]> {
+  if (!(await exists(projectDir))) {
+    return [];
+  }
+
+  const titles = ctx.titles ?? new Map();
+  const skipDirs = ctx.skipDirNames ?? new Set<string>();
+  const skipFiles = ctx.skipFilePatterns ?? [];
+  const sessions: TranscriptSession[] = [];
+
+  const entries = await fs.readdir(projectDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (skipDirs.has(entry.name)) {
+        continue;
+      }
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) {
+      continue;
+    }
+    if (skipFiles.some((re) => re.test(entry.name))) {
+      continue;
+    }
+    const id = entry.name.replace(/\.jsonl$/i, "");
+    const filePath = path.join(projectDir, entry.name);
+    try {
+      const stat = await fs.stat(filePath);
+      const mtime = stat.mtimeMs;
+      const date = new Date(mtime).toLocaleString();
+      const title =
+        titles.get(id) ??
+        (await readFirstUserQueryPreview(filePath)) ??
+        `${id.slice(0, 8)}…`;
+      sessions.push({
+        id,
+        filePath,
+        mtimeMs: mtime,
+        label: `${title} · ${date}`,
+        hostId: ctx.hostId ?? "claude-code",
+        projectSlug: ctx.projectSlug,
+        projectPath: ctx.projectPath,
+      });
+    } catch {
+      // skip unreadable
+    }
+  }
+
+  sessions.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return sessions;
+}
+
+/** @deprecated Use host-specific listers via {@link getActiveHost}. */
+export async function listSessions(
+  transcriptsDir: string,
+  ctx: ListSessionsContext = {}
+): Promise<TranscriptSession[]> {
+  return listCursorSessions(transcriptsDir, ctx);
 }
 
 export async function readSessionFile(filePath: string): Promise<string> {
