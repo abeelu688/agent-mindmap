@@ -26,6 +26,7 @@ import {
   buildDeterministicMergeMindMap,
   buildDeterministicMergeRecord,
 } from "../extension/src/store/mergeDeterministic";
+import { normalizeConceptPath } from "../extension/src/llm/normalizeConceptPath";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
 import { computeMergeCacheKey } from "../extension/src/store/mergeLlm";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
@@ -338,6 +339,73 @@ async function main(): Promise<void> {
     assert(
       (trie.mindMap.children?.[0]?.data.text ?? "").startsWith("android ("),
       "trie: android at root"
+    );
+
+    assert(
+      JSON.stringify(
+        normalizeConceptPath(["android", "runtime", "art", "jit"])
+      ) === JSON.stringify(["android", "art", "jit"]),
+      "normalize: fold android/runtime/art"
+    );
+
+    const artJit = buildSessionRecord(
+      buildRecordMeta({
+        sessionId: "art-jit",
+        projectSlug: "aosp",
+        transcriptPath: "/tmp/jit.jsonl",
+        transcriptMtimeMs: 1,
+        transcriptSha256: sha256Hex("jit"),
+        llm: { provider: "fake" },
+        promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+        promptVersion: 2,
+        sessionLabel: "jit",
+      }),
+      {
+        topics: [
+          {
+            title: "JIT",
+            conceptPath: ["android", "runtime", "art", "jit"],
+            items: [{ text: "a" }],
+          },
+        ],
+      }
+    );
+    const artHook = buildSessionRecord(
+      buildRecordMeta({
+        sessionId: "art-hook",
+        projectSlug: "aosp",
+        transcriptPath: "/tmp/hook.jsonl",
+        transcriptMtimeMs: 1,
+        transcriptSha256: sha256Hex("hook"),
+        llm: { provider: "fake" },
+        promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+        promptVersion: 2,
+        sessionLabel: "hook",
+      }),
+      {
+        topics: [
+          {
+            title: "Hook",
+            conceptPath: ["android", "art", "instrumentation"],
+            items: [{ text: "b" }],
+          },
+        ],
+      }
+    );
+    const artTrie = buildConceptTrieMindMap([artJit, artHook]);
+    const artAndroid = artTrie.mindMap.children?.find((c) =>
+      (c.data.text ?? "").startsWith("android (")
+    );
+    assert(!!artAndroid, "trie: art merge has android root");
+    const artAndroidKids =
+      artAndroid?.children?.map((c) => c.data.text ?? "") ?? [];
+    assert(
+      artAndroidKids.filter((l) => l.startsWith("art (")).length === 1,
+      "trie: single art under android"
+    );
+    assert(
+      !artAndroidKids.some((l) => l.startsWith("runtime (")),
+      "trie: no runtime sibling"
     );
 
     const key1 = computeMergeCacheKey(

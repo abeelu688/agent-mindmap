@@ -86,6 +86,7 @@ export function buildMergePrompt(
     "  - title: 5-15 字，名词性短语",
     "  - summary: 一句话（≤ 50 字），可省略",
     "  - conceptPath: 3-5 段概念路径，从最泛领域到最细概念（与单会话同字段语义一致，用于以后再合并）",
+    "    Android ART 主题：第 2 段统一 art，例如 [\"android\",\"art\",\"jit\"]；禁止 android/runtime/art 夹层",
     `  - items: 1-${maxItems} 条要点，每条 ≤ 40 字`,
     "- 不要保留时间顺序、不要逐会话罗列；以主题为中心组织内容",
     "- 在每个 item 里如果某条要点显著来自某些会话，在 sourceTurnIndices 字段写入这些会话在输入里的下标（0-based，对应 [S1] 是 0，[S2] 是 1，依此类推）",
