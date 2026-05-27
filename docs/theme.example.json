@@ -1,0 +1,7 @@
+{
+  "cssVar": {
+    "--main-gap-x": "28px",
+    "--root-radius": "8px"
+  },
+  "palette": ["#4e9af1", "#6bcb77", "#f6c85f", "#e64553", "#7287fd"]
+}

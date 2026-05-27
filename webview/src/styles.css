@@ -30,3 +30,61 @@ body,
 #mindMapContainer .toolbar {
   display: none !important;
 }
+
+.mindmap-ui-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 180px;
+  padding: 4px 0;
+  border: 1px solid var(--vscode-menu-border, #454545);
+  border-radius: 4px;
+  background: var(--vscode-menu-background, #252526);
+  color: var(--vscode-menu-foreground, #cccccc);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+.mindmap-ui-menu__heading {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  opacity: 0.75;
+  user-select: none;
+}
+
+.mindmap-ui-menu__sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground, #454545);
+}
+
+.mindmap-ui-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 4px 12px 4px 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mindmap-ui-menu__item:hover,
+.mindmap-ui-menu__item:focus {
+  background: var(--vscode-menu-selectionBackground, #094771);
+  color: var(--vscode-menu-selectionForeground, #ffffff);
+  outline: none;
+}
+
+.mindmap-ui-menu__check {
+  display: inline-block;
+  width: 1.25em;
+  flex-shrink: 0;
+}
+
+.mindmap-ui-menu__label {
+  flex: 1;
+}

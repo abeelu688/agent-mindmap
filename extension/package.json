@@ -243,6 +243,23 @@
           "minimum": 1,
           "maximum": 16,
           "description": "Maximum sub-items per topic the LLM merge command should produce."
+        },
+        "agentMindmap.ui.preset": {
+          "type": "string",
+          "enum": ["auto", "dark", "light"],
+          "default": "auto",
+          "description": "Mind map color preset. auto follows the editor theme; dark and light use mind-elixir built-in themes."
+        },
+        "agentMindmap.ui.direction": {
+          "type": "string",
+          "enum": ["side", "left", "right"],
+          "default": "side",
+          "description": "Mind map layout direction: both sides with first branch on the right (side, default), left only, or right only."
+        },
+        "agentMindmap.ui.themeFile": {
+          "type": "string",
+          "default": "",
+          "description": "Optional JSON file overriding palette and CSS variables (cssVar). Empty = no file. Supports workspace-relative paths, ~/..., or absolute paths."
         }
       }
     }
