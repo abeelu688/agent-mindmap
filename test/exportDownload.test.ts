@@ -112,6 +112,33 @@ describe("markdownToTranscriptHtmlBody", () => {
     expect(html).toContain("步骤");
   });
 
+  it("renders pipe tables without separator row", () => {
+    const md = [
+      "| 问题 | 答案 |",
+      "| **何时启动** | `init` 启动 |",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<table>");
+    expect(html).toContain("<strong>何时启动</strong>");
+    expect(html).toContain("<code>init</code>");
+    expect(html).not.toContain("**何时启动**");
+  });
+
+  it("renders tab-separated tables with inline markdown", () => {
+    const md = [
+      "问题\t答案",
+      "**何时启动**\t`init` 在 `logd`/`lmkd` 后 `start servicemanager`",
+      "**与 Binder 关系**\t`ioctl(BINDER_SET_CONTEXT_MGR*)` 在内核登记",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<table>");
+    expect(html).toContain("<th>问题</th>");
+    expect(html).toContain("<strong>何时启动</strong>");
+    expect(html).toContain("<code>init</code>");
+    expect(html).toContain("servicemanager");
+    expect(html).not.toContain("**何时启动**");
+  });
+
   it("renders fenced code blocks", () => {
     const md = ["```javascript", "const x = 1;", "```"].join("\n");
     const html = markdownToTranscriptHtmlBody(md);
