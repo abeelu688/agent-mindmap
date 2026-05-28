@@ -72,8 +72,34 @@ function progressMessage(update: MindMapProgressUpdate): string {
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
 
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+const t = (
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string => {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+};
+
 function progressTitle(): string {
-  return "Agent Mind Map: 正在分析会话…";
+  return t(
+    "ui.progress.analyzingSession.title",
+    "Agent Mind Map: Analyzing session…"
+  );
 }
 
 async function withCancellableProgress<T>(
@@ -127,7 +153,13 @@ function attachTranscriptWatch(
       return;
     }
     const currentPanel = MindMapPanel.getCurrent();
-    currentPanel?.setLoading(true, "对话记录已更新，正在重新分析…");
+    currentPanel?.setLoading(
+      true,
+      t(
+        "ui.loading.transcriptUpdatedReanalyzing",
+        "Transcript updated, re-analyzing…"
+      )
+    );
     try {
       const refreshed = await withCancellableProgress(
         ({ signal, progress }) =>
@@ -154,7 +186,7 @@ async function loadAndShowSession(
   title: string = progressTitle()
 ): Promise<void> {
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备…");
+  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
   try {
     const loaded = await withCancellableProgress(
       ({ signal, progress }) =>
@@ -263,7 +295,7 @@ async function commandOpenLatest(): Promise<void> {
 
 async function commandPickSession(): Promise<void> {
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备…");
+  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
   try {
     const loaded = await withCancellableProgress(
       ({ signal, progress }) =>
@@ -287,7 +319,10 @@ async function commandRefresh(): Promise<void> {
     return;
   }
   const panel = MindMapPanel.getCurrent() ?? createOrShowMindMap();
-  panel.setLoading(true, "正在强制重新分析…");
+  panel.setLoading(
+    true,
+    t("ui.loading.forceReanalyzing", "Force re-analyzing…")
+  );
   try {
     const refreshed = await withCancellableProgress(
       ({ signal, progress }) =>
@@ -303,7 +338,9 @@ async function commandRefresh(): Promise<void> {
       activeSession = refreshed;
       panel.setMindMapData(refreshed.mindMap);
       attachTranscriptWatch(panel, refreshed.session);
-      vscode.window.showInformationMessage("Agent Mind Map refreshed.");
+      vscode.window.showInformationMessage(
+        t("ui.command.refresh.done", "Agent Mind Map refreshed.")
+      );
     }
   } finally {
     panel.setLoading(false);
@@ -315,7 +352,7 @@ async function commandDownloadPackage(): Promise<void> {
   const mindMap = panel?.getMindMapData();
   if (!mindMap) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: 请先打开思维导图。"
+      t("ui.warning.openMindMapFirst", "Agent Mind Map: Open a mind map first.")
     );
     return;
   }
@@ -324,7 +361,7 @@ async function commandDownloadPackage(): Promise<void> {
     canSelectFiles: false,
     canSelectFolders: true,
     canSelectMany: false,
-    openLabel: "选择下载目录",
+    openLabel: t("ui.download.pickFolderLabel", "Select download folder"),
   });
   if (!picked?.length) {
     return;
@@ -336,7 +373,7 @@ async function commandDownloadPackage(): Promise<void> {
     const result = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Agent Mind Map: 正在导出…",
+        title: t("ui.download.exporting.title", "Agent Mind Map: Exporting…"),
         cancellable: false,
       },
       async () =>
@@ -347,10 +384,20 @@ async function commandDownloadPackage(): Promise<void> {
         })
     );
 
-    const openBrowser = "在浏览器中打开";
-    const showFolder = "在资源管理器中显示";
+    const openBrowser = t(
+      "ui.download.choice.openInBrowser",
+      "Open in browser"
+    );
+    const showFolder = t(
+      "ui.download.choice.showInExplorer",
+      "Show in file manager"
+    );
     const choice = await vscode.window.showInformationMessage(
-      `已导出思维导图与 ${result.transcriptCount} 个对话到所选目录。`,
+      t(
+        "ui.download.exported.summary",
+        "Exported mind map and {0} transcript(s) to the selected folder.",
+        result.transcriptCount
+      ),
       openBrowser,
       showFolder
     );
@@ -361,7 +408,11 @@ async function commandDownloadPackage(): Promise<void> {
     }
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Agent Mind Map: 导出失败: ${err instanceof Error ? err.message : String(err)}`
+      t(
+        "ui.download.exportFailed",
+        "Agent Mind Map: Export failed: {0}",
+        err instanceof Error ? err.message : String(err)
+      )
     );
   }
 }
@@ -371,7 +422,10 @@ async function commandOpenDownloadedPackage(): Promise<void> {
     canSelectFiles: false,
     canSelectFolders: true,
     canSelectMany: false,
-    openLabel: "选择离线包目录",
+    openLabel: t(
+      "ui.download.pickPackageFolderLabel",
+      "Select offline package folder"
+    ),
   });
   if (!picked?.length) {
     return;
@@ -382,14 +436,19 @@ async function commandOpenDownloadedPackage(): Promise<void> {
 async function commandExportJson(): Promise<void> {
   if (!activeSession) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a mind map first."
+      t("ui.warning.openMindMapFirst", "Agent Mind Map: Open a mind map first.")
     );
     return;
   }
 
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
-    vscode.window.showWarningMessage("Agent Mind Map: No workspace folder.");
+    vscode.window.showWarningMessage(
+      t(
+        "ui.warning.openWorkspaceFolderFirst",
+        "Agent Mind Map: Open a workspace folder first."
+      )
+    );
     return;
   }
 
@@ -405,7 +464,11 @@ async function commandExportJson(): Promise<void> {
   const doc = await vscode.workspace.openTextDocument(fileUri);
   await vscode.window.showTextDocument(doc, { preview: false });
   vscode.window.showInformationMessage(
-    `Exported mind map to docs/agent-mindmaps/${fileName}`
+    t(
+      "ui.exportJson.exported",
+      "Exported mind map to docs/agent-mindmaps/{0}",
+      fileName
+    )
   );
 }
 
@@ -431,7 +494,10 @@ async function commandOpenMerged(): Promise<void> {
   const merge = await ensureDeterministicMerge();
   if (!merge.meta.sessionIds.length) {
     vscode.window.showInformationMessage(
-      "Agent Mind Map: 库为空。先用『Open Latest Session』等命令分析至少一个会话。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
   }
   await showMindMapStandalone(`Agent Mind Map · 全部`, merge.mindMap);
@@ -443,7 +509,7 @@ async function ensureConceptMerge(
   signal?: AbortSignal
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const storeDir = getStoreDir();
-  progress?.report("正在加载分析库…");
+  progress?.report(t("ui.progress.loadLibrary", "Loading analysis library…"));
   const records = await loadLibraryRecords();
   // Best-effort: infer/patch conceptPath using persisted ontology memory.
   // Falls back to deterministic behavior when LLM is unavailable.
@@ -459,9 +525,13 @@ async function ensureConceptMerge(
       signal ?? new AbortController().signal,
       progress
     );
-    progress?.report("正在应用概念路径…");
+    progress?.report(
+      t("ui.progress.applyConceptPaths", "Applying concept paths…")
+    );
     enriched = applyTopicPathsFromOntology(records, memory);
-    progress?.report("正在生成思维导图…");
+    progress?.report(
+      t("ui.progress.generateMindMap", "Generating mind map…")
+    );
     const merge = await buildConceptMergeRecordAsync(enriched, {
       projectSlug,
       segmentEquivalences: memory.segmentEquivalences,
@@ -474,7 +544,7 @@ async function ensureConceptMerge(
     // ignore; deterministic merge still works
   }
 
-  progress?.report("正在生成思维导图…");
+  progress?.report(t("ui.progress.generateMindMap", "Generating mind map…"));
   const merge = await buildConceptMergeRecordAsync(enriched, { projectSlug });
   if (!projectSlug) {
     await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
@@ -487,7 +557,11 @@ async function commandRebuildOntologyCache(): Promise<void> {
   await ensureStore(storeDir);
   const removed = await clearOntologyCache(storeDir);
   vscode.window.showInformationMessage(
-    `Agent Mind Map: 已清除 ${removed} 个 ontology 缓存文件。下次打开 Concept Mind Map 将重新抽取并精炼同义段。`
+    t(
+      "ui.ontology.cacheCleared",
+      "Agent Mind Map: Cleared {0} ontology cache file(s). Next open of Concept Mind Map will re-extract and refine segment equivalences.",
+      removed
+    )
   );
 }
 
@@ -495,11 +569,17 @@ async function commandOpenConceptMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备思维导图…");
+  panel.setLoading(
+    true,
+    t("ui.progress.preparingMindMap", "Preparing mind map…")
+  );
   try {
     const merge = await withCancellableProgress(
       ({ signal, progress }) => ensureConceptMerge(undefined, progress, signal),
-      "Agent Mind Map: 正在构建思维导图…",
+      t(
+        "ui.progress.buildingMindMap.title",
+        "Agent Mind Map: Building mind map…"
+      ),
       panel
     );
     if (!merge) {
@@ -509,11 +589,18 @@ async function commandOpenConceptMerged(): Promise<void> {
     const { stats } = buildConceptTrieMindMap(records);
     if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
       vscode.window.showInformationMessage(
-        "Agent Mind Map: 库里所有核心都没有 conceptPath（可能是升级前分析的）。对每个会话执行 Refresh 即可重新分析并填上概念路径。"
+        t(
+          "ui.concept.noConceptPathAll",
+          "Agent Mind Map: All topics in the library have no conceptPath (likely analyzed before upgrade). Run Refresh on each session to re-analyze and attach concept paths."
+        )
       );
     } else if (stats.topicsWithoutPath > 0) {
       vscode.window.showInformationMessage(
-        `Agent Mind Map: ${stats.topicsWithoutPath} 个核心缺少 conceptPath，被放在「未分类」分支下。`
+        t(
+          "ui.concept.someMissingConceptPath",
+          "Agent Mind Map: {0} topic(s) missing conceptPath were placed under the “Uncategorized” branch.",
+          stats.topicsWithoutPath
+        )
       );
     }
     panel.setMindMapData(merge.mindMap);
@@ -528,16 +615,25 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder first."
+      t(
+        "ui.warning.openWorkspaceFolderFirst",
+        "Agent Mind Map: Open a workspace folder first."
+      )
     );
     return;
   }
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备思维导图…");
+  panel.setLoading(
+    true,
+    t("ui.progress.preparingMindMap", "Preparing mind map…")
+  );
   try {
     const merge = await withCancellableProgress(
       ({ signal, progress }) => ensureConceptMerge(slug, progress, signal),
-      "Agent Mind Map: 正在构建思维导图…",
+      t(
+        "ui.progress.buildingMindMap.title",
+        "Agent Mind Map: Building mind map…"
+      ),
       panel
     );
     if (!merge) {
@@ -552,9 +648,13 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
 
 function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
   const newlyAnalyzed = result.analyzed - result.skippedFresh;
-  let msg =
-    `Agent Mind Map: 共 ${result.total} 条会话，` +
-    `新分析 ${newlyAnalyzed}，缓存 ${result.skippedFresh}`;
+  let msg = t(
+    "ui.batch.summary",
+    "Agent Mind Map: {0} session(s) total, {1} newly analyzed, {2} cached.",
+    result.total,
+    newlyAnalyzed,
+    result.skippedFresh
+  );
   if (result.failed > 0) {
     const labels = result.failures
       .slice(0, 3)
@@ -564,26 +664,44 @@ function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
       result.failures.length > 3
         ? ` 等 ${result.failures.length} 条`
         : "";
-    msg += `，失败 ${result.failed}（${labels}${more}）`;
+    msg = t(
+      "ui.batch.summary.withFailures",
+      "Agent Mind Map: {0} session(s) total, {1} newly analyzed, {2} cached, {3} failed ({4}{5}).",
+      result.total,
+      newlyAnalyzed,
+      result.skippedFresh,
+      result.failed,
+      labels,
+      more
+    );
   }
-  return `${msg}。`;
+  return msg;
 }
 
 async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
   const mode = await vscode.window.showQuickPick(
     [
       {
-        label: "跳过已缓存会话",
-        description: "仅分析库中缺失或已过期的 transcript",
+        label: t(
+          "ui.batch.mode.skipCached.label",
+          "Skip cached sessions"
+        ),
+        description: t(
+          "ui.batch.mode.skipCached.desc",
+          "Only analyze transcripts missing or stale in the library"
+        ),
         forceRefresh: false,
       },
       {
-        label: "全部强制重新分析",
-        description: "忽略分析库缓存，每条会话重新调用 LLM",
+        label: t("ui.batch.mode.force.label", "Force re-analyze all"),
+        description: t(
+          "ui.batch.mode.force.desc",
+          "Ignore library cache and call the LLM for every session"
+        ),
         forceRefresh: true,
       },
     ],
-    { placeHolder: "批量分析当前项目的 agent 会话" }
+    { placeHolder: t("ui.batch.pickMode.placeholder", "Batch analyze agent sessions in current project") }
   );
   if (!mode) {
     return;
@@ -593,17 +711,22 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder first."
+      t(
+        "ui.warning.openWorkspaceFolderFirst",
+        "Agent Mind Map: Open a workspace folder first."
+      )
     );
     return;
   }
 
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备…");
+  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
   try {
     const merge = await withCancellableProgress(
       async ({ signal, progress }) => {
-        progress.report("正在扫描当前项目的 agent 会话…");
+        progress.report(
+          t("ui.batch.progress.scanSessions", "Scanning agent sessions for current project…")
+        );
         const batch = await analyzeProjectSessions(
           { context: extensionContext, signal, progress },
           {
@@ -616,7 +739,11 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         }
         if (batch.total === 0) {
           vscode.window.showInformationMessage(
-            `Agent Mind Map: 当前项目 (${slug}) 磁盘上暂无 agent 会话记录。`
+            t(
+              "ui.batch.emptyOnDisk",
+              "Agent Mind Map: No agent transcripts found on disk for current project ({0}).",
+              slug
+            )
           );
           return undefined;
         }
@@ -627,16 +754,28 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         );
         if (!projectRecords.length) {
           vscode.window.showInformationMessage(
-            `Agent Mind Map: 当前项目 (${slug}) 分析后库中仍无可用记录。` +
-              (batch.failed > 0
-                ? ` ${batch.failed} 条会话分析失败。`
-                : "")
+            t(
+              "ui.library.empty.noRecordsAfterAnalyze",
+              "Agent Mind Map: After analysis, the library still has no usable records for current project ({0}).",
+              slug
+            ) + (batch.failed > 0
+              ? " " +
+                t(
+                  "ui.batch.failedSuffix",
+                  "{0} session(s) failed.",
+                  batch.failed
+                )
+              : "")
           );
           return undefined;
         }
 
         progress.report(
-          `正在合并概念思维导图（已分析 ${batch.total} 条会话）…`
+          t(
+            "ui.batch.progress.mergingConceptMap",
+            "Merging concept mind map (analyzed {0} session(s))…",
+            batch.total
+          )
         );
         const conceptMerge = await ensureConceptMerge(
           slug,
@@ -648,7 +787,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         );
         return conceptMerge;
       },
-      "Agent Mind Map: 批量分析并合并…",
+      t("ui.batch.progress.title", "Agent Mind Map: Batch analyze & merge…"),
       panel
     );
     if (!merge) {
@@ -656,7 +795,11 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
     }
     if (!merge.meta.sessionIds.length) {
       vscode.window.showInformationMessage(
-        `Agent Mind Map: 当前项目 (${slug}) 合并结果为空。`
+        t(
+          "ui.library.merge.emptyResult",
+          "Agent Mind Map: Merge result is empty for current project ({0}).",
+          slug
+        )
       );
       return;
     }
@@ -672,14 +815,21 @@ async function commandOpenMergedCurrentProject(): Promise<void> {
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder first."
+      t(
+        "ui.warning.openWorkspaceFolderFirst",
+        "Agent Mind Map: Open a workspace folder first."
+      )
     );
     return;
   }
   const merge = await ensureDeterministicMerge(slug);
   if (!merge.meta.sessionIds.length) {
     vscode.window.showInformationMessage(
-      `Agent Mind Map: 当前项目 (${slug}) 库中暂无已分析的会话。`
+      t(
+        "ui.library.empty.currentProject",
+        "Agent Mind Map: No analyzed sessions in the library for current project ({0}).",
+        slug
+      )
     );
   }
   await showMindMapStandalone(`Agent Mind Map · ${slug}`, merge.mindMap);
@@ -696,23 +846,30 @@ async function pickMergeScope(
   const items: (vscode.QuickPickItem & { scope: PickScope })[] = [];
   if (currentSlug) {
     items.push({
-      label: `当前项目 (${currentSlug})`,
-      description: "合并当前 workspace 的所有已分析会话",
+      label: t(
+        "ui.merge.scope.current.label",
+        "Current project ({0})",
+        currentSlug
+      ),
+      description: t(
+        "ui.merge.scope.current.desc",
+        "Merge all analyzed sessions from the current workspace"
+      ),
       scope: { kind: "current", slug: currentSlug },
     });
   }
   items.push({
-    label: "全部项目",
-    description: "合并库中所有项目的所有会话",
+    label: t("ui.merge.scope.all.label", "All projects"),
+    description: t("ui.merge.scope.all.desc", "Merge all sessions across all projects in the library"),
     scope: { kind: "all" },
   });
   items.push({
-    label: "手动选择会话…",
-    description: "多选要参与合并的会话",
+    label: t("ui.merge.scope.select.label", "Select sessions…"),
+    description: t("ui.merge.scope.select.desc", "Choose sessions to include in the merge"),
     scope: { kind: "select" },
   });
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: "选择 LLM 合并范围",
+    placeHolder: t("ui.merge.scope.placeholder", "Select LLM merge scope"),
   });
   return picked?.scope;
 }
@@ -734,7 +891,7 @@ async function pickRecordsManually(
   }));
   const picked = await vscode.window.showQuickPick(items, {
     canPickMany: true,
-    placeHolder: "选择参与合并的会话（默认全选）",
+    placeHolder: t("ui.merge.manualSelect.placeholder", "Select sessions to merge (all selected by default)"),
   });
   return picked?.map((p) => p.record);
 }
@@ -745,7 +902,10 @@ async function commandLlmMergeRefine(): Promise<void> {
   const all = await listRecords(storeDir);
   if (!all.length) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: 库为空，先分析至少一个会话再尝试合并。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
     return;
   }
@@ -763,7 +923,11 @@ async function commandLlmMergeRefine(): Promise<void> {
       selected = all.filter((r) => r.meta.projectSlug === scope.slug);
       if (!selected.length) {
         vscode.window.showInformationMessage(
-          `当前项目 (${scope.slug}) 库中暂无已分析的会话。`
+          t(
+            "ui.library.empty.currentProject",
+            "Agent Mind Map: No analyzed sessions in the library for current project ({0}).",
+            scope.slug
+          )
         );
         return;
       }
@@ -790,7 +954,7 @@ async function commandLlmMergeRefine(): Promise<void> {
   );
 
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备 LLM 合并…");
+  panel.setLoading(true, t("ui.merge.progress.preparing", "Preparing LLM merge…"));
   try {
     const merge = await withCancellableProgress(
       async ({ signal, progress }) => {
@@ -809,7 +973,7 @@ async function commandLlmMergeRefine(): Promise<void> {
           progress
         );
       },
-      "Agent Mind Map: 正在合并主题…",
+      t("ui.merge.progress.title", "Agent Mind Map: Merging topics…"),
       panel
     );
 
@@ -877,7 +1041,10 @@ async function commandSearchLibrary(): Promise<void> {
   const records = await listRecords(storeDir);
   if (!records.length) {
     vscode.window.showInformationMessage(
-      "Agent Mind Map: 库为空。先分析至少一个会话。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
     return;
   }
@@ -885,7 +1052,10 @@ async function commandSearchLibrary(): Promise<void> {
   type PickItem = vscode.QuickPickItem & { record: SessionRecord };
 
   const qp = vscode.window.createQuickPick<PickItem>();
-  qp.placeholder = "搜索主题、标题、要点关键词…";
+  qp.placeholder = t(
+    "ui.search.placeholder",
+    "Search topics, titles, and keywords…"
+  );
   qp.matchOnDescription = true;
   qp.matchOnDetail = true;
 
@@ -956,7 +1126,10 @@ async function commandBrowseLibrary(): Promise<void> {
   const records = await listRecords(storeDir);
   if (!records.length) {
     vscode.window.showInformationMessage(
-      "Agent Mind Map: 库为空。先分析至少一个会话。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
     return;
   }
@@ -971,7 +1144,7 @@ async function commandBrowseLibrary(): Promise<void> {
     record: r,
   }));
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: "选择要打开的已分析会话（来自库）",
+    placeHolder: t("ui.browse.placeholder", "Pick an analyzed session to open (from library)"),
     matchOnDescription: true,
     matchOnDetail: true,
   });
@@ -1022,13 +1195,22 @@ async function commandDumpStateDbKey(): Promise<void> {
   const picked = await vscode.window.showQuickPick(
     candidates.map((k) => ({ label: k })),
     {
-      placeHolder: "选择一个 state.vscdb key 查看完整 value",
+      placeHolder: t(
+        "ui.debug.pickStateKey.placeholder",
+        "Pick a state.vscdb key to view its full value"
+      ),
     }
   );
   if (!picked) return;
   const value = await readStateDbKey(picked.label);
   if (value === undefined) {
-    vscode.window.showWarningMessage(`Agent Mind Map: key ${picked.label} 不存在或读取失败。`);
+    vscode.window.showWarningMessage(
+      t(
+        "ui.debug.stateKeyMissing",
+        "Agent Mind Map: key {0} does not exist or failed to read.",
+        picked.label
+      )
+    );
     return;
   }
   let pretty = value;
@@ -1052,7 +1234,12 @@ async function commandInspectComposerHeader(): Promise<void> {
   await ensureStore(storeDir);
   const records = await listRecords(storeDir);
   if (!records.length) {
-    vscode.window.showWarningMessage("Agent Mind Map: 库为空。");
+    vscode.window.showWarningMessage(
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
+    );
     return;
   }
   records.sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
@@ -1063,7 +1250,12 @@ async function commandInspectComposerHeader(): Promise<void> {
       detail: r.meta.projectPath ?? r.meta.projectSlug,
       sessionId: r.meta.sessionId,
     })),
-    { placeHolder: "选择一个 session 检查它在 composer.composerHeaders 里的条目" }
+    {
+      placeHolder: t(
+        "ui.debug.inspectComposer.pickSession.placeholder",
+        "Pick a session to inspect its entry in composer.composerHeaders"
+      ),
+    }
   );
   if (!picked) return;
 
@@ -1098,7 +1290,10 @@ async function requireCursorHostForDebug(): Promise<boolean> {
   const host = await getActiveHost(extensionContext);
   if (host.id !== "cursor") {
     vscode.window.showInformationMessage(
-      "Agent Mind Map: 此调试命令仅在 agentMindmap.host 为 Cursor 时可用。"
+      t(
+        "ui.debug.cursorOnly",
+        "Agent Mind Map: This debug command is only available when agentMindmap.host is Cursor."
+      )
     );
     return false;
   }
@@ -1152,7 +1347,10 @@ async function commandTryOpenAgentShapes(): Promise<void> {
   const records = await listRecords(storeDir);
   if (!records.length) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: 库为空，先用 Open Latest Session 等命令分析至少一个会话。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
     return;
   }
@@ -1164,7 +1362,12 @@ async function commandTryOpenAgentShapes(): Promise<void> {
       detail: r.meta.projectPath ?? r.meta.projectSlug,
       sessionId: r.meta.sessionId,
     })),
-    { placeHolder: "选择一个 session 来调试 glass.openAgentById 的参数形态" }
+    {
+      placeHolder: t(
+        "ui.debug.tryOpenShapes.placeholder",
+        "Pick a session to debug glass.openAgentById argument shapes"
+      ),
+    }
   );
   if (!picked) return;
   await tryOpenAgentShapes(picked.sessionId);
@@ -1176,7 +1379,10 @@ async function commandTestJump(): Promise<void> {
   const records = await listRecords(storeDir);
   if (!records.length) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: 库为空，先用 Open Latest Session 等命令分析至少一个会话。"
+      t(
+        "ui.library.empty.hint",
+        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+      )
     );
     return;
   }
@@ -1187,7 +1393,12 @@ async function commandTestJump(): Promise<void> {
       description: r.meta.projectPath ?? r.meta.projectSlug,
       record: r,
     })),
-    { placeHolder: "选择一个 session 作为模拟点击的目标" }
+    {
+      placeHolder: t(
+        "ui.debug.testJump.pickSession.placeholder",
+        "Pick a session as the simulated click target"
+      ),
+    }
   );
   if (!pickedRecord) {
     return;

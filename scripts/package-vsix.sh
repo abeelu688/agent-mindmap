@@ -5,12 +5,56 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+node_major() {
+  node -p 'Number(process.versions.node.split(".")[0])'
+}
+
+# @vscode/vsce 3.x pulls cheerio/undici that require Node 20+ (global File API).
+ensure_node20_for_vsce() {
+  if (( $(node_major) >= 20 )); then
+    return 0
+  fi
+
+  local candidate dir
+  local -a candidates=(
+    "/usr/share/cursor/resources/app/resources/helpers/node"
+    "/Applications/Cursor.app/Contents/Resources/app/resources/helpers/node"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]] && (( $("$candidate" -p 'Number(process.versions.node.split(".")[0])') >= 20 )); then
+      dir="$(dirname "$candidate")"
+      PATH="$dir:$PATH"
+      export PATH
+      echo "==> Using Node $(node -v) from $dir for VSIX packaging"
+      return 0
+    fi
+  done
+
+  if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    if nvm use 20 >/dev/null 2>&1 || nvm use 22 >/dev/null 2>&1 || nvm use lts/iron >/dev/null 2>&1 || nvm use lts/jod >/dev/null 2>&1; then
+      echo "==> Using Node $(node -v) via nvm for VSIX packaging"
+      return 0
+    fi
+  fi
+
+  echo "ERROR: @vscode/vsce requires Node.js 20+. Current: $(node -v)" >&2
+  echo "Install Node 20, e.g.: nvm install 20 && nvm use 20" >&2
+  exit 1
+}
+
 echo "==> Workspace: $ROOT"
 echo "==> Building webview + extension..."
 npm run build
 
 echo "==> Packaging VSIX (vsce)..."
-npm run package --prefix extension
+ensure_node20_for_vsce
+(
+  cd "$ROOT/extension"
+  npm run package
+)
 
 shopt -s nullglob
 vsix_files=("$ROOT"/extension/*.vsix)

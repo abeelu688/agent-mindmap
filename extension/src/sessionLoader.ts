@@ -117,6 +117,11 @@ async function readSettings(host: AgentHost): Promise<Settings> {
       includeToolCalls: config.get<boolean>("includeToolCalls", true) ?? true,
       maxConclusionItems:
         config.get<number>("maxConclusionItems", 8) ?? 8,
+      labels: {
+        research: t("mindmap.turn.research", "Research"),
+        conclusion: t("mindmap.turn.conclusion", "Conclusion"),
+        sessionDefault: t("mindmap.turn.sessionDefault", "Agent Session"),
+      },
     },
   };
 }
@@ -205,7 +210,11 @@ export async function pickSession(
       session: s,
     })),
     {
-      placeHolder: `Select a ${host.displayName} chat session`,
+      placeHolder: t(
+        "ui.pickSession.placeholder",
+        "Select a {0} chat session",
+        host.displayName
+      ),
       matchOnDescription: true,
       matchOnDetail: true,
     }
@@ -258,6 +267,29 @@ export type AnalyzeProjectResult = {
   failures: { sessionId: string; label: string; message: string }[];
 };
 
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+const t = (
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string => {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+};
+
 export async function loadSession(
   session: TranscriptSession,
   deps: LoadDeps,
@@ -266,7 +298,7 @@ export async function loadSession(
 ): Promise<LoadedSession> {
   const host = hostArg ?? (await getActiveHost(deps.context));
   const progress = deps.progress;
-  progress?.report("正在读取对话记录…");
+  progress?.report(t("ui.progress.readTranscript", "Reading transcript…"));
   const content = await readSessionFile(session.filePath);
   const events = host.parseTranscript(content);
   const settings = await readSettings(host);
@@ -285,7 +317,9 @@ export async function loadSession(
   };
 
   if (settings.library.enabled && !options.forceRefresh) {
-    progress?.report("正在检查分析库缓存…");
+    progress?.report(
+      t("ui.progress.checkLibraryCache", "Checking library cache…")
+    );
     try {
       const existing = await readRecord(
         getStoreDir(),
@@ -309,7 +343,9 @@ export async function loadSession(
         })
       ) {
         const userQueryCount = countUserQueries(events);
-        progress?.report("命中缓存，正在生成思维导图…");
+        progress?.report(
+          t("ui.progress.cacheHitRender", "Cache hit, generating mind map…")
+        );
         const outline = sanitizeSessionOutline(
           existing.outline,
           userQueryCount
@@ -359,9 +395,14 @@ export async function loadSession(
       err instanceof LlmProviderError && err.code === "cli-missing";
     const action = cliMissing
       ? host.cliMissingHint()
-      : "Falling back to chronological view.";
+      : t("ui.llm.failed.fallback", "Falling back to chronological view.");
     vscode.window.showWarningMessage(
-      `Agent Mind Map: LLM summarization failed (${detail}). ${action}`
+      t(
+        "ui.llm.failed.message",
+        "Agent Mind Map: LLM summarization failed ({0}). {1}",
+        detail,
+        action
+      )
     );
     console.warn("[agent-mindmap] LLM failure, using turn fallback:", err);
     return {
@@ -378,10 +419,10 @@ export async function loadSession(
 
   const userQueryCount = countUserQueries(events);
   outline = sanitizeSessionOutline(outline, userQueryCount);
-  progress?.report("正在渲染思维导图…");
+  progress?.report(t("ui.progress.renderMindMap", "Rendering mind map…"));
 
   if (settings.library.enabled) {
-    progress?.report("正在写入分析库…");
+    progress?.report(t("ui.progress.writeLibrary", "Writing to library…"));
     try {
       const meta = buildRecordMeta({
         sessionId: session.id,
@@ -470,7 +511,13 @@ export async function runProjectSessionBatch(
   let failed = 0;
   const failures: AnalyzeProjectResult["failures"] = [];
 
-  progress?.report(`共 ${total} 条会话，开始批量分析…`);
+  progress?.report(
+    t(
+      "ui.batch.progress.start",
+      "{0} session(s) total, starting batch analysis…",
+      total
+    )
+  );
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i]!;
@@ -480,7 +527,7 @@ export async function runProjectSessionBatch(
       total,
       session.label
     );
-    itemProgress.report("开始分析");
+    itemProgress.report(t("ui.batch.item.start", "Start analyzing"));
     try {
       const loaded = await loadOne(
         session,
@@ -491,11 +538,13 @@ export async function runProjectSessionBatch(
       analyzed += 1;
       if (loaded.fromLibrary) {
         skippedFresh += 1;
-        reportComplete("命中缓存");
+        reportComplete(t("ui.batch.item.cacheHit", "Cache hit"));
       } else if (loaded.source === "turn") {
-        reportComplete("已降级为时序视图");
+        reportComplete(
+          t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
+        );
       } else {
-        reportComplete("分析完成");
+        reportComplete(t("ui.batch.item.done", "Analysis completed"));
       }
     } catch (err) {
       if (isCancellation(err)) {
@@ -507,7 +556,7 @@ export async function runProjectSessionBatch(
         label: session.label,
         message: describeError(err),
       });
-      reportComplete("分析失败");
+      reportComplete(t("ui.batch.item.failed", "Analysis failed"));
       console.warn(
         `[agent-mindmap] batch analyze failed for ${session.id}:`,
         err
@@ -517,7 +566,14 @@ export async function runProjectSessionBatch(
 
   if (total > 0) {
     progress?.report(
-      `批量分析结束：共 ${total} 条，成功 ${analyzed}，缓存 ${skippedFresh}，失败 ${failed}`
+      t(
+        "ui.batch.progress.finished",
+        "Batch finished: {0} total, {1} succeeded, {2} cached, {3} failed",
+        total,
+        analyzed,
+        skippedFresh,
+        failed
+      )
     );
   }
 
@@ -544,7 +600,10 @@ export async function analyzeProjectSessions(
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder first."
+      t(
+        "ui.warning.openWorkspaceFolderFirst",
+        "Agent Mind Map: Open a workspace folder first."
+      )
     );
     return undefined;
   }

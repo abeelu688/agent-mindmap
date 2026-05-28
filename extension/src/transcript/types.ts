@@ -59,4 +59,9 @@ export type MindMapRoot = MindMapNodeData;
 export type BuildOptions = {
   includeToolCalls: boolean;
   maxConclusionItems: number;
+  labels?: {
+    research: string;
+    conclusion: string;
+    sessionDefault: string;
+  };
 };

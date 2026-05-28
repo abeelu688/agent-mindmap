@@ -29,6 +29,29 @@ import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+const t = (
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string => {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+};
+
 // Untitled markdown docs created via `vscode.workspace.openTextDocument({ content })`.
 // When the user closes one, reveal the mind map editor tab again.
 const transcriptDocUrisToAutoReveal = new Set<string>();
@@ -207,7 +230,10 @@ async function pickCandidate(
   }
 
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: "选择要打开的会话 / 问题",
+    placeHolder: t(
+      "ui.jump.openPicker.placeholder",
+      "Select a session / question to open"
+    ),
     matchOnDescription: true,
     matchOnDetail: true,
   });
@@ -350,7 +376,7 @@ async function withTranscriptJumpLoading<T>(
   work: () => Promise<T>
 ): Promise<T> {
   const panel = MindMapPanel.getCurrent();
-  panel?.setLoading(true, "正在加载会话记录…");
+  panel?.setLoading(true, t("ui.jump.loading", "Loading transcript…"));
   try {
     return await work();
   } finally {
@@ -364,7 +390,10 @@ async function openChosenTranscript(
 ): Promise<void> {
   if (!candidate.transcriptPath) {
     vscode.window.showErrorMessage(
-      "Agent Mind Map: 无法打开对话记录（缺少 transcript 路径）。"
+      t(
+        "ui.jump.missingTranscriptPath",
+        "Agent Mind Map: Cannot open transcript (missing transcript path)."
+      )
     );
     return;
   }
@@ -381,7 +410,12 @@ async function openChosenTranscript(
     focusTurnIndex >= userQueryCount
   ) {
     vscode.window.showWarningMessage(
-      `Agent Mind Map: 该节点标注的 Q${focusTurnIndex + 1} 在当前 transcript 中不存在（共 ${userQueryCount} 轮用户提问）。已打开整段会话。`
+      t(
+        "ui.jump.qTagMissing",
+        "Agent Mind Map: Q{0} referenced by this node does not exist in the current transcript ({1} user question(s) total). Opening the whole session instead.",
+        focusTurnIndex + 1,
+        userQueryCount
+      )
     );
     focusTurnIndex = undefined;
   }
@@ -409,7 +443,11 @@ async function openTranscriptAsMarkdown(
     content = await fs.readFile(transcriptPath, "utf8");
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Agent Mind Map: 读取 transcript 失败: ${err instanceof Error ? err.message : String(err)}`
+      t(
+        "ui.jump.readTranscriptFailed",
+        "Agent Mind Map: Failed to read transcript: {0}",
+        err instanceof Error ? err.message : String(err)
+      )
     );
     return;
   }
@@ -494,7 +532,11 @@ export async function tryOpenAgentShapes(
   const cmd = await probeOpenByIdCommand(context);
   if (!cmd) {
     vscode.window.showWarningMessage(
-      `Agent Mind Map: 当前 ${host.displayName} 环境不支持按 ID 打开原生 Agent 面板。`
+      t(
+        "ui.jump.openByIdUnsupported",
+        "Agent Mind Map: The current {0} environment does not support opening the native Agent panel by ID.",
+        host.displayName
+      )
     );
     return;
   }
@@ -509,14 +551,24 @@ export async function tryOpenAgentShapes(
   for (const { arg, label } of shapes) {
     const ret = await tryOpenById(cmd, arg, label);
     const choice = await vscode.window.showInformationMessage(
-      `Agent Mind Map · 调用 ${cmd} ${label} → ${JSON.stringify(ret) ?? "undefined"}。是否打开了正确的 Agent？`,
-      "✅ 是，停止",
-      "❌ 否，继续下一个"
+      t(
+        "ui.jump.openById.shapePrompt",
+        "Agent Mind Map · Called {0} {1} → {2}. Did it open the correct Agent?",
+        cmd,
+        label,
+        JSON.stringify(ret) ?? "undefined"
+      ),
+      t("ui.jump.openById.confirmYes", "✅ Yes, stop"),
+      t("ui.jump.openById.confirmNo", "❌ No, try next")
     );
-    if (choice === "✅ 是，停止") {
+    if (choice === t("ui.jump.openById.confirmYes", "✅ Yes, stop")) {
       mindMapLog(`[openAgentById] user confirmed working shape: ${label}`);
       vscode.window.showInformationMessage(
-        `Agent Mind Map: 已记住 shape ${label}（请将这条信息发回开发者）。`
+        t(
+          "ui.jump.openById.remembered",
+          "Agent Mind Map: Remembered shape {0} (please send this back to the developer).",
+          label
+        )
       );
       return;
     }
@@ -525,7 +577,10 @@ export async function tryOpenAgentShapes(
     }
   }
   vscode.window.showWarningMessage(
-    "Agent Mind Map: 尝试了所有 shape 都未生效。请检查日志面板。"
+    t(
+      "ui.jump.openById.allFailed",
+      "Agent Mind Map: Tried all shapes and none worked. Please check the logs."
+    )
   );
 }
 
@@ -543,7 +598,11 @@ export async function diagnoseJumpCommands(): Promise<void> {
   mindMapLog("[diagnose] agent-related commands:\n" + relevant.join("\n"));
   const items = relevant.map((c) => ({ label: c }));
   await vscode.window.showQuickPick(items, {
-    placeHolder: `发现 ${relevant.length} 个命令（已记录到 Mind Map 日志）`,
+    placeHolder: t(
+      "ui.jump.diagnose.placeholder",
+      "Found {0} command(s) (recorded to Mind Map logs)",
+      relevant.length
+    ),
     canPickMany: false,
   });
 }

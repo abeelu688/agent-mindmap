@@ -3,6 +3,7 @@
   "displayName": "Agent Mind Map",
   "description": "Read Cursor or Claude Code agent chat transcripts and visualize them as an interactive mind map.",
   "version": "0.1.0",
+  "icon": "icon.png",
   "publisher": "airecorder",
   "engines": {
     "vscode": "^1.85.0"
