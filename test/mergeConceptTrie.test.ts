@@ -16,13 +16,19 @@ import type { Topic, TopicGraph } from "../extension/src/llm/types";
 function topic(
   title: string,
   conceptPath: string[] | undefined,
-  items: string[]
+  items: string[],
+  summary?: string
 ): Topic {
   return {
     title,
+    summary,
     conceptPath,
     items: items.map((text) => ({ text })),
   };
+}
+
+function isTrieSegmentLabel(text: string): boolean {
+  return /\s+\(\d+\)$/.test(text);
 }
 
 function makeRecord(
@@ -111,6 +117,57 @@ describe("buildConceptTrieMindMap", () => {
     expect(
       binderChildren.some((t) => t.includes("Binder 调研"))
     ).toBe(true);
+    const topicNode = binder.children?.find(
+      (c) => !isTrieSegmentLabel(c.data.text)
+    );
+    expect(topicNode?.data.text).toBe("Binder 调研");
+    expect(topicNode?.data.text).not.toContain("s1-label");
+    expect(topicNode?.data.text).not.toContain("[");
+    const leafTexts = topicNode?.children?.map((c) => c.data.text) ?? [];
+    expect(leafTexts.some((t) => t.startsWith("概述"))).toBe(false);
+    expect(leafTexts.some((t) => t.includes("tr.code"))).toBe(true);
+  });
+
+  it("uses summary as penultimate headline with detail-only leaves", () => {
+    const records = [
+      makeRecord("s1", "proj", {
+        topics: [
+          {
+            title: "Android IPC / Binder",
+            summary: "Binder 通信要点",
+            conceptPath: ["android", "ipc", "binder"],
+            items: [{ text: "tr.code 字段" }],
+          },
+        ],
+      }),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records);
+    const binder = mindMap.children?.[0]?.children?.[0]?.children?.[0];
+    const topicNode = binder?.children?.find(
+      (c) => !isTrieSegmentLabel(c.data.text)
+    );
+    expect(topicNode?.data.text).toBe("Binder 通信要点");
+    const leafTexts = topicNode?.children?.map((c) => c.data.text) ?? [];
+    expect(leafTexts).toEqual(["tr.code 字段"]);
+  });
+
+  it("shows placeholder leaf when topic has no items", () => {
+    const records = [
+      makeRecord("s1", "proj", {
+        topics: [
+          {
+            title: "Empty topic",
+            conceptPath: ["android"],
+            items: [],
+          },
+        ],
+      }),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records);
+    const topicNode = mindMap.children?.[0]?.children?.find(
+      (c) => !isTrieSegmentLabel(c.data.text)
+    );
+    expect(topicNode?.children?.[0]?.data.text).toBe("（无细节）");
   });
 
   it("places topics without conceptPath under a 未分类 bucket", () => {
