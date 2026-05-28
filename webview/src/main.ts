@@ -131,7 +131,15 @@ function setBatchStatus(status: BatchStatus): void {
   batchDetailEl.textContent = parts.join(" · ");
 
   if (batchRefreshBtn) {
-    batchRefreshBtn.disabled = status.pendingUpdateBatchNo === undefined;
+    const canRefresh = status.pendingUpdateBatchNo !== undefined;
+    batchRefreshBtn.disabled = !canRefresh;
+    batchRefreshBtn.classList.toggle(
+      "batch-status__button--attention",
+      canRefresh
+    );
+    batchRefreshBtn.title = canRefresh
+      ? "Merge ready — click to update mind map"
+      : "";
   }
 }
 

@@ -87,6 +87,73 @@ body,
   cursor: default;
 }
 
+@keyframes batch-refresh-pulse {
+  0%,
+  100% {
+    border-color: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #0e70c0) 70%,
+      transparent
+    );
+    background: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #0e70c0) 22%,
+      var(--vscode-editor-background, #1e1e1e)
+    );
+    color: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #0e70c0) 55%,
+      var(--vscode-foreground, #cccccc)
+    );
+    box-shadow:
+      0 0 0 2px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 40%, transparent),
+      0 0 14px 3px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 35%, transparent);
+  }
+  50% {
+    border-color: var(--vscode-progressBar-background, #0e70c0);
+    background: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #0e70c0) 58%,
+      var(--vscode-editor-background, #1e1e1e)
+    );
+    color: var(--vscode-button-foreground, #ffffff);
+    box-shadow:
+      0 0 0 5px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 85%, transparent),
+      0 0 28px 10px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 90%, transparent);
+  }
+}
+
+.batch-status__button--attention {
+  font-weight: 600;
+  animation: batch-refresh-pulse 1.2s ease-in-out infinite;
+}
+
+.batch-status__button--attention:hover:enabled {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch-status__button--attention {
+    animation: none;
+    border-color: var(--vscode-progressBar-background, #0e70c0);
+    background: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #0e70c0) 42%,
+      var(--vscode-editor-background, #1e1e1e)
+    );
+    color: var(--vscode-button-foreground, #ffffff);
+    box-shadow:
+      0 0 0 3px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 55%, transparent),
+      0 0 16px 4px
+        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 50%, transparent);
+  }
+}
+
 .mindmap-loading {
   position: absolute;
   inset: 0;
