@@ -85,6 +85,10 @@ export class MindMapPanel {
     this.host.setMindMapData(data);
   }
 
+  public setLoading(active: boolean, message?: string): void {
+    this.host.setLoading(active, message);
+  }
+
   public getMindMapData(): MindMapRoot | undefined {
     return this.host.getMindMapData();
   }

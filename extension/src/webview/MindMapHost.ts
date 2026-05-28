@@ -20,7 +20,8 @@ export type WebviewToExtensionMessage =
 
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
-  | { type: "setUi"; ui: MindMapUiOptions };
+  | { type: "setUi"; ui: MindMapUiOptions }
+  | { type: "setLoading"; active: boolean; message?: string };
 
 export type NodeClickedListener = (payload: {
   origin: NodeOrigin;
@@ -42,6 +43,7 @@ export class MindMapHost {
 
   private webviewReady = false;
   private pendingData: MindMapRoot | undefined;
+  private pendingLoading: { active: boolean; message?: string } | undefined;
   private lastMindMapData: MindMapRoot | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
   private themeFileWatcher: vscode.FileSystemWatcher | undefined;
@@ -78,6 +80,10 @@ export class MindMapHost {
           this.webviewReady = true;
           this.postUi();
           this.updateThemeFileWatcher();
+          if (this.pendingLoading !== undefined) {
+            this.postLoading(this.pendingLoading.active, this.pendingLoading.message);
+            this.pendingLoading = undefined;
+          }
           if (this.pendingData) {
             this.postData(this.pendingData);
             this.pendingData = undefined;
@@ -173,11 +179,31 @@ export class MindMapHost {
 
   public setMindMapData(data: MindMapRoot): void {
     this.lastMindMapData = data;
+    this.setLoading(false);
     if (this.webviewReady) {
       this.postData(data);
     } else {
       this.pendingData = data;
     }
+  }
+
+  public setLoading(active: boolean, message?: string): void {
+    if (this.webviewReady) {
+      this.postLoading(active, message);
+    } else if (active) {
+      this.pendingLoading = { active, message };
+    } else {
+      this.pendingLoading = { active: false };
+    }
+  }
+
+  private postLoading(active: boolean, message?: string): void {
+    const msg: ExtensionToWebviewMessage = {
+      type: "setLoading",
+      active,
+      message,
+    };
+    void this.webview.postMessage(msg);
   }
 
   public setTitle(title: string): void {

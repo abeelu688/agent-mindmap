@@ -149,6 +149,8 @@ export type SummarizeInput = {
   maxItemsPerTopic: number;
   /** Which JSON schema to validate CLI output against. */
   responseSchema?: LlmResponseSchema;
+  /** Called before each CLI attempt (1-based). */
+  onAttempt?: (attempt: number, maxAttempts: number) => void;
 };
 
 export type LlmProviderOptions = {

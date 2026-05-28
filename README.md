@@ -126,7 +126,7 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 | **Agent Mind Map: Browse Library…** | Cross-project quick-pick of any analyzed session — opens directly from the library, no transcript or workspace needed |
 | **Agent Mind Map: Open Store Directory** | Reveal `storeDir` in the OS file manager (for backup / sync setup) |
 
-All loading commands show a cancellable progress notification while the LLM runs.
+Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text (e.g. cache hit, LLM call, render), plus an in-panel loading overlay on the mind-map webview so the editor tab is not blank while work runs.
 
 ## Open transcript from the map
 

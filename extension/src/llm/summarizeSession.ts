@@ -3,6 +3,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
 import { validateSessionOutline } from "./outlineValidate";
+import type { MindMapProgress } from "../progress";
+import { createHeartbeat } from "../progress";
 import {
   LlmProviderError,
   type LlmProvider,
@@ -73,7 +75,8 @@ export async function summarizeSession(
   events: ChatEvent[],
   opts: SummarizeOptions,
   provider: LlmProvider,
-  signal: AbortSignal
+  signal: AbortSignal,
+  progress?: MindMapProgress
 ): Promise<SessionOutline> {
   if (!events.length) {
     throw new LlmProviderError("empty", "Transcript has no events to summarize");
@@ -86,32 +89,46 @@ export async function summarizeSession(
   if (useCache && opts.cacheDir) {
     const cached = await readCache(opts.cacheDir, cacheKey);
     if (cached) {
+      progress?.report("命中 LLM 缓存…");
       return cached;
     }
   }
 
-  const result = await provider.summarize(
-    {
-      events,
-      prompt,
-      model: opts.modelHint,
-      maxTopics: opts.prompt.maxBranches,
-      maxItemsPerTopic: opts.prompt.maxDetailsPerNode,
-      responseSchema: "session-outline",
-    },
-    signal
-  );
+  const heartbeat = createHeartbeat(progress, "正在生成大纲…");
+  try {
+    const result = await provider.summarize(
+      {
+        events,
+        prompt,
+        model: opts.modelHint,
+        maxTopics: opts.prompt.maxBranches,
+        maxItemsPerTopic: opts.prompt.maxDetailsPerNode,
+        responseSchema: "session-outline",
+        onAttempt: (attempt, maxAttempts) => {
+          if (attempt > 1) {
+            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+          }
+        },
+      },
+      signal
+    );
 
-  if (!result || typeof result !== "object" || !("outline" in result)) {
-    throw new LlmProviderError("bad-shape", "Provider did not return SessionOutline");
+    if (!result || typeof result !== "object" || !("outline" in result)) {
+      throw new LlmProviderError(
+        "bad-shape",
+        "Provider did not return SessionOutline"
+      );
+    }
+    const outline = result as SessionOutline;
+
+    if (useCache && opts.cacheDir) {
+      await writeCache(opts.cacheDir, cacheKey, outline);
+    }
+
+    return outline;
+  } finally {
+    heartbeat.stop();
   }
-  const outline = result as SessionOutline;
-
-  if (useCache && opts.cacheDir) {
-    await writeCache(opts.cacheDir, cacheKey, outline);
-  }
-
-  return outline;
 }
 
 export const __testing = { computeCacheKey };

@@ -454,6 +454,7 @@ export class HeadlessCliProvider {
 
     let lastErr: LlmProviderError | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      input.onAttempt?.(attempt, maxAttempts);
       let allMissing: LlmProviderError | undefined;
       let runErr: LlmProviderError | undefined;
 

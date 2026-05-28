@@ -22,7 +22,14 @@ export function buildMindMapHtml(
   <title>Agent Mind Map</title>
 </head>
 <body>
-  <div id="app"><div id="mindMapContainer"></div></div>
+  <div id="app">
+    <div id="mindMapContainer"></div>
+    <div id="mindmapLoading" class="mindmap-loading mindmap-loading--hidden" hidden aria-live="polite">
+      <div class="mindmap-loading__spinner" aria-hidden="true"></div>
+      <p class="mindmap-loading__title">正在生成思维导图…</p>
+      <p class="mindmap-loading__message"></p>
+    </div>
+  </div>
   <script type="module" src="${scriptUri}"></script>
 </body>
 </html>`;

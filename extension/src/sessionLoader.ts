@@ -33,6 +33,7 @@ import {
   writeMergeRecord,
   writeRecord,
 } from "./store/sessionStore";
+import type { MindMapProgress } from "./progress";
 import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
 
@@ -48,6 +49,7 @@ export type LoadedSession = {
 export type LoadDeps = {
   context: vscode.ExtensionContext;
   signal?: AbortSignal;
+  progress?: MindMapProgress;
 };
 
 type Settings = {
@@ -244,6 +246,8 @@ export async function loadSession(
   hostArg?: AgentHost
 ): Promise<LoadedSession> {
   const host = hostArg ?? (await getActiveHost(deps.context));
+  const progress = deps.progress;
+  progress?.report("正在读取对话记录…");
   const content = await readSessionFile(session.filePath);
   const events = host.parseTranscript(content);
   const settings = await readSettings(host);
@@ -262,6 +266,7 @@ export async function loadSession(
   };
 
   if (settings.library.enabled && !options.forceRefresh) {
+    progress?.report("正在检查分析库缓存…");
     try {
       const existing = await readRecord(
         getStoreDir(),
@@ -285,6 +290,7 @@ export async function loadSession(
         })
       ) {
         const userQueryCount = countUserQueries(events);
+        progress?.report("命中缓存，正在生成思维导图…");
         const outline = sanitizeSessionOutline(
           existing.outline,
           userQueryCount
@@ -322,7 +328,8 @@ export async function loadSession(
         hostId: host.id,
       },
       provider,
-      signal
+      signal,
+      progress
     );
   } catch (err) {
     if (isCancellation(err)) {
@@ -352,8 +359,10 @@ export async function loadSession(
 
   const userQueryCount = countUserQueries(events);
   outline = sanitizeSessionOutline(outline, userQueryCount);
+  progress?.report("正在渲染思维导图…");
 
   if (settings.library.enabled) {
+    progress?.report("正在写入分析库…");
     try {
       const meta = buildRecordMeta({
         sessionId: session.id,

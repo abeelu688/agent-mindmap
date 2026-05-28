@@ -13,6 +13,59 @@ body,
 #app {
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.mindmap-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-background, #1e1e1e) 88%,
+    transparent
+  );
+  color: var(--vscode-foreground, #cccccc);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  pointer-events: none;
+}
+
+.mindmap-loading--hidden {
+  display: none !important;
+}
+
+.mindmap-loading__spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--vscode-progressBar-background, #0e70c0);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: mindmap-loading-spin 0.85s linear infinite;
+}
+
+@keyframes mindmap-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mindmap-loading__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mindmap-loading__message {
+  margin: 0;
+  max-width: min(90%, 420px);
+  text-align: center;
+  opacity: 0.85;
+  line-height: 1.4;
 }
 
 #mindMapContainer {
