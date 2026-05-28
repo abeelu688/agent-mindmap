@@ -1,5 +1,7 @@
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider } from "../llm/types";
+import type { MindMapProgress } from "../progress";
+import { createHeartbeat } from "../progress";
 import {
   buildOntologyPrompt,
   ONTOLOGY_PROMPT_VERSION,
@@ -177,24 +179,35 @@ async function runOntologyRefine(
   >,
   opts: { model?: string; hostId?: AgentHostId },
   provider: LlmProvider,
-  signal: AbortSignal
+  signal: AbortSignal,
+  progress?: MindMapProgress
 ): Promise<ConceptOntologyRecord["segmentEquivalences"]> {
   const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
   const input = buildRefineInputFromRecords(records, base, base.topicPaths);
   const prompt = buildOntologyRefinePrompt(input, hostId);
-  const res = await provider.summarize(
-    {
-      events: [],
-      prompt,
-      model: opts.model,
-      maxTopics: 8,
-      maxItemsPerTopic: 8,
-      responseSchema: "ontology-refine",
-    },
-    signal
-  );
-  const refined = validateOntologyRefine(res);
-  return refined.segmentEquivalences;
+  const heartbeat = createHeartbeat(progress, "正在精炼概念同义段…");
+  try {
+    const res = await provider.summarize(
+      {
+        events: [],
+        prompt,
+        model: opts.model,
+        maxTopics: 8,
+        maxItemsPerTopic: 8,
+        responseSchema: "ontology-refine",
+        onAttempt: (attempt, maxAttempts) => {
+          if (attempt > 1) {
+            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+          }
+        },
+      },
+      signal
+    );
+    const refined = validateOntologyRefine(res);
+    return refined.segmentEquivalences;
+  } finally {
+    heartbeat.stop();
+  }
 }
 
 function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
@@ -214,12 +227,15 @@ export async function ensureOntologyMemory(
   opts: { model?: string; hostId?: AgentHostId; title?: string },
   provider: LlmProvider,
   storeDir: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  progress?: MindMapProgress
 ): Promise<ConceptOntologyRecord> {
   await ensureStore(storeDir);
+  progress?.report("正在检查概念本体缓存…");
   const cacheKey = computeOntologyCacheKey(records, opts, provider.id);
   const cached = await readOntologyRecord(storeDir, cacheKey);
   if (cached && isCompleteOntologyRecord(cached)) {
+    progress?.report("命中概念本体缓存…");
     return cached;
   }
 
@@ -231,18 +247,30 @@ export async function ensureOntologyMemory(
   let reattachMoves = cached?.reattachMoves;
 
   if (!nodes || !mappings) {
-    const ontologyPrompt = buildOntologyPrompt(records, hostId);
-    const ontologyResult = await provider.summarize(
-      {
-        events: [],
-        prompt: ontologyPrompt,
-        model: opts.model,
-        maxTopics: 8,
-        maxItemsPerTopic: 8,
-        responseSchema: "concept-ontology",
-      },
-      signal
-    );
+    progress?.report("正在抽取概念本体…");
+    const heartbeat = createHeartbeat(progress, "正在抽取概念本体…");
+    let ontologyResult: Awaited<ReturnType<LlmProvider["summarize"]>>;
+    try {
+      const ontologyPrompt = buildOntologyPrompt(records, hostId);
+      ontologyResult = await provider.summarize(
+        {
+          events: [],
+          prompt: ontologyPrompt,
+          model: opts.model,
+          maxTopics: 8,
+          maxItemsPerTopic: 8,
+          responseSchema: "concept-ontology",
+          onAttempt: (attempt, maxAttempts) => {
+            if (attempt > 1) {
+              progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+            }
+          },
+        },
+        signal
+      );
+    } finally {
+      heartbeat.stop();
+    }
     const validated = validateConceptOntology(ontologyResult as any);
     nodes = validated.nodes;
     mappings = validated.mappings;
@@ -262,19 +290,37 @@ export async function ensureOntologyMemory(
   };
 
   if (!topicPaths.length) {
+    const total = records.length;
+    let index = 0;
     for (const rec of records) {
+      index += 1;
+      progress?.report(`正在推断 topic-paths（${index}/${total}）…`);
       const { prompt } = buildTopicPathsPrompt(rec, lite, hostId);
-      const res = await provider.summarize(
-        {
-          events: [],
-          prompt,
-          model: opts.model,
-          maxTopics: 8,
-          maxItemsPerTopic: 8,
-          responseSchema: "topic-paths",
-        },
-        signal
+      const heartbeat = createHeartbeat(
+        progress,
+        `正在推断 topic-paths（${index}/${total}）…`
       );
+      let res: Awaited<ReturnType<LlmProvider["summarize"]>>;
+      try {
+        res = await provider.summarize(
+          {
+            events: [],
+            prompt,
+            model: opts.model,
+            maxTopics: 8,
+            maxItemsPerTopic: 8,
+            responseSchema: "topic-paths",
+            onAttempt: (attempt, maxAttempts) => {
+              if (attempt > 1) {
+                progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+              }
+            },
+          },
+          signal
+        );
+      } finally {
+        heartbeat.stop();
+      }
       const parsed = validateTopicPaths(res as any);
       const validatedPaths = validateConceptOntology({
         nodes: nodes!,
@@ -294,7 +340,8 @@ export async function ensureOntologyMemory(
       { nodes: nodes!, mappings: mappings!, topicPaths, reattachMoves },
       opts,
       provider,
-      signal
+      signal,
+      progress
     );
   }
 

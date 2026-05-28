@@ -19,6 +19,7 @@ import {
   loadLatestSession,
   loadSession,
   pickSession,
+  type LoadDeps,
   type LoadedSession,
 } from "./sessionLoader";
 import {
@@ -56,6 +57,10 @@ import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
 import { exportMindMapPackage } from "./export/exportPackage";
 import { openMindMapPackage } from "./export/openMindMapPackage";
+import {
+  createProgressReporter,
+  type MindMapProgress,
+} from "./progress";
 
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
@@ -65,8 +70,12 @@ function progressTitle(): string {
 }
 
 async function withCancellableProgress<T>(
-  run: (signal: AbortSignal) => Promise<T>,
-  title: string = progressTitle()
+  run: (ctx: {
+    signal: AbortSignal;
+    progress: MindMapProgress;
+  }) => Promise<T>,
+  title: string = progressTitle(),
+  panel?: MindMapPanel
 ): Promise<T | undefined> {
   return vscode.window.withProgress(
     {
@@ -74,11 +83,19 @@ async function withCancellableProgress<T>(
       title,
       cancellable: true,
     },
-    async (_progress, token) => {
+    async (vscodeProgress, token) => {
       const controller = new AbortController();
       const sub = token.onCancellationRequested(() => controller.abort());
+      const panelRef = panel ?? MindMapPanel.getCurrent();
+      const baseReporter = createProgressReporter(vscodeProgress);
+      const progress: MindMapProgress = {
+        report(message: string) {
+          baseReporter.report(message);
+          panelRef?.setLoading(true, message);
+        },
+      };
       try {
-        return await run(controller.signal);
+        return await run({ signal: controller.signal, progress });
       } catch (err) {
         if (controller.signal.aborted) {
           return undefined;
@@ -91,30 +108,62 @@ async function withCancellableProgress<T>(
   );
 }
 
-function createOrShowMindMap(): MindMapPanel {
-  return MindMapPanel.createOrShow(extensionContext.extensionUri);
-}
-
-function showMindMap(loaded: LoadedSession): void {
-  activeSession = loaded;
-
-  const panel = createOrShowMindMap();
-  panel.setMindMapData(loaded.mindMap);
-  panel.watchTranscript(loaded.session.filePath, async () => {
+function attachTranscriptWatch(
+  panel: MindMapPanel,
+  session: LoadedSession["session"]
+): void {
+  panel.watchTranscript(session.filePath, async () => {
     if (!activeSession) {
       return;
     }
-    const refreshed = await withCancellableProgress((signal) =>
-      loadSession(activeSession!.session, {
-        context: extensionContext,
-        signal,
-      })
-    );
-    if (refreshed) {
-      activeSession = refreshed;
-      MindMapPanel.getCurrent()?.setMindMapData(refreshed.mindMap);
+    const currentPanel = MindMapPanel.getCurrent();
+    currentPanel?.setLoading(true, "对话记录已更新，正在重新分析…");
+    try {
+      const refreshed = await withCancellableProgress(
+        ({ signal, progress }) =>
+          loadSession(
+            activeSession!.session,
+            { context: extensionContext, signal, progress },
+            { forceRefresh: true }
+          ),
+        progressTitle(),
+        currentPanel
+      );
+      if (refreshed) {
+        activeSession = refreshed;
+        MindMapPanel.getCurrent()?.setMindMapData(refreshed.mindMap);
+      }
+    } finally {
+      MindMapPanel.getCurrent()?.setLoading(false);
     }
   });
+}
+
+async function loadAndShowSession(
+  loadFn: (deps: LoadDeps) => Promise<LoadedSession | undefined>,
+  title: string = progressTitle()
+): Promise<void> {
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备…");
+  try {
+    const loaded = await withCancellableProgress(
+      ({ signal, progress }) =>
+        loadFn({ context: extensionContext, signal, progress }),
+      title,
+      panel
+    );
+    if (loaded) {
+      activeSession = loaded;
+      panel.setMindMapData(loaded.mindMap);
+      attachTranscriptWatch(panel, loaded.session);
+    }
+  } finally {
+    panel.setLoading(false);
+  }
+}
+
+function createOrShowMindMap(): MindMapPanel {
+  return MindMapPanel.createOrShow(extensionContext.extensionUri);
 }
 
 function showMindMapStandalone(
@@ -199,44 +248,55 @@ async function ensureDeterministicMerge(
 }
 
 async function commandOpenLatest(): Promise<void> {
-  const loaded = await withCancellableProgress((signal) =>
-    loadLatestSession({ context: extensionContext, signal })
-  );
-  if (loaded) {
-    await showMindMap(loaded);
-  }
+  await loadAndShowSession((deps) => loadLatestSession(deps));
 }
 
 async function commandPickSession(): Promise<void> {
-  const loaded = await withCancellableProgress((signal) =>
-    pickSession({ context: extensionContext, signal })
-  );
-  if (loaded) {
-    await showMindMap(loaded);
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备…");
+  try {
+    const loaded = await withCancellableProgress(
+      ({ signal, progress }) =>
+        pickSession({ context: extensionContext, signal, progress }),
+      progressTitle(),
+      panel
+    );
+    if (loaded) {
+      activeSession = loaded;
+      panel.setMindMapData(loaded.mindMap);
+      attachTranscriptWatch(panel, loaded.session);
+    }
+  } finally {
+    panel.setLoading(false);
   }
 }
 
 async function commandRefresh(): Promise<void> {
   if (!activeSession) {
-    const loaded = await withCancellableProgress((signal) =>
-      loadLatestSession({ context: extensionContext, signal })
-    );
-    if (loaded) {
-      await showMindMap(loaded);
-    }
+    await loadAndShowSession((deps) => loadLatestSession(deps));
     return;
   }
-  const refreshed = await withCancellableProgress((signal) =>
-    loadSession(
-      activeSession!.session,
-      { context: extensionContext, signal },
-      { forceRefresh: true }
-    )
-  );
-  if (refreshed) {
-    activeSession = refreshed;
-    MindMapPanel.getCurrent()?.setMindMapData(refreshed.mindMap);
-    vscode.window.showInformationMessage("Agent Mind Map refreshed.");
+  const panel = MindMapPanel.getCurrent() ?? createOrShowMindMap();
+  panel.setLoading(true, "正在强制重新分析…");
+  try {
+    const refreshed = await withCancellableProgress(
+      ({ signal, progress }) =>
+        loadSession(
+          activeSession!.session,
+          { context: extensionContext, signal, progress },
+          { forceRefresh: true }
+        ),
+      progressTitle(),
+      panel
+    );
+    if (refreshed) {
+      activeSession = refreshed;
+      panel.setMindMapData(refreshed.mindMap);
+      attachTranscriptWatch(panel, refreshed.session);
+      vscode.window.showInformationMessage("Agent Mind Map refreshed.");
+    }
+  } finally {
+    panel.setLoading(false);
   }
 }
 
@@ -368,9 +428,12 @@ async function commandOpenMerged(): Promise<void> {
 }
 
 async function ensureConceptMerge(
-  projectSlug?: string
+  projectSlug?: string,
+  progress?: MindMapProgress,
+  signal?: AbortSignal
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const storeDir = getStoreDir();
+  progress?.report("正在加载分析库…");
   const records = await loadLibraryRecords();
   // Best-effort: infer/patch conceptPath using persisted ontology memory.
   // Falls back to deterministic behavior when LLM is unavailable.
@@ -378,15 +441,17 @@ async function ensureConceptMerge(
   try {
     const llmOpts = await readLlmOptions(extensionContext);
     const provider = getProvider(llmOpts);
-    const ac = new AbortController();
     const memory = await ensureOntologyMemory(
       records,
       { model: llmOpts.model, hostId: llmOpts.hostId },
       provider,
       storeDir,
-      ac.signal
+      signal ?? new AbortController().signal,
+      progress
     );
+    progress?.report("正在应用概念路径…");
     enriched = applyTopicPathsFromOntology(records, memory);
+    progress?.report("正在生成概念思维导图…");
     const merge = await buildConceptMergeRecordAsync(enriched, {
       projectSlug,
       segmentEquivalences: memory.segmentEquivalences,
@@ -399,6 +464,7 @@ async function ensureConceptMerge(
     // ignore; deterministic merge still works
   }
 
+  progress?.report("正在生成概念思维导图…");
   const merge = await buildConceptMergeRecordAsync(enriched, { projectSlug });
   if (!projectSlug) {
     await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
@@ -418,21 +484,33 @@ async function commandRebuildOntologyCache(): Promise<void> {
 async function commandOpenConceptMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
-  const merge = await ensureConceptMerge();
-  // Show a hint when many records still lack conceptPath (e.g. produced
-  // before the prompt v2 upgrade) so users know why the trie looks sparse.
-  const records = await loadLibraryRecords();
-  const { stats } = buildConceptTrieMindMap(records);
-  if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
-    vscode.window.showInformationMessage(
-      "Agent Mind Map: 库里所有核心都没有 conceptPath（可能是升级前分析的）。对每个会话执行 Refresh 即可重新分析并填上概念路径。"
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备概念思维导图…");
+  try {
+    const merge = await withCancellableProgress(
+      ({ signal, progress }) => ensureConceptMerge(undefined, progress, signal),
+      "Agent Mind Map: 正在构建概念思维导图…",
+      panel
     );
-  } else if (stats.topicsWithoutPath > 0) {
-    vscode.window.showInformationMessage(
-      `Agent Mind Map: ${stats.topicsWithoutPath} 个核心缺少 conceptPath，被放在「未分类」分支下。`
-    );
+    if (!merge) {
+      return;
+    }
+    const records = await loadLibraryRecords();
+    const { stats } = buildConceptTrieMindMap(records);
+    if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
+      vscode.window.showInformationMessage(
+        "Agent Mind Map: 库里所有核心都没有 conceptPath（可能是升级前分析的）。对每个会话执行 Refresh 即可重新分析并填上概念路径。"
+      );
+    } else if (stats.topicsWithoutPath > 0) {
+      vscode.window.showInformationMessage(
+        `Agent Mind Map: ${stats.topicsWithoutPath} 个核心缺少 conceptPath，被放在「未分类」分支下。`
+      );
+    }
+    panel.setMindMapData(merge.mindMap);
+    panel.setTitle("Concept Mind Map · 全部");
+  } finally {
+    panel.setLoading(false);
   }
-  await showMindMapStandalone("Concept Mind Map · 全部", merge.mindMap);
 }
 
 async function commandOpenConceptMergedCurrentProject(): Promise<void> {
@@ -444,8 +522,22 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
     );
     return;
   }
-  const merge = await ensureConceptMerge(slug);
-  await showMindMapStandalone(`Concept Mind Map · ${slug}`, merge.mindMap);
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备概念思维导图…");
+  try {
+    const merge = await withCancellableProgress(
+      ({ signal, progress }) => ensureConceptMerge(slug, progress, signal),
+      "Agent Mind Map: 正在构建概念思维导图…",
+      panel
+    );
+    if (!merge) {
+      return;
+    }
+    panel.setMindMapData(merge.mindMap);
+    panel.setTitle(`Concept Mind Map · ${slug}`);
+  } finally {
+    panel.setLoading(false);
+  }
 }
 
 async function commandOpenMergedCurrentProject(): Promise<void> {
@@ -570,26 +662,38 @@ async function commandLlmMergeRefine(): Promise<void> {
     config.get<number>("merge.llm.maxItemsPerTopic", 6) ?? 6
   );
 
-  const merge = await withCancellableProgress(async (signal) => {
-    const provider = getProvider(llmOpts);
-    return mergeWithLlm(
-      selected,
-      {
-        maxTopics,
-        maxItemsPerTopic,
-        model: llmOpts.model || undefined,
-        hostId: mergeHost.id,
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备 LLM 合并…");
+  try {
+    const merge = await withCancellableProgress(
+      async ({ signal, progress }) => {
+        const provider = getProvider(llmOpts);
+        return mergeWithLlm(
+          selected,
+          {
+            maxTopics,
+            maxItemsPerTopic,
+            model: llmOpts.model || undefined,
+            hostId: mergeHost.id,
+          },
+          provider,
+          storeDir,
+          signal,
+          progress
+        );
       },
-      provider,
-      storeDir,
-      signal
+      "Agent Mind Map: 正在合并主题…",
+      panel
     );
-  }, "Agent Mind Map: 正在合并主题…");
 
-  if (!merge) {
-    return;
+    if (!merge) {
+      return;
+    }
+    panel.setMindMapData(merge.mindMap);
+    panel.setTitle("Agent Mind Map · LLM 合并");
+  } finally {
+    panel.setLoading(false);
   }
-  await showMindMapStandalone("Agent Mind Map · LLM 合并", merge.mindMap);
 }
 
 // ---------------------------------------------------------------------------

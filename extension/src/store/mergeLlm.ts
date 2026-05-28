@@ -1,4 +1,6 @@
 import type { AgentHostId } from "../host/types";
+import type { MindMapProgress } from "../progress";
+import { createHeartbeat } from "../progress";
 import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
 import { PROMPT_VERSION } from "../llm/promptOutline";
 import {
@@ -73,16 +75,19 @@ export async function mergeWithLlm(
   opts: MergeLlmOptions,
   provider: LlmProvider,
   storeDir: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  progress?: MindMapProgress
 ): Promise<MergeRecord> {
   if (!records.length) {
     throw new LlmProviderError("empty", "No sessions selected to merge");
   }
 
+  progress?.report("正在检查合并缓存…");
   const cacheKey = computeMergeCacheKey(records, opts, provider.id);
   const cacheFile = llmMergeCachePath(storeDir, cacheKey);
   const cached = await readMergeRecord(cacheFile);
   if (cached) {
+    progress?.report("命中合并缓存，正在生成思维导图…");
     await writeMergeRecord(llmRefinedMergePath(storeDir), cached);
     return cached;
   }
@@ -98,23 +103,35 @@ export async function mergeWithLlm(
     hostId
   );
 
-  const result = await provider.summarize(
-    {
-      events: [],
-      prompt,
-      model: opts.model,
-      maxTopics: opts.maxTopics,
-      maxItemsPerTopic: opts.maxItemsPerTopic,
-      responseSchema: "merged-outline",
-    },
-    signal
-  );
+  const heartbeat = createHeartbeat(progress, "正在调用 LLM 合并主题…");
+  let result: Awaited<ReturnType<LlmProvider["summarize"]>>;
+  try {
+    result = await provider.summarize(
+      {
+        events: [],
+        prompt,
+        model: opts.model,
+        maxTopics: opts.maxTopics,
+        maxItemsPerTopic: opts.maxItemsPerTopic,
+        responseSchema: "merged-outline",
+        onAttempt: (attempt, maxAttempts) => {
+          if (attempt > 1) {
+            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+          }
+        },
+      },
+      signal
+    );
+  } finally {
+    heartbeat.stop();
+  }
 
   if (!result || typeof result !== "object" || !("outline" in result)) {
     throw new LlmProviderError("bad-shape", "Provider did not return MergedOutline");
   }
   const merged = result as MergedOutline;
 
+  progress?.report("正在渲染思维导图…");
   const mindMap = buildRefinedMindMap(
     merged,
     records,
@@ -137,6 +154,7 @@ export async function mergeWithLlm(
     mindMap,
   };
 
+  progress?.report("正在写入合并缓存…");
   await writeMergeRecord(cacheFile, record);
   await writeMergeRecord(llmRefinedMergePath(storeDir), record);
   return record;

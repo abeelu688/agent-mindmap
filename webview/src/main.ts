@@ -17,7 +17,8 @@ import type { MindMapUiOptions } from "./uiTypes";
 
 type ExtensionMessage =
   | { type: "setData"; data: MindMapNodeData }
-  | { type: "setUi"; ui: MindMapUiOptions };
+  | { type: "setUi"; ui: MindMapUiOptions }
+  | { type: "setLoading"; active: boolean; message?: string };
 
 type WebviewToExtensionMessage =
   | { type: "ready" }
@@ -41,9 +42,30 @@ const vscode: VsCodeApi | undefined =
     : undefined;
 
 const container = document.getElementById("mindMapContainer");
+const loadingEl = document.getElementById("mindmapLoading");
+const loadingMessageEl = loadingEl?.querySelector(".mindmap-loading__message");
 
 if (!container) {
   throw new Error("mindMapContainer not found");
+}
+
+function setLoadingOverlay(active: boolean, message?: string): void {
+  if (!loadingEl) {
+    return;
+  }
+  if (active) {
+    loadingEl.classList.remove("mindmap-loading--hidden");
+    loadingEl.hidden = false;
+    if (loadingMessageEl) {
+      loadingMessageEl.textContent = message?.trim() ? message : "";
+    }
+  } else {
+    loadingEl.classList.add("mindmap-loading--hidden");
+    loadingEl.hidden = true;
+    if (loadingMessageEl) {
+      loadingMessageEl.textContent = "";
+    }
+  }
 }
 
 let mind: MindElixirInstance | undefined;
@@ -213,6 +235,7 @@ function render(data: MindMapNodeData): void {
     applyUi(ui);
   }
   lastRenderedData = data;
+  setLoadingOverlay(false);
   handleResize();
 }
 
@@ -237,6 +260,10 @@ if (!offlineMode) {
         applyUi(msg.ui);
       }
       tryRender();
+      return;
+    }
+    if (msg?.type === "setLoading") {
+      setLoadingOverlay(!!msg.active, msg.message);
       return;
     }
     if (msg?.type === "setData" && msg.data) {
