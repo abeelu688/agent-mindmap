@@ -16,6 +16,77 @@ body,
   position: relative;
 }
 
+.batch-status {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-foreground, #cccccc) 18%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-background, #1e1e1e) 72%,
+    transparent
+  );
+  color: var(--vscode-foreground, #cccccc);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.batch-status--hidden {
+  display: none !important;
+}
+
+.batch-status__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.batch-status__title {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.batch-status__progress {
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-status__detail {
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batch-status__right {
+  display: flex;
+  align-items: center;
+}
+
+.batch-status__button {
+  border: 1px solid color-mix(in srgb, var(--vscode-foreground, #cccccc) 25%, transparent);
+  background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 65%, transparent);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.batch-status__button:hover:enabled {
+  background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 50%, transparent);
+}
+
+.batch-status__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .mindmap-loading {
   position: absolute;
   inset: 0;

@@ -23,6 +23,18 @@ export function buildMindMapHtml(
 </head>
 <body>
   <div id="app">
+    <div id="batchStatusBar" class="batch-status batch-status--hidden" hidden>
+      <div class="batch-status__left">
+        <span class="batch-status__title">Batch</span>
+        <span class="batch-status__progress"></span>
+        <span class="batch-status__detail"></span>
+      </div>
+      <div class="batch-status__right">
+        <button id="batchStatusRefresh" class="batch-status__button" type="button">
+          Refresh
+        </button>
+      </div>
+    </div>
     <div id="mindMapContainer"></div>
     <div id="mindmapLoading" class="mindmap-loading mindmap-loading--hidden" hidden aria-live="polite">
       <div class="mindmap-loading__spinner" aria-hidden="true"></div>

@@ -137,7 +137,7 @@ export async function listCursorSessions(
         projectPath: ctx.projectPath,
       });
     } catch {
-      // skip missing jsonl
+      // skip missing/unreadable jsonl
     }
   }
 

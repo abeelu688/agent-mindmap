@@ -247,7 +247,12 @@
         "agentMindmap.cacheLlmResult": {
           "type": "boolean",
           "default": true,
-          "description": "Cache the LLM topic graph under globalStorage keyed by transcript hash to avoid re-spending tokens. This is a secondary content-addressed cache; the primary persistence layer is agentMindmap.library."
+          "description": "Cache the LLM topic graph keyed by transcript hash to avoid re-spending tokens. By default this is stored under storeDir/llm-cache; override via agentMindmap.llm.cacheDir."
+        },
+        "agentMindmap.llm.cacheDir": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the LLM cache directory. Empty = <storeDir>/llm-cache."
         },
         "agentMindmap.storeDir": {
           "type": "string",

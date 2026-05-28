@@ -20,14 +20,30 @@ type ExtensionMessage =
   | { type: "setData"; data: MindMapNodeData }
   | { type: "setUi"; ui: MindMapUiOptions }
   | { type: "setLoading"; active: boolean; message?: string }
-  | { type: "setStrings"; strings: { loadingTitle: string; menu: WebviewStrings["menu"] } };
+  | {
+      type: "setStrings";
+      strings: { loadingTitle: string; menu: WebviewStrings["menu"] };
+    }
+  | { type: "setBatchStatus"; status: BatchStatus };
 
 type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
   | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
-  | { type: "requestDownload" };
+  | { type: "requestDownload" }
+  | { type: "requestApplyPendingUpdate" };
+
+type BatchStatus = {
+  total: number;
+  processed: number;
+  analyzed: number;
+  cached: number;
+  failed: number;
+  batchNo: number;
+  running: boolean;
+  pendingUpdateBatchNo?: number;
+};
 
 type VsCodeApi = {
   postMessage(message: WebviewToExtensionMessage): void;
@@ -47,6 +63,12 @@ const container = document.getElementById("mindMapContainer");
 const loadingEl = document.getElementById("mindmapLoading");
 const loadingTitleEl = loadingEl?.querySelector(".mindmap-loading__title");
 const loadingMessageEl = loadingEl?.querySelector(".mindmap-loading__message");
+const batchStatusEl = document.getElementById("batchStatusBar");
+const batchProgressEl = batchStatusEl?.querySelector(".batch-status__progress");
+const batchDetailEl = batchStatusEl?.querySelector(".batch-status__detail");
+const batchRefreshBtn = document.getElementById(
+  "batchStatusRefresh"
+) as HTMLButtonElement | null;
 
 if (!container) {
   throw new Error("mindMapContainer not found");
@@ -68,6 +90,48 @@ function setLoadingOverlay(active: boolean, message?: string): void {
     if (loadingMessageEl) {
       loadingMessageEl.textContent = "";
     }
+  }
+}
+
+let lastBatchStatus: BatchStatus | undefined;
+
+function setBatchStatus(status: BatchStatus): void {
+  lastBatchStatus = status;
+  if (!batchStatusEl || !batchProgressEl || !batchDetailEl) {
+    return;
+  }
+
+  if (status.total <= 0) {
+    batchStatusEl.classList.add("batch-status--hidden");
+    batchStatusEl.hidden = true;
+    return;
+  }
+
+  batchStatusEl.classList.remove("batch-status--hidden");
+  batchStatusEl.hidden = false;
+
+  const pct =
+    status.total > 0 ? Math.floor((status.processed / status.total) * 100) : 0;
+  batchProgressEl.textContent = `${status.processed}/${status.total} (${pct}%)`;
+
+  const parts: string[] = [];
+  parts.push(`ok:${status.analyzed}`);
+  parts.push(`cached:${status.cached}`);
+  if (status.failed) {
+    parts.push(`failed:${status.failed}`);
+  }
+  if (status.running) {
+    parts.push("running");
+  } else {
+    parts.push("done");
+  }
+  if (status.pendingUpdateBatchNo !== undefined) {
+    parts.push(`update:batch${status.pendingUpdateBatchNo}`);
+  }
+  batchDetailEl.textContent = parts.join(" · ");
+
+  if (batchRefreshBtn) {
+    batchRefreshBtn.disabled = status.pendingUpdateBatchNo === undefined;
   }
 }
 
@@ -294,6 +358,10 @@ if (!offlineMode) {
       setLoadingOverlay(!!msg.active, msg.message);
       return;
     }
+    if (msg?.type === "setBatchStatus" && msg.status) {
+      setBatchStatus(msg.status);
+      return;
+    }
     if (msg?.type === "setData" && msg.data) {
       if (!currentUi) {
         pendingData = msg.data;
@@ -353,6 +421,14 @@ if (!offlineMode) {
 
   // Ensure we have a title even before strings arrive.
   applyStrings(uiStrings);
+  if (batchRefreshBtn) {
+    batchRefreshBtn.addEventListener("click", () => {
+      if (!lastBatchStatus?.pendingUpdateBatchNo) {
+        return;
+      }
+      postToExtension({ type: "requestApplyPendingUpdate" });
+    });
+  }
   postToExtension({ type: "ready" });
 } else if (exportBootstrap) {
   currentUi = exportBootstrap.ui;
