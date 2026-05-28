@@ -346,6 +346,18 @@ function transcriptViewColumn(): vscode.ViewColumn {
   return col;
 }
 
+async function withTranscriptJumpLoading<T>(
+  work: () => Promise<T>
+): Promise<T> {
+  const panel = MindMapPanel.getCurrent();
+  panel?.setLoading(true, "正在加载会话记录…");
+  try {
+    return await work();
+  } finally {
+    panel?.setLoading(false);
+  }
+}
+
 async function openChosenTranscript(
   candidate: JumpCandidate,
   context?: vscode.ExtensionContext
@@ -687,36 +699,38 @@ export async function handleNodeClicked(
     mindMapLog("handleNodeClicked: empty origin, nothing to do");
     return;
   }
-  mindMapLog(
-    `handleNodeClicked: ${origin.refs.length} ref(s) → flattening + enriching`
-  );
-  const candidates = await enrichWithTurnData(
-    flattenCandidates(origin.refs),
-    _deps?.context
-  );
-  if (!candidates.length) {
-    mindMapLog("handleNodeClicked: no candidates after flatten");
-    return;
-  }
-  mindMapLog(
-    `handleNodeClicked: ${candidates.length} candidate row(s) ready for picker`
-  );
-  const chosen = await pickCandidate(candidates);
-  if (!chosen) {
-    mindMapLog("handleNodeClicked: user dismissed picker");
-    return;
-  }
-  const eventCache = new Map<string, ChatEvent[]>();
-  const resolved = await resolveJumpCandidate(chosen, {
-    nodeLabel,
-    context: _deps?.context,
-    listSessionRecords: _deps?.listSessionRecords,
-    eventCache,
+  await withTranscriptJumpLoading(async () => {
+    mindMapLog(
+      `handleNodeClicked: ${origin.refs.length} ref(s) → flattening + enriching`
+    );
+    const candidates = await enrichWithTurnData(
+      flattenCandidates(origin.refs),
+      _deps?.context
+    );
+    if (!candidates.length) {
+      mindMapLog("handleNodeClicked: no candidates after flatten");
+      return;
+    }
+    mindMapLog(
+      `handleNodeClicked: ${candidates.length} candidate row(s) ready for picker`
+    );
+    const chosen = await pickCandidate(candidates);
+    if (!chosen) {
+      mindMapLog("handleNodeClicked: user dismissed picker");
+      return;
+    }
+    const eventCache = new Map<string, ChatEvent[]>();
+    const resolved = await resolveJumpCandidate(chosen, {
+      nodeLabel,
+      context: _deps?.context,
+      listSessionRecords: _deps?.listSessionRecords,
+      eventCache,
+    });
+    mindMapLog(
+      `handleNodeClicked: open session=${resolved.sessionId} turnIndex=${resolved.turnIndex ?? "<branch>"}`
+    );
+    await openChosenTranscript(resolved, _deps?.context);
   });
-  mindMapLog(
-    `handleNodeClicked: open session=${resolved.sessionId} turnIndex=${resolved.turnIndex ?? "<branch>"}`
-  );
-  await openChosenTranscript(resolved, _deps?.context);
 }
 
 /**
@@ -735,8 +749,10 @@ export async function drainPendingJump(
   if (pending.expiresAt < Date.now() || !pending.transcriptPath) {
     return;
   }
-  await openTranscriptAsMarkdown(pending.transcriptPath, {
-    focusTurnIndex: pending.turnIndex,
-    context: deps.context,
-  });
+  await withTranscriptJumpLoading(() =>
+    openTranscriptAsMarkdown(pending.transcriptPath!, {
+      focusTurnIndex: pending.turnIndex,
+      context: deps.context,
+    })
+  );
 }

@@ -451,7 +451,7 @@ async function ensureConceptMerge(
     );
     progress?.report("正在应用概念路径…");
     enriched = applyTopicPathsFromOntology(records, memory);
-    progress?.report("正在生成概念思维导图…");
+    progress?.report("正在生成思维导图…");
     const merge = await buildConceptMergeRecordAsync(enriched, {
       projectSlug,
       segmentEquivalences: memory.segmentEquivalences,
@@ -464,7 +464,7 @@ async function ensureConceptMerge(
     // ignore; deterministic merge still works
   }
 
-  progress?.report("正在生成概念思维导图…");
+  progress?.report("正在生成思维导图…");
   const merge = await buildConceptMergeRecordAsync(enriched, { projectSlug });
   if (!projectSlug) {
     await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
@@ -485,11 +485,11 @@ async function commandOpenConceptMerged(): Promise<void> {
   const storeDir = getStoreDir();
   await ensureStore(storeDir);
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备概念思维导图…");
+  panel.setLoading(true, "正在准备思维导图…");
   try {
     const merge = await withCancellableProgress(
       ({ signal, progress }) => ensureConceptMerge(undefined, progress, signal),
-      "Agent Mind Map: 正在构建概念思维导图…",
+      "Agent Mind Map: 正在构建思维导图…",
       panel
     );
     if (!merge) {
@@ -523,11 +523,11 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
     return;
   }
   const panel = createOrShowMindMap();
-  panel.setLoading(true, "正在准备概念思维导图…");
+  panel.setLoading(true, "正在准备思维导图…");
   try {
     const merge = await withCancellableProgress(
       ({ signal, progress }) => ensureConceptMerge(slug, progress, signal),
-      "Agent Mind Map: 正在构建概念思维导图…",
+      "Agent Mind Map: 正在构建思维导图…",
       panel
     );
     if (!merge) {
