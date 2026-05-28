@@ -11,6 +11,29 @@ import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+const t = (
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string => {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+};
+
 export type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
@@ -21,7 +44,23 @@ export type WebviewToExtensionMessage =
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
   | { type: "setUi"; ui: MindMapUiOptions }
-  | { type: "setLoading"; active: boolean; message?: string };
+  | { type: "setLoading"; active: boolean; message?: string }
+  | { type: "setStrings"; strings: WebviewStrings };
+
+export type WebviewStrings = {
+  loadingTitle: string;
+  menu: {
+    sectionTheme: string;
+    sectionDirection: string;
+    presetAuto: string;
+    presetDark: string;
+    presetLight: string;
+    directionSide: string;
+    directionRight: string;
+    directionLeft: string;
+    download: string;
+  };
+};
 
 export type NodeClickedListener = (payload: {
   origin: NodeOrigin;
@@ -78,6 +117,7 @@ export class MindMapHost {
       webview.onDidReceiveMessage((msg: WebviewToExtensionMessage) => {
         if (msg.type === "ready") {
           this.webviewReady = true;
+          this.postStrings();
           this.postUi();
           this.updateThemeFileWatcher();
           if (this.pendingLoading !== undefined) {
@@ -206,6 +246,37 @@ export class MindMapHost {
     void this.webview.postMessage(msg);
   }
 
+  private buildStrings(): WebviewStrings {
+    return {
+      loadingTitle: t("webview.loading.title", "Generating mind map…"),
+      menu: {
+        sectionTheme: t("webview.menu.section.theme", "Theme"),
+        sectionDirection: t("webview.menu.section.direction", "Layout direction"),
+        presetAuto: t("webview.menu.preset.auto", "Follow editor"),
+        presetDark: t("webview.menu.preset.dark", "Dark"),
+        presetLight: t("webview.menu.preset.light", "Light"),
+        directionSide: t(
+          "webview.menu.direction.side",
+          "Both sides (right then left)"
+        ),
+        directionRight: t("webview.menu.direction.right", "Right"),
+        directionLeft: t("webview.menu.direction.left", "Left"),
+        download: t("webview.menu.download", "Download mind map & transcripts…"),
+      },
+    };
+  }
+
+  private postStrings(): void {
+    if (!this.webviewReady) {
+      return;
+    }
+    const msg: ExtensionToWebviewMessage = {
+      type: "setStrings",
+      strings: this.buildStrings(),
+    };
+    void this.webview.postMessage(msg);
+  }
+
   public setTitle(title: string): void {
     if (this.titleTarget) {
       this.titleTarget.title = title;
@@ -262,7 +333,10 @@ export class MindMapHost {
     }
     if (result.reason === "no_workspace") {
       void vscode.window.showWarningMessage(
-        "Agent Mind Map: 请先打开文件夹工作区，才能将样式写入 .vscode/settings.json。"
+        t(
+          "ui.uiSetting.noWorkspace",
+          "Agent Mind Map: Open a workspace folder first to write UI settings into .vscode/settings.json."
+        )
       );
       return;
     }

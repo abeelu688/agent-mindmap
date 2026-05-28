@@ -14,11 +14,13 @@ import {
 } from "./toMindElixir";
 import { isBlankCanvasTarget, showUiContextMenu } from "./uiContextMenu";
 import type { MindMapUiOptions } from "./uiTypes";
+import type { WebviewStrings } from "./uiContextMenu";
 
 type ExtensionMessage =
   | { type: "setData"; data: MindMapNodeData }
   | { type: "setUi"; ui: MindMapUiOptions }
-  | { type: "setLoading"; active: boolean; message?: string };
+  | { type: "setLoading"; active: boolean; message?: string }
+  | { type: "setStrings"; strings: { loadingTitle: string; menu: WebviewStrings["menu"] } };
 
 type WebviewToExtensionMessage =
   | { type: "ready" }
@@ -43,6 +45,7 @@ const vscode: VsCodeApi | undefined =
 
 const container = document.getElementById("mindMapContainer");
 const loadingEl = document.getElementById("mindmapLoading");
+const loadingTitleEl = loadingEl?.querySelector(".mindmap-loading__title");
 const loadingMessageEl = loadingEl?.querySelector(".mindmap-loading__message");
 
 if (!container) {
@@ -74,6 +77,27 @@ let onSelectNodes: ((nodes: NodeObj<NodeMetadata>[]) => void) | undefined;
 let currentUi: MindMapUiOptions | undefined;
 let pendingData: MindMapNodeData | undefined;
 let lastRenderedData: MindMapNodeData | undefined;
+let uiStrings: { loadingTitle: string; menu: WebviewStrings["menu"] } = {
+  loadingTitle: "Generating mind map…",
+  menu: {
+    sectionTheme: "Theme",
+    sectionDirection: "Layout direction",
+    presetAuto: "Follow editor",
+    presetDark: "Dark",
+    presetLight: "Light",
+    directionSide: "Both sides (right then left)",
+    directionRight: "Right",
+    directionLeft: "Left",
+    download: "Download mind map & transcripts…",
+  },
+};
+
+function applyStrings(next: typeof uiStrings): void {
+  uiStrings = next;
+  if (loadingTitleEl) {
+    loadingTitleEl.textContent = uiStrings.loadingTitle;
+  }
+}
 
 function postToExtension(message: WebviewToExtensionMessage): void {
   vscode?.postMessage(message);
@@ -251,6 +275,10 @@ function rebuildMindFromLastData(): void {
 if (!offlineMode) {
   window.addEventListener("message", (event) => {
     const msg = event.data as ExtensionMessage;
+    if (msg?.type === "setStrings" && msg.strings) {
+      applyStrings(msg.strings);
+      return;
+    }
     if (msg?.type === "setUi" && msg.ui) {
       const prev = currentUi;
       currentUi = msg.ui;
@@ -306,6 +334,7 @@ if (!offlineMode) {
       event.clientX,
       event.clientY,
       currentUi,
+      { menu: uiStrings.menu },
       (pick) => {
         postToExtension({
           type: "updateUiSetting",
@@ -322,8 +351,11 @@ if (!offlineMode) {
     );
   });
 
+  // Ensure we have a title even before strings arrive.
+  applyStrings(uiStrings);
   postToExtension({ type: "ready" });
 } else if (exportBootstrap) {
   currentUi = exportBootstrap.ui;
+  applyStrings(uiStrings);
   render(exportBootstrap.data);
 }

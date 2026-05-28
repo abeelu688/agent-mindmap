@@ -98,13 +98,18 @@ export function buildTurnMindMap(
   sessionLabel?: string,
   sessionMeta?: SessionMeta
 ): MindMapRoot {
+  const labels = options.labels ?? {
+    research: "调研",
+    conclusion: "结论",
+    sessionDefault: "Agent Session",
+  };
   const turns = groupIntoTurns(events);
   const firstQuery = turns[0]?.query;
   const rootText = sessionLabel
     ? truncate(sessionLabel, 80)
     : firstQuery
       ? truncate(firstQuery, 80)
-      : "Agent Session";
+      : labels.sessionDefault;
 
   const children: MindMapNodeData[] = turns.map((turn, idx) => {
     const qLabel = `Q${idx + 1}: ${truncate(turn.query, 80)}`;
@@ -118,7 +123,7 @@ export function buildTurnMindMap(
         const node = leaf(t.kind === "tool" ? t.label : "");
         return turnRef ? withOrigin(node, turnRef) : node;
       });
-      const toolBranch = branch("调研", toolLeaves);
+      const toolBranch = branch(labels.research, toolLeaves);
       sub.push(turnRef ? withOrigin(toolBranch, turnRef) : toolBranch);
     }
 
@@ -141,7 +146,7 @@ export function buildTurnMindMap(
         const node = leaf(c);
         return turnRef ? withOrigin(node, turnRef) : node;
       });
-      const conclusionBranch = branch("结论", conclusionLeaves);
+      const conclusionBranch = branch(labels.conclusion, conclusionLeaves);
       sub.push(
         turnRef ? withOrigin(conclusionBranch, turnRef) : conclusionBranch
       );

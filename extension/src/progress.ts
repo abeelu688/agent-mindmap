@@ -1,4 +1,28 @@
 import type * as vscode from "vscode";
+import * as vs from "vscode";
+
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+function safeT(
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vs as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+}
 
 export type MindMapProgressUpdate =
   | string
@@ -49,8 +73,18 @@ export function createBatchItemProgress(
   progress: MindMapProgress;
   reportComplete: (detail: string) => void;
 } {
-  const position = `第 ${index + 1}/${total} 条`;
-  const header = `${position} · ${truncateLabel(sessionLabel, 40)}`;
+  const position = safeT(
+    "ui.progress.batch.position",
+    "第 {0}/{1} 条",
+    index + 1,
+    total
+  );
+  const header = safeT(
+    "ui.progress.batch.header",
+    "{0} · {1}",
+    position,
+    truncateLabel(sessionLabel, 40)
+  );
 
   return {
     progress: {
@@ -68,7 +102,14 @@ export function createBatchItemProgress(
     reportComplete(detail: string) {
       const increment = total > 0 ? 100 / total : 0;
       parent?.report({
-        message: `${position} · ${detail}（已完成 ${index + 1}/${total}）`,
+        message: safeT(
+          "ui.progress.batch.complete",
+          "{0} · {1}（已完成 {2}/{3}）",
+          position,
+          detail,
+          index + 1,
+          total
+        ),
         increment,
       });
     },
@@ -95,7 +136,14 @@ export function createHeartbeat(
   progress.report(baseMessage);
   const timer = setInterval(() => {
     const secs = Math.floor((Date.now() - started) / 1000);
-    progress.report(`${baseMessage}（已等待 ${secs} 秒）`);
+    progress.report(
+      safeT(
+        "ui.progress.heartbeat.wait",
+        "{0}（已等待 {1} 秒）",
+        baseMessage,
+        secs
+      )
+    );
   }, intervalMs);
   return {
     stop() {

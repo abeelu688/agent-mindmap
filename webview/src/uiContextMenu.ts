@@ -1,5 +1,19 @@
 import type { MindMapUiOptions, MindMapUiPreset } from "./uiTypes";
 
+export type WebviewStrings = {
+  menu: {
+    sectionTheme: string;
+    sectionDirection: string;
+    presetAuto: string;
+    presetDark: string;
+    presetLight: string;
+    directionSide: string;
+    directionRight: string;
+    directionLeft: string;
+    download: string;
+  };
+};
+
 export type UiSettingKey = "preset" | "direction";
 
 export type UiSettingPick = {
@@ -7,17 +21,25 @@ export type UiSettingPick = {
   value: string;
 };
 
-const PRESET_OPTIONS: { value: MindMapUiPreset; label: string }[] = [
-  { value: "auto", label: "跟随编辑器" },
-  { value: "dark", label: "深色" },
-  { value: "light", label: "浅色" },
-];
+function presetOptions(
+  strings: WebviewStrings
+): { value: MindMapUiPreset; label: string }[] {
+  return [
+    { value: "auto", label: strings.menu.presetAuto },
+    { value: "dark", label: strings.menu.presetDark },
+    { value: "light", label: strings.menu.presetLight },
+  ];
+}
 
-const DIRECTION_OPTIONS: { value: string; label: string; dir: 0 | 1 | 2 }[] = [
-  { value: "side", label: "两侧（先右后左）", dir: 2 },
-  { value: "right", label: "向右", dir: 1 },
-  { value: "left", label: "向左", dir: 0 },
-];
+function directionOptions(
+  strings: WebviewStrings
+): { value: string; label: string; dir: 0 | 1 | 2 }[] {
+  return [
+    { value: "side", label: strings.menu.directionSide, dir: 2 },
+    { value: "right", label: strings.menu.directionRight, dir: 1 },
+    { value: "left", label: strings.menu.directionLeft, dir: 0 },
+  ];
+}
 
 let menuEl: HTMLDivElement | undefined;
 let dismissListenersBound = false;
@@ -46,7 +68,11 @@ export function isBlankCanvasTarget(
 }
 
 function directionToSettingName(direction: 0 | 1 | 2): string {
-  const found = DIRECTION_OPTIONS.find((o) => o.dir === direction);
+  const found = [
+    { value: "side", dir: 2 },
+    { value: "right", dir: 1 },
+    { value: "left", dir: 0 },
+  ].find((o) => o.dir === direction);
   return found?.value ?? "side";
 }
 
@@ -118,6 +144,7 @@ export function showUiContextMenu(
   clientX: number,
   clientY: number,
   currentUi: MindMapUiOptions,
+  strings: WebviewStrings,
   onPick: (pick: UiSettingPick) => void,
   options?: { onDownload?: () => void; showDownload?: boolean }
 ): void {
@@ -132,8 +159,8 @@ export function showUiContextMenu(
 
   addSection(
     root,
-    "主题",
-    PRESET_OPTIONS.map((o) => ({
+    strings.menu.sectionTheme,
+    presetOptions(strings).map((o) => ({
       value: o.value,
       label: o.label,
       checked: currentUi.preset === o.value,
@@ -147,8 +174,8 @@ export function showUiContextMenu(
 
   addSection(
     root,
-    "布局方向",
-    DIRECTION_OPTIONS.map((o) => ({
+    strings.menu.sectionDirection,
+    directionOptions(strings).map((o) => ({
       value: o.value,
       label: o.label,
       checked: currentDirection === o.value,
@@ -170,7 +197,7 @@ export function showUiContextMenu(
     downloadMark.textContent = "";
     const downloadLabel = document.createElement("span");
     downloadLabel.className = "mindmap-ui-menu__label";
-    downloadLabel.textContent = "下载思维导图与对话…";
+    downloadLabel.textContent = strings.menu.download;
     downloadBtn.appendChild(downloadMark);
     downloadBtn.appendChild(downloadLabel);
     downloadBtn.addEventListener("click", (e) => {

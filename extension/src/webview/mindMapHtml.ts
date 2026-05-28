@@ -26,7 +26,7 @@ export function buildMindMapHtml(
     <div id="mindMapContainer"></div>
     <div id="mindmapLoading" class="mindmap-loading mindmap-loading--hidden" hidden aria-live="polite">
       <div class="mindmap-loading__spinner" aria-hidden="true"></div>
-      <p class="mindmap-loading__title">正在生成思维导图…</p>
+      <p class="mindmap-loading__title"></p>
       <p class="mindmap-loading__message"></p>
     </div>
   </div>
