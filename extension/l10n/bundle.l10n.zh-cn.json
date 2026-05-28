@@ -111,6 +111,7 @@
   "webview.menu.preset.dark": "深色",
   "webview.menu.preset.light": "浅色",
   "webview.menu.direction.side": "两侧（先右后左）",
+  "webview.menu.direction.sideLr": "两侧（从左到右）",
   "webview.menu.direction.right": "向右",
   "webview.menu.direction.left": "向左",
   "webview.menu.download": "下载思维导图与对话…"

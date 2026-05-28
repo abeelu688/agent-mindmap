@@ -29,3 +29,32 @@ export function assignSideDirectionsPreferRight(root: NodeObj): void {
     }
   }
 }
+
+/**
+ * SIDE layout with the first unmarked root child on the left, then alternates.
+ */
+export function assignSideDirectionsPreferLeft(root: NodeObj): void {
+  const children = root.children;
+  if (!children?.length) {
+    return;
+  }
+  let leftCount = 0;
+  let rightCount = 0;
+  for (const child of children) {
+    if (child.direction === 0) {
+      leftCount += 1;
+      continue;
+    }
+    if (child.direction === 1) {
+      rightCount += 1;
+      continue;
+    }
+    if (leftCount <= rightCount) {
+      child.direction = 0;
+      leftCount += 1;
+    } else {
+      child.direction = 1;
+      rightCount += 1;
+    }
+  }
+}

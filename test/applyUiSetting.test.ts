@@ -34,6 +34,10 @@ describe("parseUiSettingUpdate", () => {
       configKey: "ui.direction",
       value: "side",
     });
+    expect(parseUiSettingUpdate("direction", "side-lr")).toEqual({
+      configKey: "ui.direction",
+      value: "side-lr",
+    });
   });
 
   it("rejects unknown key or value", () => {

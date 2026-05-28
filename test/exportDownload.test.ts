@@ -162,6 +162,54 @@ describe("markdownToTranscriptHtmlBody", () => {
     expect(html).toContain("<pre>");
     expect(html).toContain("start zygote");
   });
+
+  it("renders bold wrapped in ASCII quotes (Binder summary line)", () => {
+    const md =
+      'Binder 用字符设备，是因为在 Linux 里**"可打开的文件描述符 + ioctl 控制 + mmap 共享内存 + poll 等待"** 这套 IPC 门面，就是字符设备（misc/binderfs）提供的；';
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<strong>");
+    expect(html).toContain("可打开的文件描述符");
+    expect(html).not.toContain("**可打开");
+    expect(html).not.toContain('**"可打开');
+  });
+
+  it("renders bold wrapped in curly quotes", () => {
+    const md =
+      "在 Linux 里**“可打开的文件描述符 + ioctl 控制 + mmap 共享内存 + poll 等待”** 这套";
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<strong>");
+    expect(html).toContain("可打开的文件描述符");
+    expect(html).not.toContain("**可打开");
+    expect(html).not.toContain("**“可打开");
+  });
+
+  it("does not alter quoted bold inside fenced code", () => {
+    const md = ["```", '**"literal"**', "```"].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain("<pre>");
+    expect(html).toContain("literal");
+    expect(html).not.toContain("<strong>");
+  });
+
+  it("does not turn tab-indented C struct in citation fence into a table", () => {
+    const md = [
+      "```6751:6760:kernel-6.1/drivers/android/binder.c",
+      "const struct file_operations binder_fops = {",
+      "\t.owner = THIS_MODULE,",
+      "\t.poll = binder_poll,",
+      "\t.unlocked_ioctl = binder_ioctl,",
+      "\t.mmap = binder_mmap,",
+      "\t.open = binder_open,",
+      "};",
+      "```",
+    ].join("\n");
+    const html = markdownToTranscriptHtmlBody(md);
+    expect(html).toContain('class="code-citation"');
+    expect(html).toContain("binder_fops");
+    expect(html).toContain(".owner = THIS_MODULE");
+    expect(html).not.toContain("<table>");
+    expect(html).not.toContain("<td>.poll = binder_poll");
+  });
 });
 
 describe("buildTranscriptJumpHref", () => {

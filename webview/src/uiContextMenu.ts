@@ -1,4 +1,4 @@
-import type { MindMapUiOptions, MindMapUiPreset } from "./uiTypes";
+import type { MindMapUiOptions, MindMapUiPreset, SideBranchOrder } from "./uiTypes";
 
 export type WebviewStrings = {
   menu: {
@@ -8,6 +8,7 @@ export type WebviewStrings = {
     presetDark: string;
     presetLight: string;
     directionSide: string;
+    directionSideLr: string;
     directionRight: string;
     directionLeft: string;
     download: string;
@@ -33,9 +34,20 @@ function presetOptions(
 
 function directionOptions(
   strings: WebviewStrings
-): { value: string; label: string; dir: 0 | 1 | 2 }[] {
+): { value: string; label: string; dir: 0 | 1 | 2; sideBranchOrder?: SideBranchOrder }[] {
   return [
-    { value: "side", label: strings.menu.directionSide, dir: 2 },
+    {
+      value: "side",
+      label: strings.menu.directionSide,
+      dir: 2,
+      sideBranchOrder: "right-first",
+    },
+    {
+      value: "side-lr",
+      label: strings.menu.directionSideLr,
+      dir: 2,
+      sideBranchOrder: "left-first",
+    },
     { value: "right", label: strings.menu.directionRight, dir: 1 },
     { value: "left", label: strings.menu.directionLeft, dir: 0 },
   ];
@@ -67,13 +79,18 @@ export function isBlankCanvasTarget(
   return true;
 }
 
-function directionToSettingName(direction: 0 | 1 | 2): string {
-  const found = [
-    { value: "side", dir: 2 },
-    { value: "right", dir: 1 },
-    { value: "left", dir: 0 },
-  ].find((o) => o.dir === direction);
-  return found?.value ?? "side";
+function effectiveSideBranchOrder(ui: MindMapUiOptions): SideBranchOrder {
+  return ui.sideBranchOrder ?? "right-first";
+}
+
+function directionToSettingName(ui: MindMapUiOptions): string {
+  if (ui.direction === 0) {
+    return "left";
+  }
+  if (ui.direction === 1) {
+    return "right";
+  }
+  return effectiveSideBranchOrder(ui) === "left-first" ? "side-lr" : "side";
 }
 
 function bindDismissListeners(): void {
@@ -155,7 +172,7 @@ export function showUiContextMenu(
   root.className = "mindmap-ui-menu";
   root.setAttribute("role", "menu");
 
-  const currentDirection = directionToSettingName(currentUi.direction);
+  const currentDirection = directionToSettingName(currentUi);
 
   addSection(
     root,

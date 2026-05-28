@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   directionFromSetting,
   presetFromSetting,
+  sideBranchOrderFromSetting,
 } from "../extension/src/ui/mindMapUiTypes";
 import { parseThemeFileJson } from "../extension/src/ui/themeMerge";
 import { resolveThemeFilePath } from "../extension/src/ui/themePath";
@@ -56,7 +57,16 @@ describe("directionFromSetting", () => {
     expect(directionFromSetting("left")).toBe(0);
     expect(directionFromSetting("right")).toBe(1);
     expect(directionFromSetting("side")).toBe(2);
+    expect(directionFromSetting("side-lr")).toBe(2);
     expect(directionFromSetting(undefined)).toBe(2);
+  });
+});
+
+describe("sideBranchOrderFromSetting", () => {
+  it("maps side-lr to left-first and defaults to right-first", () => {
+    expect(sideBranchOrderFromSetting("side-lr")).toBe("left-first");
+    expect(sideBranchOrderFromSetting("side")).toBe("right-first");
+    expect(sideBranchOrderFromSetting(undefined)).toBe("right-first");
   });
 });
 

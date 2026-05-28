@@ -3,7 +3,10 @@ import "mind-elixir/style.css";
 import "./styles.css";
 import { readExportBootstrap } from "./exportBootstrap";
 import { resolveOfflineJumpHref } from "./offlineJump";
-import { assignSideDirectionsPreferRight } from "./sideLayout";
+import {
+  assignSideDirectionsPreferLeft,
+  assignSideDirectionsPreferRight,
+} from "./sideLayout";
 import { directionFromUi, resolveTheme } from "./theme";
 import {
   readOriginFromNodeObj,
@@ -13,7 +16,7 @@ import {
   type NodeOrigin,
 } from "./toMindElixir";
 import { isBlankCanvasTarget, showUiContextMenu } from "./uiContextMenu";
-import type { MindMapUiOptions } from "./uiTypes";
+import type { MindMapUiOptions, SideBranchOrder } from "./uiTypes";
 import type { WebviewStrings } from "./uiContextMenu";
 
 type ExtensionMessage =
@@ -158,11 +161,16 @@ let uiStrings: { loadingTitle: string; menu: WebviewStrings["menu"] } = {
     presetDark: "Dark",
     presetLight: "Light",
     directionSide: "Both sides (right then left)",
+    directionSideLr: "Both sides (left then right)",
     directionRight: "Right",
     directionLeft: "Left",
     download: "Download mind map & transcripts…",
   },
 };
+
+function effectiveSideBranchOrder(ui: MindMapUiOptions): SideBranchOrder {
+  return ui.sideBranchOrder ?? "right-first";
+}
 
 function applyStrings(next: typeof uiStrings): void {
   uiStrings = next;
@@ -314,7 +322,11 @@ function render(data: MindMapNodeData): void {
   const ui = currentUi;
   const meiData = toMindElixirData(data);
   if (directionFromUi(ui) === 2) {
-    assignSideDirectionsPreferRight(meiData.nodeData);
+    if (effectiveSideBranchOrder(ui) === "left-first") {
+      assignSideDirectionsPreferLeft(meiData.nodeData);
+    } else {
+      assignSideDirectionsPreferRight(meiData.nodeData);
+    }
   }
   if (!mind) {
     mind = createMind(ui);
@@ -354,7 +366,11 @@ if (!offlineMode) {
     if (msg?.type === "setUi" && msg.ui) {
       const prev = currentUi;
       currentUi = msg.ui;
-      if (mind && prev && prev.direction !== msg.ui.direction) {
+      const uiChanged =
+        prev &&
+        (prev.direction !== msg.ui.direction ||
+          effectiveSideBranchOrder(prev) !== effectiveSideBranchOrder(msg.ui));
+      if (mind && uiChanged) {
         rebuildMindFromLastData();
       } else {
         applyUi(msg.ui);

@@ -69,6 +69,7 @@ export type WebviewStrings = {
     presetDark: string;
     presetLight: string;
     directionSide: string;
+    directionSideLr: string;
     directionRight: string;
     directionLeft: string;
     download: string;
@@ -308,6 +309,10 @@ export class MindMapHost {
         directionSide: t(
           "webview.menu.direction.side",
           "Both sides (right then left)"
+        ),
+        directionSideLr: t(
+          "webview.menu.direction.sideLr",
+          "Both sides (left then right)"
         ),
         directionRight: t("webview.menu.direction.right", "Right"),
         directionLeft: t("webview.menu.direction.left", "Left"),

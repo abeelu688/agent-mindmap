@@ -5,6 +5,7 @@ export type UiSettingKey = "preset" | "direction";
 const PRESETS: readonly MindMapUiPreset[] = ["auto", "dark", "light"];
 const DIRECTIONS: readonly MindMapUiDirectionName[] = [
   "side",
+  "side-lr",
   "left",
   "right",
 ];

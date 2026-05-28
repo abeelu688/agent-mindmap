@@ -173,7 +173,7 @@ Known limitations:
 
 ### UI / theme
 - `agentMindmap.ui.preset` — `auto` (follow editor colors, default), `dark`, or `light` (mind-elixir built-in themes)
-- `agentMindmap.ui.direction` — `side` (default, both sides; first branch on the right, then left), `right`, or `left`
+- `agentMindmap.ui.direction` — `side` (default, both sides; first branch on the right, then left), `side-lr` (both sides; first branch on the left, then right), `right`, or `left`
 - `agentMindmap.ui.themeFile` — optional JSON file for advanced overrides (`cssVar`, `palette`). Empty = none. Supports workspace-relative paths, `~/...`, or absolute paths. See [`docs/theme.example.json`](docs/theme.example.json).
 
 Preset merge order: built-in or VS Code–mapped base → theme file overrides. Invalid theme files are ignored (warning in **Agent Mind Map** output).
