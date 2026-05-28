@@ -17,11 +17,12 @@ export const TRANSCRIPT_MARKDOWN_STYLES = `
       margin: 10px 0; padding: 8px 14px; border-left: 4px solid #d0d7de;
       background: #f6f8fa; color: #24292f;
     }
-  p > code, li > code, td > code, th > code {
-    background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 2px 6px; font-size: 0.9em;
-  }
+    :not(pre) > code {
+      color: #0550ae;
+      background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 2px 6px; font-size: 0.9em;
+    }
     pre { background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 12px 0; line-height: 1.45; }
-    pre code { background: transparent; border: none; padding: 0; border-radius: 0; font-size: 0.875rem; white-space: pre; }
+    pre code { color: #0550ae; background: transparent; border: none; padding: 0; border-radius: 0; font-size: 0.875rem; white-space: pre; }
     .code-citation { margin: 12px 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; }
     .code-citation-header {
       display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px;
