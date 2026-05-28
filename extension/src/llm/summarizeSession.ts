@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as vscode from "vscode";
 import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
 import { validateSessionOutline } from "./outlineValidate";
 import type { MindMapProgress } from "../progress";
@@ -12,6 +13,30 @@ import {
 } from "./types";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
+import type { PromptLanguage } from "./promptLanguage";
+
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+function safeT(
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+}
 
 export type SummarizeOptions = {
   prompt: OutlinePromptOptions;
@@ -19,6 +44,7 @@ export type SummarizeOptions = {
   cacheDir?: string;
   cache: boolean;
   hostId?: AgentHostId;
+  promptLanguage?: PromptLanguage;
 };
 
 function computeCacheKey(
@@ -39,7 +65,7 @@ function computeCacheKey(
   hash.update(JSON.stringify(events));
   hash.update("\0");
   hash.update(prompt);
-  hash.update("\0outline-v5");
+  hash.update("\0outline-v6");
   return hash.digest("hex");
 }
 
@@ -82,19 +108,27 @@ export async function summarizeSession(
     throw new LlmProviderError("empty", "Transcript has no events to summarize");
   }
 
-  const prompt = buildOutlinePrompt(events, opts.prompt, opts.hostId ?? "cursor");
+  const prompt = buildOutlinePrompt(
+    events,
+    opts.prompt,
+    opts.hostId ?? "cursor",
+    opts.promptLanguage ?? "zh"
+  );
   const cacheKey = computeCacheKey(events, opts, provider.id, prompt);
   const useCache = opts.cache && !!opts.cacheDir;
 
   if (useCache && opts.cacheDir) {
     const cached = await readCache(opts.cacheDir, cacheKey);
     if (cached) {
-      progress?.report("命中 LLM 缓存…");
+      progress?.report(safeT("ui.llm.cacheHit", "LLM cache hit…"));
       return cached;
     }
   }
 
-  const heartbeat = createHeartbeat(progress, "正在生成大纲…");
+  const heartbeat = createHeartbeat(
+    progress,
+    safeT("ui.llm.outline.heartbeat", "Generating outline…")
+  );
   try {
     const result = await provider.summarize(
       {
@@ -106,7 +140,9 @@ export async function summarizeSession(
         responseSchema: "session-outline",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+            progress?.report(
+              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+            );
           }
         },
       },

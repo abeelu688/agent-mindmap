@@ -1,5 +1,6 @@
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider } from "../llm/types";
+import * as vscode from "vscode";
 import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import {
@@ -35,6 +36,30 @@ import {
   validateOntologyRefine,
   validateTopicPaths,
 } from "../llm/ontologyValidate";
+import type { PromptLanguage } from "../llm/promptLanguage";
+
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+function safeT(
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+}
 
 type OntologyIndex = {
   schemaVersion: 1;
@@ -53,7 +78,7 @@ function projectSlugsFor(records: SessionRecord[]): string[] {
 
 export function computeOntologyCacheKey(
   records: SessionRecord[],
-  opts: { model?: string; hostId?: AgentHostId },
+  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
   providerId: string
 ): string {
   const sorted = [...records].sort((a, b) =>
@@ -65,6 +90,7 @@ export function computeOntologyCacheKey(
     provider: providerId,
     model: opts.model?.trim() || "",
     hostId: opts.hostId ?? sorted[0]?.meta.hostId ?? "cursor",
+    promptLanguage: opts.promptLanguage ?? "zh",
     promptVersions: {
       ontology: ONTOLOGY_PROMPT_VERSION,
       topicPaths: TOPIC_PATHS_PROMPT_VERSION,
@@ -177,15 +203,25 @@ async function runOntologyRefine(
     ConceptOntologyRecord,
     "nodes" | "mappings" | "topicPaths" | "reattachMoves"
   >,
-  opts: { model?: string; hostId?: AgentHostId },
+  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
   provider: LlmProvider,
   signal: AbortSignal,
   progress?: MindMapProgress
 ): Promise<ConceptOntologyRecord["segmentEquivalences"]> {
   const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
   const input = buildRefineInputFromRecords(records, base, base.topicPaths);
-  const prompt = buildOntologyRefinePrompt(input, hostId);
-  const heartbeat = createHeartbeat(progress, "正在精炼概念同义段…");
+  const prompt = buildOntologyRefinePrompt(
+    input,
+    hostId,
+    opts.promptLanguage ?? "zh"
+  );
+  const heartbeat = createHeartbeat(
+    progress,
+    safeT(
+      "ui.ontology.refine.heartbeat",
+      "Refining concept segment equivalences…"
+    )
+  );
   try {
     const res = await provider.summarize(
       {
@@ -197,7 +233,9 @@ async function runOntologyRefine(
         responseSchema: "ontology-refine",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+            progress?.report(
+              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+            );
           }
         },
       },
@@ -224,18 +262,25 @@ function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
  */
 export async function ensureOntologyMemory(
   records: SessionRecord[],
-  opts: { model?: string; hostId?: AgentHostId; title?: string },
+  opts: {
+    model?: string;
+    hostId?: AgentHostId;
+    title?: string;
+    promptLanguage?: PromptLanguage;
+  },
   provider: LlmProvider,
   storeDir: string,
   signal: AbortSignal,
   progress?: MindMapProgress
 ): Promise<ConceptOntologyRecord> {
   await ensureStore(storeDir);
-  progress?.report("正在检查概念本体缓存…");
+  progress?.report(
+    safeT("ui.ontology.cache.check", "Checking concept ontology cache…")
+  );
   const cacheKey = computeOntologyCacheKey(records, opts, provider.id);
   const cached = await readOntologyRecord(storeDir, cacheKey);
   if (cached && isCompleteOntologyRecord(cached)) {
-    progress?.report("命中概念本体缓存…");
+    progress?.report(safeT("ui.ontology.cache.hit", "Concept ontology cache hit…"));
     return cached;
   }
 
@@ -247,11 +292,18 @@ export async function ensureOntologyMemory(
   let reattachMoves = cached?.reattachMoves;
 
   if (!nodes || !mappings) {
-    progress?.report("正在抽取概念本体…");
-    const heartbeat = createHeartbeat(progress, "正在抽取概念本体…");
+    progress?.report(safeT("ui.ontology.extract", "Extracting concept ontology…"));
+    const heartbeat = createHeartbeat(
+      progress,
+      safeT("ui.ontology.extract.heartbeat", "Extracting concept ontology…")
+    );
     let ontologyResult: Awaited<ReturnType<LlmProvider["summarize"]>>;
     try {
-      const ontologyPrompt = buildOntologyPrompt(records, hostId);
+      const ontologyPrompt = buildOntologyPrompt(
+        records,
+        hostId,
+        opts.promptLanguage ?? "zh"
+      );
       ontologyResult = await provider.summarize(
         {
           events: [],
@@ -262,7 +314,9 @@ export async function ensureOntologyMemory(
           responseSchema: "concept-ontology",
           onAttempt: (attempt, maxAttempts) => {
             if (attempt > 1) {
-              progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+              progress?.report(
+                safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+              );
             }
           },
         },
@@ -294,11 +348,23 @@ export async function ensureOntologyMemory(
     let index = 0;
     for (const rec of records) {
       index += 1;
-      progress?.report(`正在推断 topic-paths（${index}/${total}）…`);
-      const { prompt } = buildTopicPathsPrompt(rec, lite, hostId);
+      progress?.report(
+        safeT("ui.ontology.topicPaths.step", "Inferring topic paths ({0}/{1})…", index, total)
+      );
+      const { prompt } = buildTopicPathsPrompt(
+        rec,
+        lite,
+        hostId,
+        opts.promptLanguage ?? "zh"
+      );
       const heartbeat = createHeartbeat(
         progress,
-        `正在推断 topic-paths（${index}/${total}）…`
+        safeT(
+          "ui.ontology.topicPaths.step",
+          "Inferring topic paths ({0}/{1})…",
+          index,
+          total
+        )
       );
       let res: Awaited<ReturnType<LlmProvider["summarize"]>>;
       try {
@@ -312,7 +378,9 @@ export async function ensureOntologyMemory(
             responseSchema: "topic-paths",
             onAttempt: (attempt, maxAttempts) => {
               if (attempt > 1) {
-                progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+                progress?.report(
+                  safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+                );
               }
             },
           },
@@ -385,13 +453,18 @@ export async function ensureOntologyMemory(
 export async function suggestReattachMoves(
   candidates: ReattachCandidate[],
   ontology: ConceptOntologyRecord,
-  opts: { model?: string; hostId?: AgentHostId },
+  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
   provider: LlmProvider,
   signal: AbortSignal
 ): Promise<ConceptOntologyRecord["reattachMoves"]> {
   const hostId = opts.hostId ?? ontology.meta.hostId ?? "cursor";
   const lite = toOntologyLite(ontology);
-  const prompt = buildReattachPrompt(candidates, lite, hostId);
+  const prompt = buildReattachPrompt(
+    candidates,
+    lite,
+    hostId,
+    opts.promptLanguage ?? "zh"
+  );
   const res = await provider.summarize(
     {
       events: [],

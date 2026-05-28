@@ -1,4 +1,5 @@
 import type { AgentHostId } from "../host/types";
+import * as vscode from "vscode";
 import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
@@ -8,6 +9,7 @@ import {
   type LlmProvider,
   type MergedOutline,
 } from "../llm/types";
+import type { PromptLanguage } from "../llm/promptLanguage";
 import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
 import type { MindMapRoot } from "../transcript/types";
 import {
@@ -19,6 +21,29 @@ import {
 } from "./sessionStore";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
+function format(message: string, args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
+function safeT(
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
+}
+
 export type MergeLlmOptions = {
   maxTopics: number;
   maxItemsPerTopic: number;
@@ -27,6 +52,7 @@ export type MergeLlmOptions = {
   /** Model hint, propagated to provider and folded into the cache key. */
   model?: string;
   hostId?: AgentHostId;
+  promptLanguage?: PromptLanguage;
 };
 
 /**
@@ -49,6 +75,7 @@ export function computeMergeCacheKey(
     },
     promptVersion: MERGE_PROMPT_VERSION,
     outlineSchema: PROMPT_VERSION,
+    promptLanguage: opts.promptLanguage ?? "zh",
     provider: providerId,
     model: opts.model?.trim() || "",
   });
@@ -82,12 +109,14 @@ export async function mergeWithLlm(
     throw new LlmProviderError("empty", "No sessions selected to merge");
   }
 
-  progress?.report("正在检查合并缓存…");
+  progress?.report(safeT("ui.merge.cache.check", "Checking merge cache…"));
   const cacheKey = computeMergeCacheKey(records, opts, provider.id);
   const cacheFile = llmMergeCachePath(storeDir, cacheKey);
   const cached = await readMergeRecord(cacheFile);
   if (cached) {
-    progress?.report("命中合并缓存，正在生成思维导图…");
+    progress?.report(
+      safeT("ui.merge.cache.hitRender", "Merge cache hit, generating mind map…")
+    );
     await writeMergeRecord(llmRefinedMergePath(storeDir), cached);
     return cached;
   }
@@ -100,10 +129,14 @@ export async function mergeWithLlm(
       maxTopics: opts.maxTopics,
       maxItemsPerTopic: opts.maxItemsPerTopic,
     },
-    hostId
+    hostId,
+    opts.promptLanguage ?? "zh"
   );
 
-  const heartbeat = createHeartbeat(progress, "正在调用 LLM 合并主题…");
+  const heartbeat = createHeartbeat(
+    progress,
+    safeT("ui.merge.llm.heartbeat", "Calling LLM to merge topics…")
+  );
   let result: Awaited<ReturnType<LlmProvider["summarize"]>>;
   try {
     result = await provider.summarize(
@@ -116,7 +149,9 @@ export async function mergeWithLlm(
         responseSchema: "merged-outline",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(`LLM 第 ${attempt}/${maxAttempts} 次尝试…`);
+            progress?.report(
+              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+            );
           }
         },
       },
@@ -131,7 +166,7 @@ export async function mergeWithLlm(
   }
   const merged = result as MergedOutline;
 
-  progress?.report("正在渲染思维导图…");
+  progress?.report(safeT("ui.progress.renderMindMap", "Rendering mind map…"));
   const mindMap = buildRefinedMindMap(
     merged,
     records,
@@ -154,7 +189,7 @@ export async function mergeWithLlm(
     mindMap,
   };
 
-  progress?.report("正在写入合并缓存…");
+  progress?.report(safeT("ui.merge.cache.write", "Writing merge cache…"));
   await writeMergeRecord(cacheFile, record);
   await writeMergeRecord(llmRefinedMergePath(storeDir), record);
   return record;
