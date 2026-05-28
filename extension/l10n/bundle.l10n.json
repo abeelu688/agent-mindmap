@@ -111,6 +111,7 @@
   "webview.menu.preset.dark": "Dark",
   "webview.menu.preset.light": "Light",
   "webview.menu.direction.side": "Both sides (right then left)",
+  "webview.menu.direction.sideLr": "Both sides (left then right)",
   "webview.menu.direction.right": "Right",
   "webview.menu.direction.left": "Left",
   "webview.menu.download": "Download mind map & transcripts…"

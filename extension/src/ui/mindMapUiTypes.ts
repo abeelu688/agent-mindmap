@@ -1,6 +1,8 @@
 export type MindMapUiPreset = "auto" | "dark" | "light";
 
-export type MindMapUiDirectionName = "side" | "left" | "right";
+export type MindMapUiDirectionName = "side" | "side-lr" | "left" | "right";
+
+export type SideBranchOrder = "right-first" | "left-first";
 
 /** mind-elixir direction: LEFT=0, RIGHT=1, SIDE=2 */
 export type MindMapDirection = 0 | 1 | 2;
@@ -13,6 +15,7 @@ export type MindMapThemeOverrides = {
 export type MindMapUiOptions = {
   preset: MindMapUiPreset;
   direction: MindMapDirection;
+  sideBranchOrder?: SideBranchOrder;
   themeOverrides?: MindMapThemeOverrides;
 };
 
@@ -33,7 +36,14 @@ export function directionFromSetting(
     case "right":
       return 1;
     case "side":
+    case "side-lr":
     default:
       return 2;
   }
+}
+
+export function sideBranchOrderFromSetting(
+  value: string | undefined
+): SideBranchOrder {
+  return value === "side-lr" ? "left-first" : "right-first";
 }

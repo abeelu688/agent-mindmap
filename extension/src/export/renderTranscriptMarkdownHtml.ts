@@ -95,7 +95,21 @@ function splitTabCells(line: string): string[] {
 }
 
 function isTabTableRow(line: string): boolean {
-  return line.includes("\t") && splitTabCells(line).length >= 2;
+  if (!line.includes("\t")) {
+    return false;
+  }
+  const cells = splitTabCells(line);
+  if (cells.length < 2) {
+    return false;
+  }
+  let nonEmpty = 0;
+  for (const c of cells) {
+    if (c.length > 0) {
+      nonEmpty += 1;
+    }
+  }
+  // Tab-indented source lines often split as ["", ".foo = bar"] — not a table.
+  return nonEmpty >= 2;
 }
 
 function isStrictPipeTableRow(line: string): boolean {
@@ -244,12 +258,58 @@ function readTabTable(lines: string[], start: number): TableBlock | undefined {
   return { header, rows, end: i };
 }
 
+/** Opening/closing quote chars that break CommonMark `**` emphasis when adjacent. */
+const QUOTE_CHAR_CLASS = `"'\\u201c\\u201d\\u2018\\u2019`;
+
+/** `**"…"**` / `**"…"**` → `<strong>…</strong>` (markdown-it leaves these as literal `**`). */
+const QUOTED_BOLD_RE = new RegExp(
+  `\\*\\*([${QUOTE_CHAR_CLASS}][^*\\n]*[${QUOTE_CHAR_CLASS}])\\*\\*`,
+  "g"
+);
+
+/**
+ * Fix bold markers wrapped in quotes that CommonMark does not parse as emphasis.
+ * Skips fenced code blocks so literals inside ``` are untouched.
+ */
+export function preprocessQuotedBold(md: string): string {
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      out.push(line);
+      continue;
+    }
+    if (inFence) {
+      out.push(line);
+      continue;
+    }
+    out.push(line.replace(QUOTED_BOLD_RE, "<strong>$1</strong>"));
+  }
+  return out.join("\n");
+}
+
 /** Convert pipe / tab tables to HTML (markdown-it html:true passes them through). */
 export function preprocessTables(md: string, renderer: MarkdownIt): string {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
+  let inFence = false;
   let i = 0;
   while (i < lines.length) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      out.push(lines[i]!);
+      i += 1;
+      continue;
+    }
+    if (inFence) {
+      out.push(lines[i]!);
+      i += 1;
+      continue;
+    }
     const block =
       readGfmPipeTable(lines, i) ??
       readPipeTableNoSeparator(lines, i) ??
@@ -307,7 +367,7 @@ export function renderTranscriptMarkdownHtml(md: string): string {
     sharedRenderer = createTranscriptMarkdownRenderer();
   }
   const normalized = preprocessTables(
-    md.replace(/\r\n/g, "\n"),
+    preprocessQuotedBold(md.replace(/\r\n/g, "\n")),
     sharedRenderer
   );
   return sharedRenderer.render(normalized);

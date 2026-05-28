@@ -291,9 +291,9 @@
         },
         "agentMindmap.ui.direction": {
           "type": "string",
-          "enum": ["side", "left", "right"],
+          "enum": ["side", "side-lr", "left", "right"],
           "default": "side",
-          "description": "Mind map layout direction: both sides with first branch on the right (side, default), left only, or right only."
+          "description": "Mind map layout direction: both sides with first branch on the right (side, default), both sides with first branch on the left (side-lr), left only, or right only."
         },
         "agentMindmap.ui.themeFile": {
           "type": "string",

@@ -5,6 +5,7 @@ import type { MindMapUiOptions } from "./mindMapUiTypes";
 import {
   directionFromSetting,
   presetFromSetting,
+  sideBranchOrderFromSetting,
 } from "./mindMapUiTypes";
 import { parseThemeFileJson } from "./themeMerge";
 import { resolveThemeFilePath } from "./themePath";
@@ -40,11 +41,13 @@ export function readThemeFileOverrides(
 export function readMindMapUiConfig(): MindMapUiOptions {
   const config = vscode.workspace.getConfiguration("agentMindmap");
   const preset = presetFromSetting(config.get<string>("ui.preset"));
-  const direction = directionFromSetting(config.get<string>("ui.direction"));
+  const directionSetting = config.get<string>("ui.direction");
+  const direction = directionFromSetting(directionSetting);
+  const sideBranchOrder = sideBranchOrderFromSetting(directionSetting);
   const themeFile = config.get<string>("ui.themeFile", "");
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const themeOverrides = themeFile.trim()
     ? readThemeFileOverrides(themeFile, workspaceRoot)
     : undefined;
-  return { preset, direction, themeOverrides };
+  return { preset, direction, sideBranchOrder, themeOverrides };
 }
