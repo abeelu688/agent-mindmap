@@ -15,6 +15,14 @@ npm-log.txt
 *.log
 out.txt
 
+# local dev / agent artifacts
+_git-*.txt
+_vitest-exit.txt
+_ext-test-exit.txt
+.cmd-report.txt
+ext-test
+git-status.txt
+
 # editor / OS
 .DS_Store
 .idea/

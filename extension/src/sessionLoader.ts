@@ -33,7 +33,7 @@ import {
   writeMergeRecord,
   writeRecord,
 } from "./store/sessionStore";
-import type { MindMapProgress } from "./progress";
+import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
 
@@ -237,6 +237,25 @@ function resolveSessionContext(
 export type LoadSessionOptions = {
   /** Force re-analysis even if the library has a fresh record. */
   forceRefresh?: boolean;
+  /** Skip background deterministic/concept merge rebuild after writeRecord. */
+  skipAutoMerge?: boolean;
+};
+
+export type AnalyzeProjectOptions = {
+  forceRefresh?: boolean;
+  /** Default true for batch analyze. */
+  skipAutoMerge?: boolean;
+  /** Test hook: override per-session loader. */
+  loadSessionFn?: typeof loadSession;
+};
+
+export type AnalyzeProjectResult = {
+  projectSlug: string;
+  total: number;
+  analyzed: number;
+  skippedFresh: number;
+  failed: number;
+  failures: { sessionId: string; label: string; message: string }[];
 };
 
 export async function loadSession(
@@ -388,7 +407,10 @@ export async function loadSession(
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
 
-      if (settings.library.autoRebuildDeterministic) {
+      if (
+        settings.library.autoRebuildDeterministic &&
+        !options.skipAutoMerge
+      ) {
         void (async () => {
           try {
             const all = await listRecords(storeDir);
@@ -429,6 +451,109 @@ async function tryStatMtime(filePath: string, fallback: number): Promise<number>
   } catch {
     return fallback;
   }
+}
+
+export async function runProjectSessionBatch(
+  sessions: TranscriptSession[],
+  projectSlug: string,
+  host: AgentHost,
+  deps: LoadDeps,
+  options: AnalyzeProjectOptions = {}
+): Promise<AnalyzeProjectResult> {
+  const loadOne = options.loadSessionFn ?? loadSession;
+  const forceRefresh = options.forceRefresh ?? false;
+  const skipAutoMerge = options.skipAutoMerge ?? true;
+  const progress = deps.progress;
+  const total = sessions.length;
+  let analyzed = 0;
+  let skippedFresh = 0;
+  let failed = 0;
+  const failures: AnalyzeProjectResult["failures"] = [];
+
+  progress?.report(`共 ${total} 条会话，开始批量分析…`);
+
+  for (let i = 0; i < sessions.length; i++) {
+    const session = sessions[i]!;
+    const { progress: itemProgress, reportComplete } = createBatchItemProgress(
+      progress,
+      i,
+      total,
+      session.label
+    );
+    itemProgress.report("开始分析");
+    try {
+      const loaded = await loadOne(
+        session,
+        { ...deps, progress: itemProgress },
+        { forceRefresh, skipAutoMerge },
+        host
+      );
+      analyzed += 1;
+      if (loaded.fromLibrary) {
+        skippedFresh += 1;
+        reportComplete("命中缓存");
+      } else if (loaded.source === "turn") {
+        reportComplete("已降级为时序视图");
+      } else {
+        reportComplete("分析完成");
+      }
+    } catch (err) {
+      if (isCancellation(err)) {
+        throw err;
+      }
+      failed += 1;
+      failures.push({
+        sessionId: session.id,
+        label: session.label,
+        message: describeError(err),
+      });
+      reportComplete("分析失败");
+      console.warn(
+        `[agent-mindmap] batch analyze failed for ${session.id}:`,
+        err
+      );
+    }
+  }
+
+  if (total > 0) {
+    progress?.report(
+      `批量分析结束：共 ${total} 条，成功 ${analyzed}，缓存 ${skippedFresh}，失败 ${failed}`
+    );
+  }
+
+  return {
+    projectSlug,
+    total,
+    analyzed,
+    skippedFresh,
+    failed,
+    failures,
+  };
+}
+
+export async function analyzeProjectSessions(
+  deps: LoadDeps,
+  options: AnalyzeProjectOptions = {}
+): Promise<AnalyzeProjectResult | undefined> {
+  const host = await getActiveHost(deps.context);
+  const listed = await listWorkspaceSessions(host);
+  if (!listed) {
+    return undefined;
+  }
+  const { scanDir, sessions } = listed;
+  const slug = getWorkspaceSlug(host);
+  if (!slug) {
+    vscode.window.showWarningMessage(
+      "Agent Mind Map: Open a workspace folder first."
+    );
+    return undefined;
+  }
+  if (!sessions.length) {
+    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
+    return undefined;
+  }
+
+  return runProjectSessionBatch(sessions, slug, host, deps, options);
 }
 
 export async function getTranscriptsDir(

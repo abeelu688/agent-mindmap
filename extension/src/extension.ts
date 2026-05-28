@@ -16,9 +16,11 @@ import {
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import {
+  analyzeProjectSessions,
   loadLatestSession,
   loadSession,
   pickSession,
+  type AnalyzeProjectResult,
   type LoadDeps,
   type LoadedSession,
 } from "./sessionLoader";
@@ -60,7 +62,12 @@ import { openMindMapPackage } from "./export/openMindMapPackage";
 import {
   createProgressReporter,
   type MindMapProgress,
+  type MindMapProgressUpdate,
 } from "./progress";
+
+function progressMessage(update: MindMapProgressUpdate): string {
+  return typeof update === "string" ? update : (update.message ?? "");
+}
 
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
@@ -89,9 +96,12 @@ async function withCancellableProgress<T>(
       const panelRef = panel ?? MindMapPanel.getCurrent();
       const baseReporter = createProgressReporter(vscodeProgress);
       const progress: MindMapProgress = {
-        report(message: string) {
-          baseReporter.report(message);
-          panelRef?.setLoading(true, message);
+        report(update: MindMapProgressUpdate) {
+          baseReporter.report(update);
+          const message = progressMessage(update);
+          if (message) {
+            panelRef?.setLoading(true, message);
+          }
         },
       };
       try {
@@ -531,6 +541,123 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
       panel
     );
     if (!merge) {
+      return;
+    }
+    panel.setMindMapData(merge.mindMap);
+    panel.setTitle(`Concept Mind Map · ${slug}`);
+  } finally {
+    panel.setLoading(false);
+  }
+}
+
+function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
+  const newlyAnalyzed = result.analyzed - result.skippedFresh;
+  let msg =
+    `Agent Mind Map: 共 ${result.total} 条会话，` +
+    `新分析 ${newlyAnalyzed}，缓存 ${result.skippedFresh}`;
+  if (result.failed > 0) {
+    const labels = result.failures
+      .slice(0, 3)
+      .map((f) => f.label)
+      .join("、");
+    const more =
+      result.failures.length > 3
+        ? ` 等 ${result.failures.length} 条`
+        : "";
+    msg += `，失败 ${result.failed}（${labels}${more}）`;
+  }
+  return `${msg}。`;
+}
+
+async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
+  const mode = await vscode.window.showQuickPick(
+    [
+      {
+        label: "跳过已缓存会话",
+        description: "仅分析库中缺失或已过期的 transcript",
+        forceRefresh: false,
+      },
+      {
+        label: "全部强制重新分析",
+        description: "忽略分析库缓存，每条会话重新调用 LLM",
+        forceRefresh: true,
+      },
+    ],
+    { placeHolder: "批量分析当前项目的 agent 会话" }
+  );
+  if (!mode) {
+    return;
+  }
+
+  const host = await getActiveHost(extensionContext);
+  const slug = getWorkspaceSlug(host);
+  if (!slug) {
+    vscode.window.showWarningMessage(
+      "Agent Mind Map: Open a workspace folder first."
+    );
+    return;
+  }
+
+  const panel = createOrShowMindMap();
+  panel.setLoading(true, "正在准备…");
+  try {
+    const merge = await withCancellableProgress(
+      async ({ signal, progress }) => {
+        progress.report("正在扫描当前项目的 agent 会话…");
+        const batch = await analyzeProjectSessions(
+          { context: extensionContext, signal, progress },
+          {
+            forceRefresh: mode.forceRefresh,
+            skipAutoMerge: true,
+          }
+        );
+        if (!batch) {
+          return undefined;
+        }
+        if (batch.total === 0) {
+          vscode.window.showInformationMessage(
+            `Agent Mind Map: 当前项目 (${slug}) 磁盘上暂无 agent 会话记录。`
+          );
+          return undefined;
+        }
+
+        const records = await loadLibraryRecords();
+        const projectRecords = records.filter(
+          (r) => r.meta.projectSlug === slug
+        );
+        if (!projectRecords.length) {
+          vscode.window.showInformationMessage(
+            `Agent Mind Map: 当前项目 (${slug}) 分析后库中仍无可用记录。` +
+              (batch.failed > 0
+                ? ` ${batch.failed} 条会话分析失败。`
+                : "")
+          );
+          return undefined;
+        }
+
+        progress.report(
+          `正在合并概念思维导图（已分析 ${batch.total} 条会话）…`
+        );
+        const conceptMerge = await ensureConceptMerge(
+          slug,
+          progress,
+          signal
+        );
+        vscode.window.showInformationMessage(
+          formatAnalyzeProjectSummary(batch)
+        );
+        return conceptMerge;
+      },
+      "Agent Mind Map: 批量分析并合并…",
+      panel
+    );
+    if (!merge) {
+      return;
+    }
+    if (!merge.meta.sessionIds.length) {
+      vscode.window.showInformationMessage(
+        `Agent Mind Map: 当前项目 (${slug}) 合并结果为空。`
+      );
       return;
     }
     panel.setMindMapData(merge.mindMap);
@@ -1201,6 +1328,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.openConceptMergedCurrentProject",
       commandOpenConceptMergedCurrentProject
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.analyzeAndMergeCurrentProject",
+      commandAnalyzeAndMergeCurrentProject
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.llmMergeRefine",

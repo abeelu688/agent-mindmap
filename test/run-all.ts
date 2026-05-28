@@ -40,6 +40,9 @@ import {
 } from "../extension/src/jumpToOriginCore";
 import type { NodeOriginRef } from "../extension/src/transcript/types";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
+import { runProjectSessionBatch } from "../extension/src/sessionLoader";
+import type { TranscriptSession } from "../extension/src/transcript/types";
+import type { AgentHost } from "../extension/src/host/types";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -442,6 +445,74 @@ async function main(): Promise<void> {
       // ignore
     }
   }
+
+  // runProjectSessionBatch
+  const batchSessions: TranscriptSession[] = [
+    {
+      id: "batch-ok",
+      label: "OK",
+      filePath: "/tmp/ok.jsonl",
+      mtimeMs: 1,
+    },
+    {
+      id: "batch-fail",
+      label: "Fail",
+      filePath: "/tmp/fail.jsonl",
+      mtimeMs: 2,
+    },
+    {
+      id: "batch-cache",
+      label: "Cache",
+      filePath: "/tmp/cache.jsonl",
+      mtimeMs: 3,
+    },
+  ];
+  const stubHost = { id: "cursor" } as AgentHost;
+  let batchCalls = 0;
+  const batchMessages: string[] = [];
+  const batchResult = await runProjectSessionBatch(
+    batchSessions,
+    "proj-batch",
+    stubHost,
+    {
+      context: { globalStorageUri: { fsPath: "/tmp" } } as never,
+      progress: {
+        report(u) {
+          batchMessages.push(typeof u === "string" ? u : (u.message ?? ""));
+        },
+      },
+    },
+    {
+      loadSessionFn: async (session, deps, opts) => {
+        batchCalls += 1;
+        assert(opts?.skipAutoMerge === true, "batch: skipAutoMerge");
+        deps.progress?.report("子步骤");
+        const prefixed = batchMessages.find((m) => m.includes("子步骤"));
+        assert(
+          !!prefixed && /第 \d+\/3 条/.test(prefixed),
+          "batch: prefixed progress with position"
+        );
+        if (session.id === "batch-fail") {
+          throw new Error("batch failure");
+        }
+        return {
+          session,
+          mindMap: { data: { text: session.label } },
+          source: "topic",
+          fromLibrary: session.id === "batch-cache",
+        };
+      },
+    }
+  );
+  assert(batchCalls === 3, "batch: three load calls");
+  assert(batchResult.total === 3, "batch: total");
+  assert(batchResult.analyzed === 2, "batch: analyzed");
+  assert(batchResult.skippedFresh === 1, "batch: skippedFresh");
+  assert(batchResult.failed === 1, "batch: failed");
+  assert(
+    batchResult.failures[0]?.sessionId === "batch-fail",
+    "batch: failure id"
+  );
 
   console.log("All tests passed.");
 }

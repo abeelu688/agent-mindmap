@@ -1,0 +1,7 @@
+ extension/esbuild.config.mjs                 |  27 ++++++-
+ extension/package.json                       |   2 +
+ extension/src/export/exportPackage.ts        | 111 ++++++++-------------------
+ extension/src/export/renderTranscriptHtml.ts | 103 ++++---------------------
+ extension/src/jumpToOrigin.ts                |  63 ++++++++++++++-
+ test/exportDownload.test.ts                  |  45 +++++++++++
+ 6 files changed, 176 insertions(+), 175 deletions(-)

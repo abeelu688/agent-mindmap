@@ -1,0 +1,16 @@
+## main...origin/main
+ M README.md
+ M extension/package.json
+ M extension/src/extension.ts
+ M extension/src/progress.ts
+ M extension/src/sessionLoader.ts
+ M test/run-all.ts
+?? .cmd-report.txt
+?? _ext-test-exit.txt
+?? _git-out.txt
+?? _git-staged.txt
+?? _git-status.txt
+?? _vitest-exit.txt
+?? ext-test
+?? git-status.txt
+?? test/analyzeProjectSessions.test.ts
