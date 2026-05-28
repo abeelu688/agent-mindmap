@@ -113,25 +113,49 @@ function locSessionMeta(loc: TopicLocation): SessionMeta {
   };
 }
 
+const TOPIC_HEADLINE_MAX = 60;
+
+function lastTitleSegment(title: string): string {
+  const parts = title
+    .split(/\s*\/\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : title.trim();
+}
+
+/** Concise penultimate label: summary first, else last title segment. */
+function topicHeadline(topic: Topic): string {
+  const summary = topic.summary?.trim();
+  if (summary) {
+    return truncate(summary, TOPIC_HEADLINE_MAX);
+  }
+  const last = lastTitleSegment(topic.title);
+  if (last) {
+    return truncate(last, TOPIC_HEADLINE_MAX);
+  }
+  return truncate(topic.title, TOPIC_HEADLINE_MAX);
+}
+
 function topicBranch(loc: TopicLocation): MindMapNodeData {
-  const sessionTag = `[${loc.record.meta.sessionLabel}]`;
-  const heading = `${loc.topic.title} · ${sessionTag}`;
+  const heading = topicHeadline(loc.topic);
   const sessionMeta = locSessionMeta(loc);
   const children: MindMapNodeData[] = [];
-  if (loc.topic.summary && loc.topic.summary.trim()) {
-    children.push(withOrigin(leaf(`概述：${loc.topic.summary}`), [
-      { ...sessionMeta },
-    ]));
-  }
-  for (const item of loc.topic.items) {
-    const refs = item.sourceTurnIndices?.length
-      ? ` (Q${item.sourceTurnIndices.map((n) => n + 1).join("/Q")})`
-      : "";
+  const items = loc.topic.items ?? [];
+  if (items.length) {
+    for (const item of items) {
+      const refs = item.sourceTurnIndices?.length
+        ? ` (Q${item.sourceTurnIndices.map((n) => n + 1).join("/Q")})`
+        : "";
+      children.push(
+        withOrigin(
+          leaf(`${item.text}${refs}`),
+          leafRefs(sessionMeta, item.sourceTurnIndices)
+        )
+      );
+    }
+  } else {
     children.push(
-      withOrigin(
-        leaf(`${item.text}${refs}`),
-        leafRefs(sessionMeta, item.sourceTurnIndices)
-      )
+      withOrigin(leaf("（无细节）"), [{ ...sessionMeta }])
     );
   }
   const node = branch(heading, children, false);

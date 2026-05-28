@@ -12,8 +12,9 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
  *
  * v5: hierarchical SessionOutline (outline[] + details[] leaves + anchors)
  * v5.1: + conceptPath on detail nodes for concept-trie merge
+ * v6: conceptPath last segment = sub-topic; summary required on detail nodes
  */
-export const PROMPT_VERSION = 5;
+export const PROMPT_VERSION = 6;
 
 export type OutlinePromptOptions = {
   maxBranches: number;
@@ -42,7 +43,9 @@ export function buildOutlinePrompt(
     "  - 中间层节点只有 title / summary / children，不要放 details",
     "  - 最细一层节点放 details[]（叶子细节），每条 ≤40 字",
     `  - 每个有 details 的节点 1-${maxDetails} 条细节`,
+    "  - 有 details 的节点必须写 summary（≤50 字），作为跨会话 Concept Mind Map 该子话题的概括标题",
     "- 有 details 的节点另附 conceptPath: 3-5 段，从最泛领域到最细概念（小写英文/通用术语），用于跨会话 Concept Mind Map 聚类；单会话图不显示",
+    "  - conceptPath 最后一段应对应本条 details 的子话题/子概念（例：JNI 下 JVM 创建 vs startVm → …,\"jvm-creation\" / …,\"startvm\"），便于同父概念下按子概念分列",
     "  例：Binder 调试 → [\"android\",\"ipc\",\"binder\"]；ART JIT → [\"android\",\"art\",\"jit\"]（ART 第 2 段用 art，勿用 runtime）",
     "- details 若引用【本 transcript 内】某轮用户提问，附 sourceTurnIndices（0-based，[Q1]→0、[Q2]→1）",
     "- 禁止把助理回复里提到的其他会话轮次写入 sourceTurnIndices",
