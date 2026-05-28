@@ -36,7 +36,6 @@ import {
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
-
 export type LoadedSession = {
   session: TranscriptSession;
   mindMap: MindMapRoot;
@@ -127,7 +126,13 @@ async function readSettings(host: AgentHost): Promise<Settings> {
 }
 
 function getCacheDir(context: vscode.ExtensionContext): string {
-  return path.join(context.globalStorageUri.fsPath, "llm-cache");
+  const config = vscode.workspace.getConfiguration("agentMindmap");
+  const override = config.get<string>("llm.cacheDir", "").trim();
+  if (override) {
+    return override;
+  }
+  // Default: keep cache under storeDir so deleting ~/.agent-mindmap clears it.
+  return path.join(getStoreDir(), "llm-cache");
 }
 
 function describeError(err: unknown): string {
@@ -256,6 +261,8 @@ export type AnalyzeProjectOptions = {
   skipAutoMerge?: boolean;
   /** Test hook: override per-session loader. */
   loadSessionFn?: typeof loadSession;
+  batchSize?: number;
+  onBatchDone?: (info: AnalyzeProjectBatchInfo) => Promise<void> | void;
 };
 
 export type AnalyzeProjectResult = {
@@ -265,6 +272,15 @@ export type AnalyzeProjectResult = {
   skippedFresh: number;
   failed: number;
   failures: { sessionId: string; label: string; message: string }[];
+};
+
+export type AnalyzeProjectBatchInfo = AnalyzeProjectResult & {
+  /** 1-based batch number. */
+  batchNo: number;
+  /** Number of sessions processed so far (analyzed + failed). */
+  processed: number;
+  /** Session ids processed in this batch (success or failure). */
+  batchSessionIds: string[];
 };
 
 function format(message: string, args: Array<string | number | boolean>): string {
@@ -587,6 +603,127 @@ export async function runProjectSessionBatch(
   };
 }
 
+export async function runProjectSessionBatches(
+  sessions: TranscriptSession[],
+  projectSlug: string,
+  host: AgentHost,
+  deps: LoadDeps,
+  options: AnalyzeProjectOptions & {
+    batchSize?: number;
+    onBatchDone?: (info: AnalyzeProjectBatchInfo) => Promise<void> | void;
+  } = {}
+): Promise<AnalyzeProjectResult> {
+  const loadOne = options.loadSessionFn ?? loadSession;
+  const forceRefresh = options.forceRefresh ?? false;
+  const skipAutoMerge = options.skipAutoMerge ?? true;
+  const progress = deps.progress;
+  const total = sessions.length;
+  const batchSize = Math.max(1, Math.floor(options.batchSize ?? 5));
+  const onBatchDone = options.onBatchDone;
+
+  let analyzed = 0;
+  let skippedFresh = 0;
+  let failed = 0;
+  const failures: AnalyzeProjectResult["failures"] = [];
+
+  progress?.report(
+    t(
+      "ui.batch.progress.start",
+      "{0} session(s) total, starting batch analysis…",
+      total
+    )
+  );
+
+  let batchNo = 0;
+  let batchSessionIds: string[] = [];
+  for (let i = 0; i < sessions.length; i++) {
+    const session = sessions[i]!;
+    batchSessionIds.push(session.id);
+    const { progress: itemProgress, reportComplete } = createBatchItemProgress(
+      progress,
+      i,
+      total,
+      session.label
+    );
+    itemProgress.report(t("ui.batch.item.start", "Start analyzing"));
+    try {
+      const loaded = await loadOne(
+        session,
+        { ...deps, progress: itemProgress },
+        { forceRefresh, skipAutoMerge },
+        host
+      );
+      analyzed += 1;
+      if (loaded.fromLibrary) {
+        skippedFresh += 1;
+        reportComplete(t("ui.batch.item.cacheHit", "Cache hit"));
+      } else if (loaded.source === "turn") {
+        reportComplete(
+          t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
+        );
+      } else {
+        reportComplete(t("ui.batch.item.done", "Analysis completed"));
+      }
+    } catch (err) {
+      if (isCancellation(err)) {
+        throw err;
+      }
+      failed += 1;
+      failures.push({
+        sessionId: session.id,
+        label: session.label,
+        message: describeError(err),
+      });
+      reportComplete(t("ui.batch.item.failed", "Analysis failed"));
+      console.warn(
+        `[agent-mindmap] batch analyze failed for ${session.id}:`,
+        err
+      );
+    }
+
+    const processed = analyzed + failed;
+    const completedBatch = processed > 0 && processed % batchSize === 0;
+    const finishedAll = processed === total;
+    if ((completedBatch || finishedAll) && onBatchDone) {
+      batchNo += 1;
+      await onBatchDone({
+        projectSlug,
+        total,
+        analyzed,
+        skippedFresh,
+        failed,
+        failures,
+        batchNo,
+        processed,
+        batchSessionIds,
+      });
+      batchSessionIds = [];
+    }
+  }
+
+  if (total > 0) {
+    progress?.report(
+      t(
+        "ui.batch.progress.finished",
+        "Batch finished: {0} total, {1} succeeded, {2} cached, {3} failed",
+        total,
+        analyzed,
+        skippedFresh,
+        failed
+      )
+    );
+  }
+
+  return {
+    projectSlug,
+    total,
+    analyzed,
+    skippedFresh,
+    failed,
+    failures,
+  };
+}
+
 export async function analyzeProjectSessions(
   deps: LoadDeps,
   options: AnalyzeProjectOptions = {}
@@ -612,6 +749,9 @@ export async function analyzeProjectSessions(
     return undefined;
   }
 
+  if (options.onBatchDone || options.batchSize !== undefined) {
+    return runProjectSessionBatches(sessions, slug, host, deps, options);
+  }
   return runProjectSessionBatch(sessions, slug, host, deps, options);
 }
 

@@ -39,13 +39,26 @@ export type WebviewToExtensionMessage =
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
   | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
-  | { type: "requestDownload" };
+  | { type: "requestDownload" }
+  | { type: "requestApplyPendingUpdate" };
 
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
   | { type: "setUi"; ui: MindMapUiOptions }
   | { type: "setLoading"; active: boolean; message?: string }
-  | { type: "setStrings"; strings: WebviewStrings };
+  | { type: "setStrings"; strings: WebviewStrings }
+  | { type: "setBatchStatus"; status: BatchStatus };
+
+export type BatchStatus = {
+  total: number;
+  processed: number;
+  analyzed: number;
+  cached: number;
+  failed: number;
+  batchNo: number;
+  running: boolean;
+  pendingUpdateBatchNo?: number;
+};
 
 export type WebviewStrings = {
   loadingTitle: string;
@@ -68,6 +81,7 @@ export type NodeClickedListener = (payload: {
 }) => void;
 
 export type DownloadRequestedListener = () => void;
+export type ApplyPendingUpdateRequestedListener = () => void;
 
 /**
  * Shared mind-map webview logic for editor panels and other hosts. Keeps
@@ -77,6 +91,9 @@ export class MindMapHost {
   private static current: MindMapHost | undefined;
   private static nodeClickedListener: NodeClickedListener | undefined;
   private static downloadRequestedListener: DownloadRequestedListener | undefined;
+  private static applyPendingUpdateRequestedListener:
+    | ApplyPendingUpdateRequestedListener
+    | undefined;
   private static bootData: MindMapRoot | undefined;
   private static bootTitle: string | undefined;
 
@@ -84,6 +101,7 @@ export class MindMapHost {
   private pendingData: MindMapRoot | undefined;
   private pendingLoading: { active: boolean; message?: string } | undefined;
   private lastMindMapData: MindMapRoot | undefined;
+  private lastBatchStatus: BatchStatus | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
   private themeFileWatcher: vscode.FileSystemWatcher | undefined;
   private themeFsWatcher: fs.FSWatcher | undefined;
@@ -120,6 +138,14 @@ export class MindMapHost {
           this.postStrings();
           this.postUi();
           this.updateThemeFileWatcher();
+          if (this.lastBatchStatus) {
+            const status = this.lastBatchStatus;
+            const out: ExtensionToWebviewMessage = {
+              type: "setBatchStatus",
+              status,
+            };
+            void this.webview.postMessage(out);
+          }
           if (this.pendingLoading !== undefined) {
             this.postLoading(this.pendingLoading.active, this.pendingLoading.message);
             this.pendingLoading = undefined;
@@ -162,6 +188,15 @@ export class MindMapHost {
             mindMapLog("WARN: requestDownload with no listener registered");
           }
         }
+        if (msg.type === "requestApplyPendingUpdate") {
+          if (MindMapHost.applyPendingUpdateRequestedListener) {
+            MindMapHost.applyPendingUpdateRequestedListener();
+          } else {
+            mindMapLog(
+              "WARN: requestApplyPendingUpdate with no listener registered"
+            );
+          }
+        }
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("agentMindmap.ui")) {
@@ -180,6 +215,12 @@ export class MindMapHost {
     listener: DownloadRequestedListener | undefined
   ): void {
     MindMapHost.downloadRequestedListener = listener;
+  }
+
+  public static onApplyPendingUpdateRequested(
+    listener: ApplyPendingUpdateRequestedListener | undefined
+  ): void {
+    MindMapHost.applyPendingUpdateRequestedListener = listener;
   }
 
   public getMindMapData(): MindMapRoot | undefined {
@@ -225,6 +266,15 @@ export class MindMapHost {
     } else {
       this.pendingData = data;
     }
+  }
+
+  public setBatchStatus(status: BatchStatus): void {
+    this.lastBatchStatus = status;
+    if (!this.webviewReady) {
+      return;
+    }
+    const msg: ExtensionToWebviewMessage = { type: "setBatchStatus", status };
+    void this.webview.postMessage(msg);
   }
 
   public setLoading(active: boolean, message?: string): void {

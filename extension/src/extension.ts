@@ -15,11 +15,13 @@ import {
 } from "./transcript/composerTitles";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
+import type { BatchStatus } from "./webview/MindMapHost";
 import {
-  analyzeProjectSessions,
   loadLatestSession,
   loadSession,
   pickSession,
+  runProjectSessionBatches,
+  type AnalyzeProjectBatchInfo,
   type AnalyzeProjectResult,
   type LoadDeps,
   type LoadedSession,
@@ -27,6 +29,7 @@ import {
 import {
   getActiveHost,
   getHostById,
+  getWorkspacePath,
   getWorkspaceSlug,
   resetHostCache,
   resolveHostId,
@@ -38,6 +41,7 @@ import {
   deterministicMergePath,
   ensureStore,
   listRecords,
+  readRecord,
   readMergeRecord,
   rebuildIndex,
   writeMergeRecord,
@@ -45,8 +49,10 @@ import {
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import {
   buildConceptMergeRecordAsync,
+  buildConceptMergeRecord,
   buildConceptTrieMindMap,
 } from "./store/mergeConceptTrie";
+import { sanitizeSessionRecord } from "./store/sanitizeRecords";
 import { mergeWithLlm } from "./store/mergeLlm";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { getProvider } from "./llm";
@@ -64,13 +70,30 @@ import {
   type MindMapProgress,
   type MindMapProgressUpdate,
 } from "./progress";
-
 function progressMessage(update: MindMapProgressUpdate): string {
   return typeof update === "string" ? update : (update.message ?? "");
 }
 
 let activeSession: LoadedSession | undefined;
 let extensionContext: vscode.ExtensionContext;
+
+let pendingMergeMindMap: import("./transcript/types").MindMapRoot | undefined;
+let pendingMergeBatchNo: number | undefined;
+let lastBatchStatus: BatchStatus | undefined;
+
+function applyPendingMergeToPanel(panel: MindMapPanel): boolean {
+  if (!pendingMergeMindMap) {
+    return false;
+  }
+  panel.setMindMapData(pendingMergeMindMap);
+  pendingMergeMindMap = undefined;
+  pendingMergeBatchNo = undefined;
+  if (lastBatchStatus) {
+    lastBatchStatus = { ...lastBatchStatus, pendingUpdateBatchNo: undefined };
+    panel.setBatchStatus(lastBatchStatus);
+  }
+  return true;
+}
 
 function format(message: string, args: Array<string | number | boolean>): string {
   return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
@@ -108,7 +131,8 @@ async function withCancellableProgress<T>(
     progress: MindMapProgress;
   }) => Promise<T>,
   title: string = progressTitle(),
-  panel?: MindMapPanel
+  panel?: MindMapPanel,
+  options?: { forwardToWebviewLoading?: boolean }
 ): Promise<T | undefined> {
   return vscode.window.withProgress(
     {
@@ -121,11 +145,12 @@ async function withCancellableProgress<T>(
       const sub = token.onCancellationRequested(() => controller.abort());
       const panelRef = panel ?? MindMapPanel.getCurrent();
       const baseReporter = createProgressReporter(vscodeProgress);
+      const forwardToWebviewLoading = options?.forwardToWebviewLoading ?? true;
       const progress: MindMapProgress = {
         report(update: MindMapProgressUpdate) {
           baseReporter.report(update);
           const message = progressMessage(update);
-          if (message) {
+          if (forwardToWebviewLoading && message) {
             panelRef?.setLoading(true, message);
           }
         },
@@ -722,22 +747,37 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
   const panel = createOrShowMindMap();
   panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
   try {
-    const merge = await withCancellableProgress(
+    const completed = await withCancellableProgress(
       async ({ signal, progress }) => {
         progress.report(
           t("ui.batch.progress.scanSessions", "Scanning agent sessions for current project…")
         );
-        const batch = await analyzeProjectSessions(
-          { context: extensionContext, signal, progress },
-          {
-            forceRefresh: mode.forceRefresh,
-            skipAutoMerge: true,
-          }
-        );
-        if (!batch) {
+        const workspacePath = getWorkspacePath();
+        if (!workspacePath) {
+          vscode.window.showWarningMessage(
+            t(
+              "ui.warning.openWorkspaceFolderFirst",
+              "Agent Mind Map: Open a workspace folder first."
+            )
+          );
           return undefined;
         }
-        if (batch.total === 0) {
+        const scanDir = host.getSessionsScanDir(workspacePath);
+        if (!scanDir) {
+          vscode.window.showWarningMessage(
+            t(
+              "ui.warning.openWorkspaceFolderFirst",
+              "Agent Mind Map: Open a workspace folder first."
+            )
+          );
+          return undefined;
+        }
+        const sessions = await host.listSessions(scanDir, {
+          projectSlug: slug,
+          projectPath: workspacePath,
+        });
+
+        if (sessions.length === 0) {
           vscode.window.showInformationMessage(
             t(
               "ui.batch.emptyOnDisk",
@@ -748,62 +788,139 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           return undefined;
         }
 
-        const records = await loadLibraryRecords();
-        const projectRecords = records.filter(
-          (r) => r.meta.projectSlug === slug
+        const storeDir = getStoreDir();
+        await ensureStore(storeDir);
+        const projectRecordsById = new Map<string, SessionRecord>();
+
+        pendingMergeMindMap = undefined;
+        pendingMergeBatchNo = undefined;
+        lastBatchStatus = {
+          total: sessions.length,
+          processed: 0,
+          analyzed: 0,
+          cached: 0,
+          failed: 0,
+          batchNo: 0,
+          running: true,
+        };
+        panel.setBatchStatus(lastBatchStatus);
+
+        const deps: LoadDeps = { context: extensionContext, signal, progress };
+        const result = await runProjectSessionBatches(
+          sessions,
+          slug,
+          host,
+          deps,
+          {
+            forceRefresh: mode.forceRefresh,
+            skipAutoMerge: true,
+            batchSize: 5,
+            onBatchDone: async (info: AnalyzeProjectBatchInfo) => {
+              if (signal.aborted) {
+                return;
+              }
+
+              const cached = info.skippedFresh;
+
+              progress.report(
+                t(
+                  "ui.batch.progress.mergingConceptMap",
+                  "Merging concept mind map (analyzed {0} session(s))…",
+                  info.processed
+                )
+              );
+              for (const sessionId of info.batchSessionIds) {
+                if (signal.aborted) {
+                  return;
+                }
+                const rec = await readRecord(storeDir, slug, sessionId);
+                if (!rec) {
+                  continue;
+                }
+                const sanitized = await sanitizeSessionRecord(rec);
+                projectRecordsById.set(sessionId, sanitized);
+              }
+              if (signal.aborted) {
+                return;
+              }
+              const conceptMerge = buildConceptMergeRecord(
+                [...projectRecordsById.values()],
+                { projectSlug: slug }
+              );
+              pendingMergeMindMap = conceptMerge.mindMap;
+              pendingMergeBatchNo = info.batchNo;
+              lastBatchStatus = {
+                total: info.total,
+                processed: info.processed,
+                analyzed: info.analyzed,
+                cached,
+                failed: info.failed,
+                batchNo: info.batchNo,
+                running: true,
+                pendingUpdateBatchNo: pendingMergeBatchNo,
+              };
+              panel.setBatchStatus(lastBatchStatus);
+
+              if (!panel.getMindMapData()) {
+                applyPendingMergeToPanel(panel);
+              } else {
+                void vscode.window.showInformationMessage(
+                  t(
+                    "ui.batch.pendingRefresh",
+                    "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
+                    info.batchNo,
+                    info.processed,
+                    info.total
+                  )
+                );
+              }
+            },
+          }
         );
-        if (!projectRecords.length) {
+
+        if (projectRecordsById.size === 0) {
           vscode.window.showInformationMessage(
             t(
               "ui.library.empty.noRecordsAfterAnalyze",
               "Agent Mind Map: After analysis, the library still has no usable records for current project ({0}).",
               slug
-            ) + (batch.failed > 0
-              ? " " +
-                t(
-                  "ui.batch.failedSuffix",
-                  "{0} session(s) failed.",
-                  batch.failed
-                )
-              : "")
+            ) +
+              (result.failed > 0
+                ? " " +
+                  t(
+                    "ui.batch.failedSuffix",
+                    "{0} session(s) failed.",
+                    result.failed
+                  )
+                : "")
           );
           return undefined;
         }
 
-        progress.report(
-          t(
-            "ui.batch.progress.mergingConceptMap",
-            "Merging concept mind map (analyzed {0} session(s))…",
-            batch.total
-          )
-        );
-        const conceptMerge = await ensureConceptMerge(
-          slug,
-          progress,
-          signal
-        );
-        vscode.window.showInformationMessage(
-          formatAnalyzeProjectSummary(batch)
-        );
-        return conceptMerge;
+        vscode.window.showInformationMessage(formatAnalyzeProjectSummary(result));
+
+        lastBatchStatus = {
+          total: result.total,
+          processed: result.total,
+          analyzed: result.analyzed,
+          cached: result.skippedFresh,
+          failed: result.failed,
+          batchNo: Math.max(1, Math.ceil(result.total / 5)),
+          running: false,
+          pendingUpdateBatchNo: pendingMergeBatchNo,
+        };
+        panel.setBatchStatus(lastBatchStatus);
+
+        return undefined;
       },
       t("ui.batch.progress.title", "Agent Mind Map: Batch analyze & merge…"),
-      panel
+      panel,
+      { forwardToWebviewLoading: false }
     );
-    if (!merge) {
-      return;
+    if (!completed && lastBatchStatus?.running) {
+      lastBatchStatus = { ...lastBatchStatus, running: false };
+      panel.setBatchStatus(lastBatchStatus);
     }
-    if (!merge.meta.sessionIds.length) {
-      vscode.window.showInformationMessage(
-        t(
-          "ui.library.merge.emptyResult",
-          "Agent Mind Map: Merge result is empty for current project ({0}).",
-          slug
-        )
-      );
-      return;
-    }
-    panel.setMindMapData(merge.mindMap);
     panel.setTitle(`Concept Mind Map · ${slug}`);
   } finally {
     panel.setLoading(false);
@@ -1456,7 +1573,6 @@ async function maybeWarnEmptyClaudeTranscripts(
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
-
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (
@@ -1493,6 +1609,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
   MindMapPanel.onDownloadRequested(() => {
     void commandDownloadPackage();
+  });
+
+  MindMapPanel.onApplyPendingUpdateRequested(() => {
+    const panel = MindMapPanel.getCurrent();
+    if (!panel) {
+      return;
+    }
+    applyPendingMergeToPanel(panel);
   });
 
   context.subscriptions.push(

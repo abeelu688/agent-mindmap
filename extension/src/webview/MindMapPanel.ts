@@ -4,6 +4,7 @@ import {
   MindMapHost,
   type DownloadRequestedListener,
   type NodeClickedListener,
+  type ApplyPendingUpdateRequestedListener,
 } from "./MindMapHost";
 
 /**
@@ -68,6 +69,12 @@ export class MindMapPanel {
     MindMapHost.onDownloadRequested(listener);
   }
 
+  public static onApplyPendingUpdateRequested(
+    listener: ApplyPendingUpdateRequestedListener | undefined
+  ): void {
+    MindMapHost.onApplyPendingUpdateRequested(listener);
+  }
+
   public static queueBoot(data: MindMapRoot, title?: string): void {
     MindMapHost.queueBoot(data, title);
   }
@@ -87,6 +94,12 @@ export class MindMapPanel {
 
   public setLoading(active: boolean, message?: string): void {
     this.host.setLoading(active, message);
+  }
+
+  public setBatchStatus(
+    status: Parameters<MindMapHost["setBatchStatus"]>[0]
+  ): void {
+    this.host.setBatchStatus(status);
   }
 
   public getMindMapData(): MindMapRoot | undefined {
