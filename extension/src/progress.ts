@@ -24,6 +24,24 @@ function safeT(
   return format(message, args);
 }
 
+function localeFallback(
+  key: string,
+  enMessage: string,
+  zhMessage: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vs as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message: enMessage, args });
+  }
+  const lang = (vs.env?.language ?? "").toLowerCase();
+  const isZh = lang.startsWith("zh") || lang.includes("zh-cn");
+  return format(isZh ? zhMessage : enMessage, args);
+}
+
 export type MindMapProgressUpdate =
   | string
   | { message?: string; increment?: number };
@@ -73,14 +91,16 @@ export function createBatchItemProgress(
   progress: MindMapProgress;
   reportComplete: (detail: string) => void;
 } {
-  const position = safeT(
+  const position = localeFallback(
     "ui.progress.batch.position",
+    "{0}/{1}",
     "第 {0}/{1} 条",
     index + 1,
     total
   );
-  const header = safeT(
+  const header = localeFallback(
     "ui.progress.batch.header",
+    "{0} · {1}",
     "{0} · {1}",
     position,
     truncateLabel(sessionLabel, 40)
@@ -102,8 +122,9 @@ export function createBatchItemProgress(
     reportComplete(detail: string) {
       const increment = total > 0 ? 100 / total : 0;
       parent?.report({
-        message: safeT(
+        message: localeFallback(
           "ui.progress.batch.complete",
+          "{0} · {1} (completed {2}/{3})",
           "{0} · {1}（已完成 {2}/{3}）",
           position,
           detail,
@@ -137,8 +158,9 @@ export function createHeartbeat(
   const timer = setInterval(() => {
     const secs = Math.floor((Date.now() - started) / 1000);
     progress.report(
-      safeT(
+      localeFallback(
         "ui.progress.heartbeat.wait",
+        "{0} (waiting {1} second(s))",
         "{0}（已等待 {1} 秒）",
         baseMessage,
         secs
