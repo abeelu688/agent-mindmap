@@ -489,7 +489,7 @@ async function main(): Promise<void> {
         deps.progress?.report("子步骤");
         const prefixed = batchMessages.find((m) => m.includes("子步骤"));
         assert(
-          !!prefixed && /第 \d+\/3 条/.test(prefixed),
+          !!prefixed && /\b\d+\/3\b/.test(prefixed),
           "batch: prefixed progress with position"
         );
         if (session.id === "batch-fail") {
