@@ -70,6 +70,10 @@ import {
   type MindMapProgress,
   type MindMapProgressUpdate,
 } from "./progress";
+import {
+  hadFullLibraryCoverage as computeHadFullLibraryCoverage,
+  shouldAutoApplyBatchUpdates,
+} from "./batchMergeApplyMode";
 function progressMessage(update: MindMapProgressUpdate): string {
   return typeof update === "string" ? update : (update.message ?? "");
 }
@@ -805,6 +809,33 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         };
         panel.setBatchStatus(lastBatchStatus);
 
+        for (const session of sessions) {
+          const rec = await readRecord(storeDir, slug, session.id);
+          if (!rec) {
+            continue;
+          }
+          const sanitized = await sanitizeSessionRecord(rec);
+          projectRecordsById.set(session.id, sanitized);
+        }
+
+        const hadFullLibraryAtStart = computeHadFullLibraryCoverage({
+          sessionCount: sessions.length,
+          libraryRecordCount: projectRecordsById.size,
+        });
+        const autoApplyUpdates = shouldAutoApplyBatchUpdates({
+          sessionCount: sessions.length,
+          libraryRecordCount: projectRecordsById.size,
+          panelHasMindMap: Boolean(panel.getMindMapData()),
+        });
+
+        if (hadFullLibraryAtStart) {
+          const initial = buildConceptMergeRecord(
+            [...projectRecordsById.values()],
+            { projectSlug: slug }
+          );
+          panel.setMindMapData(initial.mindMap);
+        }
+
         const deps: LoadDeps = { context: extensionContext, signal, progress };
         const result = await runProjectSessionBatches(
           sessions,
@@ -847,32 +878,50 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                 [...projectRecordsById.values()],
                 { projectSlug: slug }
               );
-              pendingMergeMindMap = conceptMerge.mindMap;
-              pendingMergeBatchNo = info.batchNo;
-              lastBatchStatus = {
-                total: info.total,
-                processed: info.processed,
-                analyzed: info.analyzed,
-                cached,
-                failed: info.failed,
-                batchNo: info.batchNo,
-                running: true,
-                pendingUpdateBatchNo: pendingMergeBatchNo,
-              };
+
+              if (autoApplyUpdates) {
+                pendingMergeMindMap = undefined;
+                pendingMergeBatchNo = undefined;
+                panel.setMindMapData(conceptMerge.mindMap);
+                lastBatchStatus = {
+                  total: info.total,
+                  processed: info.processed,
+                  analyzed: info.analyzed,
+                  cached,
+                  failed: info.failed,
+                  batchNo: info.batchNo,
+                  running: true,
+                };
+              } else {
+                pendingMergeMindMap = conceptMerge.mindMap;
+                pendingMergeBatchNo = info.batchNo;
+                lastBatchStatus = {
+                  total: info.total,
+                  processed: info.processed,
+                  analyzed: info.analyzed,
+                  cached,
+                  failed: info.failed,
+                  batchNo: info.batchNo,
+                  running: true,
+                  pendingUpdateBatchNo: pendingMergeBatchNo,
+                };
+              }
               panel.setBatchStatus(lastBatchStatus);
 
-              if (!panel.getMindMapData()) {
-                applyPendingMergeToPanel(panel);
-              } else {
-                void vscode.window.showInformationMessage(
-                  t(
-                    "ui.batch.pendingRefresh",
-                    "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
-                    info.batchNo,
-                    info.processed,
-                    info.total
-                  )
-                );
+              if (!autoApplyUpdates) {
+                if (!panel.getMindMapData()) {
+                  applyPendingMergeToPanel(panel);
+                } else {
+                  void vscode.window.showInformationMessage(
+                    t(
+                      "ui.batch.pendingRefresh",
+                      "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
+                      info.batchNo,
+                      info.processed,
+                      info.total
+                    )
+                  );
+                }
               }
             },
           }
@@ -907,7 +956,9 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           failed: result.failed,
           batchNo: Math.max(1, Math.ceil(result.total / 5)),
           running: false,
-          pendingUpdateBatchNo: pendingMergeBatchNo,
+          ...(autoApplyUpdates
+            ? {}
+            : { pendingUpdateBatchNo: pendingMergeBatchNo }),
         };
         panel.setBatchStatus(lastBatchStatus);
 
