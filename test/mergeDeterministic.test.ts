@@ -54,11 +54,11 @@ describe("buildDeterministicMergeMindMap", () => {
       makeRecord("b1", "proj-b", 150, graphA, "/work/proj-b"),
     ];
     const root = buildDeterministicMergeMindMap(records);
-    expect(root.data.text).toBe("Agent Mind Map · 全部");
+    expect(root.data.text).toBe("Agent Mind Map · All");
     expect(root.children?.length).toBe(2);
     const labels = root.children?.map((c) => c.data.text) ?? [];
-    expect(labels.some((l) => l.startsWith("项目: /work/proj-a"))).toBe(true);
-    expect(labels.some((l) => l.startsWith("项目: /work/proj-b"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Project: /work/proj-a"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Project: /work/proj-b"))).toBe(true);
   });
 
   it("orders projects by most recently analyzed session", () => {
@@ -98,7 +98,9 @@ describe("buildDeterministicMergeMindMap", () => {
 
   it("shows a placeholder when library is empty", () => {
     const root = buildDeterministicMergeMindMap([]);
-    expect(root.children?.[0].data.text).toContain("(库中暂无已分析的 session)");
+    expect(root.children?.[0].data.text).toContain(
+      "(No analyzed sessions in the library)"
+    );
   });
 
   it("buildDeterministicMergeRecord captures meta", () => {

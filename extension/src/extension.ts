@@ -35,6 +35,8 @@ import {
   resolveHostId,
 } from "./host";
 import { getStoreDir } from "./paths";
+import { showCliInstallGuide } from "./llm/cliInstallGuide";
+import { uiTranslate } from "./l10n/uiTranslate";
 import type { LlmProviderId } from "./llm/types";
 import {
   conceptTrieMergePath,
@@ -616,7 +618,14 @@ async function commandOpenConceptMerged(): Promise<void> {
     }
     const records = await loadLibraryRecords();
     const { stats } = buildConceptTrieMindMap(records);
-    if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
+    if (stats.recordCount === 0) {
+      vscode.window.showInformationMessage(
+        t(
+          "ui.library.empty.hint",
+          "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
+        )
+      );
+    } else if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
       vscode.window.showInformationMessage(
         t(
           "ui.concept.noConceptPathAll",
@@ -667,6 +676,35 @@ async function commandOpenConceptMergedCurrentProject(): Promise<void> {
     );
     if (!merge) {
       return;
+    }
+    const records = await loadLibraryRecords();
+    const projectRecords = records.filter((r) => r.meta.projectSlug === slug);
+    if (projectRecords.length === 0) {
+      vscode.window.showInformationMessage(
+        t(
+          "ui.library.empty.currentProject",
+          "Agent Mind Map: No analyzed sessions in the library for current project ({0}).",
+          slug
+        )
+      );
+    } else {
+      const { stats } = buildConceptTrieMindMap(records, { projectSlug: slug });
+      if (stats.topicsWithoutPath > 0 && stats.topicsWithPath === 0) {
+        vscode.window.showInformationMessage(
+          t(
+            "ui.concept.noConceptPathAll",
+            "Agent Mind Map: All topics in the library have no conceptPath (likely analyzed before upgrade). Run Refresh on each session to re-analyze and attach concept paths."
+          )
+        );
+      } else if (stats.topicsWithoutPath > 0) {
+        vscode.window.showInformationMessage(
+          t(
+            "ui.concept.someMissingConceptPath",
+            "Agent Mind Map: {0} topic(s) missing conceptPath were placed under the “Uncategorized” branch.",
+            stats.topicsWithoutPath
+          )
+        );
+      }
     }
     panel.setMindMapData(merge.mindMap);
     panel.setTitle(`Concept Mind Map · ${slug}`);
@@ -928,21 +966,48 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         );
 
         if (projectRecordsById.size === 0) {
-          vscode.window.showInformationMessage(
-            t(
-              "ui.library.empty.noRecordsAfterAnalyze",
-              "Agent Mind Map: After analysis, the library still has no usable records for current project ({0}).",
-              slug
-            ) +
-              (result.failed > 0
-                ? " " +
-                  t(
-                    "ui.batch.failedSuffix",
-                    "{0} session(s) failed.",
-                    result.failed
-                  )
-                : "")
-          );
+          const allNewTurnFallbacks =
+            result.turnFallbacks > 0 &&
+            result.turnFallbacks >= result.analyzed - result.skippedFresh;
+          const allCliMissing =
+            result.cliMissingCount > 0 &&
+            result.cliMissingCount >= result.turnFallbacks;
+          const allBadJson =
+            result.jsonParseFailures > 0 &&
+            result.jsonParseFailures >= result.turnFallbacks;
+          if (allNewTurnFallbacks && allCliMissing) {
+            await showCliInstallGuide(host.id, { modal: true });
+          } else if (allNewTurnFallbacks && allBadJson) {
+            vscode.window.showWarningMessage(
+              uiTranslate(
+                "ui.library.empty.llmBadJson",
+                "Agent Mind Map: cursor-agent returned invalid JSON for every session (not saved to the library). Check Output → Agent Mind Map logs, retry batch analyze, or increase agentMindmap.llm.maxAttempts."
+              )
+            );
+          } else if (allNewTurnFallbacks) {
+            vscode.window.showWarningMessage(
+              uiTranslate(
+                "ui.library.empty.llmTurnFallbackGeneric",
+                "Agent Mind Map: LLM summarization failed for every session. Turn-only views are not saved to the library, so Concept Mind Map stays empty."
+              )
+            );
+          } else {
+            vscode.window.showInformationMessage(
+              t(
+                "ui.library.empty.noRecordsAfterAnalyze",
+                "Agent Mind Map: After analysis, the library still has no usable records for current project ({0}).",
+                slug
+              ) +
+                (result.failed > 0
+                  ? " " +
+                    t(
+                      "ui.batch.failedSuffix",
+                      "{0} session(s) failed.",
+                      result.failed
+                    )
+                  : "")
+            );
+          }
           return undefined;
         }
 

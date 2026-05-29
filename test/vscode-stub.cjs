@@ -8,4 +8,9 @@ module.exports = {
   window: {},
   Uri: { file: (p) => ({ fsPath: p }) },
   commands: { executeCommand: async () => undefined },
+  env: {
+    language: "en",
+    clipboard: { writeText: async () => undefined },
+    openExternal: async () => true,
+  },
 };

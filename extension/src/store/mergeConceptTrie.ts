@@ -1,3 +1,4 @@
+import { uiTranslate } from "../l10n/uiTranslate";
 import { canonicalizeConceptSegment } from "../llm/cursorCliProvider";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import type { SegmentEquivalence, Topic } from "../llm/types";
@@ -155,7 +156,15 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
     }
   } else {
     children.push(
-      withOrigin(leaf("（无细节）"), [{ ...sessionMeta }])
+      withOrigin(
+        leaf(
+          uiTranslate(
+            "mindmap.concept.noDetails",
+            "(No details)"
+          )
+        ),
+        [{ ...sessionMeta }]
+      )
     );
   }
   const node = branch(heading, children, false);
@@ -190,11 +199,41 @@ export type ConceptMergeOptions = {
 
 /** Stats useful for UI / tests / progress messages. */
 export type ConceptMergeStats = {
+  recordCount: number;
   totalTopics: number;
   topicsWithPath: number;
   topicsWithoutPath: number;
   rootChildren: number;
 };
+
+function conceptTrieEmptyLeaf(
+  filteredRecordCount: number,
+  totalTopics: number,
+  rootHiddenTopics: number
+): MindMapNodeData {
+  if (filteredRecordCount === 0 || totalTopics === 0) {
+    return leaf(
+      uiTranslate(
+        "mindmap.concept.empty.noSessions",
+        "(No analyzed sessions in the library; run Open Latest Session or Analyze Project Sessions first.)"
+      )
+    );
+  }
+  if (rootHiddenTopics > 0) {
+    return leaf(
+      uiTranslate(
+        "mindmap.concept.empty.invalidConceptPath",
+        "(Some topics have invalid conceptPath; refresh a session to re-analyze.)"
+      )
+    );
+  }
+  return leaf(
+    uiTranslate(
+      "mindmap.concept.empty.noConceptPath",
+      "(No topics with conceptPath in the library; refresh a session to re-analyze.)"
+    )
+  );
+}
 
 export function buildConceptTrieMindMap(
   records: SessionRecord[],
@@ -227,7 +266,7 @@ export function buildConceptTrieMindMap(
     options.title ??
     (options.projectSlug
       ? `Concept Mind Map · ${options.projectSlug}`
-      : "Concept Mind Map · 全部");
+      : uiTranslate("mindmap.concept.titleAll", "Concept Mind Map · All"));
 
   const sortedTop = [...root.children.values()].sort(
     (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
@@ -236,7 +275,11 @@ export function buildConceptTrieMindMap(
   if (orphans.length) {
     const orphanNodes = orphans.map(topicBranch);
     const orphanBranch = branch(
-      `未分类 (${orphans.length})`,
+      uiTranslate(
+        "mindmap.concept.uncategorized",
+        "Uncategorized ({0})",
+        orphans.length
+      ),
       orphanNodes,
       false
     );
@@ -244,6 +287,7 @@ export function buildConceptTrieMindMap(
   }
 
   const stats: ConceptMergeStats = {
+    recordCount: filtered.length,
     totalTopics: total,
     topicsWithPath: total - orphans.length,
     topicsWithoutPath: orphans.length,
@@ -251,12 +295,15 @@ export function buildConceptTrieMindMap(
   };
 
   if (!topChildren.length) {
+    const emptyLeaf = conceptTrieEmptyLeaf(
+      filtered.length,
+      total,
+      root.topics.length
+    );
     return {
       mindMap: {
         data: { text: title, expand: true },
-        children: [
-          leaf("(库中暂无带 conceptPath 的核心；Refresh 一次会话以触发重新分析)"),
-        ],
+        children: [emptyLeaf],
       },
       stats,
     };

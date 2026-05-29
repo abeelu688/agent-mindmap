@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { resolveCliSpawnTarget } from "./resolveWindowsCliSpawn";
 import {
   validateMergedOutline,
   validateSessionOutline,
@@ -44,6 +45,15 @@ function uniq(arr: string[]): string[] {
   return out;
 }
 
+function spawnCliProcess(target: ReturnType<typeof resolveCliSpawnTarget>) {
+  const options = {
+    stdio: ["ignore", "pipe", "pipe"] as const,
+    env: process.env,
+    ...(target.shell ? { shell: true as const } : {}),
+  };
+  return spawn(target.command, target.args, options);
+}
+
 export function runCli(
   bin: string,
   args: string[],
@@ -52,12 +62,10 @@ export function runCli(
   providerLabel: string
 ): Promise<RunResult> {
   return new Promise<RunResult>((resolve, reject) => {
+    const spawnTarget = resolveCliSpawnTarget(bin, args);
     let proc;
     try {
-      proc = spawn(bin, args, {
-        stdio: ["ignore", "pipe", "pipe"],
-        env: process.env,
-      });
+      proc = spawnCliProcess(spawnTarget);
     } catch (err) {
       reject(
         new LlmProviderError(
@@ -186,7 +194,7 @@ function extractPayload(stdout: string): string {
     }
   };
 
-  const pickString = (obj: unknown): string | undefined => {
+  const pickPayload = (obj: unknown): string | undefined => {
     if (typeof obj !== "object" || obj === null) {
       return undefined;
     }
@@ -204,6 +212,9 @@ function extractPayload(stdout: string): string {
       if (typeof v === "string" && v.trim()) {
         return v;
       }
+      if (v && typeof v === "object") {
+        return JSON.stringify(v);
+      }
     }
     return undefined;
   };
@@ -212,13 +223,13 @@ function extractPayload(stdout: string): string {
   if (direct !== undefined) {
     if (Array.isArray(direct)) {
       for (const item of direct) {
-        const s = pickString(item);
+        const s = pickPayload(item);
         if (s) {
           return s;
         }
       }
     } else {
-      const s = pickString(direct);
+      const s = pickPayload(direct);
       if (s) {
         return s;
       }
@@ -232,7 +243,7 @@ function extractPayload(stdout: string): string {
       continue;
     }
     const obj = tryParseJson(t);
-    const s = pickString(obj);
+    const s = pickPayload(obj);
     if (s) {
       fallback = s;
     }
@@ -295,22 +306,49 @@ function extractTopicsJson(payload: string): string {
   return cleaned;
 }
 
+/** Best-effort fixes for common LLM JSON mistakes (trailing commas, smart quotes). */
+export function repairJsonText(s: string): string {
+  return s
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+}
+
+function tryParseJsonLoose(text: string): unknown | undefined {
+  const variants = [text, repairJsonText(text)];
+  for (const candidate of variants) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // continue
+    }
+    const extracted = extractTopicsJson(candidate);
+    for (const slice of [extracted, repairJsonText(extracted)]) {
+      try {
+        return JSON.parse(slice);
+      } catch {
+        // continue
+      }
+    }
+  }
+  return undefined;
+}
+
 function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
   const payload = extractPayload(stdout);
   if (!payload.trim()) {
     throw new LlmProviderError("empty", `${providerLabel} returned empty output`);
   }
   const jsonText = extractTopicsJson(payload);
-
-  try {
-    return JSON.parse(jsonText);
-  } catch (err) {
-    throw new LlmProviderError(
-      "bad-json",
-      `Failed to parse JSON from ${providerLabel}: ${(err as Error).message}`,
-      err
-    );
+  const parsed = tryParseJsonLoose(jsonText);
+  if (parsed !== undefined) {
+    return parsed;
   }
+
+  throw new LlmProviderError(
+    "bad-json",
+    `Failed to parse JSON from ${providerLabel} (output may include prose or truncated JSON)`
+  );
 }
 
 export function parseTopicGraphFromStdout(
@@ -515,8 +553,10 @@ export class HeadlessCliProvider {
 }
 
 export const __testing = {
+  resolveCliSpawnTarget,
   extractPayload,
   extractTopicsJson,
+  repairJsonText,
   parseJsonFromStdout,
   parseTopicGraphFromStdout,
   parseSessionOutlineFromStdout,

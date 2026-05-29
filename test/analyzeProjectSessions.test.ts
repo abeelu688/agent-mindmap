@@ -118,6 +118,9 @@ describe("runProjectSessionBatch", () => {
       total: 3,
       analyzed: 2,
       skippedFresh: 1,
+      turnFallbacks: 0,
+      cliMissingCount: 0,
+      jsonParseFailures: 0,
       failed: 1,
       failures: [
         {
@@ -133,8 +136,29 @@ describe("runProjectSessionBatch", () => {
       expect(call[2]).toEqual({
         forceRefresh: false,
         skipAutoMerge: true,
+        quietLlmErrors: true,
       });
     }
+  });
+
+  it("counts turn fallbacks and cli-missing", async () => {
+    loadSessionFn.mockResolvedValue({
+      session: sessions[0]!,
+      mindMap: { data: { text: "turn" } },
+      source: "turn",
+      llmErrorCode: "cli-missing",
+    });
+
+    const result = await runProjectSessionBatch(
+      [sessions[0]!],
+      "my-project",
+      mockHost,
+      { context: fakeContext },
+      { loadSessionFn, skipAutoMerge: true }
+    );
+
+    expect(result.turnFallbacks).toBe(1);
+    expect(result.cliMissingCount).toBe(1);
   });
 
   it("re-throws cancellation", async () => {
