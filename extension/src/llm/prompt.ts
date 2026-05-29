@@ -20,8 +20,9 @@ const MAX_TOOL_LABELS_PER_TURN = 8;
  * v2: + topics[].conceptPath  (for cross-session concept-trie merging)
  * v3: stricter sourceTurnIndices — only [Q#] in this transcript
  * v4: conceptPath schema — Android ART under android/art (no runtime parent)
+ * v5: neutral conceptPath examples (no Android-specific prompt bias)
  */
-export const PROMPT_VERSION = 4;
+export const PROMPT_VERSION = 5;
 
 export type PromptOptions = {
   maxTopics: number;
@@ -124,11 +125,9 @@ export function buildPrompt(
     "- items 若引用【本 transcript 内】某轮用户提问，附 sourceTurnIndices（0-based，对应上文 [Q1]→0、[Q2]→1）",
     "- 禁止把助理回复里提到的其他会话/其他 thread 的轮次号写入 sourceTurnIndices；若要点来自助理归纳的其他会话，省略该字段",
     "- conceptPath: 3-5 段，从【最泛领域】到【最细概念】，每段 ≤12 字、小写英文/通用术语，用于跨会话合并按公共前缀聚类；本会话单图不显示。",
-    "  层级：第 1 段=领域（android / linux / frontend / …）；第 2 段=子系统；第 3–5 段=具体主题。同会话内同领域核心必须共享前缀。",
-    "  示例：「Binder 驱动调试」→ [\"android\",\"ipc\",\"binder\",\"binder 驱动\"]；「AIDL 代码生成」→ [\"android\",\"ipc\",\"aidl\"]；「React hooks 用法」→ [\"frontend\",\"react\",\"hooks\"]。",
-    "  Android ART：第 2 段统一用 art，不要用 runtime 作 ART 的父级。",
-    "    正例：「JIT即时编译」→ [\"android\",\"art\",\"jit\"]；「MethodEntered」→ [\"android\",\"art\",\"instrumentation\",\"method entry hook\"]；「DeoptimizeEverything」→ [\"android\",\"art\",\"deoptimization\",\"interpret only\"]。",
-    "    反例：不要用 [\"android\",\"runtime\",\"art\",\"jit\"]（runtime 与 art 重复分层）。",
+    "  层级：第 1 段=领域（frontend / backend / devops / …）；第 2 段=子系统或框架；第 3–5 段=具体主题。同会话内同领域核心必须共享前缀。",
+    "  示例：「React Hooks 用法」→ [\"frontend\",\"react\",\"hooks\"]；「Express 中间件」→ [\"backend\",\"nodejs\",\"express\",\"middleware\"]；「K8s Deployment」→ [\"devops\",\"kubernetes\",\"deployment\"]。",
+    "  path 必须根据本 transcript 内容归纳，禁止照搬与对话无关的示例路径。",
     "",
     "只输出严格 JSON，不要 markdown / 解释 / ```：",
     '{"title":"...","summary":"...","topics":[{"title":"...","summary":"...","conceptPath":["...","..."],"items":[{"text":"...","sourceTurnIndices":[0,2]}]}]}',

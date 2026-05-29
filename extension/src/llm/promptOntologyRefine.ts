@@ -8,7 +8,7 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const ONTOLOGY_REFINE_PROMPT_VERSION = 1;
+export const ONTOLOGY_REFINE_PROMPT_VERSION = 2;
 
 function clip(text: string, max: number): string {
   const t = text.replace(/\r/g, "").trim();
@@ -48,14 +48,14 @@ export function buildOntologyRefinePrompt(
     "",
     "要求：",
     "- 每条 equivalence 必须包含 scope（pathPrefix 和/或 evidenceKeywords），禁止全局无差别合并。",
-    "- 例：在 android 语境且证据含 ART/libart/dex2oat 时，runtime / androidruntime 可视为 art 的别名；",
-    "  但不要把所有领域的 runtime（如 node.js runtime）都改成 art。",
+    "- 例：在 frontend 语境且证据含 React/JSX/hooks 时，reactjs 可视为 react 的别名；",
+    "  但不要把 backend 领域的 api runtime 与 react 混淆合并。",
     "- canonical 应是更短、更稳定的段名；aliases 列出应被替换的同义段。",
     "- confidence 0-1；不确定则不要输出该条。",
     "- 不要输出 nodeMerges；只输出 segmentEquivalences。",
     "",
     "只输出严格 JSON：",
-    '{"segmentEquivalences":[{"canonical":"art","aliases":["runtime","androidruntime"],"scope":{"pathPrefix":["android"],"evidenceKeywords":["libart","art","dex2oat"]},"confidence":0.9,"rationale":"..."}]}',
+    '{"segmentEquivalences":[{"canonical":"react","aliases":["reactjs"],"scope":{"pathPrefix":["frontend"],"evidenceKeywords":["jsx","hooks","useState"]},"confidence":0.9,"rationale":"..."}]}',
     "",
     "输入 ontology nodes/mappings（摘要）：",
     JSON.stringify({
