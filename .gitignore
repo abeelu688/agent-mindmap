@@ -15,6 +15,11 @@ npm-log.txt
 *.log
 out.txt
 
+# eval (local overrides + generated reports)
+test/eval/eval.config.local.json
+test/eval/reports/
+test/eval/.cache/
+
 # local dev / agent artifacts
 _git-*.txt
 _vitest-exit.txt

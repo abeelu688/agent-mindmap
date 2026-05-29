@@ -1,0 +1,15 @@
+{
+  "useFixtureTranscripts": true,
+  "fixtureSet": "aosp14",
+  "projectSlug": "home-example-cursor-aosp14",
+  "projectPath": "/home/example/cursor/aosp14",
+  "sessionFilter": "all",
+  "llmProvider": "cursor-cli",
+  "promptParams": {
+    "maxTopics": 12,
+    "maxItemsPerTopic": 6
+  },
+  "writeReport": true,
+  "compareBaseline": true,
+  "useStoreRecords": false
+}

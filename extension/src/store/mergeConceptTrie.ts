@@ -43,18 +43,21 @@ type TopicLocation = {
   topic: Topic;
 };
 
-type TrieNode = {
+export type ConceptTrieNode = {
   /** Canonicalised key for equality across sessions. */
   key: string;
   /** Display label — pick the most common original casing seen. */
   label: string;
   /** Children keyed by canonical segment. */
-  children: Map<string, TrieNode>;
+  children: Map<string, ConceptTrieNode>;
   /** Topics whose conceptPath terminates at this node. */
   topics: TopicLocation[];
   /** Count of times this segment was seen (for label voting / sorting). */
   occurrences: number;
 };
+
+/** @internal alias */
+type TrieNode = ConceptTrieNode;
 
 function makeNode(canonical: string, label: string): TrieNode {
   return {
@@ -207,6 +210,13 @@ export type ConceptMergeStats = {
   rootChildren: number;
 };
 
+export type ConceptTrieStructure = {
+  root: ConceptTrieNode;
+  orphans: TopicLocation[];
+  filtered: SessionRecord[];
+  stats: ConceptMergeStats;
+};
+
 function conceptTrieEmptyLeaf(
   filteredRecordCount: number,
   totalTopics: number,
@@ -236,10 +246,10 @@ function conceptTrieEmptyLeaf(
   );
 }
 
-export function buildConceptTrieMindMap(
+export function buildConceptTrieStructure(
   records: SessionRecord[],
   options: ConceptMergeOptions = {}
-): { mindMap: MindMapRoot; stats: ConceptMergeStats } {
+): ConceptTrieStructure {
   const filtered = options.projectSlug
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
@@ -262,6 +272,28 @@ export function buildConceptTrieMindMap(
   }
 
   mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
+
+  const sortedTop = [...root.children.values()].sort(
+    (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
+  );
+  const rootChildren = sortedTop.length + (orphans.length ? 1 : 0);
+
+  const stats: ConceptMergeStats = {
+    recordCount: filtered.length,
+    totalTopics: total,
+    topicsWithPath: total - orphans.length,
+    topicsWithoutPath: orphans.length,
+    rootChildren,
+  };
+
+  return { root, orphans, filtered, stats };
+}
+
+export function buildConceptTrieMindMap(
+  records: SessionRecord[],
+  options: ConceptMergeOptions = {}
+): { mindMap: MindMapRoot; stats: ConceptMergeStats } {
+  const { root, orphans, stats } = buildConceptTrieStructure(records, options);
 
   const title =
     options.title ??
@@ -287,18 +319,10 @@ export function buildConceptTrieMindMap(
     topChildren.push(withOrigin(orphanBranch, unionChildRefs(orphanNodes)));
   }
 
-  const stats: ConceptMergeStats = {
-    recordCount: filtered.length,
-    totalTopics: total,
-    topicsWithPath: total - orphans.length,
-    topicsWithoutPath: orphans.length,
-    rootChildren: topChildren.length,
-  };
-
   if (!topChildren.length) {
     const emptyLeaf = conceptTrieEmptyLeaf(
-      filtered.length,
-      total,
+      stats.recordCount,
+      stats.totalTopics,
       root.topics.length
     );
     return {
