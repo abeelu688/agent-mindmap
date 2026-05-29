@@ -271,6 +271,13 @@ describe("extractPayload", () => {
     expect(__testing.extractPayload('{"result":"inner"}')).toBe("inner");
   });
 
+  it("unwraps {result: {...}} when result is already an object", () => {
+    const out = __testing.extractPayload(
+      '{"result":{"title":"t","outline":[{"title":"A","details":[{"text":"x"}]}]}}'
+    );
+    expect(JSON.parse(out).outline.length).toBe(1);
+  });
+
   it("scans NDJSON for last string payload", () => {
     const out = __testing.extractPayload(
       '{"event":"start"}\n{"result":"final"}\n'

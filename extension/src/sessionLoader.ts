@@ -4,12 +4,14 @@ import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
+import { showCliInstallGuide } from "./llm/cliInstallGuide";
 import { PROMPT_VERSION } from "./llm/promptOutline";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
 import { summarizeSession } from "./llm/summarizeSession";
 import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
+  type LlmErrorCode,
   type LlmProviderId,
   type LlmProviderOptions,
   type SessionOutline,
@@ -36,6 +38,7 @@ import {
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
+
 export type LoadedSession = {
   session: TranscriptSession;
   mindMap: MindMapRoot;
@@ -43,6 +46,8 @@ export type LoadedSession = {
   source: "topic" | "turn";
   /** True when the topic graph came from the on-disk library (no LLM call). */
   fromLibrary?: boolean;
+  /** Set when source is turn after an LLM failure. */
+  llmErrorCode?: LlmErrorCode;
 };
 
 export type LoadDeps = {
@@ -253,6 +258,8 @@ export type LoadSessionOptions = {
   forceRefresh?: boolean;
   /** Skip background deterministic/concept merge rebuild after writeRecord. */
   skipAutoMerge?: boolean;
+  /** Suppress per-session LLM failure toasts (batch shows one summary). */
+  quietLlmErrors?: boolean;
 };
 
 export type AnalyzeProjectOptions = {
@@ -270,6 +277,12 @@ export type AnalyzeProjectResult = {
   total: number;
   analyzed: number;
   skippedFresh: number;
+  /** Sessions that fell back to chronological turn view (no library write). */
+  turnFallbacks: number;
+  /** Turn fallbacks caused by missing CLI binary. */
+  cliMissingCount: number;
+  /** Turn fallbacks caused by unparseable LLM JSON. */
+  jsonParseFailures: number;
   failed: number;
   failures: { sessionId: string; label: string; message: string }[];
 };
@@ -409,17 +422,22 @@ export async function loadSession(
     const detail = describeError(err);
     const cliMissing =
       err instanceof LlmProviderError && err.code === "cli-missing";
-    const action = cliMissing
-      ? host.cliMissingHint()
-      : t("ui.llm.failed.fallback", "Falling back to chronological view.");
-    vscode.window.showWarningMessage(
-      t(
-        "ui.llm.failed.message",
-        "Agent Mind Map: LLM summarization failed ({0}). {1}",
-        detail,
-        action
-      )
-    );
+    const llmErrorCode =
+      err instanceof LlmProviderError ? err.code : undefined;
+    if (!options.quietLlmErrors) {
+      if (cliMissing) {
+        void showCliInstallGuide(host.id, { modal: false });
+      } else {
+        vscode.window.showWarningMessage(
+          t(
+            "ui.llm.failed.message",
+            "Agent Mind Map: LLM summarization failed ({0}). {1}",
+            detail,
+            t("ui.llm.failed.fallback", "Falling back to chronological view.")
+          )
+        );
+      }
+    }
     console.warn("[agent-mindmap] LLM failure, using turn fallback:", err);
     return {
       session: { ...session, hostId: host.id },
@@ -430,6 +448,7 @@ export async function loadSession(
         sessionMeta
       ),
       source: "turn",
+      llmErrorCode,
     };
   }
 
@@ -524,6 +543,9 @@ export async function runProjectSessionBatch(
   const total = sessions.length;
   let analyzed = 0;
   let skippedFresh = 0;
+  let turnFallbacks = 0;
+  let cliMissingCount = 0;
+  let jsonParseFailures = 0;
   let failed = 0;
   const failures: AnalyzeProjectResult["failures"] = [];
 
@@ -548,7 +570,7 @@ export async function runProjectSessionBatch(
       const loaded = await loadOne(
         session,
         { ...deps, progress: itemProgress },
-        { forceRefresh, skipAutoMerge },
+        { forceRefresh, skipAutoMerge, quietLlmErrors: true },
         host
       );
       analyzed += 1;
@@ -556,6 +578,12 @@ export async function runProjectSessionBatch(
         skippedFresh += 1;
         reportComplete(t("ui.batch.item.cacheHit", "Cache hit"));
       } else if (loaded.source === "turn") {
+        turnFallbacks += 1;
+        if (loaded.llmErrorCode === "cli-missing") {
+          cliMissingCount += 1;
+        } else if (loaded.llmErrorCode === "bad-json") {
+          jsonParseFailures += 1;
+        }
         reportComplete(
           t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
         );
@@ -598,6 +626,9 @@ export async function runProjectSessionBatch(
     total,
     analyzed,
     skippedFresh,
+    turnFallbacks,
+    cliMissingCount,
+    jsonParseFailures,
     failed,
     failures,
   };
@@ -623,6 +654,9 @@ export async function runProjectSessionBatches(
 
   let analyzed = 0;
   let skippedFresh = 0;
+  let turnFallbacks = 0;
+  let cliMissingCount = 0;
+  let jsonParseFailures = 0;
   let failed = 0;
   const failures: AnalyzeProjectResult["failures"] = [];
 
@@ -650,7 +684,7 @@ export async function runProjectSessionBatches(
       const loaded = await loadOne(
         session,
         { ...deps, progress: itemProgress },
-        { forceRefresh, skipAutoMerge },
+        { forceRefresh, skipAutoMerge, quietLlmErrors: true },
         host
       );
       analyzed += 1;
@@ -658,6 +692,12 @@ export async function runProjectSessionBatches(
         skippedFresh += 1;
         reportComplete(t("ui.batch.item.cacheHit", "Cache hit"));
       } else if (loaded.source === "turn") {
+        turnFallbacks += 1;
+        if (loaded.llmErrorCode === "cli-missing") {
+          cliMissingCount += 1;
+        } else if (loaded.llmErrorCode === "bad-json") {
+          jsonParseFailures += 1;
+        }
         reportComplete(
           t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
         );
@@ -691,6 +731,9 @@ export async function runProjectSessionBatches(
         total,
         analyzed,
         skippedFresh,
+        turnFallbacks,
+        cliMissingCount,
+        jsonParseFailures,
         failed,
         failures,
         batchNo,
@@ -719,6 +762,9 @@ export async function runProjectSessionBatches(
     total,
     analyzed,
     skippedFresh,
+    turnFallbacks,
+    cliMissingCount,
+    jsonParseFailures,
     failed,
     failures,
   };

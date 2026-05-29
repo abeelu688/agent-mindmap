@@ -167,10 +167,10 @@ describe("buildConceptTrieMindMap", () => {
     const topicNode = mindMap.children?.[0]?.children?.find(
       (c) => !isTrieSegmentLabel(c.data.text)
     );
-    expect(topicNode?.children?.[0]?.data.text).toBe("（无细节）");
+    expect(topicNode?.children?.[0]?.data.text).toBe("(No details)");
   });
 
-  it("places topics without conceptPath under a 未分类 bucket", () => {
+  it("places topics without conceptPath under an Uncategorized bucket", () => {
     const records = [
       makeRecord("a", "proj", {
         topics: [topic("With path", ["android", "ui"], ["x"])],
@@ -182,7 +182,7 @@ describe("buildConceptTrieMindMap", () => {
     const { mindMap, stats } = buildConceptTrieMindMap(records);
     expect(stats.topicsWithoutPath).toBe(1);
     const labels = mindMap.children?.map((c) => c.data.text) ?? [];
-    expect(labels.some((l) => l.startsWith("未分类"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Uncategorized"))).toBe(true);
   });
 
   it("filters by projectSlug", () => {
@@ -210,6 +210,18 @@ describe("buildConceptTrieMindMap", () => {
       // Intentionally only orphans; check no crash and we still get a tree.
     });
     expect(mindMap.children?.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns an analyzed-session hint when project filter matches no records", () => {
+    const records = [
+      makeRecord("a", "proj-a", {
+        topics: [topic("Binder", ["android", "ipc", "binder"], ["x"])],
+      }),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records, {
+      projectSlug: "proj-b",
+    });
+    expect(mindMap.children?.[0].data.text).toContain("No analyzed sessions");
   });
 
   it("merges android/runtime/art and android/art under one art node", () => {

@@ -9,6 +9,7 @@ import {
 } from "../transcript/listSessions";
 import type { ChatEvent, TranscriptSession } from "../transcript/types";
 import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "./claudePath";
+import { cliMissingHintSummary } from "../llm/cliInstallGuide";
 import type { AgentHost } from "./types";
 
 const SUBAGENT_DIR = "subagents";
@@ -135,7 +136,7 @@ export const claudeHost: AgentHost = {
   },
 
   cliMissingHint(): string {
-    return "Install Claude Code CLI: https://code.claude.com/docs/en/headless";
+    return cliMissingHintSummary("claude-code");
   },
 
   emptyTranscriptsHint(scanDir: string): string {

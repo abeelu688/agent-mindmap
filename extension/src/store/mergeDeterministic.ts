@@ -1,3 +1,4 @@
+import { uiTranslate } from "../l10n/uiTranslate";
 import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
 import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
@@ -56,7 +57,7 @@ function sessionBranch(record: SessionRecord): MindMapNodeData {
 }
 
 export type DeterministicMergeOptions = {
-  /** Override the root node label. Defaults to "Agent Mind Map · 全部". */
+  /** Override the root node label. Defaults to localized "Agent Mind Map · All". */
   title?: string;
   /** Restrict to a specific project slug. Empty = all projects. */
   projectSlug?: string;
@@ -97,7 +98,10 @@ export function buildDeterministicMergeMindMap(
     const display =
       sessions.find((s) => s.meta.projectPath)?.meta.projectPath ?? slug;
     const sessionNodes = sessions.map(sessionBranch);
-    const node = branch(`项目: ${display}`, sessionNodes);
+    const node = branch(
+      uiTranslate("mindmap.merge.projectPrefix", "Project: {0}", display),
+      sessionNodes
+    );
     return withOrigin(node, unionChildRefs(sessionNodes));
   });
 
@@ -105,12 +109,19 @@ export function buildDeterministicMergeMindMap(
     options.title ??
     (options.projectSlug
       ? `Agent Mind Map · ${options.projectSlug}`
-      : "Agent Mind Map · 全部");
+      : uiTranslate("mindmap.merge.titleAll", "Agent Mind Map · All"));
 
   if (!projectNodes.length) {
     return {
       data: { text: title, expand: true },
-      children: [leaf("(库中暂无已分析的 session)")],
+      children: [
+        leaf(
+          uiTranslate(
+            "mindmap.merge.empty.noSessions",
+            "(No analyzed sessions in the library)"
+          )
+        ),
+      ],
     };
   }
 

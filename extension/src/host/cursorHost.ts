@@ -8,6 +8,7 @@ import {
 } from "../transcript/listSessions";
 import { parseJsonl } from "../transcript/parseJsonl";
 import type { ChatEvent, TranscriptSession } from "../transcript/types";
+import { cliMissingHintSummary } from "../llm/cliInstallGuide";
 import { workspaceToSlug, slugToWorkspacePath } from "../paths";
 import type { AgentHost } from "./types";
 
@@ -57,8 +58,10 @@ export const cursorHost: AgentHost = {
   },
 
   getSessionsScanDir(workspacePath: string): string | undefined {
+    const projectsRoot = getCursorProjectsRoot();
     const slug = workspaceToSlug(workspacePath);
-    return path.join(getCursorProjectsRoot(), slug, "agent-transcripts");
+    const scanDir = path.join(projectsRoot, slug, "agent-transcripts");
+    return scanDir;
   },
 
   async listSessions(
@@ -95,7 +98,7 @@ export const cursorHost: AgentHost = {
   },
 
   cliMissingHint(): string {
-    return "Install cursor-agent CLI: curl https://cursor.com/install -fsS | bash";
+    return cliMissingHintSummary("cursor");
   },
 
   emptyTranscriptsHint(scanDir: string): string {

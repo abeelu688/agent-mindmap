@@ -1,3 +1,4 @@
+import { uiTranslate } from "../l10n/uiTranslate";
 import { normalizeConceptPath } from "./normalizeConceptPath";
 import type { OutlineNode, SessionOutline, Topic, TopicGraph } from "./types";
 
@@ -61,7 +62,26 @@ export function outlineToTopicGraph(outline: SessionOutline): TopicGraph {
   return {
     title: outline.title,
     summary: outline.summary,
-    topics: topics.length ? topics : [{ title: outline.title ?? "会话", items: [{ text: "（无细节）" }] }],
+    topics: topics.length
+      ? topics
+      : [
+          {
+            title:
+              outline.title ??
+              uiTranslate(
+                "mindmap.turn.sessionDefault",
+                "Agent Session"
+              ),
+            items: [
+              {
+                text: uiTranslate(
+                  "mindmap.concept.noDetails",
+                  "(No details)"
+                ),
+              },
+            ],
+          },
+        ],
   };
 }
 

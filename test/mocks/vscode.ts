@@ -1,6 +1,6 @@
 /** Minimal vscode stub for vitest (extension code imports `vscode`). */
 export const workspace = {
-  getConfiguration: () => ({
+  getConfiguration: (_section?: string) => ({
     get: (_key: string, defaultValue?: unknown) => defaultValue,
   }),
 };
@@ -17,4 +17,10 @@ export const Uri = {
 
 export const commands = {
   executeCommand: async () => undefined,
+};
+
+export const env = {
+  language: "en",
+  clipboard: { writeText: async () => undefined },
+  openExternal: async () => true,
 };
