@@ -1,6 +1,6 @@
 {
   "ui.progress.analyzingSession.title": "Agent Mind Map: 正在分析会话…",
-  "ui.loading.preparing": "正在准备…",
+  "ui.loading.preparing": "理解对话中",
   "ui.loading.transcriptUpdatedReanalyzing": "对话记录已更新，正在重新分析…",
   "ui.loading.forceReanalyzing": "正在强制重新分析…",
   "ui.command.refresh.done": "Agent Mind Map 已刷新。",
