@@ -22,7 +22,10 @@ import {
   buildReattachPrompt,
   type ReattachCandidate,
 } from "../llm/promptReattach";
-import type { ConceptOntologyRecord } from "./ontologyTypes";
+import type {
+  ConceptOntologyRecord,
+  TopicConceptPathDecision,
+} from "./ontologyTypes";
 import type { SessionRecord } from "./storeTypes";
 import {
   ensureStore,
@@ -61,7 +64,7 @@ function safeT(
   return format(message, args);
 }
 
-type OntologyIndex = {
+export type OntologyIndex = {
   schemaVersion: 1;
   updatedAt: number;
   entries: {
@@ -71,6 +74,77 @@ type OntologyIndex = {
     projectSlugs: string[];
   }[];
 };
+
+export type EnsureOntologyMemoryFlags = {
+  /** Re-run refine even when cache is complete; do not return early on cache hit. */
+  forceRefine?: boolean;
+  /** Reuse nodes/mappings from the latest subset ontology cache in index.json. */
+  incrementalFromIndex?: boolean;
+  /** Skip extract and topicPaths; only run refine (final pass). */
+  refineOnly?: boolean;
+};
+
+function sessionIdsSubsetOf(subset: string[], superset: string[]): boolean {
+  const set = new Set(superset);
+  return subset.every((id) => set.has(id));
+}
+
+export async function readOntologyIndex(
+  storeDir: string
+): Promise<OntologyIndex | undefined> {
+  const parsed = await readJson<OntologyIndex>(ontologyIndexPath(storeDir));
+  if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.entries)) {
+    return undefined;
+  }
+  return parsed;
+}
+
+/**
+ * Latest ontology cache for the same project whose sessions are a subset of
+ * the current selection (for incremental nodes/mappings reuse).
+ */
+export async function findReusableOntologyBase(
+  storeDir: string,
+  records: SessionRecord[]
+): Promise<ConceptOntologyRecord | undefined> {
+  if (!records.length) {
+    return undefined;
+  }
+  const currentSessionIds = records.map((r) => r.meta.sessionId);
+  const projectSlugs = new Set(records.map((r) => r.meta.projectSlug));
+  const index = await readOntologyIndex(storeDir);
+  if (!index?.entries.length) {
+    return undefined;
+  }
+  const candidates = index.entries
+    .filter(
+      (e) =>
+        e.sessionIds.length > 0 &&
+        e.projectSlugs.some((s) => projectSlugs.has(s)) &&
+        sessionIdsSubsetOf(e.sessionIds, currentSessionIds)
+    )
+    .sort((a, b) => b.builtAt - a.builtAt);
+  for (const entry of candidates) {
+    const cached = await readOntologyRecord(storeDir, entry.cacheKey);
+    if (cached?.nodes?.length && cached.mappings) {
+      return cached;
+    }
+  }
+  return undefined;
+}
+
+function filterTopicPathsForSessions(
+  topicPaths: TopicConceptPathDecision[],
+  sessionIds: Set<string>
+): TopicConceptPathDecision[] {
+  return topicPaths.filter((p) => sessionIds.has(p.sessionId));
+}
+
+function sessionIdsWithTopicPaths(
+  topicPaths: TopicConceptPathDecision[]
+): Set<string> {
+  return new Set(topicPaths.map((p) => p.sessionId));
+}
 
 function projectSlugsFor(records: SessionRecord[]): string[] {
   return Array.from(new Set(records.map((r) => r.meta.projectSlug))).sort();
@@ -248,13 +322,156 @@ async function runOntologyRefine(
   }
 }
 
-function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
+export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
   return (
     record.nodes.length > 0 &&
     record.topicPaths.length > 0 &&
     record.meta.promptVersions.refine === ONTOLOGY_REFINE_PROMPT_VERSION &&
     record.segmentEquivalences !== undefined
   );
+}
+
+async function inferTopicPathsForRecords(
+  records: SessionRecord[],
+  nodes: ConceptOntologyRecord["nodes"],
+  mappings: ConceptOntologyRecord["mappings"],
+  existingPaths: TopicConceptPathDecision[],
+  opts: {
+    model?: string;
+    hostId?: AgentHostId;
+    promptLanguage?: PromptLanguage;
+  },
+  hostId: AgentHostId,
+  provider: LlmProvider,
+  signal: AbortSignal,
+  progress?: MindMapProgress
+): Promise<TopicConceptPathDecision[]> {
+  const covered = sessionIdsWithTopicPaths(existingPaths);
+  const toInfer = records.filter((r) => !covered.has(r.meta.sessionId));
+  if (!toInfer.length) {
+    return existingPaths;
+  }
+
+  const lite: OntologyLite = {
+    nodes: nodes.map((n) => ({
+      key: n.key,
+      label: n.label,
+      aliases: n.aliases,
+      parentKeys: n.parentKeys,
+    })),
+    mappings: mappings.map((m) => ({ mention: m.mention, key: m.key })),
+  };
+
+  const topicPaths = [...existingPaths];
+  const total = toInfer.length;
+  let index = 0;
+  for (const rec of toInfer) {
+    index += 1;
+    progress?.report(
+      safeT(
+        "ui.ontology.topicPaths.step",
+        "Inferring topic paths ({0}/{1})…",
+        index,
+        total
+      )
+    );
+    const { prompt } = buildTopicPathsPrompt(
+      rec,
+      lite,
+      hostId,
+      opts.promptLanguage ?? "zh"
+    );
+    const heartbeat = createHeartbeat(
+      progress,
+      safeT(
+        "ui.ontology.topicPaths.step",
+        "Inferring topic paths ({0}/{1})…",
+        index,
+        total
+      )
+    );
+    let res: Awaited<ReturnType<LlmProvider["summarize"]>>;
+    try {
+      res = await provider.summarize(
+        {
+          events: [],
+          prompt,
+          model: opts.model,
+          maxTopics: 8,
+          maxItemsPerTopic: 8,
+          responseSchema: "topic-paths",
+          onAttempt: (attempt, maxAttempts) => {
+            if (attempt > 1) {
+              progress?.report(
+                safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
+              );
+            }
+          },
+        },
+        signal
+      );
+    } finally {
+      heartbeat.stop();
+    }
+    const parsed = validateTopicPaths(res as any);
+    const validatedPaths = validateConceptOntology({
+      nodes,
+      mappings,
+      topicPaths: parsed.topicPaths,
+    } as any).topicPaths;
+    for (const p of validatedPaths) {
+      topicPaths.push(p);
+    }
+  }
+  return topicPaths;
+}
+
+async function writeOntologyRecord(
+  storeDir: string,
+  cacheKey: string,
+  records: SessionRecord[],
+  hostId: AgentHostId,
+  opts: {
+    model?: string;
+    hostId?: AgentHostId;
+  },
+  provider: LlmProvider,
+  payload: Pick<
+    ConceptOntologyRecord,
+    "nodes" | "mappings" | "topicPaths" | "reattachMoves" | "segmentEquivalences"
+  >
+): Promise<ConceptOntologyRecord> {
+  const record: ConceptOntologyRecord = {
+    schemaVersion: 1,
+    meta: {
+      builtAt: Date.now(),
+      cacheKey,
+      sessionIds: records.map((r) => r.meta.sessionId),
+      projectSlugs: projectSlugsFor(records),
+      llm: { provider: provider.id, model: opts.model?.trim() || undefined },
+      promptVersions: {
+        ontology: ONTOLOGY_PROMPT_VERSION,
+        topicPaths: TOPIC_PATHS_PROMPT_VERSION,
+        reattach: REATTACH_PROMPT_VERSION,
+        refine: ONTOLOGY_REFINE_PROMPT_VERSION,
+        outlineSchema: OUTLINE_PROMPT_VERSION,
+      },
+      hostId,
+    },
+    nodes: payload.nodes,
+    mappings: payload.mappings,
+    topicPaths: payload.topicPaths,
+    reattachMoves: payload.reattachMoves,
+    segmentEquivalences: payload.segmentEquivalences,
+  };
+  await writeJsonAtomic(ontologyCachePath(storeDir, cacheKey), record);
+  await writeOntologyIndex(storeDir, {
+    cacheKey,
+    builtAt: record.meta.builtAt,
+    sessionIds: record.meta.sessionIds,
+    projectSlugs: record.meta.projectSlugs,
+  });
+  return record;
 }
 
 /**
@@ -271,7 +488,8 @@ export async function ensureOntologyMemory(
   provider: LlmProvider,
   storeDir: string,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: MindMapProgress,
+  flags: EnsureOntologyMemoryFlags = {}
 ): Promise<ConceptOntologyRecord> {
   await ensureStore(storeDir);
   progress?.report(
@@ -279,19 +497,63 @@ export async function ensureOntologyMemory(
   );
   const cacheKey = computeOntologyCacheKey(records, opts, provider.id);
   const cached = await readOntologyRecord(storeDir, cacheKey);
-  if (cached && isCompleteOntologyRecord(cached)) {
+  if (
+    cached &&
+    isCompleteOntologyRecord(cached) &&
+    !flags.forceRefine &&
+    !flags.refineOnly
+  ) {
     progress?.report(safeT("ui.ontology.cache.hit", "Concept ontology cache hit…"));
     return cached;
   }
 
   const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
+  const currentSessionIds = new Set(records.map((r) => r.meta.sessionId));
 
-  let nodes = cached?.nodes;
-  let mappings = cached?.mappings;
-  let topicPaths = cached?.topicPaths ?? [];
-  let reattachMoves = cached?.reattachMoves;
+  const reusableBase = flags.incrementalFromIndex
+    ? await findReusableOntologyBase(storeDir, records)
+    : undefined;
 
-  if (!nodes || !mappings) {
+  let nodes = cached?.nodes ?? reusableBase?.nodes;
+  let mappings = cached?.mappings ?? reusableBase?.mappings;
+  let reattachMoves = cached?.reattachMoves ?? reusableBase?.reattachMoves;
+  let topicPaths = filterTopicPathsForSessions(
+    cached?.topicPaths ?? reusableBase?.topicPaths ?? [],
+    currentSessionIds
+  );
+
+  if (flags.refineOnly) {
+    if (!nodes?.length || !mappings) {
+      throw new Error(
+        "ontology refine-only requires existing nodes/mappings in cache"
+      );
+    }
+    const segmentEquivalences = await runOntologyRefine(
+      records,
+      { nodes, mappings, topicPaths, reattachMoves },
+      opts,
+      provider,
+      signal,
+      progress
+    );
+    return writeOntologyRecord(
+      storeDir,
+      cacheKey,
+      records,
+      hostId,
+      opts,
+      provider,
+      {
+        nodes,
+        mappings,
+        topicPaths,
+        reattachMoves,
+        segmentEquivalences,
+      }
+    );
+  }
+
+  if (!nodes?.length || !mappings) {
     progress?.report(safeT("ui.ontology.extract", "Extracting concept ontology…"));
     const heartbeat = createHeartbeat(
       progress,
@@ -329,80 +591,25 @@ export async function ensureOntologyMemory(
     nodes = validated.nodes;
     mappings = validated.mappings;
     reattachMoves = validated.reattachMoves;
-    topicPaths = [];
-  }
-
-  const lite: OntologyLite = {
-    nodes: nodes!.map((n) => ({
-      key: n.key,
-      label: n.label,
-      aliases: n.aliases,
-      parentKeys: n.parentKeys,
-    })),
-    mappings: mappings!.map((m) => ({ mention: m.mention, key: m.key })),
-    segmentEquivalences: cached?.segmentEquivalences,
-  };
-
-  if (!topicPaths.length) {
-    const total = records.length;
-    let index = 0;
-    for (const rec of records) {
-      index += 1;
-      progress?.report(
-        safeT("ui.ontology.topicPaths.step", "Inferring topic paths ({0}/{1})…", index, total)
-      );
-      const { prompt } = buildTopicPathsPrompt(
-        rec,
-        lite,
-        hostId,
-        opts.promptLanguage ?? "zh"
-      );
-      const heartbeat = createHeartbeat(
-        progress,
-        safeT(
-          "ui.ontology.topicPaths.step",
-          "Inferring topic paths ({0}/{1})…",
-          index,
-          total
-        )
-      );
-      let res: Awaited<ReturnType<LlmProvider["summarize"]>>;
-      try {
-        res = await provider.summarize(
-          {
-            events: [],
-            prompt,
-            model: opts.model,
-            maxTopics: 8,
-            maxItemsPerTopic: 8,
-            responseSchema: "topic-paths",
-            onAttempt: (attempt, maxAttempts) => {
-              if (attempt > 1) {
-                progress?.report(
-                  safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-                );
-              }
-            },
-          },
-          signal
-        );
-      } finally {
-        heartbeat.stop();
-      }
-      const parsed = validateTopicPaths(res as any);
-      const validatedPaths = validateConceptOntology({
-        nodes: nodes!,
-        mappings: mappings!,
-        topicPaths: parsed.topicPaths,
-      } as any).topicPaths;
-      for (const p of validatedPaths) {
-        topicPaths.push(p);
-      }
+    if (!flags.incrementalFromIndex || !reusableBase) {
+      topicPaths = [];
     }
   }
 
-  let segmentEquivalences = cached?.segmentEquivalences;
-  if (segmentEquivalences === undefined) {
+  topicPaths = await inferTopicPathsForRecords(
+    records,
+    nodes!,
+    mappings!,
+    topicPaths,
+    opts,
+    hostId,
+    provider,
+    signal,
+    progress
+  );
+
+  let segmentEquivalences: ConceptOntologyRecord["segmentEquivalences"];
+  if (flags.forceRefine || cached?.segmentEquivalences === undefined) {
     segmentEquivalences = await runOntologyRefine(
       records,
       { nodes: nodes!, mappings: mappings!, topicPaths, reattachMoves },
@@ -411,40 +618,25 @@ export async function ensureOntologyMemory(
       signal,
       progress
     );
+  } else {
+    segmentEquivalences = cached!.segmentEquivalences;
   }
 
-  const record: ConceptOntologyRecord = {
-    schemaVersion: 1,
-    meta: {
-      builtAt: Date.now(),
-      cacheKey,
-      sessionIds: records.map((r) => r.meta.sessionId),
-      projectSlugs: projectSlugsFor(records),
-      llm: { provider: provider.id, model: opts.model?.trim() || undefined },
-      promptVersions: {
-        ontology: ONTOLOGY_PROMPT_VERSION,
-        topicPaths: TOPIC_PATHS_PROMPT_VERSION,
-        reattach: REATTACH_PROMPT_VERSION,
-        refine: ONTOLOGY_REFINE_PROMPT_VERSION,
-        outlineSchema: OUTLINE_PROMPT_VERSION,
-      },
-      hostId,
-    },
-    nodes: nodes!,
-    mappings: mappings!,
-    topicPaths,
-    reattachMoves,
-    segmentEquivalences,
-  };
-
-  await writeJsonAtomic(ontologyCachePath(storeDir, cacheKey), record);
-  await writeOntologyIndex(storeDir, {
+  return writeOntologyRecord(
+    storeDir,
     cacheKey,
-    builtAt: record.meta.builtAt,
-    sessionIds: record.meta.sessionIds,
-    projectSlugs: record.meta.projectSlugs,
-  });
-  return record;
+    records,
+    hostId,
+    opts,
+    provider,
+    {
+      nodes: nodes!,
+      mappings: mappings!,
+      topicPaths,
+      reattachMoves,
+      segmentEquivalences,
+    }
+  );
 }
 
 /**

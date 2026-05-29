@@ -17,7 +17,12 @@ const equivalences: SegmentEquivalence[] = [
   },
 ];
 
-function record(sessionId: string, title: string, path: string[]) {
+function record(
+  sessionId: string,
+  title: string,
+  path: string[],
+  itemTexts: string[] = ["libart"]
+) {
   return buildSessionRecord(
     buildRecordMeta({
       sessionId,
@@ -32,7 +37,13 @@ function record(sessionId: string, title: string, path: string[]) {
       sessionLabel: title,
     }),
     topicGraphToOutline({
-      topics: [{ title, conceptPath: path, items: [{ text: "libart" }] }],
+      topics: [
+        {
+          title,
+          conceptPath: path,
+          items: itemTexts.map((text) => ({ text })),
+        },
+      ],
     })
   );
 }
@@ -50,6 +61,37 @@ describe("mergeTrieSiblingsByEquivalences", () => {
       c.data.text.startsWith("android (")
     );
     expect(android).toBeDefined();
+    const childLabels =
+      android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
+      [];
+    expect(childLabels.filter((l) => l === "art")).toHaveLength(1);
+    expect(childLabels).not.toContain("runtime");
+  });
+
+  it("merges siblings when evidence keywords match subtree topics", () => {
+    const withEvidence: SegmentEquivalence[] = [
+      {
+        canonical: "art",
+        aliases: ["runtime"],
+        scope: {
+          pathPrefix: ["android"],
+          evidenceKeywords: ["libart"],
+        },
+        confidence: 0.9,
+      },
+    ];
+    const records = [
+      record("s1", "ART", ["android", "art", "jit"]),
+      record("s2", "Runtime path", ["android", "runtime", "start"], [
+        "libart.so",
+      ]),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records, {
+      segmentEquivalences: withEvidence,
+    });
+    const android = mindMap.children?.find((c) =>
+      c.data.text.startsWith("android (")
+    );
     const childLabels =
       android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
       [];

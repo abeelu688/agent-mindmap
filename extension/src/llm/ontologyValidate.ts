@@ -141,13 +141,27 @@ function parseScope(value: unknown): SegmentEquivalence["scope"] | undefined {
   const pathPrefix = parseStringArray(obj.pathPrefix, 8, MAX_KEY)?.map((s) =>
     s.toLowerCase()
   );
+  const downstreamPrefix = parseStringArray(obj.downstreamPrefix, 8, MAX_KEY)?.map(
+    (s) => s.toLowerCase()
+  );
+  const downstreamFirst = parseStringArray(obj.downstreamFirst, 8, MAX_KEY)?.map(
+    (s) => s.toLowerCase()
+  );
   const projectSlugs = parseStringArray(obj.projectSlugs, 16, 200);
   const evidenceKeywords = parseStringArray(obj.evidenceKeywords, 24, 80);
-  if (!pathPrefix?.length && !projectSlugs?.length && !evidenceKeywords?.length) {
+  if (
+    !pathPrefix?.length &&
+    !downstreamPrefix?.length &&
+    !downstreamFirst?.length &&
+    !projectSlugs?.length &&
+    !evidenceKeywords?.length
+  ) {
     return undefined;
   }
   return {
     pathPrefix,
+    downstreamPrefix,
+    downstreamFirst,
     projectSlugs,
     evidenceKeywords,
   };

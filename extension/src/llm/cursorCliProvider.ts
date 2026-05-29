@@ -8,6 +8,7 @@ import type { SummarizeInput } from "./types";
 
 export {
   canonicalizeConceptSegment,
+  segmentKeyForMerge,
   validateTopicGraph,
 } from "./topicGraphValidate";
 export { validateSessionOutline, validateMergedOutline } from "./outlineValidate";

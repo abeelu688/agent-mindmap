@@ -49,21 +49,24 @@ import {
   writeMergeRecord,
 } from "./store/sessionStore";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
+import { buildConceptTrieMindMap } from "./store/mergeConceptTrie";
 import {
-  buildConceptMergeRecordAsync,
-  buildConceptMergeRecord,
-  buildConceptTrieMindMap,
-} from "./store/mergeConceptTrie";
+  buildConceptMergeWithOntology,
+  ensureIncrementalOntologyAndBuildConceptMerge,
+  ensureOntologyAndBuildConceptMerge,
+  loadSegmentEquivalencesForRecords,
+  type ConceptMergeLlmOpts,
+} from "./store/conceptMergeContext";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
 import { mergeWithLlm } from "./store/mergeLlm";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { getProvider } from "./llm";
+import { clearOntologyCache } from "./store/ontologyStore";
 import {
-  clearOntologyCache,
-  ensureOntologyMemory,
-} from "./store/ontologyStore";
-import { applyTopicPathsFromOntology } from "./store/applyOntology";
-import { LlmProviderError, type LlmProviderOptions } from "./llm/types";
+  LlmProviderError,
+  type LlmProvider,
+  type LlmProviderOptions,
+} from "./llm/types";
 import type { SessionRecord } from "./store/storeTypes";
 import { exportMindMapPackage } from "./export/exportPackage";
 import { openMindMapPackage } from "./export/openMindMapPackage";
@@ -534,6 +537,107 @@ async function commandOpenMerged(): Promise<void> {
   await showMindMapStandalone(`Agent Mind Map · 全部`, merge.mindMap);
 }
 
+function toConceptMergeLlmOpts(
+  llmOpts: LlmProviderOptions,
+  providerId: string
+): ConceptMergeLlmOpts {
+  return {
+    model: llmOpts.model,
+    hostId: llmOpts.hostId,
+    providerId,
+  };
+}
+
+async function buildProjectConceptMergeFromCache(
+  storeDir: string,
+  records: SessionRecord[],
+  llmOpts: ConceptMergeLlmOpts,
+  projectSlug?: string
+): Promise<import("./store/storeTypes").MergeRecord> {
+  const ctx = await loadSegmentEquivalencesForRecords(
+    storeDir,
+    records,
+    llmOpts
+  );
+  const sanitized = await Promise.all(
+    records.map((r) => sanitizeSessionRecord(r))
+  );
+  return buildConceptMergeWithOntology(
+    sanitized,
+    projectSlug ? { projectSlug } : {},
+    ctx
+  );
+}
+
+async function buildProjectConceptMergeForBatch(
+  storeDir: string,
+  records: SessionRecord[],
+  opts: {
+    projectSlug: string;
+    conceptLlm: ConceptMergeLlmOpts;
+    provider: LlmProvider;
+    signal: AbortSignal;
+    progress?: MindMapProgress;
+    batchRefineOntology: boolean;
+    refineOnly?: boolean;
+    batchNo?: number;
+    processed?: number;
+    total?: number;
+  }
+): Promise<import("./store/storeTypes").MergeRecord> {
+  const sanitized = await Promise.all(
+    records.map((r) => sanitizeSessionRecord(r))
+  );
+  if (!opts.batchRefineOntology) {
+    return buildProjectConceptMergeFromCache(
+      storeDir,
+      sanitized,
+      opts.conceptLlm,
+      opts.projectSlug
+    );
+  }
+  if (opts.batchNo !== undefined && opts.processed !== undefined && opts.total !== undefined) {
+    opts.progress?.report(
+      t(
+        "ui.batch.progress.refineOntology",
+        "Refining concept synonyms (batch {0}, {1}/{2} sessions)…",
+        opts.batchNo,
+        opts.processed,
+        opts.total
+      )
+    );
+  } else {
+    opts.progress?.report(
+      t(
+        "ui.ontology.refine.heartbeat",
+        "Refining concept segment equivalences…"
+      )
+    );
+  }
+  try {
+    const { merge } = await ensureIncrementalOntologyAndBuildConceptMerge(
+      sanitized,
+      {
+        storeDir,
+        projectSlug: opts.projectSlug,
+        llm: opts.conceptLlm,
+        provider: opts.provider,
+        signal: opts.signal,
+        progress: opts.progress,
+        refineOnly: opts.refineOnly,
+      }
+    );
+    return merge;
+  } catch {
+    return buildProjectConceptMergeFromCache(
+      storeDir,
+      sanitized,
+      opts.conceptLlm,
+      opts.projectSlug
+    );
+  }
+}
+
 async function ensureConceptMerge(
   projectSlug?: string,
   progress?: MindMapProgress,
@@ -542,45 +646,55 @@ async function ensureConceptMerge(
   const storeDir = getStoreDir();
   progress?.report(t("ui.progress.loadLibrary", "Loading analysis library…"));
   const records = await loadLibraryRecords();
-  // Best-effort: infer/patch conceptPath using persisted ontology memory.
-  // Falls back to deterministic behavior when LLM is unavailable.
-  let enriched = records;
+  const filtered = projectSlug
+    ? records.filter((r) => r.meta.projectSlug === projectSlug)
+    : records;
   try {
     const llmOpts = await readLlmOptions(extensionContext);
     const provider = getProvider(llmOpts);
-    const memory = await ensureOntologyMemory(
-      records,
-      { model: llmOpts.model, hostId: llmOpts.hostId },
-      provider,
-      storeDir,
-      signal ?? new AbortController().signal,
-      progress
-    );
     progress?.report(
       t("ui.progress.applyConceptPaths", "Applying concept paths…")
     );
-    enriched = applyTopicPathsFromOntology(records, memory);
-    progress?.report(
-      t("ui.progress.generateMindMap", "Generating mind map…")
-    );
-    const merge = await buildConceptMergeRecordAsync(enriched, {
+    const { merge } = await ensureOntologyAndBuildConceptMerge(filtered, {
+      storeDir,
       projectSlug,
-      segmentEquivalences: memory.segmentEquivalences,
+      llm: toConceptMergeLlmOpts(llmOpts, provider.id),
+      provider,
+      signal: signal ?? new AbortController().signal,
+      progress,
     });
     if (!projectSlug) {
       await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
     }
     return merge;
   } catch {
-    // ignore; deterministic merge still works
+    // ignore; fall back to cache-only / mechanical merge
   }
 
   progress?.report(t("ui.progress.generateMindMap", "Generating mind map…"));
-  const merge = await buildConceptMergeRecordAsync(enriched, { projectSlug });
-  if (!projectSlug) {
-    await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
+  try {
+    const llmOpts = await readLlmOptions(extensionContext);
+    const provider = getProvider(llmOpts);
+    const merge = await buildProjectConceptMergeFromCache(
+      storeDir,
+      filtered,
+      toConceptMergeLlmOpts(llmOpts, provider.id),
+      projectSlug
+    );
+    if (!projectSlug) {
+      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
+    }
+    return merge;
+  } catch {
+    const merge = buildConceptMergeWithOntology(
+      await Promise.all(filtered.map((r) => sanitizeSessionRecord(r))),
+      { projectSlug }
+    );
+    if (!projectSlug) {
+      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
+    }
+    return merge;
   }
-  return merge;
 }
 
 async function commandRebuildOntologyCache(): Promise<void> {
@@ -866,10 +980,31 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           panelHasMindMap: Boolean(panel.getMindMapData()),
         });
 
+        const llmOpts = await readLlmOptions(extensionContext);
+        const provider = getProvider(llmOpts);
+        const conceptLlm = toConceptMergeLlmOpts(llmOpts, provider.id);
+        const batchRefineOntology =
+          vscode.workspace
+            .getConfiguration("agentMindmap")
+            .get<boolean>("library.batchRefineOntology", true) ?? true;
+        const batchFinalRefine =
+          vscode.workspace
+            .getConfiguration("agentMindmap")
+            .get<boolean>("library.batchFinalRefine", true) ?? true;
+        let batchOntologyFailed = false;
+
         if (hadFullLibraryAtStart) {
-          const initial = buildConceptMergeRecord(
+          const initial = await buildProjectConceptMergeForBatch(
+            storeDir,
             [...projectRecordsById.values()],
-            { projectSlug: slug }
+            {
+              projectSlug: slug,
+              conceptLlm,
+              provider,
+              signal,
+              progress,
+              batchRefineOntology,
+            }
           );
           panel.setMindMapData(initial.mindMap);
         }
@@ -912,9 +1047,20 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               if (signal.aborted) {
                 return;
               }
-              const conceptMerge = buildConceptMergeRecord(
+              const conceptMerge = await buildProjectConceptMergeForBatch(
+                storeDir,
                 [...projectRecordsById.values()],
-                { projectSlug: slug }
+                {
+                  projectSlug: slug,
+                  conceptLlm,
+                  provider,
+                  signal,
+                  progress,
+                  batchRefineOntology,
+                  batchNo: info.batchNo,
+                  processed: info.processed,
+                  total: info.total,
+                }
               );
 
               if (autoApplyUpdates) {
@@ -1011,7 +1157,60 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           return undefined;
         }
 
+        if (
+          projectRecordsById.size > 0 &&
+          !signal.aborted &&
+          batchRefineOntology &&
+          batchFinalRefine
+        ) {
+          const batchRecords = [...projectRecordsById.values()];
+          progress.report(
+            t(
+              "ui.batch.progress.finalRefine",
+              "Final concept synonym refine…"
+            )
+          );
+          try {
+            const finalMerge = await buildProjectConceptMergeForBatch(
+              storeDir,
+              batchRecords,
+              {
+                projectSlug: slug,
+                conceptLlm,
+                provider,
+                signal,
+                progress,
+                batchRefineOntology: true,
+                refineOnly: true,
+              }
+            );
+            if (autoApplyUpdates) {
+              panel.setMindMapData(finalMerge.mindMap);
+            } else {
+              pendingMergeMindMap = finalMerge.mindMap;
+              pendingMergeBatchNo = Math.max(1, Math.ceil(result.total / 5));
+            }
+          } catch {
+            batchOntologyFailed = true;
+          }
+        }
+
         vscode.window.showInformationMessage(formatAnalyzeProjectSummary(result));
+        if (projectRecordsById.size > 0 && batchOntologyFailed && batchRefineOntology) {
+          void vscode.window.showInformationMessage(
+            t(
+              "ui.batch.noOntologyEquivalences",
+              "Agent Mind Map: Concept synonym rules were not generated. Open Concept Mind Map (current project) or Rebuild Concept Ontology Cache for full merge."
+            )
+          );
+        } else if (projectRecordsById.size > 0 && !batchRefineOntology) {
+          void vscode.window.showInformationMessage(
+            t(
+              "ui.batch.noOntologyEquivalencesDisabled",
+              "Agent Mind Map: Batch merge used mechanical path rules only. Enable agentMindmap.library.batchRefineOntology or open Concept Mind Map to refine synonyms."
+            )
+          );
+        }
 
         lastBatchStatus = {
           total: result.total,

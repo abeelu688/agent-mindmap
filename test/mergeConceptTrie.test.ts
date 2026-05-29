@@ -8,7 +8,10 @@ import {
   buildSessionRecord,
   sha256Hex,
 } from "../extension/src/store/sessionStore";
-import { canonicalizeConceptSegment } from "../extension/src/llm/cursorCliProvider";
+import {
+  canonicalizeConceptSegment,
+  segmentKeyForMerge,
+} from "../extension/src/llm/cursorCliProvider";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { Topic, TopicGraph } from "../extension/src/llm/types";
@@ -59,6 +62,14 @@ describe("canonicalizeConceptSegment", () => {
   it("collapses whitespace and lowercases", () => {
     expect(canonicalizeConceptSegment("  Android  ")).toBe("android");
     expect(canonicalizeConceptSegment("Binder 驱动")).toBe("binder 驱动");
+  });
+});
+
+describe("segmentKeyForMerge", () => {
+  it("folds hyphen and underscore variants", () => {
+    expect(segmentKeyForMerge("android-runtime")).toBe("androidruntime");
+    expect(segmentKeyForMerge("android_runtime")).toBe("androidruntime");
+    expect(segmentKeyForMerge("AndroidRuntime")).toBe("androidruntime");
   });
 });
 

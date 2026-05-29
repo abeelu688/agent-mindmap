@@ -44,4 +44,67 @@ describe("resolveConceptPathWithEquivalences", () => {
       )
     ).toEqual(["android", "runtime", "start"]);
   });
+
+  it("applies runtime→art only under android/art upstream prefix", () => {
+    const underArt: SegmentEquivalence[] = [
+      {
+        canonical: "art",
+        aliases: ["runtime"],
+        scope: { pathPrefix: ["android", "art"] },
+        confidence: 0.9,
+      },
+    ];
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["android", "art", "runtime", "start"],
+        underArt,
+        { title: "ART", items: ["libart"] }
+      )
+    ).toEqual(["android", "art", "start"]);
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["android", "runtime", "start"],
+        underArt,
+        { title: "ART", items: ["libart"] }
+      )
+    ).toEqual(["android", "runtime", "start"]);
+  });
+
+  it("respects downstreamPrefix scope", () => {
+    const eq: SegmentEquivalence[] = [
+      {
+        canonical: "art",
+        aliases: ["runtime"],
+        scope: {
+          pathPrefix: ["android"],
+          downstreamPrefix: ["jit"],
+        },
+        confidence: 0.9,
+      },
+    ];
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["android", "runtime", "jit"],
+        eq,
+        {}
+      )
+    ).toEqual(["android", "art", "jit"]);
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["android", "runtime", "start"],
+        eq,
+        {}
+      )
+    ).toEqual(["android", "runtime", "start"]);
+  });
+
+  it("uses summary in evidence matching", () => {
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["android", "runtime", "start"],
+        artRuntimeEq,
+        { title: "Generic", summary: "libart module", items: [] }
+      )
+    ).toEqual(["android", "art", "start"]);
+  });
 });

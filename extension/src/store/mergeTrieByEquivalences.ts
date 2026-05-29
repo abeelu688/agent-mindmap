@@ -1,14 +1,48 @@
-import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence } from "../llm/types";
-import { canonicalizeConceptSegment } from "../llm/topicGraphValidate";
+import {
+  resolveConceptPathWithEquivalences,
+  type TopicPathContext,
+} from "../llm/resolveConceptPathWithEquivalences";
+import type { SegmentEquivalence, Topic } from "../llm/types";
+import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import type { SessionRecord } from "./storeTypes";
+
+type TopicLocation = {
+  record: SessionRecord;
+  topic: Topic;
+};
 
 type TrieNodeLike = {
   key: string;
   label: string;
   children: Map<string, TrieNodeLike>;
-  topics: unknown[];
+  topics: TopicLocation[];
   occurrences: number;
 };
+
+function topicContextFromNode(child: TrieNodeLike): TopicPathContext {
+  const titles: string[] = [];
+  const summaries: string[] = [];
+  const items: string[] = [];
+  let projectSlug: string | undefined;
+  for (const loc of child.topics) {
+    if (loc.topic.title) {
+      titles.push(loc.topic.title);
+    }
+    if (loc.topic.summary) {
+      summaries.push(loc.topic.summary);
+    }
+    for (const item of loc.topic.items ?? []) {
+      items.push(item.text);
+    }
+    projectSlug = projectSlug ?? loc.record.meta.projectSlug;
+  }
+  return {
+    title: titles.join(" "),
+    summary: summaries.join(" "),
+    items,
+    projectSlug,
+  };
+}
 
 function mergeTrieNodes(target: TrieNodeLike, source: TrieNodeLike): void {
   target.occurrences += source.occurrences;
@@ -38,10 +72,10 @@ function resolvedSegmentKey(
   const resolved = resolveConceptPathWithEquivalences(
     pathLabels,
     equivalences,
-    {}
+    topicContextFromNode(child)
   );
   const last = resolved[resolved.length - 1] ?? child.label;
-  return canonicalizeConceptSegment(last);
+  return segmentKeyForMerge(last);
 }
 
 /**

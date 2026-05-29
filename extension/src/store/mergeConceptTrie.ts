@@ -1,5 +1,5 @@
 import { uiTranslate } from "../l10n/uiTranslate";
-import { canonicalizeConceptSegment } from "../llm/cursorCliProvider";
+import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import type { SegmentEquivalence, Topic } from "../llm/types";
 import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
@@ -74,6 +74,7 @@ function insertPath(
 ): void {
   const ctx = {
     title: location.topic.title,
+    summary: location.topic.summary,
     items: location.topic.items?.map((i) => i.text),
     projectSlug: location.record.meta.projectSlug,
   };
@@ -84,7 +85,7 @@ function insertPath(
   );
   let node = root;
   for (const segment of normalized) {
-    const key = canonicalizeConceptSegment(segment);
+    const key = segmentKeyForMerge(segment);
     if (!key) {
       continue;
     }

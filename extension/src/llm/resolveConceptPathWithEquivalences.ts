@@ -1,9 +1,10 @@
 import { normalizeConceptPath } from "./normalizeConceptPath";
 import type { SegmentEquivalence } from "./types";
-import { canonicalizeConceptSegment } from "./topicGraphValidate";
+import { segmentKeyForMerge } from "./topicGraphValidate";
 
 export type TopicPathContext = {
   title?: string;
+  summary?: string;
   items?: string[];
   projectSlug?: string;
 };
@@ -18,7 +19,7 @@ function pathPrefixMatches(pathKeys: string[], prefix?: string[]): boolean {
     return false;
   }
   for (let i = 0; i < prefix.length; i++) {
-    if (pathKeys[i] !== canonicalizeConceptSegment(prefix[i])) {
+    if (pathKeys[i] !== segmentKeyForMerge(prefix[i])) {
       return false;
     }
   }
@@ -29,10 +30,25 @@ function evidenceMatches(ctx: TopicPathContext, keywords?: string[]): boolean {
   if (!keywords?.length) {
     return true;
   }
-  const blob = [ctx.title ?? "", ...(ctx.items ?? []).map((i) => i)]
+  const blob = [ctx.title ?? "", ctx.summary ?? "", ...(ctx.items ?? []).map((i) => i)]
     .join(" ")
     .toLowerCase();
   return keywords.some((k) => blob.includes(k.toLowerCase()));
+}
+
+function downstreamFirstMatches(
+  afterKeys: string[],
+  allowed?: string[]
+): boolean {
+  if (!allowed?.length) {
+    return true;
+  }
+  if (!afterKeys.length) {
+    return false;
+  }
+  const first = afterKeys[0];
+  const allowedKeys = new Set(allowed.map((s) => segmentKeyForMerge(s)));
+  return allowedKeys.has(first);
 }
 
 function projectMatches(ctx: TopicPathContext, slugs?: string[]): boolean {
@@ -58,6 +74,13 @@ function equivalenceApplies(
   if (!pathPrefixMatches(pathKeys.slice(0, segmentIndex), eq.scope.pathPrefix)) {
     return false;
   }
+  const afterKeys = pathKeys.slice(segmentIndex + 1);
+  if (!pathPrefixMatches(afterKeys, eq.scope.downstreamPrefix)) {
+    return false;
+  }
+  if (!downstreamFirstMatches(afterKeys, eq.scope.downstreamFirst)) {
+    return false;
+  }
   if (!projectMatches(ctx, eq.scope.projectSlugs)) {
     return false;
   }
@@ -69,9 +92,9 @@ function equivalenceApplies(
 
 function aliasKeysFor(eq: SegmentEquivalence): string[] {
   const keys = new Set<string>();
-  keys.add(canonicalizeConceptSegment(eq.canonical));
+  keys.add(segmentKeyForMerge(eq.canonical));
   for (const a of eq.aliases ?? []) {
-    keys.add(canonicalizeConceptSegment(a));
+    keys.add(segmentKeyForMerge(a));
   }
   return [...keys];
 }
@@ -93,7 +116,7 @@ export function resolveConceptPathWithEquivalences(
     return normalizeConceptPath(path);
   }
 
-  const pathKeys = path.map((s) => canonicalizeConceptSegment(s));
+  const pathKeys = path.map((s) => segmentKeyForMerge(s));
   const out: string[] = [];
 
   for (let i = 0; i < path.length; i++) {
