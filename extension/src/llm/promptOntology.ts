@@ -12,7 +12,7 @@ const MAX_ITEMS_PER_TOPIC = 6;
 const MAX_TOPIC_TITLE = 80;
 const MAX_ITEM_TEXT = 80;
 
-export const ONTOLOGY_PROMPT_VERSION = 2;
+export const ONTOLOGY_PROMPT_VERSION = 3;
 
 function clip(text: string, max: number): string {
   const t = text.replace(/\r/g, "").trim();
@@ -64,13 +64,13 @@ export function buildOntologyPrompt(
     "- parentKeys[]: 父概念 key（允许 DAG：一个节点可多父）。",
     "- aliases[]: 同义词/别名（大小写/中英文/缩写等）。",
     "- mappings[]: mention->key 的归一化映射（mention 可为别名/术语原形），用于快速把文本提及归到 canonical key。",
-    "- 禁止把会话标题或长句当作 key；key 应该是稳定概念（如 android / ios / linux / art / ipc / binder / jit / jni / objc-runtime）。",
+    "- 禁止把会话标题或长句当作 key；key 应该是稳定概念（如 frontend / react / hooks / typescript / kubernetes）。",
     "- 不要把某个领域写死（domain 是开放集合），但建议抽取 3-10 个顶层 domain 便于归类。",
-    "- AOSP 必须映射到 android（mappings 与 parentKeys），不要创建与 android 并列的顶层 aosp 节点。",
-    "- jni 的父概念应包含 art（android → art → jni），不要作为 android 的直接子节点。",
+    "- 同一概念的多种写法应通过 aliases 与 mappings 归并，不要为别名单独建并列顶层节点（例：reactjs → react）。",
+    "- 子概念应挂在合理的父概念之下（例：hooks 的 parent 含 react，而非与 frontend 并列的孤立节点）。",
     "",
     "只输出严格 JSON，不要 markdown、不要解释、不要 ```：",
-    '{"nodes":[{"key":"android","label":"Android","aliases":["AOSP"],"parentKeys":["operating-system"]}],"mappings":[{"mention":"AOSP","key":"android"}],"topicPaths":[]}',
+    '{"nodes":[{"key":"frontend","label":"Frontend","parentKeys":["software"]},{"key":"react","label":"React","aliases":["ReactJS"],"parentKeys":["frontend"]}],"mappings":[{"mention":"ReactJS","key":"react"}],"topicPaths":[]}',
     "",
     `附：当前 outline promptVersion=${OUTLINE_PROMPT_VERSION}（仅供参考，不要输出该字段）`,
     "===",

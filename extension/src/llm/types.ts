@@ -13,7 +13,7 @@ export type Topic = {
   summary?: string;
   /**
    * Optional concept path from broadest to narrowest, e.g.
-   * `["android", "ipc", "binder"]` for a topic titled "Binder 驱动".
+   * `["frontend", "react", "hooks"]` for a topic titled "React Hooks".
    *
    * Used as cross-session merge metadata: a deterministic merge groups topics
    * by their longest common concept-path prefix into a concept trie. It is

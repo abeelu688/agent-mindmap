@@ -33,10 +33,11 @@ The extension spawns the matching **headless CLI** as a subprocess (`extension/s
 
 This reuses your existing product subscription — **no separate API key is required**.
 
-- **Cursor:** install via `curl https://cursor.com/install -fsS | bash`, verify with `agent --version`.
+- **Cursor (macOS / Linux / WSL):** `curl https://cursor.com/install -fsS | bash`, then verify with `agent --version`.
+- **Cursor (Windows PowerShell):** `irm 'https://cursor.com/install?win32=true' | iex`, then verify with `agent --version`. Docs: [cursor.com/docs/cli](https://cursor.com/docs/cli/overview).
 - **Claude Code:** install the [Claude Code CLI](https://code.claude.com/docs/en/headless), verify with `claude --version`.
 
-If the binary is missing the extension falls back to the chronological "turn" view and surfaces install guidance in a notification.
+If the binary is missing the extension falls back to the chronological "turn" view (not saved to the library) and shows a modal with full install steps. Override the binary path with `agentMindmap.llm.cliPath` if auto-detect fails.
 
 `agentMindmap.llm.provider` defaults to `auto`, which follows `agentMindmap.host`.
 
@@ -71,7 +72,7 @@ Opening **Concept Mind Map** runs a three-step LLM pipeline (cached under `ontol
 
 1. **Ontology** — domain concepts, aliases, parent keys
 2. **Topic paths** — per-topic `conceptPath` for trie merge
-3. **Refine** — contextual **segment equivalences** (e.g. under `android` + ART evidence, `runtime` / `androidruntime` → canonical `art`)
+3. **Refine** — contextual **segment equivalences** (e.g. under `frontend` + React evidence, `reactjs` → canonical `react`)
 
 `segmentEquivalences` are applied when merging (not hardcoded): each rule has `scope.pathPrefix`, optional `evidenceKeywords`, and `confidence`. Results are reused until transcripts or prompt versions change.
 
@@ -84,27 +85,28 @@ Command: **Agent Mind Map: Rebuild Concept Ontology Cache** clears `ontology/cac
 The LLM is asked to attach a `conceptPath` to every topic — an ordered, 3-5-segment path from broadest domain to finest concept, e.g.
 
 ```
-title: "Binder 驱动调试"
-conceptPath: ["android", "ipc", "binder", "binder 驱动"]
+title: "React Hooks 入门"
+conceptPath: ["frontend", "react", "hooks"]
 ```
 
 `conceptPath` is stored in `SessionRecord.graph.topics[].conceptPath`. It is **not** rendered in the single-session mind map (it's metadata). When you run **Open Concept Mind Map**, all topics across all sessions are inserted into a trie keyed by canonicalised (lowercased, whitespace-collapsed) path segments and rendered:
 
 ```
 Concept Mind Map · 全部
-└── android (5)
-    └── ipc (3)
-        ├── binder (2)
-        │   ├── binder 驱动 (1)
-        │   │   └── Binder 驱动调试 · [s2-label]
-        │   └── Binder 调研 · [s1-label]
-        └── aidl (1)
-            └── AIDL 代码生成 · [s3-label]
+└── frontend (5)
+    └── react (3)
+        ├── hooks (2)
+        │   ├── use-state (1)
+        │   │   └── useState 基础 · [s2-label]
+        │   └── use-reducer (1)
+        │       └── useReducer 进阶 · [s1-label]
+        └── router (1)
+            └── React Router 配置 · [s3-label]
 ```
 
-This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (e.g. `android → runtime → art` is folded to `android → art` so JIT and Hook sessions share one `art` branch). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (dedupe segments, optional domain-specific folds from ontology `segmentEquivalences`). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
 
-**Open Merged View** vs **Open Concept Mind Map**: the former stitches by **project → session → topic** (good for replaying each chat as analyzed). The latter is the cross-session **concept hierarchy** — use it when you want topics like ART JIT and ART instrumentation under the same `android → art` tree.
+**Open Merged View** vs **Open Concept Mind Map**: the former stitches by **project → session → topic** (good for replaying each chat as analyzed). The latter is the cross-session **concept hierarchy** — use it when you want related topics (e.g. multiple React hooks sessions) under the same `frontend → react` tree.
 
 The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `agentMindmap.cacheLlmResult`) remains as a secondary cache — harmless and useful when `library.enabled = false`.
 
@@ -120,7 +122,7 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 | **Agent Mind Map: Open Downloaded Package in Browser…** | Pick a previously exported folder; opens `index.html` in the system browser (no `npx serve` required) |
 | **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
 | **Agent Mind Map: Open Merged View (Current Project)** | Same, filtered to the current workspace |
-| **Agent Mind Map: Open Concept Mind Map (All Projects)** | Cross-session **concept trie**: groups topics by the longest common `conceptPath` prefix (e.g. `android → ipc → binder → binder 驱动`). Pure deterministic — uses the conceptPath meta the LLM already produced per session |
+| **Agent Mind Map: Open Concept Mind Map (All Projects)** | Cross-session **concept trie**: groups topics by the longest common `conceptPath` prefix (e.g. `frontend → react → hooks`). Pure deterministic — uses the conceptPath meta the LLM already produced per session |
 | **Agent Mind Map: Open Concept Mind Map (Current Project)** | Same, filtered to the current workspace |
 | **Agent Mind Map: Analyze All Sessions & Concept Merge (Current Project)** | One-shot pipeline for the open workspace: scan every on-disk agent transcript for this project, run per-session LLM analysis into the library (skipping fresh cache unless you choose force refresh), then build and open the **Concept Mind Map** once. Expect roughly one LLM call per uncached session plus the ontology pipeline — use the cancellable progress notification for long runs |
 | **Agent Mind Map: LLM Merge Refine…** | Pick a scope (current / all / select) and ask the LLM to dedupe + cluster topics across sessions. Receives the per-session `conceptPath` as a clustering hint. Cached by selection hash, so re-opening the same merge costs 0 tokens |
@@ -206,8 +208,9 @@ Open the `airecorder` folder as workspace, run at least one Agent chat, then exe
 
 ### Debugging the LLM path
 
-1. Install the CLI: `curl https://cursor.com/install -fsS | bash`
-2. Confirm it works headless (prompt is a **positional argument**, not stdin): `agent -p --output-format json --force --trust 'say hi as JSON {hi:1}'`
+1. **Cursor (macOS / Linux / WSL):** `curl https://cursor.com/install -fsS | bash`
+2. **Cursor (Windows PowerShell):** `irm 'https://cursor.com/install?win32=true' | iex`
+3. Confirm headless mode works: `agent -p --output-format json --force --trust 'say hi as JSON {hi:1}'`
 3. In the Extension Development Host, open the Output panel → "Agent Mind Map" / DevTools console — `[agent-mindmap]` lines log LLM failures with the underlying error code (`cli-missing`, `cli-failed`, `timeout`, `bad-json`, `bad-shape`, `cancelled`, `empty`).
 4. Cache lives in `~/.config/Code/User/globalStorage/airecorder.agent-mindmap/llm-cache/` (path varies by platform); delete the `.json` file or toggle `agentMindmap.cacheLlmResult` to force a re-summarization.
 

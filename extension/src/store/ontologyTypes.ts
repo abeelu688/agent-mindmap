@@ -50,8 +50,8 @@ export type ConceptOntologyRecord = {
    */
   reattachMoves?: ReattachMove[];
   /**
-   * Contextual segment aliases produced by the refine pass (e.g. runtime → art
-   * under android + ART evidence).
+   * Contextual segment aliases produced by the refine pass (e.g. reactjs → react
+   * under frontend + React evidence).
    */
   segmentEquivalences?: SegmentEquivalence[];
 };
