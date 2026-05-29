@@ -44,6 +44,37 @@ describe("normalizeConceptPath", () => {
     ]);
   });
 
+  it("folds mobile as first segment into android", () => {
+    expect(normalizeConceptPath(["mobile", "art", "binder"])).toEqual([
+      "android",
+      "art",
+      "binder",
+    ]);
+  });
+
+  it("maps androidruntime and android-runtime to art under android", () => {
+    expect(normalizeConceptPath(["android", "androidruntime", "start"])).toEqual(
+      ["android", "art", "start"]
+    );
+    expect(normalizeConceptPath(["android", "android-runtime", "jit"])).toEqual(
+      ["android", "art", "jit"]
+    );
+  });
+
+  it("leaves android/runtime when runtime is not the android→art sandwich", () => {
+    expect(normalizeConceptPath(["android", "runtime", "start"])).toEqual([
+      "android",
+      "runtime",
+      "start",
+    ]);
+  });
+
+  it("drops runtime segment when redundant under art", () => {
+    expect(
+      normalizeConceptPath(["android", "art", "runtime", "start"])
+    ).toEqual(["android", "art", "start"]);
+  });
+
   it("inserts art before jni when jni is directly under android", () => {
     expect(normalizeConceptPath(["android", "jni", "startvm"])).toEqual([
       "android",

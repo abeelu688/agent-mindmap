@@ -106,8 +106,12 @@ export type ReattachMove = {
 };
 
 export type SegmentEquivalenceScope = {
-  /** Apply only when path segments before the alias match this prefix. */
+  /** Apply only when path segments before the alias match this prefix (upstream). */
   pathPrefix?: string[];
+  /** After the alias, path must start with this prefix (downstream). */
+  downstreamPrefix?: string[];
+  /** First segment after the alias must be one of these keys (downstream disambiguation). */
+  downstreamFirst?: string[];
   projectSlugs?: string[];
   evidenceKeywords?: string[];
 };

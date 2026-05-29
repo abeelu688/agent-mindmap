@@ -170,6 +170,9 @@ Known limitations:
 ### Library / merge
 - `agentMindmap.storeDir` — path to the cross-project library; empty = `~/.agent-mindmap`. Supports a leading `~/`. Point at a sync folder to share the library across machines.
 - `agentMindmap.library.enabled` — persist each analysed session to the library and skip the LLM on reopen when the transcript is unchanged (default `true`)
+- `agentMindmap.library.batchRefineOntology` — incremental ontology + contextual refine (v3: outline siblings, upstream/downstream path slices, evidence) after each batch and on new session add (default `true`)
+- `agentMindmap.library.batchFinalRefine` — one extra refine after all sessions finish (default `true`)
+- `agentMindmap.library.incrementalOntologyOnSessionAdd` — incremental ontology when a single session is saved (default `true`)
 - `agentMindmap.merge.autoRebuildDeterministic` — rebuild `merges/deterministic.json` after each new session lands (default `true`)
 - `agentMindmap.merge.llm.maxTopics` / `maxItemsPerTopic` — target output size for the LLM merge command (defaults `8` / `6`)
 

@@ -264,6 +264,21 @@
           "default": true,
           "description": "Persist each analysed session to storeDir as a SessionRecord with meta, and skip the LLM call on reopen if the transcript is unchanged. Disable to fall back to the old globalStorage hash-only cache."
         },
+        "agentMindmap.library.batchRefineOntology": {
+          "type": "boolean",
+          "default": true,
+          "description": "During batch analyze, incrementally reuse ontology nodes/mappings, infer topic paths for new sessions only, and refine segment equivalences (refine v3: outline upstream/downstream + sibling context) after each batch and when a single session is added."
+        },
+        "agentMindmap.library.batchFinalRefine": {
+          "type": "boolean",
+          "default": true,
+          "description": "After all sessions in a batch analyze run finish, run one additional ontology refine pass (no extra topic-path LLM calls) before showing the final concept mind map."
+        },
+        "agentMindmap.library.incrementalOntologyOnSessionAdd": {
+          "type": "boolean",
+          "default": true,
+          "description": "When a single session is analyzed and saved to the library, incrementally update topic paths and refine segment equivalences for the concept mind map (same as batch incremental ontology)."
+        },
         "agentMindmap.merge.autoRebuildDeterministic": {
           "type": "boolean",
           "default": true,

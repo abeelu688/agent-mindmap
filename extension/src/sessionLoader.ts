@@ -21,7 +21,10 @@ import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import type { SessionMeta } from "./mindmap/origin";
 import { getStoreDir } from "./paths";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
-import { buildConceptMergeRecordAsync } from "./store/mergeConceptTrie";
+import {
+  ensureIncrementalOntologyAndBuildConceptMerge,
+  resolveAndBuildConceptMergeAsync,
+} from "./store/conceptMergeContext";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -493,7 +496,43 @@ export async function loadSession(
             await rebuildIndex(storeDir, all);
             const merge = await buildDeterministicMergeRecordAsync(all);
             await writeMergeRecord(deterministicMergePath(storeDir), merge);
-            const concept = await buildConceptMergeRecordAsync(all);
+            const provider = getProvider(settings.llm);
+            const config = vscode.workspace.getConfiguration("agentMindmap");
+            const incrementalOntology =
+              (config.get<boolean>("library.batchRefineOntology", true) ??
+                true) &&
+              (config.get<boolean>(
+                "library.incrementalOntologyOnSessionAdd",
+                true
+              ) ?? true);
+            const conceptLlm = {
+              providerId: provider.id,
+              model: settings.llm.model,
+              hostId: host.id,
+            };
+            const projectSlug = ctx.projectSlug;
+            const projectRecords = all.filter(
+              (r) => r.meta.projectSlug === projectSlug
+            );
+            const concept = incrementalOntology
+              ? (
+                  await ensureIncrementalOntologyAndBuildConceptMerge(
+                    projectRecords.length ? projectRecords : all,
+                    {
+                      storeDir,
+                      projectSlug,
+                      llm: conceptLlm,
+                      provider,
+                      signal: new AbortController().signal,
+                    }
+                  )
+                ).merge
+              : await resolveAndBuildConceptMergeAsync(
+                  storeDir,
+                  all,
+                  {},
+                  conceptLlm
+                );
             await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
           } catch (err) {
             console.warn(
