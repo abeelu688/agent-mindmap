@@ -215,7 +215,7 @@ async function loadAndShowSession(
   title: string = progressTitle()
 ): Promise<void> {
   const panel = createOrShowMindMap();
-  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
+  panel.setLoading(true, t("ui.loading.preparing", "Understanding conversation…"));
   try {
     const loaded = await withCancellableProgress(
       ({ signal, progress }) =>
@@ -324,7 +324,7 @@ async function commandOpenLatest(): Promise<void> {
 
 async function commandPickSession(): Promise<void> {
   const panel = createOrShowMindMap();
-  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
+  panel.setLoading(true, t("ui.loading.preparing", "Understanding conversation…"));
   try {
     const loaded = await withCancellableProgress(
       ({ signal, progress }) =>
@@ -749,7 +749,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
   }
 
   const panel = createOrShowMindMap();
-  panel.setLoading(true, t("ui.loading.preparing", "Preparing…"));
+  panel.setLoading(true, t("ui.loading.preparing", "Understanding conversation…"));
   try {
     const completed = await withCancellableProgress(
       async ({ signal, progress }) => {

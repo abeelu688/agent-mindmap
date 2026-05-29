@@ -1,6 +1,6 @@
 {
   "ui.progress.analyzingSession.title": "Agent Mind Map: Analyzing session…",
-  "ui.loading.preparing": "Preparing…",
+  "ui.loading.preparing": "Understanding conversation…",
   "ui.loading.transcriptUpdatedReanalyzing": "Transcript updated, re-analyzing…",
   "ui.loading.forceReanalyzing": "Force re-analyzing…",
   "ui.command.refresh.done": "Agent Mind Map refreshed.",
