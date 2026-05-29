@@ -333,7 +333,7 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --outfile=dist/test-run.js",
+    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "test": "node dist/test-run.js",
     "package": "vsce package --no-dependencies"

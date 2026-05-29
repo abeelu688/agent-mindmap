@@ -1,0 +1,178 @@
+{
+  "fixtureSet": "aosp14",
+  "projectSlug": "home-welde-cursor-aosp14",
+  "projectPath": "/home/welde/cursor/aosp14",
+  "exportedAt": "2026-05-29T09:49:27.075Z",
+  "sourceDir": "/home/welde/.cursor/projects/home-welde-cursor-aosp14/agent-transcripts",
+  "sessionCount": 24,
+  "sessions": [
+    {
+      "sessionId": "05ca7bac-aa13-4bf1-b2e9-f2ae00e8031c",
+      "sha256": "1a0f9547e6951fdc9959f7f4509cb4cdb0d02bff7faa3fdb70040183aa5809b4",
+      "bytes": 3697,
+      "mtimeMs": 1779856438163.375,
+      "relativePath": "transcripts/05ca7bac-aa13-4bf1-b2e9-f2ae00e8031c/05ca7bac-aa13-4bf1-b2e9-f2ae00e8031c.jsonl"
+    },
+    {
+      "sessionId": "134027c2-28d5-4471-a172-19d66c80a550",
+      "sha256": "f12ce36824570332b2d84dc8745938c5aa5c7dc415d8b0409f26d33be9676440",
+      "bytes": 9184,
+      "mtimeMs": 1779793759027.3572,
+      "relativePath": "transcripts/134027c2-28d5-4471-a172-19d66c80a550/134027c2-28d5-4471-a172-19d66c80a550.jsonl"
+    },
+    {
+      "sessionId": "161cc0a1-cbbf-498e-b4ec-00ee85089fe4",
+      "sha256": "3da1761b3e448ce78802b1ae0d5a94b247f020fc0ddcf0986a36b2d98fd0a760",
+      "bytes": 21857,
+      "mtimeMs": 1779758530127.9565,
+      "relativePath": "transcripts/161cc0a1-cbbf-498e-b4ec-00ee85089fe4/161cc0a1-cbbf-498e-b4ec-00ee85089fe4.jsonl"
+    },
+    {
+      "sessionId": "178fe696-9c6b-42fd-a8dd-e60240073feb",
+      "sha256": "336d3577321e24519314ea9dc6ae819b6f7f8e4c9d99b0bf7a57e8efb2cf00f3",
+      "bytes": 41845,
+      "mtimeMs": 1779764171690.5293,
+      "relativePath": "transcripts/178fe696-9c6b-42fd-a8dd-e60240073feb/178fe696-9c6b-42fd-a8dd-e60240073feb.jsonl"
+    },
+    {
+      "sessionId": "2d6452bc-42d5-49ec-9eef-e880e97075d5",
+      "sha256": "8d63d8d80f7acf6937292e197aad1262e33917086548553df3bffa6eb8ebb18a",
+      "bytes": 7864,
+      "mtimeMs": 1779966345503.545,
+      "relativePath": "transcripts/2d6452bc-42d5-49ec-9eef-e880e97075d5/2d6452bc-42d5-49ec-9eef-e880e97075d5.jsonl"
+    },
+    {
+      "sessionId": "475437f8-7596-4d7c-b2c3-12ba45049156",
+      "sha256": "7d25dbeacd17df424f1283d55e7dfb76ccbb96917b930aa981136fe9015363e7",
+      "bytes": 46386,
+      "mtimeMs": 1779795070805.856,
+      "relativePath": "transcripts/475437f8-7596-4d7c-b2c3-12ba45049156/475437f8-7596-4d7c-b2c3-12ba45049156.jsonl"
+    },
+    {
+      "sessionId": "48c99bbb-a89e-4cc6-91c5-e929a37d8e44",
+      "sha256": "ef7c8c14f4dc2e89dc0690f4bf52c0c4a0710c51b636e87723786157bd48a47c",
+      "bytes": 4817,
+      "mtimeMs": 1779804368618.7988,
+      "relativePath": "transcripts/48c99bbb-a89e-4cc6-91c5-e929a37d8e44/48c99bbb-a89e-4cc6-91c5-e929a37d8e44.jsonl"
+    },
+    {
+      "sessionId": "5aed637c-6af8-41fe-9ecf-ec39e76e0848",
+      "sha256": "87165c40178a0bebe979fd177666a404fb8f2f699186e4769091ca176ebfc0df",
+      "bytes": 14255,
+      "mtimeMs": 1779756637598.0835,
+      "relativePath": "transcripts/5aed637c-6af8-41fe-9ecf-ec39e76e0848/5aed637c-6af8-41fe-9ecf-ec39e76e0848.jsonl"
+    },
+    {
+      "sessionId": "6b4d4fbe-d1c7-4cc2-91ab-d4e88e172492",
+      "sha256": "3a5f5e7a3fa1ae7da6454fe81544761c5c881e9107dc8781ff3ef81687a8ca1d",
+      "bytes": 29080,
+      "mtimeMs": 1779772838776.9658,
+      "relativePath": "transcripts/6b4d4fbe-d1c7-4cc2-91ab-d4e88e172492/6b4d4fbe-d1c7-4cc2-91ab-d4e88e172492.jsonl"
+    },
+    {
+      "sessionId": "6fe37cff-2fa4-47c1-84e6-3fa5589bbc97",
+      "sha256": "ef27034c27581dcfe9f49d880e0bbfa099c08a897c7bd1b82dfea97b72914834",
+      "bytes": 17617,
+      "mtimeMs": 1779865567378.5586,
+      "relativePath": "transcripts/6fe37cff-2fa4-47c1-84e6-3fa5589bbc97/6fe37cff-2fa4-47c1-84e6-3fa5589bbc97.jsonl"
+    },
+    {
+      "sessionId": "78ddfa45-4049-4bdd-a443-d92df3282f33",
+      "sha256": "cd0d2958921b1d4d648089154a1e7ce4f0c38e8aaf4d23735fab6f1477f06a52",
+      "bytes": 104285,
+      "mtimeMs": 1779700442454.5144,
+      "relativePath": "transcripts/78ddfa45-4049-4bdd-a443-d92df3282f33/78ddfa45-4049-4bdd-a443-d92df3282f33.jsonl"
+    },
+    {
+      "sessionId": "7f320a3b-26bc-4ce5-b8db-1b0dcbe52325",
+      "sha256": "97a27922341412ed25f7d11c9bdbb7d4b4711e401bafe28e3b324b4d9d3f7d0a",
+      "bytes": 1530,
+      "mtimeMs": 1779793749131.4495,
+      "relativePath": "transcripts/7f320a3b-26bc-4ce5-b8db-1b0dcbe52325/7f320a3b-26bc-4ce5-b8db-1b0dcbe52325.jsonl"
+    },
+    {
+      "sessionId": "8c6dfb53-6d48-474c-9cdb-cb47946145b9",
+      "sha256": "df60bd578db077a228d25b3d3eb60442d6462c5f9af7aa3ffe54fb9869fd5802",
+      "bytes": 6079,
+      "mtimeMs": 1779762632651.2937,
+      "relativePath": "transcripts/8c6dfb53-6d48-474c-9cdb-cb47946145b9/8c6dfb53-6d48-474c-9cdb-cb47946145b9.jsonl"
+    },
+    {
+      "sessionId": "9399ab4e-c328-43b5-928c-edcdeb2b5832",
+      "sha256": "40a7bf49754b4dfbf2e9c7d6f89fcd89ee22caef89b214c1ee3b42e7886b36c7",
+      "bytes": 8096,
+      "mtimeMs": 1779793807218.9102,
+      "relativePath": "transcripts/9399ab4e-c328-43b5-928c-edcdeb2b5832/9399ab4e-c328-43b5-928c-edcdeb2b5832.jsonl"
+    },
+    {
+      "sessionId": "9be1fe9a-6359-4889-abad-d8497a1c9108",
+      "sha256": "375a466ae10d0da2eff9b4ffa886a76f0896749ada4402b98f9d25c087db44b5",
+      "bytes": 31351,
+      "mtimeMs": 1779773590373.0583,
+      "relativePath": "transcripts/9be1fe9a-6359-4889-abad-d8497a1c9108/9be1fe9a-6359-4889-abad-d8497a1c9108.jsonl"
+    },
+    {
+      "sessionId": "a231fa81-038c-4bc9-b9b3-9d37f4dcde71",
+      "sha256": "04845a9313ae67d97e257e5f792bb7dbef080596130759f275695b3784751605",
+      "bytes": 4691,
+      "mtimeMs": 1779764006222.912,
+      "relativePath": "transcripts/a231fa81-038c-4bc9-b9b3-9d37f4dcde71/a231fa81-038c-4bc9-b9b3-9d37f4dcde71.jsonl"
+    },
+    {
+      "sessionId": "aa44e38a-d7b3-476f-96f0-95d9c4bbc30e",
+      "sha256": "0994e57273a57e1c9d3d4944a09fd652fba27aab65c0028f6aa881c07fc8af51",
+      "bytes": 5670,
+      "mtimeMs": 1779703136111.1682,
+      "relativePath": "transcripts/aa44e38a-d7b3-476f-96f0-95d9c4bbc30e/aa44e38a-d7b3-476f-96f0-95d9c4bbc30e.jsonl"
+    },
+    {
+      "sessionId": "b45f19ad-88df-417b-bb1e-70d3c4ba9e06",
+      "sha256": "9e90675bf538e31dcae497f5b8bb0d6f30b68677586e77213895e9241213fefc",
+      "bytes": 37188,
+      "mtimeMs": 1779774777621.612,
+      "relativePath": "transcripts/b45f19ad-88df-417b-bb1e-70d3c4ba9e06/b45f19ad-88df-417b-bb1e-70d3c4ba9e06.jsonl"
+    },
+    {
+      "sessionId": "c21c798d-ebde-4f7f-91c5-c008118f9376",
+      "sha256": "7e1076e7e2c4ff039e28f0bb16530a2189f9662b26e83cf2d04897dd1019d038",
+      "bytes": 20017,
+      "mtimeMs": 1779767199422.3345,
+      "relativePath": "transcripts/c21c798d-ebde-4f7f-91c5-c008118f9376/c21c798d-ebde-4f7f-91c5-c008118f9376.jsonl"
+    },
+    {
+      "sessionId": "c247d92e-bc91-46f9-a2a1-0dabc4428857",
+      "sha256": "d157df6ce0d205718b6cf31dc2f1b51223e63ee31485ee872d398233f668c965",
+      "bytes": 5397,
+      "mtimeMs": 1779771934828.9084,
+      "relativePath": "transcripts/c247d92e-bc91-46f9-a2a1-0dabc4428857/c247d92e-bc91-46f9-a2a1-0dabc4428857.jsonl"
+    },
+    {
+      "sessionId": "cb552714-eaa7-44d0-92e6-70450e695b6c",
+      "sha256": "6889f62667e4bf0924e665e185ce6ff80e7f75dd5f6aa699e0fe670aa628b967",
+      "bytes": 145969,
+      "mtimeMs": 1779760504763.6548,
+      "relativePath": "transcripts/cb552714-eaa7-44d0-92e6-70450e695b6c/cb552714-eaa7-44d0-92e6-70450e695b6c.jsonl"
+    },
+    {
+      "sessionId": "f7e05a7e-2037-4d5d-b20e-8bcdb633cead",
+      "sha256": "2d2d2914f23b53501e015362739bd3d0962e44d0865fff023de4c5913863d53b",
+      "bytes": 23189,
+      "mtimeMs": 1779767895363.9011,
+      "relativePath": "transcripts/f7e05a7e-2037-4d5d-b20e-8bcdb633cead/f7e05a7e-2037-4d5d-b20e-8bcdb633cead.jsonl"
+    },
+    {
+      "sessionId": "f85e4f50-3c13-417d-8281-099809ada09c",
+      "sha256": "1c8f7f6f51cb6ba4701242b4c9d2aeb6c8e44108063ecb45233ac9b0211ef8a3",
+      "bytes": 113665,
+      "mtimeMs": 1779758297518.1174,
+      "relativePath": "transcripts/f85e4f50-3c13-417d-8281-099809ada09c/f85e4f50-3c13-417d-8281-099809ada09c.jsonl"
+    },
+    {
+      "sessionId": "ff3d2c3d-ce22-452a-8b5b-722a782cf0d6",
+      "sha256": "ec8b1ae2092fdb0ac123bd1fa145a174ea4fd027f530c2b0690d01daa26cf751",
+      "bytes": 28358,
+      "mtimeMs": 1779765172388.0242,
+      "relativePath": "transcripts/ff3d2c3d-ce22-452a-8b5b-722a782cf0d6/ff3d2c3d-ce22-452a-8b5b-722a782cf0d6.jsonl"
+    }
+  ]
+}

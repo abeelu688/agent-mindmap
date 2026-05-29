@@ -31,7 +31,21 @@ import {
   buildDeterministicMergeRecord,
 } from "../extension/src/store/mergeDeterministic";
 import { normalizeConceptPath } from "../extension/src/llm/normalizeConceptPath";
-import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
+import {
+  filterSessionIds,
+  loadEvalConfig,
+} from "../extension/src/eval/loadEvalConfig";
+import {
+  countMindMapNodes,
+  countTrieNodes,
+  measureConceptMerge,
+  measureSessionCoverage,
+  collectSessionIdsAtTerminalTopics,
+} from "../extension/src/eval/metrics";
+import {
+  buildConceptTrieMindMap,
+  buildConceptTrieStructure,
+} from "../extension/src/store/mergeConceptTrie";
 import { computeMergeCacheKey } from "../extension/src/store/mergeLlm";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
 import {
@@ -513,6 +527,107 @@ async function main(): Promise<void> {
     batchResult.failures[0]?.sessionId === "batch-fail",
     "batch: failure id"
   );
+
+  // eval config
+  {
+    const repoRoot = join(__dirname, "../..");
+    const { config, paths } = await loadEvalConfig(repoRoot);
+    assert(config.fixtureSet === "aosp14", "eval config: fixtureSet");
+    assert(paths.manifestPath.endsWith("manifest.json"), "eval config: manifest path");
+    const filtered = filterSessionIds(config, ["a", "b", "c"]);
+    assert(filtered.length === 3, "eval config: filter all ids");
+    const subset = filterSessionIds(
+      { ...config, sessionFilter: ["a"] },
+      ["a", "b"]
+    );
+    assert(subset.length === 1 && subset[0] === "a", "eval config: filter subset");
+  }
+
+  // eval metrics (concept trie)
+  {
+    const mmNode = {
+      data: { text: "root" },
+      children: [
+        { data: { text: "a" }, children: [{ data: { text: "leaf" } }] },
+      ],
+    };
+    assert(countMindMapNodes(mmNode) === 3, "eval: mind map node count");
+
+    const evalTopic = (
+      title: string,
+      conceptPath: string[] | undefined,
+      items: string[] = []
+    ) => ({
+      title,
+      conceptPath,
+      items: items.map((text) => ({ text })),
+    });
+
+    const evalRecords = [
+      buildSessionRecord(
+        buildRecordMeta({
+          sessionId: "ev-s1",
+          projectSlug: "home-welde-cursor-aosp14",
+          transcriptPath: "/tmp/ev-s1.jsonl",
+          transcriptMtimeMs: 1,
+          transcriptSha256: sha256Hex("ev-s1"),
+          llm: { provider: "test" },
+          promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+          sessionLabel: "ev-s1",
+        }),
+        topicGraphToOutline({
+          topics: [evalTopic("a", ["Platform", "Binder"])],
+        })
+      ),
+      buildSessionRecord(
+        buildRecordMeta({
+          sessionId: "ev-s2",
+          projectSlug: "home-welde-cursor-aosp14",
+          transcriptPath: "/tmp/ev-s2.jsonl",
+          transcriptMtimeMs: 1,
+          transcriptSha256: sha256Hex("ev-s2"),
+          llm: { provider: "test" },
+          promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+          sessionLabel: "ev-s2",
+        }),
+        topicGraphToOutline({
+          topics: [evalTopic("b", ["Platform", "ART"])],
+        })
+      ),
+      buildSessionRecord(
+        buildRecordMeta({
+          sessionId: "ev-s3",
+          projectSlug: "home-welde-cursor-aosp14",
+          transcriptPath: "/tmp/ev-s3.jsonl",
+          transcriptMtimeMs: 1,
+          transcriptSha256: sha256Hex("ev-s3"),
+          llm: { provider: "test" },
+          promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+          sessionLabel: "ev-s3",
+        }),
+        topicGraphToOutline({
+          topics: [evalTopic("orphan", undefined)],
+        })
+      ),
+    ];
+    const evalStructure = buildConceptTrieStructure(evalRecords, {
+      projectSlug: "home-welde-cursor-aosp14",
+    });
+    assert(countTrieNodes(evalStructure.root) > 1, "eval: trie node count");
+    const terminal = collectSessionIdsAtTerminalTopics(evalStructure);
+    assert(terminal.has("ev-s1") && terminal.has("ev-s2"), "eval: terminal s1 s2");
+    assert(!terminal.has("ev-s3"), "eval: orphan not terminal");
+    const cov = measureSessionCoverage(evalStructure, ["ev-s1", "ev-s2", "ev-s3"]);
+    assert(cov.sessionsAtTerminalTopics === 2, "eval: terminal coverage count");
+    assert(cov.sessionsInAnyTopic === 3, "eval: any topic coverage");
+    const report = measureConceptMerge(
+      evalRecords,
+      { projectSlug: "home-welde-cursor-aosp14" },
+      ["ev-s1", "ev-s2", "ev-s3"]
+    );
+    assert(report.conceptMerge.totalTopics === 3, "eval: total topics");
+    assert(report.conceptMerge.mindMapNodeCount > 0, "eval: mind map nodes");
+  }
 
   console.log("All tests passed.");
 }
