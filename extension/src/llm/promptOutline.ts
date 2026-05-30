@@ -10,10 +10,8 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 /**
  * Bump whenever {@link buildOutlinePrompt} changes the LLM JSON schema.
  *
- * v5: hierarchical SessionOutline (outline[] + details[] leaves + anchors)
- * v5.1: + conceptPath on detail nodes for concept-trie merge
- * v6: conceptPath last segment = sub-topic; summary required on detail nodes
- * v7: neutral conceptPath examples (no Android-specific prompt bias)
+ * @deprecated Primary session path uses {@link runSessionPipeline} +
+ * {@link buildOrganizeByTreePrompt} (S4). Kept for tests and `groupTurns` helpers.
  */
 export const PROMPT_VERSION = 7;
 

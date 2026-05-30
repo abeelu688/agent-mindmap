@@ -11,6 +11,11 @@ import {
   validateTopicPaths,
 } from "./ontologyValidate";
 import {
+  validateSessionConceptExtract,
+  validateSessionSynonymRefine,
+  validateSessionAnalysis,
+} from "./pipelineValidate";
+import {
   LlmProviderError,
   type LlmProviderOptions,
   type LlmResponseSchema,
@@ -397,6 +402,34 @@ export function parseOntologyRefineFromStdout(
   return validateOntologyRefine(parseJsonFromStdout(stdout, providerLabel));
 }
 
+export function parseSessionConceptExtractFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateSessionConceptExtract(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionSynonymRefineFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateSessionSynonymRefine(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionOutlineByTreeFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionAnalysisFromStdout(
+  stdout: string,
+  providerLabel: string
+) {
+  return validateSessionAnalysis(parseJsonFromStdout(stdout, providerLabel));
+}
+
 function parseBySchema(
   stdout: string,
   providerLabel: string,
@@ -415,6 +448,14 @@ function parseBySchema(
       return parseReattachMovesFromStdout(stdout, providerLabel);
     case "ontology-refine":
       return parseOntologyRefineFromStdout(stdout, providerLabel);
+    case "session-concept-extract":
+      return parseSessionConceptExtractFromStdout(stdout, providerLabel);
+    case "session-synonym-refine":
+      return parseSessionSynonymRefineFromStdout(stdout, providerLabel);
+    case "session-outline-by-tree":
+      return parseSessionOutlineByTreeFromStdout(stdout, providerLabel);
+    case "session-analysis":
+      return parseSessionAnalysisFromStdout(stdout, providerLabel);
     case "session-outline":
     default:
       return parseSessionOutlineFromStdout(stdout, providerLabel);

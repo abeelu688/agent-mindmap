@@ -1,6 +1,12 @@
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider, SegmentEquivalence } from "../llm/types";
 import type { MindMapProgress } from "../progress";
+import { runMergePipeline, type MergeRefineMode } from "../pipeline/mergePipeline";
+import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
+import {
+  collectSessionSegmentEquivalences,
+  enhanceSegmentEquivalencesForMerge,
+} from "../llm/synonymHintDerive";
 import { applyTopicPathsFromOntology } from "./applyOntology";
 import {
   buildConceptMergeRecord,
@@ -10,11 +16,10 @@ import {
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import {
   computeOntologyCacheKey,
-  ensureOntologyMemory,
-  type EnsureOntologyMemoryFlags,
   isCompleteOntologyRecord,
   readOntologyIndex,
   readOntologyRecord,
+  type EnsureOntologyMemoryFlags,
 } from "./ontologyStore";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
@@ -80,6 +85,15 @@ export async function loadSegmentEquivalencesForRecords(
   const projectSlugs = new Set(records.map((r) => r.meta.projectSlug));
   const index = await readOntologyIndex(storeDir);
   if (!index?.entries.length) {
+    const collected = collectMergeTerms(records);
+    const fallback = enhanceSegmentEquivalencesForMerge(
+      collected.topicPaths,
+      collected.nodes,
+      collectSessionSegmentEquivalences(records)
+    );
+    if (fallback.length) {
+      return { segmentEquivalences: fallback };
+    }
     return {};
   }
 
@@ -100,6 +114,16 @@ export async function loadSegmentEquivalencesForRecords(
       continue;
     }
     return { segmentEquivalences: cached.segmentEquivalences };
+  }
+
+  const collected = collectMergeTerms(records);
+  const fallback = enhanceSegmentEquivalencesForMerge(
+    collected.topicPaths,
+    collected.nodes,
+    collectSessionSegmentEquivalences(records)
+  );
+  if (fallback.length) {
+    return { segmentEquivalences: fallback };
   }
 
   return {};
@@ -139,20 +163,26 @@ export async function resolveAndBuildConceptMergeAsync(
     records,
     llmOpts
   );
+  const { sanitizeSessionRecord } = await import("./sanitizeRecords");
   const enriched = prepareRecordsForConceptMerge(
-    await Promise.all(
-      records.map(async (r) => {
-        const { sanitizeSessionRecord } = await import("./sanitizeRecords");
-        return sanitizeSessionRecord(r);
-      })
-    ),
+    await Promise.all(records.map((r) => sanitizeSessionRecord(r))),
     ctx
   );
-  return buildConceptMergeRecord(enriched, {
+  return buildConceptMergeRecordAsync(enriched, {
     ...options,
     segmentEquivalences:
       options.segmentEquivalences ?? ctx.segmentEquivalences,
   });
+}
+
+function flagsToRefineMode(flags: EnsureOntologyMemoryFlags): MergeRefineMode {
+  if (flags.refineOnly) {
+    return "final";
+  }
+  if (flags.forceRefine) {
+    return "batch";
+  }
+  return "skip";
 }
 
 export async function ensureOntologyAndBuildConceptMerge(
@@ -165,30 +195,37 @@ export async function ensureOntologyAndBuildConceptMerge(
     signal: AbortSignal;
     progress?: MindMapProgress;
     ontologyFlags?: EnsureOntologyMemoryFlags;
+    cacheDir?: string;
+    cacheLlm?: boolean;
   }
 ): Promise<{ merge: MergeRecord; ctx: LoadedConceptMergeContext }> {
-  const memory = await ensureOntologyMemory(
-    records,
-    { model: opts.llm.model, hostId: opts.llm.hostId },
+  const flags = opts.ontologyFlags ?? {};
+  const result = await runMergePipeline(
+    {
+      storeDir: opts.storeDir,
+      records,
+      projectSlug: opts.projectSlug,
+      model: opts.llm.model,
+      hostId: opts.llm.hostId,
+      providerId: opts.llm.providerId,
+      promptLanguage: opts.llm.promptLanguage,
+      refineMode: flagsToRefineMode(flags),
+      incrementalFromIndex: flags.incrementalFromIndex,
+      cacheDir: opts.cacheDir,
+      cacheLlm: opts.cacheLlm,
+      signal: opts.signal,
+    },
     opts.provider,
-    opts.storeDir,
-    opts.signal,
-    opts.progress,
-    opts.ontologyFlags ?? {}
+    opts.progress
   );
   const ctx: LoadedConceptMergeContext = {
-    segmentEquivalences: memory.segmentEquivalences,
-    ontology: memory,
+    segmentEquivalences: result.ontology.segmentEquivalences,
+    ontology: result.ontology,
   };
-  const enriched = prepareRecordsForConceptMerge(records, ctx);
-  const merge = await buildConceptMergeRecordAsync(enriched, {
-    projectSlug: opts.projectSlug,
-    segmentEquivalences: memory.segmentEquivalences,
-  });
-  return { merge, ctx };
+  return { merge: result.merge, ctx };
 }
 
-/** Batch / new-session: incremental nodes/mappings, new topicPaths only, always refine. */
+/** Batch / new-session: incremental nodes/mappings + cross-session synonym merge. */
 export async function ensureIncrementalOntologyAndBuildConceptMerge(
   records: SessionRecord[],
   opts: {
@@ -199,13 +236,14 @@ export async function ensureIncrementalOntologyAndBuildConceptMerge(
     signal: AbortSignal;
     progress?: MindMapProgress;
     refineOnly?: boolean;
+    cacheDir?: string;
+    cacheLlm?: boolean;
   }
 ): Promise<{ merge: MergeRecord; ctx: LoadedConceptMergeContext }> {
-  const ontologyFlags: EnsureOntologyMemoryFlags = opts.refineOnly
-    ? { refineOnly: true, forceRefine: true }
-    : { incrementalFromIndex: true, forceRefine: true };
   return ensureOntologyAndBuildConceptMerge(records, {
     ...opts,
-    ontologyFlags,
+    ontologyFlags: opts.refineOnly
+      ? { refineOnly: true, forceRefine: true }
+      : { incrementalFromIndex: true, forceRefine: true },
   });
 }

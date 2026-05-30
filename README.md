@@ -104,7 +104,11 @@ Concept Mind Map · 全部
             └── React Router 配置 · [s3-label]
 ```
 
-This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (dedupe segments, optional domain-specific folds from ontology `segmentEquivalences`). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (trim, dedupe, length cap) and rewritten using cached ontology **`segmentEquivalences`** (scoped aliases — no hardcoded domain names in code). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+
+**Contributor rule:** production code must not branch on specific concept segment literals (`android`, `art`, etc.). Run `npm run check:concept-nodes` — see `.cursor/rules/no-hardcoded-concept-nodes.mdc`.
+
+**Architecture:** full pipeline diagrams, code verification notes, and optimization review — see [`docs/PIPELINES_AND_REVIEW.md`](docs/PIPELINES_AND_REVIEW.md).
 
 **Open Merged View** vs **Open Concept Mind Map**: the former stitches by **project → session → topic** (good for replaying each chat as analyzed). The latter is the cross-session **concept hierarchy** — use it when you want related topics (e.g. multiple React hooks sessions) under the same `frontend → react` tree.
 

@@ -19,8 +19,8 @@ const MAX_TOOL_LABELS_PER_TURN = 8;
  * v1: title / summary / topics[].{title, summary, items[]}
  * v2: + topics[].conceptPath  (for cross-session concept-trie merging)
  * v3: stricter sourceTurnIndices — only [Q#] in this transcript
- * v4: conceptPath schema — Android ART under android/art (no runtime parent)
- * v5: neutral conceptPath examples (no Android-specific prompt bias)
+ * v4: conceptPath schema — hierarchical domain → subsystem → concept
+ * v5: neutral conceptPath examples (no domain-specific prompt bias)
  */
 export const PROMPT_VERSION = 5;
 

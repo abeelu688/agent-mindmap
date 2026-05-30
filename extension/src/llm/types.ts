@@ -136,8 +136,59 @@ export type ConceptOntology = {
   segmentEquivalences?: SegmentEquivalence[];
 };
 
+/** S1: industry domains + professional terms with context evidence. */
+export type TermWithContext = {
+  key: string;
+  label: string;
+  mentions: string[];
+  evidence: string[];
+  suggestedParentKey?: string;
+};
+
+export type SessionConceptExtract = {
+  domains: string[];
+  terms: TermWithContext[];
+};
+
+export type SessionTermAlias = {
+  canonical: string;
+  aliases: string[];
+  evidence: string[];
+};
+
+/** S2: per-session scoped segment equivalences + term aliases. */
+export type SessionSynonymRefine = {
+  segmentEquivalences: SegmentEquivalence[];
+  termAliases: SessionTermAlias[];
+};
+
+/** S3 DET output: canonical nodes + per-term concept paths for organize. */
+export type SessionTreeSnapshot = {
+  nodes: ConceptOntologyNode[];
+  mappings: ConceptOntologyMapping[];
+  topicPathDecisions: TopicPathDecision[];
+};
+
+/** Single LLM response: domain + terms + hierarchy + content outline + session synonyms. */
+export type SessionAnalysis = {
+  domains: string[];
+  nodes: ConceptOntologyNode[];
+  mappings?: ConceptOntologyMapping[];
+  segmentEquivalences: SegmentEquivalence[];
+  termAliases?: SessionTermAlias[];
+  outline: SessionOutline;
+};
+
+export type PipelineVersions = {
+  sessionAnalysis: number;
+};
+
 export type LlmResponseSchema =
   | "session-outline"
+  | "session-analysis"
+  | "session-concept-extract"
+  | "session-synonym-refine"
+  | "session-outline-by-tree"
   | "topic-graph"
   | "merged-outline"
   | "concept-ontology"
@@ -179,6 +230,9 @@ export type LlmSummarizeResult =
   | SessionOutline
   | MergedOutline
   | ConceptOntology
+  | SessionConceptExtract
+  | SessionSynonymRefine
+  | SessionAnalysis
   | { topicPaths: TopicPathDecision[] }
   | { moves: ReattachMove[] }
   | OntologyRefineResult;

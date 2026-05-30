@@ -1,0 +1,47 @@
+---
+description: Concept paths and trie merge must not hardcode domain segment names
+globs: agent-mindmap/**/*
+alwaysApply: true
+---
+
+# No hardcoded concept path segments
+
+## Rule
+
+In **production code** (`extension/src/**`), do **not** embed specific concept/trie segment names (e.g. product domains, subsystems, or synonyms) as string literals used for branching, rewriting, or prioritization.
+
+All domain-specific path alignment must come from **runtime context**:
+
+- Ontology `nodes` / `mappings`
+- Persisted `segmentEquivalences` (with `scope.pathPrefix`, evidence, downstream constraints)
+- `resolveConceptPathWithEquivalences` and trie merge that consume the above
+
+## Allowed in production
+
+- **Domain-agnostic** mechanics: trim, empty drop, consecutive dedupe (`segmentKeyForMerge`), max segment count, scoped prefix reorder for equivalences
+- **Neutral** prompt examples (`frontend`, `backend`, `api`) — never Android/ART-style baked-in paths in prompts
+- Comments that describe behavior without encoding merge rules for a specific domain
+
+## Allowed in tests / fixtures
+
+- `test/**`, `test/fixtures/**` may use realistic sample paths to assert ontology-driven behavior
+- Tests must pass `segmentEquivalences` (or full ontology) when asserting cross-session merge — not rely on hardcoded normalize rules
+
+## When adding path logic
+
+1. Prefer extending ontology refine + `segmentEquivalences`
+2. If order is wrong (alias before `pathPrefix`), use generic `reorderPathForScopedEquivalences` — no segment-name literals
+3. Run `npm run check:concept-nodes` before committing
+
+## Examples
+
+```typescript
+// ❌ BAD — hardcoded domain segment
+if (entry.key === "runtime" && afterAndroid[i + 1].key === "art") continue;
+
+// ✅ GOOD — ontology-driven
+resolveConceptPathWithEquivalences(path, ontology.segmentEquivalences, ctx);
+
+// ✅ GOOD — domain-agnostic normalize
+if (deduped.length && deduped[deduped.length - 1].key === entry.key) continue;
+```

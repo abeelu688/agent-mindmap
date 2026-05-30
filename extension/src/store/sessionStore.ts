@@ -9,7 +9,20 @@ import {
   outlineToTopicGraph,
   topicGraphToOutline,
 } from "../llm/outlineToTopicGraph";
-import type { SessionOutline, TopicGraph } from "../llm/types";
+import type {
+  PipelineVersions,
+  SessionAnalysis,
+  SessionConceptExtract,
+  SessionOutline,
+  SessionSynonymRefine,
+  SessionTreeSnapshot,
+  TopicGraph,
+} from "../llm/types";
+import {
+  currentPipelineVersions,
+  pipelineVersionsMatch,
+  PIPELINE_VERSION,
+} from "../pipeline/pipelineVersions";
 import type {
   MergeRecord,
   SessionIndex,
@@ -217,10 +230,25 @@ export function buildRecordMeta(
 
 export function buildSessionRecord(
   meta: SessionRecordMeta,
-  outline: SessionOutline
+  outline: SessionOutline,
+  pipeline?: {
+    sessionAnalysis?: SessionAnalysis;
+    conceptExtract?: SessionConceptExtract;
+    sessionSynonyms?: SessionSynonymRefine;
+    treeSnapshot?: SessionTreeSnapshot;
+  }
 ): SessionRecord {
   const graph = outlineToTopicGraph(outline);
-  return { schemaVersion: SCHEMA_VERSION, meta, outline, graph };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    meta,
+    outline,
+    graph,
+    sessionAnalysis: pipeline?.sessionAnalysis,
+    conceptExtract: pipeline?.conceptExtract,
+    sessionSynonyms: pipeline?.sessionSynonyms,
+    treeSnapshot: pipeline?.treeSnapshot,
+  };
 }
 
 /**
@@ -333,6 +361,7 @@ export function isRecordFresh(
     transcriptSha256: string;
     promptParams: { maxTopics: number; maxItemsPerTopic: number };
     promptVersion: number;
+    pipelineVersions?: PipelineVersions;
     llm: { provider: string; model?: string };
     hostId?: string;
   }
@@ -347,10 +376,20 @@ export function isRecordFresh(
   ) {
     return false;
   }
-  // Absent promptVersion is treated as v1 (records written before versioning).
-  const recVersion = record.meta.promptVersion ?? 1;
-  if (recVersion !== current.promptVersion) {
-    return false;
+  const expectedPipeline =
+    current.pipelineVersions ?? currentPipelineVersions();
+  if (record.meta.pipelineVersions) {
+    if (!pipelineVersionsMatch(record.meta.pipelineVersions, expectedPipeline)) {
+      return false;
+    }
+    if (expectedPipeline.sessionAnalysis !== undefined && !record.sessionAnalysis) {
+      return false;
+    }
+  } else {
+    const recVersion = record.meta.promptVersion ?? 1;
+    if (recVersion !== current.promptVersion) {
+      return false;
+    }
   }
   if (record.meta.llm.provider !== current.llm.provider) {
     return false;
@@ -388,6 +427,8 @@ export async function readMergeRecord(
   }
   return parsed;
 }
+
+export { PIPELINE_VERSION, currentPipelineVersions };
 
 export const __testing = {
   isSessionRecord,

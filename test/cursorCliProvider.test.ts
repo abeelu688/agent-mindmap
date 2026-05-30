@@ -141,17 +141,17 @@ describe("validateTopicGraph", () => {
     expect(g.topics[0].items[0].sourceTurnIndices).toEqual([0, 3]);
   });
 
-  it("folds android/runtime/art in conceptPath", () => {
+  it("dedupes consecutive conceptPath segments via normalizeConceptPath", () => {
     const g = validateTopicGraph({
       topics: [
         {
           title: "T",
-          conceptPath: ["android", "runtime", "art", "jit"],
+          conceptPath: ["Alpha", "alpha", "beta"],
           items: [{ text: "x" }],
         },
       ],
     });
-    expect(g.topics[0].conceptPath).toEqual(["android", "art", "jit"]);
+    expect(g.topics[0].conceptPath).toEqual(["Alpha", "beta"]);
   });
 
   it("parses and normalises conceptPath", () => {

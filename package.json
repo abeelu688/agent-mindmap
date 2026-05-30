@@ -8,6 +8,7 @@
     "build:webview": "npm run build --prefix webview",
     "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
     "test": "npm run build --prefix extension && npm run test --prefix extension",
+    "check:concept-nodes": "node scripts/check-hardcoded-concept-nodes.mjs",
     "test:vitest": "vitest run",
     "eval": "npm run build --prefix extension && node extension/dist/eval-run.js",
     "eval:fixtures:export": "node test/eval/export-aosp14-fixtures.mjs",

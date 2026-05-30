@@ -4,8 +4,10 @@ import type { SessionRecord } from "../store/storeTypes";
 import type { ConceptOntology } from "./types";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import {
+  buildAllSegmentOverlapHints,
   buildRefineContextSamples,
   buildTopicContextIndex,
+  type SegmentOverlapHint,
   type TopicSegmentContext,
 } from "./segmentContext";
 
@@ -14,7 +16,7 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const ONTOLOGY_REFINE_PROMPT_VERSION = 3;
+export const ONTOLOGY_REFINE_PROMPT_VERSION = 5;
 
 export type OntologyRefineInput = {
   nodes: ConceptOntology["nodes"];
@@ -22,6 +24,8 @@ export type OntologyRefineInput = {
   topicPaths: TopicConceptPathDecision[];
   sessions: { sessionId: string; sessionLabel: string; projectSlug: string }[];
   contextSamples: TopicSegmentContext[];
+  /** DET: sibling + chain + node relationship hints. */
+  overlapHints: SegmentOverlapHint[];
 };
 
 export function buildOntologyRefinePrompt(
@@ -46,23 +50,32 @@ export function buildOntologyRefinePrompt(
     `你是「概念本体精炼」助手。下面是 ${agentLabel} 多会话分析得到的 ontology 与 topicPaths。`,
     "请识别**带语境的同义 path 段**（segment equivalences），用于合并 Concept Mind Map 中并列的重复分支。",
     "",
-    "语境定义（必须用于判断，禁止无 scope 的全局合并）：",
-    "- **upstream**：scope.pathPrefix = alias 段之前的 path 前缀（例如 [\"android\",\"art\"] 表示 runtime 出现在 art 之下）。",
-    "- **downstream**：alias 之后的 path 后缀；可用 scope.downstreamPrefix 或 scope.downstreamFirst 限定。",
-    "- **大纲兄弟**：contextSamples 中的 siblingTitles / outlinePath（同一大纲父节点下的其它 leaf）。",
-    "- **证据**：contextSamples 中的 evidence（topic 标题、摘要、要点）。",
+    "判断必须同时考虑 **domain + 上级节点 + 下级节点**（禁止无 scope 的全局合并）：",
+    "1) **domain**：ontology nodes 的 parentKeys / domains、contextSamples.evidence 是否指向同一技术域。",
+    "2) **上级（upstream）**：scope.pathPrefix = 该段之前的 path 前缀（根级并列段用 []）。",
+    "3) **下级（downstream）**：scope.downstreamFirst / downstreamPrefix 限定 alias 之后出现的子段。",
+    "4) **大纲兄弟**：contextSamples.siblingTitles / outlinePath。",
+    "",
+    "除**并列兄弟段**外，还须检查**同链路上下级**（overlapHints kind=chain）：",
+    "- 当大量 path 为 outer/inner/suffix，同时存在 inner/suffix，且 domain+evidence 同指，",
+    "  可将 outer 折叠为 inner 的同义（scope.pathPrefix + downstreamFirst: [inner]）。",
+    "- 例：platform-wrapper/subsystem/module vs subsystem/module → canonical subsystem，aliases [platform-wrapper]。",
+    "",
+    "典型并列模式（neutral 示意）：",
+    "- 根级：platform-alpha/foo 与 platform-beta/foo 共现 → pathPrefix:[] + downstreamFirst:[foo]。",
+    "- 嵌套：pathPrefix [backend] 下 api vs middleware。",
+    "",
+    "overlapHints（DET 预计算：sibling / chain / node-alias）是强候选，须逐条核对；",
+    "node-alias 来自 nodes.aliases 互指；无 overlap 时仍可用 nodes.evidence 输出 scoped equivalence。",
     "",
     "要求：",
-    "- 每条 equivalence 必须包含 scope（pathPrefix 和/或 evidenceKeywords / downstream 约束），禁止全局无差别合并。",
-    "- 例：runtime 作为 android 的**并列**子域时：canonical art，aliases [runtime]，pathPrefix [android]，并附 ART 相关 evidenceKeywords。",
-    "- 例：runtime 出现在 android/art **之下**作为冗余子段时：pathPrefix [android, art]，aliases [runtime]（或仅在该下游语境折叠）。",
-    "- 不要把 node.js 的 node/runtime 与 Android ART 混淆。",
-    "- canonical 应是更短、更稳定的段名；aliases 列出应被替换的同义段。",
-    "- confidence 0-1；不确定则不要输出该条。",
-    "- 不要输出 nodeMerges；只输出 segmentEquivalences。",
+    "- 每条 equivalence 必须包含 scope（pathPrefix 和/或 downstreamFirst / downstreamPrefix / evidenceKeywords）。",
+    "- canonical 选更短、更稳定的段名；aliases 为应被替换的同义段。",
+    "- confidence 0-1；不确定则不要输出。",
+    "- 只输出 segmentEquivalences，不要 nodeMerges。",
     "",
     "只输出严格 JSON：",
-    '{"segmentEquivalences":[{"canonical":"art","aliases":["runtime"],"scope":{"pathPrefix":["android"],"evidenceKeywords":["libart","dex2oat"]},"confidence":0.9,"rationale":"..."}]}',
+    '{"segmentEquivalences":[{"canonical":"api","aliases":["middleware"],"scope":{"pathPrefix":["backend"],"downstreamFirst":["router"],"evidenceKeywords":["http handler"]},"confidence":0.9,"rationale":"..."}]}',
     "",
     "输入 ontology nodes/mappings（摘要）：",
     JSON.stringify({
@@ -76,7 +89,10 @@ export function buildOntologyRefinePrompt(
     "输入 topicPaths 样本：",
     JSON.stringify(topicSamples, null, 2),
     "",
-    "输入 contextSamples（含 segments 上下游切片、大纲兄弟、证据）：",
+    "输入 overlapHints（sibling / chain / node-alias）：",
+    JSON.stringify(input.overlapHints.slice(0, 32), null, 2),
+    "",
+    "输入 contextSamples：",
     JSON.stringify(input.contextSamples, null, 2),
   ].join("\n");
 }
@@ -97,5 +113,6 @@ export function buildRefineInputFromRecords(
       projectSlug: r.meta.projectSlug,
     })),
     contextSamples: buildRefineContextSamples(topicPaths, index),
+    overlapHints: buildAllSegmentOverlapHints(topicPaths, ontology.nodes),
   };
 }

@@ -26,6 +26,13 @@ export type ConceptOntologyRecord = {
       reattach: number;
       refine: number;
       outlineSchema: number;
+      sessionAnalysis?: number;
+      /** @deprecated legacy session pipeline */
+      extract?: number;
+      /** @deprecated legacy session pipeline */
+      sessionSynonyms?: number;
+      /** @deprecated legacy session pipeline */
+      organize?: number;
     };
     hostId?: AgentHostId;
   };

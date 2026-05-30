@@ -261,10 +261,9 @@ export function buildConceptTrieStructure(
   for (const record of filtered) {
     for (const topic of record.graph.topics) {
       total += 1;
-      const path = topic.conceptPath?.length ? topic.conceptPath : undefined;
       const location: TopicLocation = { record, topic };
-      if (path && path.length) {
-        insertPath(root, path, location, options.segmentEquivalences);
+      if (topic.conceptPath?.length) {
+        insertPath(root, topic.conceptPath, location, options.segmentEquivalences);
       } else {
         orphans.push(location);
       }

@@ -5,9 +5,12 @@ import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
-import { PROMPT_VERSION } from "./llm/promptOutline";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
-import { summarizeSession } from "./llm/summarizeSession";
+import { runSessionPipeline } from "./pipeline/sessionPipeline";
+import {
+  currentPipelineVersions,
+  PIPELINE_VERSION,
+} from "./pipeline/pipelineVersions";
 import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
@@ -366,7 +369,8 @@ export async function loadSession(
             maxTopics: settings.llm.maxTopics,
             maxItemsPerTopic: settings.llm.maxItemsPerTopic,
           },
-          promptVersion: PROMPT_VERSION,
+          promptVersion: PIPELINE_VERSION,
+          pipelineVersions: currentPipelineVersions(),
           llm: {
             provider: settings.llm.provider,
             model: settings.llm.model || undefined,
@@ -399,13 +403,18 @@ export async function loadSession(
     }
   }
 
-  let outline: SessionOutline | undefined;
+  let pipelineResult;
   try {
     const provider = getProvider(settings.llm);
-    outline = await summarizeSession(
-      events,
+    pipelineResult = await runSessionPipeline(
       {
+        events,
+        sessionId: session.id,
+        projectSlug: ctx.projectSlug,
         prompt: {
+          maxDomains: Math.min(10, settings.llm.maxTopics),
+          maxTerms: Math.max(6, settings.llm.maxTopics * 2),
+          maxEvidencePerTerm: 4,
           maxBranches: settings.llm.maxTopics,
           maxDetailsPerNode: settings.llm.maxItemsPerTopic,
         },
@@ -413,6 +422,7 @@ export async function loadSession(
         cacheDir: getCacheDir(deps.context),
         cache: settings.cache,
         hostId: host.id,
+        storeDir: getStoreDir(),
       },
       provider,
       signal,
@@ -456,7 +466,7 @@ export async function loadSession(
   }
 
   const userQueryCount = countUserQueries(events);
-  outline = sanitizeSessionOutline(outline, userQueryCount);
+  let outline = sanitizeSessionOutline(pipelineResult.outline, userQueryCount);
   progress?.report(t("ui.progress.renderMindMap", "Rendering mind map…"));
 
   if (settings.library.enabled) {
@@ -477,12 +487,18 @@ export async function loadSession(
           maxTopics: settings.llm.maxTopics,
           maxItemsPerTopic: settings.llm.maxItemsPerTopic,
         },
-        promptVersion: PROMPT_VERSION,
+        promptVersion: PIPELINE_VERSION,
+        pipelineVersions: pipelineResult.pipelineVersions,
         sessionLabel: session.label,
         hostId: host.id,
         userQueryCount,
       });
-      const record = buildSessionRecord(meta, outline);
+      const record = buildSessionRecord(meta, outline, {
+        sessionAnalysis: pipelineResult.sessionAnalysis,
+        conceptExtract: pipelineResult.conceptExtract,
+        sessionSynonyms: pipelineResult.sessionSynonyms,
+        treeSnapshot: pipelineResult.treeSnapshot,
+      });
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
 

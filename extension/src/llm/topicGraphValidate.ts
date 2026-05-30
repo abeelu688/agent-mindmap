@@ -41,7 +41,7 @@ export function canonicalizeConceptSegment(segment: string): string {
   return segment.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-/** Trie merge key: fold hyphen/underscore variants (e.g. android-runtime → androidruntime). */
+/** Trie merge key: fold hyphen/underscore variants (e.g. foo-bar → foobar). */
 export function segmentKeyForMerge(segment: string): string {
   return canonicalizeConceptSegment(segment).replace(/[-_\s]/g, "");
 }
