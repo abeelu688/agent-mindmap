@@ -107,4 +107,14 @@ describe("resolveConceptPathWithEquivalences", () => {
       )
     ).toEqual(["android", "art", "start"]);
   });
+
+  it("reorders misplaced pathPrefix before applying scoped alias", () => {
+    expect(
+      resolveConceptPathWithEquivalences(
+        ["runtime", "android", "art", "method-execution"],
+        artRuntimeEq,
+        { title: "ART entry_point", items: ["libart"] }
+      )
+    ).toEqual(["android", "art", "method-execution"]);
+  });
 });

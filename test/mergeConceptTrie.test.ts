@@ -253,7 +253,16 @@ describe("buildConceptTrieMindMap", () => {
       }),
     ];
 
-    const { mindMap } = buildConceptTrieMindMap(records);
+    const { mindMap } = buildConceptTrieMindMap(records, {
+      segmentEquivalences: [
+        {
+          canonical: "art",
+          aliases: ["runtime"],
+          scope: { pathPrefix: ["android"] },
+          confidence: 0.9,
+        },
+      ],
+    });
     const android = mindMap.children?.find((c) =>
       c.data.text.startsWith("android (")
     );

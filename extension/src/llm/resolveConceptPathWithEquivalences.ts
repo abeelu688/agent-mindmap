@@ -99,6 +99,84 @@ function aliasKeysFor(eq: SegmentEquivalence): string[] {
   return [...keys];
 }
 
+function indexOfContiguous(
+  haystack: string[],
+  needle: string[],
+  fromIndex: number
+): number {
+  if (!needle.length || haystack.length < needle.length) {
+    return -1;
+  }
+  for (let i = fromIndex; i <= haystack.length - needle.length; i++) {
+    let match = true;
+    for (let k = 0; k < needle.length; k++) {
+      if (haystack[i + k] !== needle[k]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * When an alias segment appears before its scoped pathPrefix (LLM inverted order),
+ * move the prefix block before the alias so scoped equivalences can apply.
+ */
+function reorderPathForScopedEquivalences(
+  path: string[],
+  equivalences: SegmentEquivalence[]
+): { path: string[]; reordered: boolean } {
+  let labels = path
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  let reordered = false;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const keys = labels.map((s) => segmentKeyForMerge(s));
+    for (const eq of equivalences) {
+      const prefix = (eq.scope.pathPrefix ?? [])
+        .map((s) => segmentKeyForMerge(s))
+        .filter(Boolean);
+      if (!prefix.length) {
+        continue;
+      }
+      for (let i = 0; i < keys.length; i++) {
+        if (!aliasKeysFor(eq).includes(keys[i])) {
+          continue;
+        }
+        if (pathPrefixMatches(keys.slice(0, i), prefix)) {
+          continue;
+        }
+        const j = indexOfContiguous(keys, prefix, i + 1);
+        if (j < 0) {
+          continue;
+        }
+        const prefixLabels = labels.slice(j, j + prefix.length);
+        labels = [
+          ...prefixLabels,
+          ...labels.slice(0, i),
+          ...labels.slice(i, j),
+          ...labels.slice(j + prefix.length),
+        ];
+        reordered = true;
+        changed = true;
+        break;
+      }
+      if (changed) {
+        break;
+      }
+    }
+  }
+
+  return { path: labels, reordered };
+}
+
 /**
  * Rewrite conceptPath segments using persisted, scoped equivalences (from ontology
  * memory), then apply mechanical normalizeConceptPath cleanup.
@@ -116,12 +194,17 @@ export function resolveConceptPathWithEquivalences(
     return normalizeConceptPath(path);
   }
 
-  const pathKeys = path.map((s) => segmentKeyForMerge(s));
+  const { path: orderedPath } = reorderPathForScopedEquivalences(
+    path,
+    equivalences
+  );
+
+  const pathKeys = orderedPath.map((s) => segmentKeyForMerge(s));
   const out: string[] = [];
 
-  for (let i = 0; i < path.length; i++) {
+  for (let i = 0; i < orderedPath.length; i++) {
     const segKey = pathKeys[i];
-    let label = path[i].replace(/\s+/g, " ").trim();
+    let label = orderedPath[i].replace(/\s+/g, " ").trim();
     for (const eq of equivalences) {
       if (!aliasKeysFor(eq).includes(segKey)) {
         continue;

@@ -30,7 +30,8 @@ import {
   buildDeterministicMergeMindMap,
   buildDeterministicMergeRecord,
 } from "../extension/src/store/mergeDeterministic";
-import { normalizeConceptPath } from "../extension/src/llm/normalizeConceptPath";
+import { resolveConceptPathWithEquivalences } from "../extension/src/llm/resolveConceptPathWithEquivalences";
+import type { SegmentEquivalence } from "../extension/src/llm/types";
 import {
   filterSessionIds,
   loadEvalConfig,
@@ -368,11 +369,23 @@ async function main(): Promise<void> {
       "trie: android at root"
     );
 
+    const artRuntimeEq: SegmentEquivalence[] = [
+      {
+        canonical: "art",
+        aliases: ["runtime"],
+        scope: { pathPrefix: ["android"] },
+        confidence: 0.9,
+      },
+    ];
     assert(
       JSON.stringify(
-        normalizeConceptPath(["android", "runtime", "art", "jit"])
+        resolveConceptPathWithEquivalences(
+          ["android", "runtime", "art", "jit"],
+          artRuntimeEq,
+          { items: ["libart"] }
+        )
       ) === JSON.stringify(["android", "art", "jit"]),
-      "normalize: fold android/runtime/art"
+      "equivalence: fold runtime under android to art"
     );
 
     const artJit = buildSessionRecord(
@@ -419,7 +432,9 @@ async function main(): Promise<void> {
         ],
       })
     );
-    const artTrie = buildConceptTrieMindMap([artJit, artHook]);
+    const artTrie = buildConceptTrieMindMap([artJit, artHook], {
+      segmentEquivalences: artRuntimeEq,
+    });
     const artAndroid = artTrie.mindMap.children?.find((c) =>
       (c.data.text ?? "").startsWith("android (")
     );

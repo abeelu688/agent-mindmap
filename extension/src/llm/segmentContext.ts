@@ -4,6 +4,30 @@ import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import { topicIdForTopic } from "./topicId";
 import { segmentKeyForMerge } from "./topicGraphValidate";
 
+export type {
+  ChainSegmentOverlapHint,
+  NodeSegmentRelationshipHint,
+  SegmentOverlapHint,
+  SiblingSegmentOverlapHint,
+} from "./synonymHintDerive";
+export {
+  buildAllSegmentOverlapHints,
+  buildChainCollapseOverlapHints,
+  buildNodeRelationshipHints,
+  buildSiblingSegmentOverlapHints,
+  collectSessionSegmentEquivalences,
+  deriveEquivalencesFromOverlapHints,
+  deriveEquivalencesFromTopicPaths,
+  enhanceSegmentEquivalencesForMerge,
+  mergeSegmentEquivalencesLists,
+} from "./synonymHintDerive";
+export {
+  applyOrphanRootReparent,
+  buildOrphanRootReparentRules,
+  rulesToReparentMap,
+  type OrphanRootReparentRule,
+} from "./reparentOrphanRootPaths";
+
 export type SegmentSliceContext = {
   index: number;
   segment: string;
@@ -33,14 +57,6 @@ export type TopicSegmentContext = {
   evidence: string[];
 };
 
-const SUSPICIOUS_SEGMENT_KEYS = new Set([
-  "runtime",
-  "art",
-  "androidruntime",
-  "mobile",
-  "aosp",
-]);
-
 const DEFAULT_REFINE_SAMPLE_LIMIT = 60;
 
 function clipText(text: string, max: number): string {
@@ -60,14 +76,36 @@ function buildSegmentSlices(path: string[]): SegmentSliceContext[] {
   }));
 }
 
-function suspiciousScore(path: string[]): number {
+/**
+ * Domain-agnostic ambiguity score for refine sampling: repeated segments,
+ * nested key overlap, and deep paths often need scoped equivalences.
+ */
+function pathAmbiguityScore(path: string[]): number {
+  const keys = path.map((s) => segmentKeyForMerge(s)).filter(Boolean);
   let score = 0;
-  for (const seg of path) {
-    const key = segmentKeyForMerge(seg);
-    if (SUSPICIOUS_SEGMENT_KEYS.has(key)) {
-      score += 2;
+
+  const counts = new Map<string, number>();
+  for (const k of keys) {
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  for (const n of counts.values()) {
+    if (n > 1) {
+      score += 2 * (n - 1);
     }
   }
+
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      if (keys[i] === keys[j]) {
+        continue;
+      }
+      if (keys[i].includes(keys[j]) || keys[j].includes(keys[i])) {
+        score += 1;
+      }
+    }
+  }
+
+  score += Math.max(0, keys.length - 3);
   return score;
 }
 
@@ -181,7 +219,7 @@ export function topicSegmentContextFromDecision(
 }
 
 /**
- * Prioritize paths with runtime/art/androidruntime, capped for refine prompt size.
+ * Prioritize ambiguous paths (likely needing scoped equivalences), capped for refine.
  */
 export function buildRefineContextSamples(
   topicPaths: TopicConceptPathDecision[],
@@ -189,7 +227,7 @@ export function buildRefineContextSamples(
   limit = DEFAULT_REFINE_SAMPLE_LIMIT
 ): TopicSegmentContext[] {
   const sorted = [...topicPaths].sort(
-    (a, b) => suspiciousScore(b.conceptPath) - suspiciousScore(a.conceptPath)
+    (a, b) => pathAmbiguityScore(b.conceptPath) - pathAmbiguityScore(a.conceptPath)
   );
   const seen = new Set<string>();
   const out: TopicSegmentContext[] = [];

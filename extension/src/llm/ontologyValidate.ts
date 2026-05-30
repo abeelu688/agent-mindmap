@@ -206,7 +206,7 @@ function parseSegmentEquivalence(value: unknown): SegmentEquivalence | undefined
   return { canonical, aliases, scope, confidence, rationale };
 }
 
-function parseSegmentEquivalences(value: unknown): SegmentEquivalence[] {
+export function parseSegmentEquivalences(value: unknown): SegmentEquivalence[] {
   const raw = Array.isArray(value) ? value : [];
   const out: SegmentEquivalence[] = [];
   for (const item of raw) {
@@ -347,12 +347,7 @@ export function validateTopicPaths(value: unknown): { topicPaths: TopicPathDecis
   return { topicPaths };
 }
 
-export function validateReattachMoves(value: unknown): { moves: ReattachMove[] } {
-  const root = asObject(value);
-  if (!root) {
-    throw new LlmProviderError("bad-shape", "Expected object with moves[]");
-  }
-  const raw = Array.isArray(root.moves) ? root.moves : [];
+function parseReattachMovesList(raw: unknown[]): ReattachMove[] {
   const moves: ReattachMove[] = [];
   for (const mv of raw) {
     const parsed = parseMove(mv);
@@ -363,9 +358,29 @@ export function validateReattachMoves(value: unknown): { moves: ReattachMove[] }
       break;
     }
   }
+  return moves;
+}
+
+export function validateReattachMoves(value: unknown): { moves: ReattachMove[] } {
+  const root = asObject(value);
+  if (!root) {
+    throw new LlmProviderError("bad-shape", "Expected object with moves[]");
+  }
+  const raw = Array.isArray(root.moves) ? root.moves : [];
+  const moves = parseReattachMovesList(raw);
   if (!moves.length) {
     throw new LlmProviderError("bad-shape", "No usable moves returned");
   }
   return { moves };
+}
+
+/** Lenient parse for optional trie-reparent stage (empty moves allowed). */
+export function tryParseReattachMoves(value: unknown): ReattachMove[] {
+  const root = asObject(value);
+  if (!root) {
+    return [];
+  }
+  const raw = Array.isArray(root.moves) ? root.moves : [];
+  return parseReattachMovesList(raw);
 }
 

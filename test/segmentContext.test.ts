@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRefineContextSamples,
+  buildSiblingSegmentOverlapHints,
   buildTopicContextIndex,
 } from "../extension/src/llm/segmentContext";
 import {
@@ -103,5 +104,60 @@ describe("segmentContext", () => {
       downstream: ["start"],
     });
     expect(samples[0].evidence.some((e) => e.includes("dex2oat"))).toBe(true);
+  });
+
+  it("prioritizes ambiguous paths in refine samples", () => {
+    const index = buildTopicContextIndex([]);
+    const topicPaths: TopicConceptPathDecision[] = [
+      {
+        topicId: "t-simple",
+        sessionId: "s1",
+        projectSlug: "p",
+        conceptPath: ["alpha", "beta"],
+      },
+      {
+        topicId: "t-dup",
+        sessionId: "s1",
+        projectSlug: "p",
+        conceptPath: ["alpha", "beta", "alpha", "gamma"],
+      },
+    ];
+    const samples = buildRefineContextSamples(topicPaths, index, 1);
+    expect(samples[0].topicId).toBe("t-dup");
+  });
+
+  it("detects sibling root segments with shared downstream for refine hints", () => {
+    const topicPaths: TopicConceptPathDecision[] = [
+      {
+        topicId: "t1",
+        sessionId: "s1",
+        projectSlug: "p",
+        conceptPath: ["platform-alpha", "core", "module-a"],
+      },
+      {
+        topicId: "t2",
+        sessionId: "s2",
+        projectSlug: "p",
+        conceptPath: ["platform-alpha", "core", "module-b"],
+      },
+      {
+        topicId: "t3",
+        sessionId: "s3",
+        projectSlug: "p",
+        conceptPath: ["platform-beta", "core", "module-a"],
+      },
+      {
+        topicId: "t4",
+        sessionId: "s4",
+        projectSlug: "p",
+        conceptPath: ["platform-beta", "core", "module-b"],
+      },
+    ];
+    const hints = buildSiblingSegmentOverlapHints(topicPaths);
+    expect(hints.length).toBeGreaterThan(0);
+    const rootHint = hints.find((h) => h.pathPrefix.length === 0);
+    expect(rootHint).toBeDefined();
+    expect(rootHint!.segments.sort()).toEqual(["platformalpha", "platformbeta"]);
+    expect(rootHint!.sharedDownstreamFirst).toContain("core");
   });
 });

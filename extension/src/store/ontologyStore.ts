@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import {
-  buildOntologyPrompt,
   ONTOLOGY_PROMPT_VERSION,
 } from "../llm/promptOntology";
 import {
@@ -13,15 +12,14 @@ import {
   ONTOLOGY_REFINE_PROMPT_VERSION,
 } from "../llm/promptOntologyRefine";
 import {
-  buildTopicPathsPrompt,
   TOPIC_PATHS_PROMPT_VERSION,
   type OntologyLite,
 } from "../llm/promptTopicPaths";
 import {
   REATTACH_PROMPT_VERSION,
   buildReattachPrompt,
-  type ReattachCandidate,
 } from "../llm/promptReattach";
+import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import type {
   ConceptOntologyRecord,
   TopicConceptPathDecision,
@@ -37,9 +35,11 @@ import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
 import {
   validateConceptOntology,
   validateOntologyRefine,
-  validateTopicPaths,
 } from "../llm/ontologyValidate";
 import type { PromptLanguage } from "../llm/promptLanguage";
+import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
+import { mergeSynonyms } from "../pipeline/stages/mergeSynonyms";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
 
 function format(message: string, args: Array<string | number | boolean>): string {
   return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
@@ -171,6 +171,7 @@ export function computeOntologyCacheKey(
       reattach: REATTACH_PROMPT_VERSION,
       refine: ONTOLOGY_REFINE_PROMPT_VERSION,
       outlineSchema: OUTLINE_PROMPT_VERSION,
+      sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
     },
   });
   return sha256Hex(payload);
@@ -331,102 +332,7 @@ export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean
   );
 }
 
-async function inferTopicPathsForRecords(
-  records: SessionRecord[],
-  nodes: ConceptOntologyRecord["nodes"],
-  mappings: ConceptOntologyRecord["mappings"],
-  existingPaths: TopicConceptPathDecision[],
-  opts: {
-    model?: string;
-    hostId?: AgentHostId;
-    promptLanguage?: PromptLanguage;
-  },
-  hostId: AgentHostId,
-  provider: LlmProvider,
-  signal: AbortSignal,
-  progress?: MindMapProgress
-): Promise<TopicConceptPathDecision[]> {
-  const covered = sessionIdsWithTopicPaths(existingPaths);
-  const toInfer = records.filter((r) => !covered.has(r.meta.sessionId));
-  if (!toInfer.length) {
-    return existingPaths;
-  }
-
-  const lite: OntologyLite = {
-    nodes: nodes.map((n) => ({
-      key: n.key,
-      label: n.label,
-      aliases: n.aliases,
-      parentKeys: n.parentKeys,
-    })),
-    mappings: mappings.map((m) => ({ mention: m.mention, key: m.key })),
-  };
-
-  const topicPaths = [...existingPaths];
-  const total = toInfer.length;
-  let index = 0;
-  for (const rec of toInfer) {
-    index += 1;
-    progress?.report(
-      safeT(
-        "ui.ontology.topicPaths.step",
-        "Inferring topic paths ({0}/{1})…",
-        index,
-        total
-      )
-    );
-    const { prompt } = buildTopicPathsPrompt(
-      rec,
-      lite,
-      hostId,
-      opts.promptLanguage ?? "zh"
-    );
-    const heartbeat = createHeartbeat(
-      progress,
-      safeT(
-        "ui.ontology.topicPaths.step",
-        "Inferring topic paths ({0}/{1})…",
-        index,
-        total
-      )
-    );
-    let res: Awaited<ReturnType<LlmProvider["summarize"]>>;
-    try {
-      res = await provider.summarize(
-        {
-          events: [],
-          prompt,
-          model: opts.model,
-          maxTopics: 8,
-          maxItemsPerTopic: 8,
-          responseSchema: "topic-paths",
-          onAttempt: (attempt, maxAttempts) => {
-            if (attempt > 1) {
-              progress?.report(
-                safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-              );
-            }
-          },
-        },
-        signal
-      );
-    } finally {
-      heartbeat.stop();
-    }
-    const parsed = validateTopicPaths(res as any);
-    const validatedPaths = validateConceptOntology({
-      nodes,
-      mappings,
-      topicPaths: parsed.topicPaths,
-    } as any).topicPaths;
-    for (const p of validatedPaths) {
-      topicPaths.push(p);
-    }
-  }
-  return topicPaths;
-}
-
-async function writeOntologyRecord(
+export async function writeOntologyRecord(
   storeDir: string,
   cacheKey: string,
   records: SessionRecord[],
@@ -455,6 +361,7 @@ async function writeOntologyRecord(
         reattach: REATTACH_PROMPT_VERSION,
         refine: ONTOLOGY_REFINE_PROMPT_VERSION,
         outlineSchema: OUTLINE_PROMPT_VERSION,
+        sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
       },
       hostId,
     },
@@ -524,6 +431,12 @@ export async function ensureOntologyMemory(
 
   if (flags.refineOnly) {
     if (!nodes?.length || !mappings) {
+      const collected = collectMergeTerms(records, reusableBase);
+      nodes = collected.nodes;
+      mappings = collected.mappings;
+      topicPaths = collected.topicPaths;
+    }
+    if (!nodes?.length || !mappings) {
       throw new Error(
         "ontology refine-only requires existing nodes/mappings in cache"
       );
@@ -553,67 +466,22 @@ export async function ensureOntologyMemory(
     );
   }
 
-  if (!nodes?.length || !mappings) {
-    progress?.report(safeT("ui.ontology.extract", "Extracting concept ontology…"));
-    const heartbeat = createHeartbeat(
-      progress,
-      safeT("ui.ontology.extract.heartbeat", "Extracting concept ontology…")
-    );
-    let ontologyResult: Awaited<ReturnType<LlmProvider["summarize"]>>;
-    try {
-      const ontologyPrompt = buildOntologyPrompt(
-        records,
-        hostId,
-        opts.promptLanguage ?? "zh"
-      );
-      ontologyResult = await provider.summarize(
-        {
-          events: [],
-          prompt: ontologyPrompt,
-          model: opts.model,
-          maxTopics: 8,
-          maxItemsPerTopic: 8,
-          responseSchema: "concept-ontology",
-          onAttempt: (attempt, maxAttempts) => {
-            if (attempt > 1) {
-              progress?.report(
-                safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-              );
-            }
-          },
-        },
-        signal
-      );
-    } finally {
-      heartbeat.stop();
-    }
-    const validated = validateConceptOntology(ontologyResult as any);
-    nodes = validated.nodes;
-    mappings = validated.mappings;
-    reattachMoves = validated.reattachMoves;
-    if (!flags.incrementalFromIndex || !reusableBase) {
-      topicPaths = [];
-    }
-  }
-
-  topicPaths = await inferTopicPathsForRecords(
-    records,
-    nodes!,
-    mappings!,
-    topicPaths,
-    opts,
-    hostId,
-    provider,
-    signal,
-    progress
-  );
+  progress?.report(safeT("ui.ontology.extract", "Collecting concept terms…"));
+  const collected = collectMergeTerms(records, reusableBase);
+  nodes = collected.nodes;
+  mappings = collected.mappings;
+  topicPaths = collected.topicPaths;
 
   let segmentEquivalences: ConceptOntologyRecord["segmentEquivalences"];
   if (flags.forceRefine || cached?.segmentEquivalences === undefined) {
-    segmentEquivalences = await runOntologyRefine(
-      records,
-      { nodes: nodes!, mappings: mappings!, topicPaths, reattachMoves },
-      opts,
+    segmentEquivalences = await mergeSynonyms(
+      {
+        records,
+        collected,
+        model: opts.model,
+        hostId: opts.hostId,
+        promptLanguage: opts.promptLanguage,
+      },
       provider,
       signal,
       progress
@@ -643,17 +511,19 @@ export async function ensureOntologyMemory(
  * Optional: ask LLM to produce reattach moves for suspicious root branches.
  */
 export async function suggestReattachMoves(
-  candidates: ReattachCandidate[],
+  records: SessionRecord[],
   ontology: ConceptOntologyRecord,
   opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
   provider: LlmProvider,
   signal: AbortSignal
 ): Promise<ConceptOntologyRecord["reattachMoves"]> {
   const hostId = opts.hostId ?? ontology.meta.hostId ?? "cursor";
-  const lite = toOntologyLite(ontology);
+  const input = buildTrieReparentInput(records, {
+    segmentEquivalences: ontology.segmentEquivalences,
+    ontologyNodes: ontology.nodes,
+  });
   const prompt = buildReattachPrompt(
-    candidates,
-    lite,
+    input,
     hostId,
     opts.promptLanguage ?? "zh"
   );

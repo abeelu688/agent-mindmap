@@ -1,0 +1,44 @@
+---
+description: Canonical conversation → concept tree → merge data flow for agent-mindmap
+globs: agent-mindmap/**/*
+alwaysApply: true
+---
+
+# Conversation data flow (pipeline contract)
+
+## Session pipeline (per transcript)
+
+Production code must follow this **fixed order** in [`extension/src/pipeline/sessionPipeline.ts`](extension/src/pipeline/sessionPipeline.ts):
+
+1. **S1 Analyze** (`session-analysis`) — one LLM call: domains, professional terms + hierarchy, content-based outline, session-scoped synonyms
+2. **S2 Finalize** (DET) — [`finalizeSessionAnalysis.ts`](extension/src/pipeline/stages/finalizeSessionAnalysis.ts): validate/sanitize outline, derive `conceptExtract` / `sessionSynonyms`, [`buildSessionTree`](extension/src/pipeline/stages/buildSessionTree.ts), `outlineToTopicGraph`
+
+Do **not** call legacy [`summarizeSession`](extension/src/llm/summarizeSession.ts) / single-shot [`buildOutlinePrompt`](extension/src/llm/promptOutline.ts) or the deprecated S1–S4 split stages from production entry points.
+
+Persist on [`SessionRecord`](extension/src/store/storeTypes.ts): `sessionAnalysis`, plus derived `conceptExtract`, `sessionSynonyms`, `treeSnapshot`, `pipelineVersions`.
+
+## Merge pipeline (cross-session / batch / new session)
+
+All merge entry points use [`runMergePipeline`](extension/src/pipeline/mergePipeline.ts):
+
+1. **M1** `collectMergeTerms` — aggregate global + new session terms **with context** (`TermWithContext.evidence`, outline index)
+2. **M2** `mergeSynonyms` — cross-session `ontology-refine`; **must** use ontology cache (`computeOntologyCacheKey` / `readOntologyRecord`)
+3. **M3** `updateConceptTrie` — deterministic concept trie (does **not** rewrite session outlines)
+
+Batch (`ensureIncrementalOntologyAndBuildConceptMerge`) and P8 background merge: `incrementalFromIndex: true` only (no M4 reorganize).
+
+## Rules
+
+- **Single conceptPath source**: S1 `session-analysis` outline leaves + S2 DET tree. Do not add a second TopicPaths LLM pass in production.
+- **Context required**: terms need `evidence[]`; equivalences need `scope` (see [`promptOntologyRefine.ts`](extension/src/llm/promptOntologyRefine.ts)).
+- **No hardcoded domain segments**: see [`no-hardcoded-concept-nodes.mdc`](no-hardcoded-concept-nodes.mdc); use `resolveConceptPathWithEquivalences` + ontology cache only.
+- **Stage cache**: per-stage LLM cache via [`pipeline/llmStage.ts`](extension/src/pipeline/llmStage.ts); invalidate via `pipelineVersions` / prompt version bumps.
+- **Timing logs**: each S1–S2 / M1–M3 stage logs duration to VS Code **Output → Agent Mind Map** and appends NDJSON to `<storeDir>/logs/pipeline-timing.ndjson` (see [`pipeline/pipelineTiming.ts`](extension/src/pipeline/pipelineTiming.ts)).
+
+## Deprecated (do not wire to commands)
+
+- Per-session split extract / synonyms / organize (S1–S4 legacy stages)
+- M4 `reorganizeSessions` full outline rewrite after merge
+- Bulk `concept-ontology` Extract on session summaries
+- Per-session `topic-paths` LLM
+- One-shot outline-only session analysis as the primary path

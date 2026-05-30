@@ -1,5 +1,13 @@
 import type { AgentHostId } from "../host/types";
-import type { SessionOutline, TopicGraph } from "../llm/types";
+import type {
+  PipelineVersions,
+  SessionAnalysis,
+  SessionConceptExtract,
+  SessionOutline,
+  SessionSynonymRefine,
+  SessionTreeSnapshot,
+  TopicGraph,
+} from "../llm/types";
 import type { MindMapRoot } from "../transcript/types";
 
 /**
@@ -15,6 +23,14 @@ export type SessionRecord = {
   meta: SessionRecordMeta;
   outline: SessionOutline;
   graph: TopicGraph;
+  /** Derived from sessionAnalysis for merge pipeline M1. */
+  conceptExtract?: SessionConceptExtract;
+  /** Derived session-scoped synonym refine. */
+  sessionSynonyms?: SessionSynonymRefine;
+  /** S3 deterministic tree snapshot before organize. */
+  treeSnapshot?: SessionTreeSnapshot;
+  /** S1 one-shot LLM analysis (primary artifact). */
+  sessionAnalysis?: SessionAnalysis;
 };
 
 export type SessionRecordMeta = {
@@ -37,11 +53,12 @@ export type SessionRecordMeta = {
   /** Prompt parameters used; if these change we re-analyze. */
   promptParams: { maxTopics: number; maxItemsPerTopic: number };
   /**
-   * Prompt schema version (see {@link PROMPT_VERSION}). Older records are
-   * re-analysed on next open so newer fields (e.g. conceptPath) get filled.
+   * Prompt schema version (legacy aggregate). Prefer {@link pipelineVersions}.
    * Absent = pre-versioning (treated as v1).
    */
   promptVersion?: number;
+  /** Per-stage pipeline prompt versions for incremental cache invalidation. */
+  pipelineVersions?: PipelineVersions;
   /** Same `label` produced by `listSessions`, kept for UI. */
   sessionLabel: string;
   /** AI product that produced this transcript; absent = cursor (legacy). */
