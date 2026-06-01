@@ -7,6 +7,10 @@ import {
   collectSessionSegmentEquivalences,
   enhanceSegmentEquivalencesForMerge,
 } from "../llm/synonymHintDerive";
+import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
+import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES, MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { prepareRecordsForFinalTrie } from "../pipeline/stages/updateConceptTrie";
 import { applyTopicPathsFromOntology } from "./applyOntology";
 import {
   buildConceptMergeRecord,
@@ -56,6 +60,21 @@ function recordsMatchOntologySessions(
   return ontologyIds.every((id) => recordIds.has(id));
 }
 
+function fallbackSegmentEquivalences(
+  records: SessionRecord[]
+): SegmentEquivalence[] {
+  const sessionEquivalences = collectSessionSegmentEquivalences(records);
+  if (!MERGE_DERIVE_SEGMENT_EQUIVALENCES) {
+    return sessionEquivalences;
+  }
+  const collected = collectMergeTerms(records);
+  return enhanceSegmentEquivalencesForMerge(
+    collected.topicPaths,
+    collected.nodes,
+    sessionEquivalences
+  );
+}
+
 /**
  * Load segment equivalences from ontology cache (exact key, then reusable subset).
  */
@@ -85,12 +104,7 @@ export async function loadSegmentEquivalencesForRecords(
   const projectSlugs = new Set(records.map((r) => r.meta.projectSlug));
   const index = await readOntologyIndex(storeDir);
   if (!index?.entries.length) {
-    const collected = collectMergeTerms(records);
-    const fallback = enhanceSegmentEquivalencesForMerge(
-      collected.topicPaths,
-      collected.nodes,
-      collectSessionSegmentEquivalences(records)
-    );
+    const fallback = fallbackSegmentEquivalences(records);
     if (fallback.length) {
       return { segmentEquivalences: fallback };
     }
@@ -113,15 +127,13 @@ export async function loadSegmentEquivalencesForRecords(
     if (!cached.segmentEquivalences?.length) {
       continue;
     }
-    return { segmentEquivalences: cached.segmentEquivalences };
+    return {
+      segmentEquivalences: cached.segmentEquivalences,
+      ontology: cached,
+    };
   }
 
-  const collected = collectMergeTerms(records);
-  const fallback = enhanceSegmentEquivalencesForMerge(
-    collected.topicPaths,
-    collected.nodes,
-    collectSessionSegmentEquivalences(records)
-  );
+  const fallback = fallbackSegmentEquivalences(records);
   if (fallback.length) {
     return { segmentEquivalences: fallback };
   }
@@ -129,14 +141,114 @@ export async function loadSegmentEquivalencesForRecords(
   return {};
 }
 
+/** Distinct first-segment roots across all topic conceptPaths. */
+export function countDistinctTopRoots(records: SessionRecord[]): number {
+  const roots = new Set<string>();
+  for (const record of records) {
+    for (const topic of record.graph.topics) {
+      const key = segmentKeyForMerge(topic.conceptPath?.[0] ?? "");
+      if (key) {
+        roots.add(key);
+      }
+    }
+  }
+  return roots.size;
+}
+
+/** Cached ontology has topicPaths + M2.5 output when multiple parallel roots exist. */
+export function isOntologyReadyForConceptMerge(
+  ctx: LoadedConceptMergeContext,
+  records: SessionRecord[]
+): boolean {
+  const ont = ctx.ontology;
+  if (!ont?.topicPaths?.length) {
+    return false;
+  }
+  if (!recordsMatchOntologySessions(records, ont)) {
+    return false;
+  }
+  if (!isCompleteOntologyRecord(ont)) {
+    return false;
+  }
+  if (ont.meta.promptVersions.reattach !== REATTACH_PROMPT_VERSION) {
+    return false;
+  }
+  if (countDistinctTopRoots(records) < 2) {
+    return true;
+  }
+  return (
+    (ont.reattachSteps?.length ?? 0) > 0 ||
+    (ont.reattachMoves?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Build concept mind map: reuse complete ontology cache, otherwise run full M1–M3 pipeline.
+ */
+export async function buildConceptMergeForRecords(
+  records: SessionRecord[],
+  opts: {
+    storeDir: string;
+    projectSlug?: string;
+    llm: ConceptMergeLlmOpts;
+    provider: LlmProvider;
+    signal: AbortSignal;
+    progress?: MindMapProgress;
+    forceReattach?: boolean;
+    ontologyFlags?: EnsureOntologyMemoryFlags;
+  }
+): Promise<{ merge: MergeRecord; ctx: LoadedConceptMergeContext }> {
+  const ctx = await loadSegmentEquivalencesForRecords(
+    opts.storeDir,
+    records,
+    opts.llm
+  );
+  const ontologyReady = isOntologyReadyForConceptMerge(ctx, records);
+
+  if (ontologyReady) {
+    return {
+      merge: buildConceptMergeWithOntology(
+        records,
+        opts.projectSlug ? { projectSlug: opts.projectSlug } : {},
+        ctx
+      ),
+      ctx,
+    };
+  }
+
+  return ensureOntologyAndBuildConceptMerge(records, {
+    storeDir: opts.storeDir,
+    projectSlug: opts.projectSlug,
+    llm: opts.llm,
+    provider: opts.provider,
+    signal: opts.signal,
+    progress: opts.progress,
+    ontologyFlags: opts.ontologyFlags ?? { forceRefine: true },
+    forceReattach: opts.forceReattach ?? true,
+  });
+}
+
 export function prepareRecordsForConceptMerge(
   records: SessionRecord[],
   ctx: LoadedConceptMergeContext
 ): SessionRecord[] {
-  if (!ctx.ontology || !recordsMatchOntologySessions(records, ctx.ontology)) {
-    return records;
-  }
-  return applyTopicPathsFromOntology(records, ctx.ontology);
+  const ontologySlice = ctx.ontology
+    ? {
+        nodes: ctx.ontology.nodes,
+        mappings: ctx.ontology.mappings,
+        topicPaths: ctx.ontology.topicPaths,
+        segmentEquivalences: ctx.ontology.segmentEquivalences,
+        reattachMoves: ctx.ontology.reattachMoves,
+        reattachSteps: ctx.ontology.reattachSteps,
+      }
+    : undefined;
+
+  return prepareRecordsForFinalTrie(
+    records,
+    ontologySlice,
+    ctx.ontology?.reattachMoves,
+    ctx.ontology?.reattachSteps
+  );
 }
 
 export function buildConceptMergeWithOntology(
@@ -149,6 +261,8 @@ export function buildConceptMergeWithOntology(
     ...options,
     segmentEquivalences:
       options.segmentEquivalences ?? ctx.segmentEquivalences,
+    applySegmentEquivalences:
+      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
   });
 }
 
@@ -172,6 +286,8 @@ export async function resolveAndBuildConceptMergeAsync(
     ...options,
     segmentEquivalences:
       options.segmentEquivalences ?? ctx.segmentEquivalences,
+    applySegmentEquivalences:
+      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
   });
 }
 
@@ -197,6 +313,7 @@ export async function ensureOntologyAndBuildConceptMerge(
     ontologyFlags?: EnsureOntologyMemoryFlags;
     cacheDir?: string;
     cacheLlm?: boolean;
+    forceReattach?: boolean;
   }
 ): Promise<{ merge: MergeRecord; ctx: LoadedConceptMergeContext }> {
   const flags = opts.ontologyFlags ?? {};
@@ -211,6 +328,7 @@ export async function ensureOntologyAndBuildConceptMerge(
       promptLanguage: opts.llm.promptLanguage,
       refineMode: flagsToRefineMode(flags),
       incrementalFromIndex: flags.incrementalFromIndex,
+      forceReattach: opts.forceReattach,
       cacheDir: opts.cacheDir,
       cacheLlm: opts.cacheLlm,
       signal: opts.signal,

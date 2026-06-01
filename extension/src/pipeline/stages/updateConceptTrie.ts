@@ -2,22 +2,42 @@ import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,
 } from "../../store/mergeConceptTrie";
-import { applyReattachMovesToRecords } from "../../llm/applyReattachMoves";
-import type { ReattachMove, SegmentEquivalence } from "../../llm/types";
+import { applySegmentEquivalencesToRecords } from "../../llm/applySegmentEquivalencesToRecords";
+import {
+  applyReattachMovesSequentially,
+  applyReattachStepsToRecords,
+} from "../../llm/reattachSteps";
+import { buildTrieReparentInput } from "../../llm/trieReparentInput";
+import type { ReattachMove, ReattachStep, SegmentEquivalence } from "../../llm/types";
 import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 import type { ConceptOntologyRecord } from "../../store/ontologyTypes";
 import { applyTopicPathsFromOntology } from "../../store/applyOntology";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../mergeSynonymPolicy";
 
 export type UpdateConceptTrieOpts = {
   records: SessionRecord[];
   segmentEquivalences?: SegmentEquivalence[];
   reattachMoves?: ReattachMove[];
+  reattachSteps?: ReattachStep[];
   ontology?: Pick<
     ConceptOntologyRecord,
-    "nodes" | "mappings" | "topicPaths" | "segmentEquivalences" | "reattachMoves"
+    | "nodes"
+    | "mappings"
+    | "topicPaths"
+    | "segmentEquivalences"
+    | "reattachMoves"
+    | "reattachSteps"
   >;
   projectSlug?: string;
 };
+
+/** Same record prep as M3 before reattach (topicPaths from ontology, no moves yet). */
+export function prepareRecordsBeforeReattach(
+  records: SessionRecord[],
+  ontology: UpdateConceptTrieOpts["ontology"]
+): SessionRecord[] {
+  return enrichRecordsWithOntology(records, ontology);
+}
 
 function enrichRecordsWithOntology(
   records: SessionRecord[],
@@ -50,13 +70,41 @@ function enrichRecordsWithOntology(
   return applyTopicPathsFromOntology(records, full);
 }
 
-function prepareRecordsForTrie(opts: UpdateConceptTrieOpts): SessionRecord[] {
-  const enriched = enrichRecordsWithOntology(opts.records, opts.ontology);
-  const moves = opts.reattachMoves ?? opts.ontology?.reattachMoves;
-  return applyReattachMovesToRecords(enriched, moves);
+/** Topic paths (if any) then LLM reattach moves — single entry for M3 and cache rebuild. */
+export function prepareRecordsForFinalTrie(
+  records: SessionRecord[],
+  ontology: UpdateConceptTrieOpts["ontology"],
+  reattachMoves?: ReattachMove[],
+  reattachSteps?: ReattachStep[]
+): SessionRecord[] {
+  const afterTopicPaths = prepareRecordsBeforeReattach(records, ontology);
+  const moves = reattachMoves ?? ontology?.reattachMoves;
+  const steps = reattachSteps;
+  const chains = buildTrieReparentInput(afterTopicPaths, {
+    segmentEquivalences: ontology?.segmentEquivalences,
+    ontologyNodes: ontology?.nodes,
+  }).chains;
+  const afterReattach = steps?.length
+    ? applyReattachStepsToRecords(afterTopicPaths, steps, chains)
+    : applyReattachMovesSequentially(afterTopicPaths, moves, chains);
+  const equivalences = ontology?.segmentEquivalences;
+  return applySegmentEquivalencesToRecords(afterReattach, equivalences);
 }
 
-/** M3 DET: build concept trie merge record (root attach via LLM reattachMoves only). */
+function prepareRecordsForTrie(opts: UpdateConceptTrieOpts): SessionRecord[] {
+  return prepareRecordsForFinalTrie(
+    opts.records,
+    opts.ontology,
+    opts.reattachMoves,
+    opts.reattachSteps
+  );
+}
+
+/**
+ * M3 DET: apply reattachMoves to topic conceptPaths, then build the **final**
+ * concept trie mind map shown in UI / written to concept-trie.json.
+ * The LLM reparent step (M2.5) reads the **origin** trie (equiv only, no moves).
+ */
 export function updateConceptTrie(
   opts: UpdateConceptTrieOpts
 ): MergeRecord {
@@ -64,6 +112,7 @@ export function updateConceptTrie(
   return buildConceptMergeRecord(records, {
     projectSlug: opts.projectSlug,
     segmentEquivalences: opts.segmentEquivalences,
+    applySegmentEquivalences: MERGE_APPLY_SEGMENT_EQUIVALENCES,
   });
 }
 
@@ -74,5 +123,6 @@ export async function updateConceptTrieAsync(
   return buildConceptMergeRecordAsync(records, {
     projectSlug: opts.projectSlug,
     segmentEquivalences: opts.segmentEquivalences,
+    applySegmentEquivalences: MERGE_APPLY_SEGMENT_EQUIVALENCES,
   });
 }

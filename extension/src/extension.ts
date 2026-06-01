@@ -51,10 +51,8 @@ import {
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import { buildConceptTrieMindMap } from "./store/mergeConceptTrie";
 import {
+  buildConceptMergeForRecords,
   buildConceptMergeWithOntology,
-  ensureIncrementalOntologyAndBuildConceptMerge,
-  ensureOntologyAndBuildConceptMerge,
-  loadSegmentEquivalencesForRecords,
   type ConceptMergeLlmOpts,
 } from "./store/conceptMergeContext";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
@@ -75,10 +73,7 @@ import {
   type MindMapProgress,
   type MindMapProgressUpdate,
 } from "./progress";
-import {
-  hadFullLibraryCoverage as computeHadFullLibraryCoverage,
-  shouldAutoApplyBatchUpdates,
-} from "./batchMergeApplyMode";
+import { shouldAutoApplyBatchUpdates } from "./batchMergeApplyMode";
 function progressMessage(update: MindMapProgressUpdate): string {
   return typeof update === "string" ? update : (update.message ?? "");
 }
@@ -552,21 +547,26 @@ async function buildProjectConceptMergeFromCache(
   storeDir: string,
   records: SessionRecord[],
   llmOpts: ConceptMergeLlmOpts,
-  projectSlug?: string
+  projectSlug: string | undefined,
+  provider: LlmProvider,
+  signal: AbortSignal,
+  progress?: MindMapProgress,
+  forceReattach = false
 ): Promise<import("./store/storeTypes").MergeRecord> {
-  const ctx = await loadSegmentEquivalencesForRecords(
-    storeDir,
-    records,
-    llmOpts
-  );
   const sanitized = await Promise.all(
     records.map((r) => sanitizeSessionRecord(r))
   );
-  return buildConceptMergeWithOntology(
-    sanitized,
-    projectSlug ? { projectSlug } : {},
-    ctx
-  );
+  const { merge } = await buildConceptMergeForRecords(sanitized, {
+    storeDir,
+    projectSlug,
+    llm: llmOpts,
+    provider,
+    signal,
+    progress,
+    forceReattach,
+    ontologyFlags: forceReattach ? { forceRefine: true } : undefined,
+  });
+  return merge;
 }
 
 async function buildProjectConceptMergeForBatch(
@@ -583,6 +583,8 @@ async function buildProjectConceptMergeForBatch(
     batchNo?: number;
     processed?: number;
     total?: number;
+    /** After each batch milestone (e.g. 5/10): run M2.5 reattach before building final mind map. */
+    forceReattach?: boolean;
   }
 ): Promise<import("./store/storeTypes").MergeRecord> {
   const sanitized = await Promise.all(
@@ -593,7 +595,11 @@ async function buildProjectConceptMergeForBatch(
       storeDir,
       sanitized,
       opts.conceptLlm,
-      opts.projectSlug
+      opts.projectSlug,
+      opts.provider,
+      opts.signal,
+      opts.progress,
+      false
     );
   }
   if (opts.batchNo !== undefined && opts.processed !== undefined && opts.total !== undefined) {
@@ -614,28 +620,19 @@ async function buildProjectConceptMergeForBatch(
       )
     );
   }
-  try {
-    const { merge } = await ensureIncrementalOntologyAndBuildConceptMerge(
-      sanitized,
-      {
-        storeDir,
-        projectSlug: opts.projectSlug,
-        llm: opts.conceptLlm,
-        provider: opts.provider,
-        signal: opts.signal,
-        progress: opts.progress,
-        refineOnly: opts.refineOnly,
-      }
-    );
-    return merge;
-  } catch {
-    return buildProjectConceptMergeFromCache(
-      storeDir,
-      sanitized,
-      opts.conceptLlm,
-      opts.projectSlug
-    );
-  }
+  const { merge } = await buildConceptMergeForRecords(sanitized, {
+    storeDir,
+    projectSlug: opts.projectSlug,
+    llm: opts.conceptLlm,
+    provider: opts.provider,
+    signal: opts.signal,
+    progress: opts.progress,
+    forceReattach: opts.forceReattach ?? true,
+    ontologyFlags: opts.refineOnly
+      ? { refineOnly: true, forceRefine: true }
+      : { incrementalFromIndex: true, forceRefine: true },
+  });
+  return merge;
 }
 
 async function ensureConceptMerge(
@@ -649,52 +646,28 @@ async function ensureConceptMerge(
   const filtered = projectSlug
     ? records.filter((r) => r.meta.projectSlug === projectSlug)
     : records;
-  try {
-    const llmOpts = await readLlmOptions(extensionContext);
-    const provider = getProvider(llmOpts);
-    progress?.report(
-      t("ui.progress.applyConceptPaths", "Applying concept paths…")
-    );
-    const { merge } = await ensureOntologyAndBuildConceptMerge(filtered, {
-      storeDir,
-      projectSlug,
-      llm: toConceptMergeLlmOpts(llmOpts, provider.id),
-      provider,
-      signal: signal ?? new AbortController().signal,
-      progress,
-    });
-    if (!projectSlug) {
-      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
-    }
-    return merge;
-  } catch {
-    // ignore; fall back to cache-only / mechanical merge
+  const llmOpts = await readLlmOptions(extensionContext);
+  const provider = getProvider(llmOpts);
+  progress?.report(
+    t("ui.progress.applyConceptPaths", "Applying concept paths & reparent…")
+  );
+  const sanitized = await Promise.all(
+    filtered.map((r) => sanitizeSessionRecord(r))
+  );
+  const { merge } = await buildConceptMergeForRecords(sanitized, {
+    storeDir,
+    projectSlug,
+    llm: toConceptMergeLlmOpts(llmOpts, provider.id),
+    provider,
+    signal: signal ?? new AbortController().signal,
+    progress,
+    forceReattach: true,
+    ontologyFlags: { forceRefine: true },
+  });
+  if (!projectSlug) {
+    await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
   }
-
-  progress?.report(t("ui.progress.generateMindMap", "Generating mind map…"));
-  try {
-    const llmOpts = await readLlmOptions(extensionContext);
-    const provider = getProvider(llmOpts);
-    const merge = await buildProjectConceptMergeFromCache(
-      storeDir,
-      filtered,
-      toConceptMergeLlmOpts(llmOpts, provider.id),
-      projectSlug
-    );
-    if (!projectSlug) {
-      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
-    }
-    return merge;
-  } catch {
-    const merge = buildConceptMergeWithOntology(
-      await Promise.all(filtered.map((r) => sanitizeSessionRecord(r))),
-      { projectSlug }
-    );
-    if (!projectSlug) {
-      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
-    }
-    return merge;
-  }
+  return merge;
 }
 
 async function commandRebuildOntologyCache(): Promise<void> {
@@ -970,10 +943,6 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           projectRecordsById.set(session.id, sanitized);
         }
 
-        const hadFullLibraryAtStart = computeHadFullLibraryCoverage({
-          sessionCount: sessions.length,
-          libraryRecordCount: projectRecordsById.size,
-        });
         const autoApplyUpdates = shouldAutoApplyBatchUpdates({
           sessionCount: sessions.length,
           libraryRecordCount: projectRecordsById.size,
@@ -992,22 +961,6 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
             .getConfiguration("agentMindmap")
             .get<boolean>("library.batchFinalRefine", true) ?? true;
         let batchOntologyFailed = false;
-
-        if (hadFullLibraryAtStart) {
-          const initial = await buildProjectConceptMergeForBatch(
-            storeDir,
-            [...projectRecordsById.values()],
-            {
-              projectSlug: slug,
-              conceptLlm,
-              provider,
-              signal,
-              progress,
-              batchRefineOntology,
-            }
-          );
-          panel.setMindMapData(initial.mindMap);
-        }
 
         const deps: LoadDeps = { context: extensionContext, signal, progress };
         const result = await runProjectSessionBatches(
@@ -1029,8 +982,9 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               progress.report(
                 t(
                   "ui.batch.progress.mergingConceptMap",
-                  "Merging concept mind map (analyzed {0} session(s))…",
-                  info.processed
+                  "Merging concept mind map ({0}/{1} sessions): synonyms + root reparent…",
+                  info.processed,
+                  info.total
                 )
               );
               for (const sessionId of info.batchSessionIds) {
@@ -1060,6 +1014,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                   batchNo: info.batchNo,
                   processed: info.processed,
                   total: info.total,
+                  forceReattach: true,
                 }
               );
 
@@ -1182,6 +1137,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                 progress,
                 batchRefineOntology: true,
                 refineOnly: true,
+                forceReattach: true,
               }
             );
             if (autoApplyUpdates) {

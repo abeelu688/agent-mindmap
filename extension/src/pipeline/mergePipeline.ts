@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { LlmProvider } from "../llm/types";
+import type { LlmProvider, ReattachStep } from "../llm/types";
 import type { MindMapProgress } from "../progress";
 import {
   computeOntologyCacheKey,
@@ -12,10 +12,16 @@ import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
 import { mergeSynonyms } from "./stages/mergeSynonyms";
 import { mergeTrieReparent } from "./stages/mergeTrieReparent";
-import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
+import {
+  prepareRecordsBeforeReattach,
+  updateConceptTrieAsync,
+} from "./stages/updateConceptTrie";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
 import { ONTOLOGY_REFINE_PROMPT_VERSION } from "../llm/promptOntologyRefine";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
+import { deriveSegmentEquivalencesFromReattachStructure } from "../llm/reattachStructuralHints";
+import { enhanceSegmentEquivalencesForMerge } from "../llm/synonymHintDerive";
+import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
@@ -35,6 +41,8 @@ export type MergePipelineOpts = {
   cacheLlm?: boolean;
   signal: AbortSignal;
   skipTiming?: boolean;
+  /** Batch milestone: always run M2.5 even when ontology cache has reattachMoves. */
+  forceReattach?: boolean;
 };
 
 export type MergePipelineResult = {
@@ -152,15 +160,59 @@ export async function runMergePipeline(
   }
 
   let reattachMoves = cached?.reattachMoves;
+  let reattachSteps: ReattachStep[] | undefined;
+  const ontologyForReparent = {
+    nodes: collected.nodes,
+    mappings: collected.mappings,
+    topicPaths: collected.topicPaths,
+    segmentEquivalences,
+  };
+  const recordsForReparent = prepareRecordsBeforeReattach(
+    opts.records,
+    ontologyForReparent
+  );
+  const reparentInputPass = buildTrieReparentInput(recordsForReparent, {
+    segmentEquivalences,
+    ontologyNodes: collected.nodes,
+    topicPaths: collected.topicPaths,
+    projectSlug: opts.projectSlug,
+  });
+  segmentEquivalences = enhanceSegmentEquivalencesForMerge(
+    collected.topicPaths,
+    collected.nodes,
+    segmentEquivalences,
+    deriveSegmentEquivalencesFromReattachStructure(
+      reparentInputPass.chains,
+      collected.topicPaths,
+      collected.nodes,
+      segmentEquivalences
+    )
+  );
+  const reparentInput = buildTrieReparentInput(recordsForReparent, {
+    segmentEquivalences,
+    ontologyNodes: collected.nodes,
+    topicPaths: collected.topicPaths,
+    projectSlug: opts.projectSlug,
+  });
+  // M2.5 runs on the origin trie (segment equiv applied, reattach not yet applied).
+  // Decoupled from M2 refineMode so opening Concept Mind Map still reparents when cache misses.
+  const hasCachedReattach =
+    (cached?.reattachSteps?.length ?? 0) > 0 ||
+    (cached?.reattachMoves?.length ?? 0) > 0;
+  const reattachVersionStale =
+    cached != null &&
+    cached.meta.promptVersions.reattach !== REATTACH_PROMPT_VERSION;
   const needsTrieReparent =
-    refineMode !== "skip" &&
-    (refineMode === "batch" ||
+    reparentInput.topBranches.length >= 2 &&
+    (opts.forceReattach ||
+      reattachVersionStale ||
+      refineMode === "batch" ||
       refineMode === "final" ||
-      !cached?.reattachMoves);
+      !hasCachedReattach);
 
   if (needsTrieReparent) {
-    progress?.report("M2.5: LLM root-branch reparent…");
-    reattachMoves = await runStage(
+    progress?.report("M2.5: LLM root-branch reparent (origin → final)…");
+    const reparent = await runStage(
       "M2.5 mergeTrieReparent",
       () =>
         mergeTrieReparent(
@@ -168,6 +220,8 @@ export async function runMergePipeline(
             records: opts.records,
             segmentEquivalences,
             ontologyNodes: collected.nodes,
+            topicPaths: collected.topicPaths,
+            ontologyMappings: collected.mappings,
             projectSlug: opts.projectSlug,
             model: opts.model,
             hostId: opts.hostId,
@@ -179,6 +233,8 @@ export async function runMergePipeline(
         ),
       () => ({ kind: "llm" })
     );
+    reattachMoves = reparent.moves;
+    reattachSteps = reparent.steps.length ? reparent.steps : undefined;
   } else if (cached?.reattachMoves) {
     progress?.report("M2.5: Root reparent cache hit…");
     await runStage("M2.5 mergeTrieReparent", async () => reattachMoves, () => ({
@@ -194,6 +250,7 @@ export async function runMergePipeline(
     topicPaths: collected.topicPaths,
     segmentEquivalences,
     reattachMoves: reattachMoves?.length ? reattachMoves : undefined,
+    reattachSteps: reattachSteps?.length ? reattachSteps : undefined,
   };
 
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
@@ -220,6 +277,7 @@ export async function runMergePipeline(
         records: opts.records,
         segmentEquivalences,
         reattachMoves: ontology.reattachMoves,
+        reattachSteps,
         ontology,
         projectSlug: opts.projectSlug,
       }),

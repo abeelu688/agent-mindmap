@@ -1,7 +1,9 @@
 import { uiTranslate } from "../l10n/uiTranslate";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
+import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import type { SegmentEquivalence, Topic } from "../llm/types";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
 import {
   leafRefs,
@@ -73,7 +75,8 @@ function insertPath(
   root: TrieNode,
   path: string[],
   location: TopicLocation,
-  equivalences: SegmentEquivalence[] | undefined
+  equivalences: SegmentEquivalence[] | undefined,
+  applyEquivalences: boolean
 ): void {
   const ctx = {
     title: location.topic.title,
@@ -81,11 +84,9 @@ function insertPath(
     items: location.topic.items?.map((i) => i.text),
     projectSlug: location.record.meta.projectSlug,
   };
-  const normalized = resolveConceptPathWithEquivalences(
-    path,
-    equivalences,
-    ctx
-  );
+  const normalized = applyEquivalences
+    ? resolveConceptPathWithEquivalences(path, equivalences, ctx)
+    : normalizeConceptPath(path);
   let node = root;
   for (const segment of normalized) {
     const key = segmentKeyForMerge(segment);
@@ -199,6 +200,8 @@ export type ConceptMergeOptions = {
   title?: string;
   projectSlug?: string;
   segmentEquivalences?: SegmentEquivalence[];
+  /** When false, paths insert as-is (mechanical normalize only). */
+  applySegmentEquivalences?: boolean;
 };
 
 /** Stats useful for UI / tests / progress messages. */
@@ -250,6 +253,8 @@ export function buildConceptTrieStructure(
   records: SessionRecord[],
   options: ConceptMergeOptions = {}
 ): ConceptTrieStructure {
+  const applyEquivalences =
+    options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES;
   const filtered = options.projectSlug
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
@@ -263,14 +268,22 @@ export function buildConceptTrieStructure(
       total += 1;
       const location: TopicLocation = { record, topic };
       if (topic.conceptPath?.length) {
-        insertPath(root, topic.conceptPath, location, options.segmentEquivalences);
+        insertPath(
+          root,
+          topic.conceptPath,
+          location,
+          options.segmentEquivalences,
+          applyEquivalences
+        );
       } else {
         orphans.push(location);
       }
     }
   }
 
-  mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
+  if (applyEquivalences) {
+    mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
+  }
 
   const sortedTop = [...root.children.values()].sort(
     (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
