@@ -33,6 +33,7 @@ import {
 } from "./sessionStore";
 import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
 import {
+  tryParseReattachResponse,
   validateConceptOntology,
   validateOntologyRefine,
 } from "../llm/ontologyValidate";
@@ -328,6 +329,7 @@ export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean
     record.nodes.length > 0 &&
     record.topicPaths.length > 0 &&
     record.meta.promptVersions.refine === ONTOLOGY_REFINE_PROMPT_VERSION &&
+    record.meta.promptVersions.reattach === REATTACH_PROMPT_VERSION &&
     record.segmentEquivalences !== undefined
   );
 }
@@ -344,7 +346,12 @@ export async function writeOntologyRecord(
   provider: LlmProvider,
   payload: Pick<
     ConceptOntologyRecord,
-    "nodes" | "mappings" | "topicPaths" | "reattachMoves" | "segmentEquivalences"
+    | "nodes"
+    | "mappings"
+    | "topicPaths"
+    | "reattachMoves"
+    | "reattachSteps"
+    | "segmentEquivalences"
   >
 ): Promise<ConceptOntologyRecord> {
   const record: ConceptOntologyRecord = {
@@ -369,6 +376,7 @@ export async function writeOntologyRecord(
     mappings: payload.mappings,
     topicPaths: payload.topicPaths,
     reattachMoves: payload.reattachMoves,
+    reattachSteps: payload.reattachSteps,
     segmentEquivalences: payload.segmentEquivalences,
   };
   await writeJsonAtomic(ontologyCachePath(storeDir, cacheKey), record);
@@ -538,8 +546,7 @@ export async function suggestReattachMoves(
     },
     signal
   );
-  const parsed = res as any;
-  const moves = Array.isArray(parsed?.moves) ? parsed.moves : [];
+  const { moves } = tryParseReattachResponse(res);
   const validated = validateConceptOntology({
     nodes: ontology.nodes,
     mappings: ontology.mappings,

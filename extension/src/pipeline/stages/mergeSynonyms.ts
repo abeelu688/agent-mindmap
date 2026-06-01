@@ -9,10 +9,12 @@ import {
   buildRefineContextSamples,
   collectSessionSegmentEquivalences,
   enhanceSegmentEquivalencesForMerge,
+  mergeSegmentEquivalencesLists,
 } from "../../llm/segmentContext";
 import type { LlmProvider, SegmentEquivalence } from "../../llm/types";
 import type { MindMapProgress } from "../../progress";
 import { createHeartbeat } from "../../progress";
+import { MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "../mergeSynonymPolicy";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { CollectedMergeTerms } from "./collectMergeTerms";
 
@@ -24,8 +26,19 @@ export type MergeSynonymsOpts = {
   promptLanguage?: "zh" | "en";
 };
 
+function finalizeSegmentEquivalences(
+  topicPaths: CollectedMergeTerms["topicPaths"],
+  nodes: CollectedMergeTerms["nodes"],
+  ...groups: SegmentEquivalence[][]
+): SegmentEquivalence[] {
+  if (MERGE_DERIVE_SEGMENT_EQUIVALENCES) {
+    return enhanceSegmentEquivalencesForMerge(topicPaths, nodes, ...groups);
+  }
+  return mergeSegmentEquivalencesLists(...groups);
+}
+
 /**
- * M2 LLM + DET: cross-session synonym merge (ontology-refine schema).
+ * M2 LLM (+ optional DET post-pass): cross-session synonym merge (ontology-refine schema).
  */
 export async function mergeSynonyms(
   opts: MergeSynonymsOpts,
@@ -74,14 +87,14 @@ export async function mergeSynonyms(
       signal
     );
     const refined = validateOntologyRefine(res);
-    return enhanceSegmentEquivalencesForMerge(
+    return finalizeSegmentEquivalences(
       topicPaths,
       opts.collected.nodes,
       sessionEquivalences,
       refined.segmentEquivalences
     );
   } catch {
-    return enhanceSegmentEquivalencesForMerge(
+    return finalizeSegmentEquivalences(
       topicPaths,
       opts.collected.nodes,
       sessionEquivalences

@@ -254,6 +254,7 @@ describe("buildConceptTrieMindMap", () => {
     ];
 
     const { mindMap } = buildConceptTrieMindMap(records, {
+      applySegmentEquivalences: true,
       segmentEquivalences: [
         {
           canonical: "art",
@@ -278,6 +279,35 @@ describe("buildConceptTrieMindMap", () => {
     expect(artChildKeys.some((l) => l.startsWith("instrumentation ("))).toBe(
       true
     );
+  });
+
+  it("does not merge runtime and art siblings when applySegmentEquivalences is off", () => {
+    const records = [
+      makeRecord("s1", "aosp", {
+        topics: [topic("ART", ["android", "art", "jit"], ["x"])],
+      }),
+      makeRecord("s2", "aosp", {
+        topics: [topic("Runtime", ["android", "runtime", "start"], ["y"])],
+      }),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records, {
+      segmentEquivalences: [
+        {
+          canonical: "art",
+          aliases: ["runtime"],
+          scope: { pathPrefix: ["android"] },
+          confidence: 0.9,
+        },
+      ],
+    });
+    const android = mindMap.children?.find((c) =>
+      c.data.text.startsWith("android (")
+    );
+    const childLabels =
+      android?.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
+      [];
+    expect(childLabels).toContain("art");
+    expect(childLabels).toContain("runtime");
   });
 
   it("buildConceptMergeRecord captures meta", () => {

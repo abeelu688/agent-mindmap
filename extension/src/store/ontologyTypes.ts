@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { SegmentEquivalence } from "../llm/types";
+import type { ReattachStep, SegmentEquivalence } from "../llm/types";
 
 /**
  * A persistent, cross-session concept memory used to reduce future LLM calls.
@@ -56,6 +56,8 @@ export type ConceptOntologyRecord = {
    * Optional patch-style tree reattachments (for post-merge structural fixes).
    */
   reattachMoves?: ReattachMove[];
+  /** Ordered M2.5 plan (preferred over reattachMoves when applying M3). */
+  reattachSteps?: ReattachStep[];
   /**
    * Contextual segment aliases produced by the refine pass (e.g. reactjs → react
    * under frontend + React evidence).

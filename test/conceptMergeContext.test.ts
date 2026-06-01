@@ -56,7 +56,7 @@ describe("buildConceptMergeWithOntology", () => {
     ];
     const merge = buildConceptMergeWithOntology(
       records,
-      { projectSlug: "aosp" },
+      { projectSlug: "aosp", applySegmentEquivalences: true },
       { segmentEquivalences: equivalences }
     );
     const android = merge.mindMap.children?.find((c) =>

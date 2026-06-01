@@ -5,9 +5,13 @@ import type {
   ConceptOntologyNode,
   OntologyRefineResult,
   ReattachMove,
+  ReattachParseResult,
+  ReattachStep,
+  ReattachStepKind,
   SegmentEquivalence,
   TopicPathDecision,
 } from "./types";
+import { reattachStepsToMoves } from "./reattachSteps";
 import { parseConceptPath } from "./topicGraphValidate";
 
 const MAX_KEY = 48;
@@ -361,26 +365,127 @@ function parseReattachMovesList(raw: unknown[]): ReattachMove[] {
   return moves;
 }
 
-export function validateReattachMoves(value: unknown): { moves: ReattachMove[] } {
-  const root = asObject(value);
-  if (!root) {
-    throw new LlmProviderError("bad-shape", "Expected object with moves[]");
+function parseReattachStepKind(value: unknown): ReattachStepKind | undefined {
+  const s = (
+    typeof value === "string" ? value.trim().toLowerCase() : ""
+  ).replace(/-/g, "_");
+  if (s === "merge_synonym" || s === "mergesynonym" || s === "merge") {
+    return "merge_synonym";
   }
-  const raw = Array.isArray(root.moves) ? root.moves : [];
-  const moves = parseReattachMovesList(raw);
-  if (!moves.length) {
-    throw new LlmProviderError("bad-shape", "No usable moves returned");
+  if (s === "attach_under" || s === "attachunder" || s === "attach") {
+    return "attach_under";
   }
-  return { moves };
+  return undefined;
 }
 
-/** Lenient parse for optional trie-reparent stage (empty moves allowed). */
-export function tryParseReattachMoves(value: unknown): ReattachMove[] {
+function parseReattachStep(value: unknown): ReattachStep | undefined {
+  const obj = asObject(value);
+  if (!obj) {
+    return undefined;
+  }
+  const step = typeof obj.step === "number" ? Math.floor(obj.step) : 0;
+  const sourceNodeId = pickString(obj, "sourceNodeId", 12);
+  const targetNodeId = pickString(obj, "targetNodeId", 12);
+  const targetNodeIds = parseStringArray(obj.targetNodeIds, 12, 12)?.filter(
+    (id) => /^N\d+$/i.test(id)
+  );
+  const sourceFrom =
+    pickString(obj, "sourceFrom", 160) ?? pickString(obj, "from", 160);
+  const targetPath = parseConceptPath(obj.targetPath ?? obj.toPath);
+  let kind = parseReattachStepKind(obj.kind);
+  if (!kind && targetPath?.length === 1) {
+    kind = "merge_synonym";
+  }
+  if (!kind && targetPath && targetPath.length >= 2) {
+    kind = "attach_under";
+  }
+  const action =
+    pickString(obj, "action", 240) ??
+    pickString(obj, "description", 240) ??
+    "";
+  const result = pickString(obj, "result", 240) ?? "";
+  const hasNodeIds =
+    Boolean(sourceNodeId) ||
+    Boolean(targetNodeId) ||
+    Boolean(targetNodeIds?.length);
+  if (!kind) {
+    return undefined;
+  }
+  if (!hasNodeIds && (!sourceFrom || !targetPath?.length)) {
+    return undefined;
+  }
+  if (!hasNodeIds && targetPath) {
+    if (kind === "merge_synonym" && targetPath.length !== 1) {
+      return undefined;
+    }
+    if (kind === "attach_under" && targetPath.length < 2) {
+      return undefined;
+    }
+  }
+  if (hasNodeIds && !sourceNodeId) {
+    return undefined;
+  }
+  const confidence = pickNumber01(obj, "confidence");
+  const evidence = parseStringArray(obj.evidence, 16, 120);
+  return {
+    step: step > 0 ? step : 1,
+    kind,
+    sourceFrom: sourceFrom ?? "",
+    targetPath: targetPath ?? [],
+    sourceNodeId,
+    targetNodeId,
+    targetNodeIds,
+    action,
+    result,
+    confidence,
+    evidence,
+  };
+}
+
+function parseReattachStepsList(raw: unknown[]): ReattachStep[] {
+  const steps: ReattachStep[] = [];
+  for (const item of raw) {
+    const parsed = parseReattachStep(item);
+    if (parsed) {
+      steps.push(parsed);
+    }
+    if (steps.length >= MAX_MOVES) {
+      break;
+    }
+  }
+  return steps;
+}
+
+/** Prefer `steps[]`; fall back to legacy `moves[]`. */
+export function tryParseReattachResponse(value: unknown): ReattachParseResult {
   const root = asObject(value);
   if (!root) {
-    return [];
+    return { steps: [], moves: [] };
   }
-  const raw = Array.isArray(root.moves) ? root.moves : [];
-  return parseReattachMovesList(raw);
+  const stepsRaw = Array.isArray(root.steps) ? root.steps : [];
+  const steps = parseReattachStepsList(stepsRaw);
+  if (steps.length) {
+    return { steps, moves: reattachStepsToMoves(steps) };
+  }
+  const moves = parseReattachMovesList(
+    Array.isArray(root.moves) ? root.moves : []
+  );
+  return { steps: [], moves };
+}
+
+/** Lenient parse for optional trie-reparent stage (empty allowed). */
+export function tryParseReattachMoves(value: unknown): ReattachMove[] {
+  return tryParseReattachResponse(value).moves;
+}
+
+export function validateReattachMoves(value: unknown): ReattachParseResult {
+  const parsed = tryParseReattachResponse(value);
+  if (!parsed.steps.length && !parsed.moves.length) {
+    throw new LlmProviderError(
+      "bad-shape",
+      "No usable steps[] or moves[] returned"
+    );
+  }
+  return parsed;
 }
 

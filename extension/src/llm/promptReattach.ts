@@ -7,10 +7,10 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const REATTACH_PROMPT_VERSION = 3;
+export const REATTACH_PROMPT_VERSION = 16;
 
 /**
- * LLM-only: decide whether top-level trie branches should attach under another chain.
+ * Single LLM call: numbered draft map → ordered `steps[]` referencing node ids (N1…).
  */
 export function buildReattachPrompt(
   input: TrieReparentInput,
@@ -18,47 +18,111 @@ export function buildReattachPrompt(
   _promptLanguage?: PromptLanguage
 ): string {
   const agentLabel = HOST_LABELS[hostId];
-  const branchCount = input.topBranches.length;
+  const catalog = input.nodeCatalog;
+  const chainCount = catalog.numberedChains.length;
+  const nodeCount = catalog.nodes.length;
+
+  const hintParts: string[] = [];
+  if (input.topBranchSynonymHints.length) {
+    hintParts.push(
+      "### 并列顶级链同义线索（segmentEquivalences，须结合语境验证）",
+      JSON.stringify(input.topBranchSynonymHints, null, 2)
+    );
+  }
+  if (input.rootChildSynonymHints.length) {
+    hintParts.push(
+      "### 链根与其直接子段同义线索（须结合语境验证）",
+      JSON.stringify(input.rootChildSynonymHints, null, 2)
+    );
+  }
+  const sh = input.structuralHints;
+  if (sh.duplicateTopRoots.length) {
+    hintParts.push(
+      "### 并列顶根重复（某链 childSegments 已含另一顶根）",
+      "→ 用 `merge_synonym`：`sourceNodeId` = duplicateTopNodeId，`targetNodeId` = parentNodeId。",
+      JSON.stringify(sh.duplicateTopRoots, null, 2)
+    );
+  }
+  if (sh.listedChildCollapses.length) {
+    hintParts.push(
+      "### 链内根/子段同义（segmentEquivalences 已支持折叠）",
+      "→ 勿保留「链根 → 同义子段」连续两层；并列顶根用 merge_synonym（按节点 id）。",
+      JSON.stringify(sh.listedChildCollapses, null, 2)
+    );
+  }
+  if (sh.ontologySubordinates.length) {
+    hintParts.push(
+      "### ontology 下位关系（parentKeys）",
+      "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
+      JSON.stringify(sh.ontologySubordinates, null, 2)
+    );
+  }
+  const hintsBlock = hintParts.length
+    ? ["", "## ontology / 结构线索", "", ...hintParts].join("\n")
+    : "";
 
   return [
-    `你是「思维导图树归并」助手。下面是 ${agentLabel} 多会话合并后、**出图前**的概念树草稿。`,
-    `已做过段级同义合并（segmentEquivalences）；仍有 ${branchCount} 个**顶级分支**并列。`,
-    "你的任务：对每个顶级分支，**从语义上**判断它是否应成为另一条链上某节点的子树，而非继续并列挂在根下。",
+    `你是「思维导图树归并」助手。下面是 ${agentLabel} 多会话合并后的**整幅草稿思维导图**。`,
+    `导图共 ${nodeCount} 个**已编号节点**（id 为 N1…N${nodeCount}），${chainCount} 条并列顶级链。`,
     "",
-    "## 核心思路（语义父子，非文本匹配）",
+    "## 节点编号（必须遵守）",
     "",
-    "不要靠 path 段名字面相同/相似来挂载。应对每个待考察的根分支 R：",
-    "1) 结合 domain、keywords、pathSamples、ontology parentKeys/evidence，理解 R 在讨论什么概念。",
-    "2) 浏览其他顶级链及其子树，寻找**语义上适合作为 R 之父**的节点 P（P 不必与 R 同名）。",
-    "3) 若 P 的子树主题、下游内容与 R 一致或为其自然上位，则 R 应挂到 P 下面；",
-    "   toPath = 从根到 P 的 conceptPath，再接上 R 自身段（即 R 移动后的新根路径）。",
-    "4) 若只能证明段级同义、找不到语义父节点，或父子关系不确定：**不要**输出 move。",
+    "- 每个概念段在 `nodeCatalog[]` 有唯一 `id`（N1、N2…）；`path` 为从导图根到该节点的段 key 序列。",
+    "- `numberedChains[].tree` 为带 id 的子树；**所有 steps 必须用节点 id 引用**，禁止仅用 segment 名（易歧义）。",
+    "- `isTopRoot: true` 的节点才可作 `merge_synonym` / `attach_under` 的 `sourceNodeId`（移动整条顶级链）。",
     "",
-    "## 判断维度（须综合，不可单看字面）",
+    "## 重要前提",
     "",
-    "1) **domain**：R 与候选父链是否同一技术域/产品语境（看 evidence、keywords、讨论主题）。",
-    "2) **上级（upstream）**：候选父节点在概念上是否涵盖、统领或包含 R。",
-    "3) **下级（downstream）**：R 的 childSegments / pathSamples 是否与候选父节点下已有子树**语义重叠**。",
-    "4) **结构信号**：若某链已呈现外层→内层→模块的层级，而 R 语义上属于该内层，应挂到对应深度。",
+    "- 思维导图 = 概念段父子关系；无预设行业架构。",
+    "- 禁止套用示例中的 seg-a/seg-b 名字；示例只说明 **steps 字段与 id 写法**。",
+    "- 同义 → `merge_synonym`；专精下位 → `attach_under`。",
     "",
-    "## 输出要求",
+    "## 你的任务",
     "",
-    "- moves[].from 必须精确匹配 topBranches[].from（段 key，小写归一）。",
-    "- moves[].toPath 为 2–5 段 conceptPath，表示该分支移动后的**新根路径**（末段为 R 自身）。",
-    "- moves[].evidence 须写**语义理由**（为何该链上节点是 R 的父），勿写「段名相同」。",
-    "- confidence 0–1；不确定则不要输出，或给低 confidence（<0.55 将被丢弃）。",
-    "- 每个 from 最多一条 move；无合适父节点则 moves 可为空数组。",
+    "1) 读完全部 `nodeCatalog` 与 `numberedChains`。",
+    "2) 输出有序 `steps`（step 从 1 递增；执行 step n 时假定 1…n-1 已生效）。",
+    "3) 每步写清 **action** 与 **result**（可提及节点 id）。",
     "",
-    "只输出严格 JSON：",
-    '{"moves":[{"from":"subsystem","toPath":["platform-wrapper","subsystem"],"confidence":0.85,"evidence":["wrapper chain covers same runtime domain","subsystem children match nested topics"]}]}',
+    "## 步骤类型（仅用节点 id）",
     "",
-    "输入 topBranches：",
-    JSON.stringify(input.topBranches, null, 2),
+    "### merge_synonym",
+    "- `sourceNodeId`：将被取消并列顶根的节点 id（须 isTopRoot）。",
+    "- `targetNodeId`：保留为唯一顶根的节点 id（须 isTopRoot）。",
+    "- **禁止**用 `attach_under` + `targetNodeIds:[hubId, sourceId]` 表示两个**并列顶根同义**（会形成 hub→同义子层）；必须用 merge_synonym。",
+    "- segmentEquivalences / topBranchSynonymHints 中已同义的顶根，只能 merge_synonym。",
     "",
-    "输入 segmentEquivalences（参考，勿仅凭同义段做挂载）：",
+    "### attach_under",
+    "- `sourceNodeId`：专精/下位顶级链的根节点 id。",
+    "- `targetNodeIds`：有序 id 列表，从上级 hub 的顶根 id 到 source 自身 id（**末 id 必须等于 sourceNodeId**）。",
+    "- 等价于把该链挂到这些节点所表示的路径下。",
+    "",
+    "## 典型错误（禁止）",
+    "",
+    "- 仅用 segment 名、不用 nodeCatalog id。",
+    "- 同义顶根未 merge_synonym 仍并列。",
+    "- attach_under 的 targetNodeIds 末 id 不是 sourceNodeId。",
+    hintsBlock,
+    "",
+    "## 输出（严格 JSON，仅 steps）",
+    "",
+    '{"steps":[',
+    '{"step":1,"kind":"merge_synonym","sourceNodeId":"N3","targetNodeId":"N1","action":"将顶根 N3 并进 N1，N3 不再并列","result":"N3 下话题改以 N1 为顶根前缀","confidence":0.9,"evidence":["nodeCatalog 语境同义"]},',
+    '{"step":2,"kind":"attach_under","sourceNodeId":"N7","targetNodeIds":["N1","N7"],"action":"将专精顶根 N7 挂在 N1 下","result":"N7 为 N1 的一级子概念","confidence":0.88,"evidence":["N7 是 N1 内部专支"]}',
+    "]}",
+    "",
+    "- 每步必须含 `sourceNodeId`；merge 用 `targetNodeId`，attach 用 `targetNodeIds`。",
+    "- 无调整则 `{\"steps\":[]}`。",
+    "",
+    "## 输入 nodeCatalog（全图节点索引）",
+    JSON.stringify(catalog.nodes, null, 2),
+    "",
+    "## 输入 numberedChains（带 id 的并列链与子树）",
+    JSON.stringify(catalog.numberedChains, null, 2),
+    "",
+    "## 输入 segmentEquivalences",
     JSON.stringify(input.segmentEquivalences.slice(0, 24), null, 2),
     "",
-    "输入 ontology nodes：",
+    "## 输入 ontology nodes",
     JSON.stringify(input.nodes.slice(0, 48), null, 2),
   ].join("\n");
 }

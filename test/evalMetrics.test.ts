@@ -19,7 +19,7 @@ import type { MindMapNodeData } from "../extension/src/transcript/types";
 function topic(
   title: string,
   conceptPath: string[] | undefined,
-  items: string[] = []
+  items: string[] = ["detail"]
 ): Topic {
   return {
     title,

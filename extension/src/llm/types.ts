@@ -105,6 +105,33 @@ export type ReattachMove = {
   evidence?: string[];
 };
 
+export type ReattachStepKind = "merge_synonym" | "attach_under";
+
+/** Ordered plan for M2.5; applied one step at a time when building the final trie. */
+export type ReattachStep = {
+  step: number;
+  kind: ReattachStepKind;
+  /** Top-level chain segment key (apply); filled by resolver from sourceNodeId. */
+  sourceFrom: string;
+  /** Target path segments (apply); filled by resolver from targetNodeId(s). */
+  targetPath: string[];
+  /** Draft-map node id (e.g. N3); preferred in LLM output over bare segment names. */
+  sourceNodeId?: string;
+  /** merge_synonym: canonical top-root id. */
+  targetNodeId?: string;
+  /** attach_under: ordered node ids from hub root to source (last id = source). */
+  targetNodeIds?: string[];
+  action: string;
+  result: string;
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type ReattachParseResult = {
+  steps: ReattachStep[];
+  moves: ReattachMove[];
+};
+
 export type SegmentEquivalenceScope = {
   /** Apply only when path segments before the alias match this prefix (upstream). */
   pathPrefix?: string[];
@@ -234,7 +261,7 @@ export type LlmSummarizeResult =
   | SessionSynonymRefine
   | SessionAnalysis
   | { topicPaths: TopicPathDecision[] }
-  | { moves: ReattachMove[] }
+  | ReattachParseResult
   | OntologyRefineResult;
 
 export type LlmProvider = {

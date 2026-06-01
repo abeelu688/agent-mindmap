@@ -433,6 +433,7 @@ async function main(): Promise<void> {
       })
     );
     const artTrie = buildConceptTrieMindMap([artJit, artHook], {
+      applySegmentEquivalences: true,
       segmentEquivalences: artRuntimeEq,
     });
     const artAndroid = artTrie.mindMap.children?.find((c) =>
@@ -571,7 +572,7 @@ async function main(): Promise<void> {
     const evalTopic = (
       title: string,
       conceptPath: string[] | undefined,
-      items: string[] = []
+      items: string[] = ["detail"]
     ) => ({
       title,
       conceptPath,

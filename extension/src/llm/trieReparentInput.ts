@@ -1,12 +1,36 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
 import {
   buildConceptTrieStructure,
   type ConceptTrieNode,
 } from "../store/mergeConceptTrie";
 import type { SessionRecord } from "../store/storeTypes";
+import { segmentKeyForMerge } from "./topicGraphValidate";
+import {
+  buildReattachNodeCatalog,
+  type ReattachNodeCatalog,
+} from "./reattachNodeCatalog";
+import {
+  buildStructuralReattachHints,
+  enrichStructuralHintsWithNodeIds,
+  type StructuralReattachHints,
+} from "./reattachStructuralHints";
+import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
+import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
-export type TopBranchSummary = {
+export type { ReattachNodeCatalog, StructuralReattachHints };
+
+/** Nested concept segment under a top-level chain root (for LLM subtree context). */
+export type ChainSubtreeNode = {
+  segment: string;
+  label: string;
+  topicCount: number;
+  childSegments: string[];
+  children: ChainSubtreeNode[];
+};
+
+/** One parallel root branch = one chain / one tree in the draft mind map. */
+export type ReparentChain = {
+  /** 1-based order; process chain₁ before chain₂ when applying rules. */
+  chainIndex: number;
   /** Root segment key — must match moves[].from exactly. */
   from: string;
   label: string;
@@ -15,11 +39,137 @@ export type TopBranchSummary = {
   childSegments: string[];
   pathSamples: string[][];
   keywords: string[];
+  /** Concept segment tree under this root (depth-limited). */
+  subtree: ChainSubtreeNode;
 };
 
+/** @deprecated Alias for ReparentChain */
+export type TopBranchSummary = ReparentChain;
+
+function aliasKeysForEquivalence(eq: SegmentEquivalence): string[] {
+  const keys = new Set<string>();
+  keys.add(segmentKeyForMerge(eq.canonical));
+  for (const alias of eq.aliases ?? []) {
+    keys.add(segmentKeyForMerge(alias));
+  }
+  return [...keys];
+}
+
+export type RootChildSynonymHint = {
+  /** Top branch key from topBranches[].from */
+  branchFrom: string;
+  /** Direct child segment under that branch */
+  childSegment: string;
+  canonical: string;
+  aliases: string[];
+  scopePathPrefix?: string[];
+  confidence?: number;
+};
+
+/**
+ * Hints from M2 segmentEquivalences: a branch root and one of its childSegments
+ * both appear in the same equivalence group (ontology-driven, not hardcoded names).
+ */
+export function buildRootChildSynonymHints(
+  branches: TopBranchSummary[],
+  equivalences: SegmentEquivalence[] | undefined
+): RootChildSynonymHint[] {
+  if (!equivalences?.length) {
+    return [];
+  }
+
+  const hints: RootChildSynonymHint[] = [];
+  for (const branch of branches) {
+    const branchKey = segmentKeyForMerge(branch.from);
+    for (const child of branch.childSegments) {
+      const childKey = segmentKeyForMerge(child);
+      if (childKey === branchKey) {
+        continue;
+      }
+      for (const eq of equivalences) {
+        const aliasKeys = aliasKeysForEquivalence(eq);
+        const prefix = (eq.scope.pathPrefix ?? []).map((s) =>
+          segmentKeyForMerge(s)
+        );
+        if (prefix.length && !prefix.includes(branchKey)) {
+          continue;
+        }
+        const branchIn =
+          aliasKeys.includes(branchKey) ||
+          segmentKeyForMerge(eq.canonical) === branchKey;
+        const childIn =
+          aliasKeys.includes(childKey) ||
+          segmentKeyForMerge(eq.canonical) === childKey;
+        if (!branchIn || !childIn) {
+          continue;
+        }
+        hints.push({
+          branchFrom: branch.from,
+          childSegment: child,
+          canonical: eq.canonical,
+          aliases: eq.aliases ?? [],
+          scopePathPrefix: eq.scope.pathPrefix,
+          confidence: eq.confidence,
+        });
+      }
+    }
+  }
+  return hints.slice(0, 32);
+}
+
+export type TopBranchSynonymHint = {
+  canonical: string;
+  aliases: string[];
+  /** Top-level branch keys in the same M2 equivalence group */
+  branches: string[];
+  confidence?: number;
+};
+
+/** Multiple topBranches[].from in one segmentEquivalences group (ontology-driven). */
+export function buildTopBranchSynonymHints(
+  branches: TopBranchSummary[],
+  equivalences: SegmentEquivalence[] | undefined
+): TopBranchSynonymHint[] {
+  if (!equivalences?.length || branches.length < 2) {
+    return [];
+  }
+
+  const hints: TopBranchSynonymHint[] = [];
+  for (const eq of equivalences) {
+    const aliasKeys = aliasKeysForEquivalence(eq);
+    const matched = branches.filter((b) => {
+      const k = segmentKeyForMerge(b.from);
+      return (
+        aliasKeys.includes(k) || segmentKeyForMerge(eq.canonical) === k
+      );
+    });
+    if (matched.length < 2) {
+      continue;
+    }
+    hints.push({
+      canonical: eq.canonical,
+      aliases: eq.aliases ?? [],
+      branches: matched.map((m) => m.from),
+      confidence: eq.confidence,
+    });
+  }
+  return hints.slice(0, 24);
+}
+
 export type TrieReparentInput = {
-  topBranches: TopBranchSummary[];
+  /** Each entry = one parallel top-level tree (chain). */
+  chains: ReparentChain[];
+  /** @deprecated Use chains */
+  topBranches: ReparentChain[];
   segmentEquivalences: SegmentEquivalence[];
+  /** Branch root + child segment in same M2 equivalence group — for LLM (A) reasoning. */
+  rootChildSynonymHints: RootChildSynonymHint[];
+  /** Multiple top-level branches in same M2 equivalence group. */
+  topBranchSynonymHints: TopBranchSynonymHint[];
+  /** Domain-agnostic structure from chains + ontology + paths (for M2.5). */
+  structuralHints: StructuralReattachHints;
+  /** N1…Nn index + id-annotated trees (LLM must reference these ids in steps). */
+  nodeCatalog: ReattachNodeCatalog;
   nodes: {
     key: string;
     label: string;
@@ -76,7 +226,32 @@ function collectKeywords(node: ConceptTrieNode, out: Set<string>): void {
   }
 }
 
-function summarizeTopBranch(node: ConceptTrieNode): TopBranchSummary {
+const SUBTREE_MAX_DEPTH = 4;
+const SUBTREE_MAX_CHILDREN = 12;
+
+function summarizeSubtreeNode(
+  node: ConceptTrieNode,
+  depth: number
+): ChainSubtreeNode {
+  const sorted = [...node.children.values()]
+    .sort((a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label))
+    .slice(0, SUBTREE_MAX_CHILDREN);
+  return {
+    segment: node.key,
+    label: node.label,
+    topicCount: node.topics.length,
+    childSegments: sorted.map((c) => c.key),
+    children:
+      depth < SUBTREE_MAX_DEPTH
+        ? sorted.map((c) => summarizeSubtreeNode(c, depth + 1))
+        : [],
+  };
+}
+
+function summarizeTopBranch(
+  node: ConceptTrieNode,
+  chainIndex: number
+): ReparentChain {
   const pathSamples: string[][] = [];
   collectBranchPaths(node, [node.label], pathSamples);
 
@@ -102,6 +277,7 @@ function summarizeTopBranch(node: ConceptTrieNode): TopBranchSummary {
     .slice(0, 16);
 
   return {
+    chainIndex,
     from: node.key,
     label: node.label,
     topicCount,
@@ -109,6 +285,7 @@ function summarizeTopBranch(node: ConceptTrieNode): TopBranchSummary {
     childSegments,
     pathSamples,
     keywords: [...keywords].slice(0, MAX_KEYWORDS),
+    subtree: summarizeSubtreeNode(node, 0),
   };
 }
 
@@ -151,6 +328,7 @@ export function buildTrieReparentInput(
   opts: {
     segmentEquivalences?: SegmentEquivalence[];
     ontologyNodes?: ConceptOntologyNode[];
+    topicPaths?: TopicConceptPathDecision[];
     projectSlug?: string;
   } = {}
 ): TrieReparentInput {
@@ -163,9 +341,38 @@ export function buildTrieReparentInput(
     (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
   );
 
+  const chains = sortedTop.map((node, i) => summarizeTopBranch(node, i + 1));
+  const segmentEquivalences = (opts.segmentEquivalences ?? []).slice(0, 40);
+  const nodeCatalog = buildReattachNodeCatalog(chains);
+  const rootNodeIdByFrom = new Map(
+    nodeCatalog.numberedChains.map(
+      (c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const
+    )
+  );
+  const structuralHints = enrichStructuralHintsWithNodeIds(
+    buildStructuralReattachHints(
+      chains,
+      opts.ontologyNodes,
+      opts.segmentEquivalences,
+      opts.topicPaths
+    ),
+    rootNodeIdByFrom
+  );
+
   return {
-    topBranches: sortedTop.map(summarizeTopBranch),
-    segmentEquivalences: (opts.segmentEquivalences ?? []).slice(0, 40),
+    chains,
+    topBranches: chains,
+    nodeCatalog,
+    segmentEquivalences,
+    rootChildSynonymHints: buildRootChildSynonymHints(
+      chains,
+      opts.segmentEquivalences
+    ),
+    topBranchSynonymHints: buildTopBranchSynonymHints(
+      chains,
+      opts.segmentEquivalences
+    ),
+    structuralHints,
     nodes: collectOntologyNodes(records, opts.ontologyNodes),
   };
 }

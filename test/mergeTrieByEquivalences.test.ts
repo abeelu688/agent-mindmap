@@ -55,6 +55,7 @@ describe("mergeTrieSiblingsByEquivalences", () => {
       record("s2", "Runtime topic", ["android", "runtime", "start"]),
     ];
     const { mindMap } = buildConceptTrieMindMap(records, {
+      applySegmentEquivalences: true,
       segmentEquivalences: equivalences,
     });
     const android = mindMap.children?.find((c) =>
@@ -87,6 +88,7 @@ describe("mergeTrieSiblingsByEquivalences", () => {
       ]),
     ];
     const { mindMap } = buildConceptTrieMindMap(records, {
+      applySegmentEquivalences: true,
       segmentEquivalences: withEvidence,
     });
     const android = mindMap.children?.find((c) =>
