@@ -68,15 +68,13 @@ Layout:
 
 ### Concept ontology memory (LLM + cache)
 
-Opening **Concept Mind Map** runs a three-step LLM pipeline (cached under `ontology/cache/`):
+Command: **Agent Mind Map: Analyze All Sessions (Current Project)** runs the concept merge pipeline (cached under `ontology/cache/` when settings allow incremental refine):
 
 1. **Ontology** — domain concepts, aliases, parent keys
 2. **Topic paths** — per-topic `conceptPath` for trie merge
 3. **Refine** — contextual **segment equivalences** (e.g. under `frontend` + React evidence, `reactjs` → canonical `react`)
 
 `segmentEquivalences` are applied when merging (not hardcoded): each rule has `scope.pathPrefix`, optional `evidenceKeywords`, and `confidence`. Results are reused until transcripts or prompt versions change.
-
-Command: **Agent Mind Map: Rebuild Concept Ontology Cache** clears `ontology/cache/` to force a full refresh.
 
 `SessionRecord.meta` carries `hostId`, `projectSlug`, `projectPath`, `transcriptSha256`, prompt parameters, `promptVersion`, LLM provider + model, and `analyzedAt`. The freshness check uses `transcriptSha256` + prompt params + `promptVersion` + `hostId` + model: if any of those changed the session is re-analyzed and the record overwritten. `promptVersion` lets the library auto-invalidate after upgrades that change the LLM output schema (e.g. adding `conceptPath`).
 
@@ -89,10 +87,10 @@ title: "React Hooks 入门"
 conceptPath: ["frontend", "react", "hooks"]
 ```
 
-`conceptPath` is stored in `SessionRecord.graph.topics[].conceptPath`. It is **not** rendered in the single-session mind map (it's metadata). When you run **Open Concept Mind Map**, all topics across all sessions are inserted into a trie keyed by canonicalised (lowercased, whitespace-collapsed) path segments and rendered:
+`conceptPath` is stored in `SessionRecord.graph.topics[].conceptPath`. It is **not** rendered in the single-session mind map (it's metadata). When you run **Analyze All Sessions (Current Project)**, all topics across project sessions are inserted into a trie keyed by canonicalised (lowercased, whitespace-collapsed) path segments and rendered:
 
 ```
-Concept Mind Map · 全部
+Concept Mind Map · <project-slug>
 └── frontend (5)
     └── react (3)
         ├── hooks (2)
@@ -104,13 +102,11 @@ Concept Mind Map · 全部
             └── React Router 配置 · [s3-label]
 ```
 
-This is fully deterministic (no LLM call). Paths are **normalized** before trie insert (trim, dedupe, length cap) and rewritten using cached ontology **`segmentEquivalences`** (scoped aliases — no hardcoded domain names in code). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — running **Refresh** on those sessions regenerates them with the new schema.
+This is fully deterministic (no LLM call for trie layout). Paths are **normalized** before trie insert (trim, dedupe, length cap) and rewritten using cached ontology **`segmentEquivalences`** (scoped aliases — no hardcoded domain names in code). Topics that were produced before the v2 prompt (and so lack `conceptPath`) land under a `未分类` branch — re-open those sessions or run batch analyze with **Force re-analyze all** to regenerate them with the new schema.
 
 **Contributor rule:** production code must not branch on specific concept segment literals (`android`, `art`, etc.). Run `npm run check:concept-nodes` — see `.cursor/rules/no-hardcoded-concept-nodes.mdc`.
 
 **Architecture:** full pipeline diagrams, code verification notes, and optimization review — see [`docs/PIPELINES_AND_REVIEW.md`](docs/PIPELINES_AND_REVIEW.md).
-
-**Open Merged View** vs **Open Concept Mind Map**: the former stitches by **project → session → topic** (good for replaying each chat as analyzed). The latter is the cross-session **concept hierarchy** — use it when you want related topics (e.g. multiple React hooks sessions) under the same `frontend → react` tree.
 
 The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `agentMindmap.cacheLlmResult`) remains as a secondary cache — harmless and useful when `library.enabled = false`.
 
@@ -118,20 +114,11 @@ The legacy hash-keyed cache under `globalStorage/llm-cache/` (controlled by `age
 
 | Command | Description |
 |---------|-------------|
-| **Agent Mind Map: Open Latest Session** | Load the most recent transcript for the current workspace |
+| **Agent Mind Map: Open Latest Session** | Load the most recent transcript for the current workspace and show a single-session mind map |
 | **Agent Mind Map: Choose Session…** | Pick a transcript by human-readable title + time (Cursor: sidebar composer name from `state.vscdb`; Claude: `sessions-index.json`; else first user query) |
-| **Agent Mind Map: Refresh** | Force re-analysis of the active session (overwrites the library record) |
-| **Agent Mind Map: Export Mind Map JSON** | Save to `docs/agent-mindmaps/<session-id>.json` |
-| **Agent Mind Map: Download Mind Map Package…** | Pick a folder; writes an offline bundle (`index.html`, `mindmap.json`, `transcripts/*.html` + `*.md`, `assets/`, `open.sh` / `open.cmd`) |
-| **Agent Mind Map: Open Downloaded Package in Browser…** | Pick a previously exported folder; opens `index.html` in the system browser (no `npx serve` required) |
-| **Agent Mind Map: Open Merged View (All Projects)** | Deterministic stitch of every record in the library, grouped by project → session → topic; no LLM call |
-| **Agent Mind Map: Open Merged View (Current Project)** | Same, filtered to the current workspace |
-| **Agent Mind Map: Open Concept Mind Map (All Projects)** | Cross-session **concept trie**: groups topics by the longest common `conceptPath` prefix (e.g. `frontend → react → hooks`). Pure deterministic — uses the conceptPath meta the LLM already produced per session |
-| **Agent Mind Map: Open Concept Mind Map (Current Project)** | Same, filtered to the current workspace |
-| **Agent Mind Map: Analyze All Sessions & Concept Merge (Current Project)** | One-shot pipeline for the open workspace: scan every on-disk agent transcript for this project, run per-session LLM analysis into the library (skipping fresh cache unless you choose force refresh), then build and open the **Concept Mind Map** once. Expect roughly one LLM call per uncached session plus the ontology pipeline — use the cancellable progress notification for long runs |
-| **Agent Mind Map: LLM Merge Refine…** | Pick a scope (current / all / select) and ask the LLM to dedupe + cluster topics across sessions. Receives the per-session `conceptPath` as a clustering hint. Cached by selection hash, so re-opening the same merge costs 0 tokens |
-| **Agent Mind Map: Browse Library…** | Cross-project quick-pick of any analyzed session — opens directly from the library, no transcript or workspace needed |
-| **Agent Mind Map: Open Store Directory** | Reveal `storeDir` in the OS file manager (for backup / sync setup) |
+| **Agent Mind Map: Analyze All Sessions (Current Project)** | One-shot pipeline for the open workspace: scan every on-disk agent transcript for this project, run per-session LLM analysis into the library (skipping fresh cache unless you choose force refresh), then build and open the **Concept Mind Map** for this project |
+
+**Offline export** is not in the command palette: right-click empty canvas → **Download mind map & transcripts…** (see below).
 
 Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text (e.g. cache hit, LLM call, render), plus an in-panel loading overlay on the mind-map webview so the editor tab is not blank while work runs.
 
@@ -144,13 +131,13 @@ Every rendered mind-map node — root, project / topic branch, and leaf — is c
 3. When the click targets a specific turn, scrolls to the matching `## Q#` heading in that document.
 4. Closing the Markdown tab (×) brings the mind map tab back to the front.
 
-**Download offline package:** right-click the blank canvas → **下载思维导图与对话…** (or run **Download Mind Map Package…**). Choose a destination folder. The export includes a self-contained `index.html` mind map plus pre-rendered `transcripts/*.html` (and Markdown under `transcripts/*.md` for editors). After export, choose **在浏览器中打开** or double-click `index.html` / run `open.cmd` / `open.sh` — no local HTTP server required. Clicking nodes opens the matching transcript HTML at the `#q-N` anchor. To reopen an old export later, use **Open Downloaded Package in Browser…**.
+**Download offline package:** right-click the blank canvas → **下载思维导图与对话…** / **Download mind map & transcripts…**. Choose a destination folder. The export includes a self-contained `index.html` mind map plus pre-rendered `transcripts/*.html` (and Markdown under `transcripts/*.md` for editors). After export, choose **在浏览器中打开** / **Open in browser** or double-click `index.html` / run `open.cmd` / `open.sh` — no local HTTP server required. Clicking nodes opens the matching transcript HTML at the `#q-N` anchor.
 
 The mind map opens as an **editor tab** in the code editor strip (not in the Activity Bar sidebar). Extensions cannot replace Cursor's Agent / chat panel.
 
 Known limitations:
 
-- The LLM-refined merge view (**LLM Merge Refine…**) does not carry per-item source refs back to the original `SessionRecord`, so its nodes are currently inert on click. The deterministic / concept-trie merges and the single-session view are fully wired.
+- Re-opening a previously built project Concept Mind Map requires running **Analyze All Sessions (Current Project)** again (choose **Skip cached sessions** to avoid extra LLM calls when transcripts are unchanged).
 
 ## Settings
 
@@ -237,7 +224,7 @@ Claude's VS Code extension has had reports of **main chats not persisting** to d
 
 Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The exported JSON stays in your workspace unless you commit it.
 
-**Library contents** (`storeDir`) only contain the already-summarised `TopicGraph` and meta (session id, host, project slug / path, transcript hash, timestamps) — **not** the raw transcript. The **LLM Merge Refine** command sends existing TopicGraphs only; it does **not** re-send raw transcripts.
+**Library contents** (`storeDir`) only contain the already-summarised `TopicGraph` and meta (session id, host, project slug / path, transcript hash, timestamps) — **not** the raw transcript.
 
 ## License
 

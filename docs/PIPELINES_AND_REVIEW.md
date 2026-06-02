@@ -19,46 +19,30 @@
 | VS Code 命令 ID | 函数 | Pipeline |
 |-----------------|------|----------|
 | `openLatest` / `pickSession` | `commandOpenLatest` / `commandPickSession` | **P1** |
-| `refresh` | `commandRefresh` | **P1**（`forceRefresh`） |
-| `openMerged` / `openMergedCurrentProject` | `commandOpenMerged*` | **P2** |
-| `openConceptMerged` / `openConceptMergedCurrentProject` | `commandOpenConceptMerged*` | **P3** → P4 + P5 |
 | `analyzeAndMergeCurrentProject` | `commandAnalyzeAndMergeCurrentProject` | **P6** → P1 + P4 + P5 |
-| `llmMergeRefine` | `commandLlmMergeRefine` | **P7** |
-| `rebuildOntologyCache` | `commandRebuildOntologyCache` | 清缓存；下次 **P4** 全量重跑 |
+
+画布右键 **Download mind map & transcripts…** 调用 `commandDownloadPackage()`（未注册为 palette 命令）。
+
+内部仍保留、但无 palette 入口的 pipeline：**P2** 确定性合并（`sessionLoader` 写库后可选重建）、**P7** LLM merge（`mergeLlm.ts`，测试覆盖）。
 
 ```mermaid
 flowchart LR
     subgraph cmds [Commands]
         C1[OpenLatest / PickSession]
-        C2[Refresh]
-        C3[OpenMergedView]
-        C4[OpenConceptMindMap]
-        C5[AnalyzeAllAndConceptMerge]
-        C6[LLMMergeRefine]
-        C7[RebuildOntologyCache]
+        C5[AnalyzeAllSessions]
     end
 
     subgraph pipes [Pipelines]
         P1[P1 SessionLoad]
         P2[P2 DeterministicMerge]
-        P3[P3 ConceptMergeOpen]
         P4[P4 OntologyMemory]
         P5[P5 ConceptTrieBuild]
         P6[P6 BatchAnalyzeAndMerge]
-        P7[P7 LLMMergeRefine]
         P8[P8 BackgroundOnWrite]
     end
 
     C1 --> P1
-    C2 --> P1
-    C3 --> P2
-    C4 --> P3
     C5 --> P6
-    C6 --> P7
-    C7 --> P4
-
-    P3 --> P4
-    P3 --> P5
     P6 --> P1
     P6 --> P4
     P6 --> P5
@@ -71,7 +55,7 @@ flowchart LR
 |----------|------------|----------|
 | P1 | ✅ | `runSessionPipeline` S1 analyze + S2 finalize → [`sessionPipeline.ts`](../extension/src/pipeline/sessionPipeline.ts) |
 | P2 | ✅ | `buildDeterministicMergeRecordAsync` → [`mergeDeterministic.ts`](../extension/src/store/mergeDeterministic.ts) |
-| P3 | ✅ | `ensureConceptMerge` 三层 fallback → [`extension.ts`](../extension/src/extension.ts) L641–697 |
+| P3 | ⚠️ 已移除 palette 入口 | 原 `ensureConceptMerge` 命令已删；P6 batch 内直接走 P4+P5 |
 | P4 | ✅ | **MergePipeline M1–M2**：`collectMergeTerms` + `mergeSynonyms`（无独立 Extract/TopicPaths LLM）→ [`mergePipeline.ts`](../extension/src/pipeline/mergePipeline.ts) |
 | P5 | ✅ | `insertPath` + `mergeTrieSiblingsByEquivalences` → [`mergeConceptTrie.ts`](../extension/src/store/mergeConceptTrie.ts) |
 | P6 | ✅ | `batchSize=5`，`skipAutoMerge=true`；`shouldAutoApplyBatchUpdates` / `hadFullLibraryCoverage` → [`batchMergeApplyMode.ts`](../extension/src/batchMergeApplyMode.ts) |
@@ -82,7 +66,7 @@ flowchart LR
 
 ## P1 — 单会话加载（Session Load）
 
-**触发**：Open Latest / Choose Session / Refresh / P6 内 `loadSession`
+**触发**：Open Latest / Choose Session / P6 内 `loadSession`（`autoRefresh` 监听 transcript 变更时内部 `forceRefresh`）
 
 ```mermaid
 flowchart TB
