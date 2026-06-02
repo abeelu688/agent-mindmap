@@ -24,6 +24,7 @@ import {
   PIPELINE_VERSION,
 } from "../pipeline/pipelineVersions";
 import type {
+  ConceptContextForMerge,
   MergeRecord,
   SessionIndex,
   SessionIndexEntry,
@@ -236,6 +237,7 @@ export function buildSessionRecord(
     conceptExtract?: SessionConceptExtract;
     sessionSynonyms?: SessionSynonymRefine;
     treeSnapshot?: SessionTreeSnapshot;
+    conceptContexts?: ConceptContextForMerge[];
   }
 ): SessionRecord {
   const graph = outlineToTopicGraph(outline);
@@ -248,6 +250,7 @@ export function buildSessionRecord(
     conceptExtract: pipeline?.conceptExtract,
     sessionSynonyms: pipeline?.sessionSynonyms,
     treeSnapshot: pipeline?.treeSnapshot,
+    conceptContexts: pipeline?.conceptContexts,
   };
 }
 

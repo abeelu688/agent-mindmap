@@ -1,5 +1,6 @@
 import type { AgentHostId } from "../host/types";
 import type { PromptLanguage } from "./promptLanguage";
+import type { ConceptContextForMerge } from "../store/storeTypes";
 import type { TrieReparentInput } from "./trieReparentInput";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -7,7 +8,7 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const REATTACH_PROMPT_VERSION = 16;
+export const REATTACH_PROMPT_VERSION = 17;
 
 /**
  * Single LLM call: numbered draft map → ordered `steps[]` referencing node ids (N1…).
@@ -77,10 +78,18 @@ export function buildReattachPrompt(
     "- 禁止套用示例中的 seg-a/seg-b 名字；示例只说明 **steps 字段与 id 写法**。",
     "- 同义 → `merge_synonym`；专精下位 → `attach_under`。",
     "",
-    "## 你的任务",
+    "## Working order（必须按序完成）",
     "",
-    "1) 读完全部 `nodeCatalog` 与 `numberedChains`。",
-    "2) 输出有序 `steps`（step 从 1 递增；执行 step n 时假定 1…n-1 已生效）。",
+    "### Step A — 链内：父子同义折叠",
+    "遍历 `nodeCatalog` 中每个节点：若该节点与其**直接上级**在 `conceptContexts` 的 domain/parent/child/evidence 语境下同义，",
+    "输出折叠步骤（避免「顶根 → 同义子段」连续两层）。同义判断须有 evidence，禁止跨 domain 乱并。",
+    "",
+    "### Step B — 跨根：顶根同义或挂靠",
+    "在假定 Step A 的 steps 已生效后，遍历各并列顶根：与其他树上的节点",
+    "同义 → `merge_synonym`；专精/下位 → `attach_under`。必须使用 `conceptContexts` 中的 domainKeys、parentKeys、childKeys、evidence。",
+    "",
+    "1) 读完全部 `nodeCatalog`、`numberedChains`、`conceptContexts`。",
+    "2) 先完成 Step A 的 steps，再完成 Step B（step 从 1 递增；执行 step n 时假定 1…n-1 已生效）。",
     "3) 每步写清 **action** 与 **result**（可提及节点 id）。",
     "",
     "## 步骤类型（仅用节点 id）",
@@ -119,10 +128,27 @@ export function buildReattachPrompt(
     "## 输入 numberedChains（带 id 的并列链与子树）",
     JSON.stringify(catalog.numberedChains, null, 2),
     "",
-    "## 输入 segmentEquivalences",
+    "## 输入 segmentEquivalences（各会话 S1，供 Step A/B 参考）",
     JSON.stringify(input.segmentEquivalences.slice(0, 24), null, 2),
+    "",
+    "## 输入 conceptContexts（Part I 概念语境：domain / 上级 / 下级 / evidence）",
+    JSON.stringify(formatConceptContexts(input.conceptContexts), null, 2),
     "",
     "## 输入 ontology nodes",
     JSON.stringify(input.nodes.slice(0, 48), null, 2),
   ].join("\n");
+}
+
+function formatConceptContexts(
+  contexts: ConceptContextForMerge[]
+): unknown[] {
+  return contexts.slice(0, 120).map((c) => ({
+    key: c.key,
+    label: c.label,
+    domainKeys: c.domainKeys,
+    parentKeys: c.parentKeys,
+    childKeys: c.childKeys,
+    evidence: c.evidence.slice(0, 4),
+    sessionId: c.sessionId,
+  }));
 }

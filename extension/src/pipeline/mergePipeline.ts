@@ -10,17 +10,17 @@ import {
 import type { ConceptOntologyRecord } from "../store/ontologyTypes";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
-import { mergeSynonyms } from "./stages/mergeSynonyms";
 import { mergeTrieReparent } from "./stages/mergeTrieReparent";
 import {
   prepareRecordsBeforeReattach,
   updateConceptTrieAsync,
 } from "./stages/updateConceptTrie";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
-import { ONTOLOGY_REFINE_PROMPT_VERSION } from "../llm/promptOntologyRefine";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
-import { deriveSegmentEquivalencesFromReattachStructure } from "../llm/reattachStructuralHints";
-import { enhanceSegmentEquivalencesForMerge } from "../llm/synonymHintDerive";
+import {
+  collectSessionSegmentEquivalences,
+  mergeSegmentEquivalencesLists,
+} from "../llm/segmentContext";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 
@@ -41,7 +41,7 @@ export type MergePipelineOpts = {
   cacheLlm?: boolean;
   signal: AbortSignal;
   skipTiming?: boolean;
-  /** Batch milestone: always run M2.5 even when ontology cache has reattachMoves. */
+  /** Batch milestone: always run M-merge even when ontology cache has reattachMoves. */
   forceReattach?: boolean;
 };
 
@@ -50,6 +50,10 @@ export type MergePipelineResult = {
   ontology: ConceptOntologyRecord;
   records: SessionRecord[];
 };
+
+function sessionSegmentEquivalences(records: SessionRecord[]) {
+  return collectSessionSegmentEquivalences(records);
+}
 
 function enhancedOntologyCacheKey(
   records: SessionRecord[],
@@ -62,7 +66,6 @@ function enhancedOntologyCacheKey(
   );
   const stageVersions = [
     SESSION_ANALYSIS_PROMPT_VERSION,
-    ONTOLOGY_REFINE_PROMPT_VERSION,
     REATTACH_PROMPT_VERSION,
   ].join(":");
   return `${base}:${stageVersions}`;
@@ -112,55 +115,25 @@ export async function runMergePipeline(
     collectMergeTerms(opts.records, baseOntology)
   );
 
-  let segmentEquivalences = baseOntology?.segmentEquivalences ?? [];
   const cached = await readOntologyRecord(opts.storeDir, cacheKey);
+  const sessionEquivalences = sessionSegmentEquivalences(opts.records);
 
-  if (refineMode !== "skip") {
-    const needsRefine =
-      refineMode === "batch" ||
-      refineMode === "final" ||
-      !cached?.segmentEquivalences;
-
-    if (needsRefine) {
-      progress?.report("M2: Merging cross-session synonyms…");
-      segmentEquivalences = await runStage(
-        "M2 mergeSynonyms",
-        () =>
-          mergeSynonyms(
-            {
-              records: opts.records,
-              collected,
-              model: opts.model,
-              hostId: opts.hostId,
-              promptLanguage: opts.promptLanguage,
-            },
-            provider,
-            opts.signal,
-            progress
-          ),
-        () => ({ kind: "llm" })
+  let segmentEquivalences = await runStage(
+    "M2 sessionEquivalences",
+    async () => {
+      if (refineMode === "skip" && cached?.segmentEquivalences?.length) {
+        return cached.segmentEquivalences;
+      }
+      return mergeSegmentEquivalencesLists(
+        baseOntology?.segmentEquivalences ?? [],
+        sessionEquivalences
       );
-    } else if (cached?.segmentEquivalences) {
-      segmentEquivalences = cached.segmentEquivalences;
-      progress?.report("M2: Ontology synonym cache hit…");
-      await runStage("M2 mergeSynonyms", async () => segmentEquivalences, () => ({
-        kind: "llm",
-        cacheHit: true,
-        skipped: true,
-      }));
-    }
-  } else if (cached?.segmentEquivalences) {
-    segmentEquivalences = cached.segmentEquivalences;
-    await runStage("M2 mergeSynonyms", async () => segmentEquivalences, () => ({
-      kind: "llm",
-      cacheHit: true,
-      skipped: true,
-      refineMode: "skip",
-    }));
-  }
+    },
+    () => ({ kind: "det" })
+  );
 
   let reattachMoves = cached?.reattachMoves;
-  let reattachSteps: ReattachStep[] | undefined;
+  let reattachSteps: ReattachStep[] | undefined = cached?.reattachSteps;
   const ontologyForReparent = {
     nodes: collected.nodes,
     mappings: collected.mappings,
@@ -171,38 +144,20 @@ export async function runMergePipeline(
     opts.records,
     ontologyForReparent
   );
-  const reparentInputPass = buildTrieReparentInput(recordsForReparent, {
-    segmentEquivalences,
-    ontologyNodes: collected.nodes,
-    topicPaths: collected.topicPaths,
-    projectSlug: opts.projectSlug,
-  });
-  segmentEquivalences = enhanceSegmentEquivalencesForMerge(
-    collected.topicPaths,
-    collected.nodes,
-    segmentEquivalences,
-    deriveSegmentEquivalencesFromReattachStructure(
-      reparentInputPass.chains,
-      collected.topicPaths,
-      collected.nodes,
-      segmentEquivalences
-    )
-  );
   const reparentInput = buildTrieReparentInput(recordsForReparent, {
     segmentEquivalences,
     ontologyNodes: collected.nodes,
     topicPaths: collected.topicPaths,
     projectSlug: opts.projectSlug,
   });
-  // M2.5 runs on the origin trie (segment equiv applied, reattach not yet applied).
-  // Decoupled from M2 refineMode so opening Concept Mind Map still reparents when cache misses.
+
   const hasCachedReattach =
     (cached?.reattachSteps?.length ?? 0) > 0 ||
     (cached?.reattachMoves?.length ?? 0) > 0;
   const reattachVersionStale =
     cached != null &&
     cached.meta.promptVersions.reattach !== REATTACH_PROMPT_VERSION;
-  const needsTrieReparent =
+  const needsConceptMerge =
     reparentInput.topBranches.length >= 2 &&
     (opts.forceReattach ||
       reattachVersionStale ||
@@ -210,10 +165,10 @@ export async function runMergePipeline(
       refineMode === "final" ||
       !hasCachedReattach);
 
-  if (needsTrieReparent) {
-    progress?.report("M2.5: LLM root-branch reparent (origin → final)…");
+  if (needsConceptMerge) {
+    progress?.report("M-merge: LLM concept mind map merge (fold + reattach)…");
     const reparent = await runStage(
-      "M2.5 mergeTrieReparent",
+      "M-merge conceptMerge",
       () =>
         mergeTrieReparent(
           {
@@ -235,9 +190,11 @@ export async function runMergePipeline(
     );
     reattachMoves = reparent.moves;
     reattachSteps = reparent.steps.length ? reparent.steps : undefined;
-  } else if (cached?.reattachMoves) {
-    progress?.report("M2.5: Root reparent cache hit…");
-    await runStage("M2.5 mergeTrieReparent", async () => reattachMoves, () => ({
+  } else if (cached?.reattachMoves || cached?.reattachSteps) {
+    reattachSteps = cached?.reattachSteps;
+    reattachMoves = cached?.reattachMoves;
+    progress?.report("M-merge: Concept merge cache hit…");
+    await runStage("M-merge conceptMerge", async () => reattachMoves, () => ({
       kind: "llm",
       cacheHit: true,
       skipped: true,

@@ -121,7 +121,7 @@ export function normalizeSynonymAttachSteps(
   return sortReattachStepsForApply(normalized);
 }
 
-/** Apply each LLM step in order (tree updates after every step). */
+/** Apply LLM steps: batch hub normalization, then rewrite topic conceptPaths. */
 export function applyReattachStepsToRecords(
   records: SessionRecord[],
   steps: ReattachStep[] | undefined,
@@ -133,20 +133,11 @@ export function applyReattachStepsToRecords(
   }
 
   const sorted = sortReattachStepsForApply(steps);
-  let result = records;
-
-  for (const step of sorted) {
-    const move = normalizeHubAttachMoves(
-      [reattachStepToMove(step)],
-      chains
-    )[0];
-    if (!move) {
-      continue;
-    }
-    result = applyReattachMovesToRecords(result, [move], minConfidence);
+  let moves = reattachStepsToMoves(sorted);
+  if (chains?.length) {
+    moves = normalizeHubAttachMoves(moves, chains);
   }
-
-  return result;
+  return applyReattachMovesToRecords(records, moves, minConfidence);
 }
 
 /** Fallback when only moves[] cached: one move per iteration, synonym-length first. */
@@ -166,10 +157,9 @@ export function applyReattachMovesSequentially(
     return al - bl || (b.confidence ?? 0) - (a.confidence ?? 0);
   });
 
-  let result = records;
-  for (const move of sorted) {
-    const batch = normalizeHubAttachMoves([move], chains);
-    result = applyReattachMovesToRecords(result, batch, minConfidence);
-  }
-  return result;
+  const normalized =
+    chains?.length && sorted.length >= 2
+      ? normalizeHubAttachMoves(sorted, chains)
+      : sorted;
+  return applyReattachMovesToRecords(records, normalized, minConfidence);
 }

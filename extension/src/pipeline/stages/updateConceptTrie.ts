@@ -79,7 +79,7 @@ export function prepareRecordsForFinalTrie(
 ): SessionRecord[] {
   const afterTopicPaths = prepareRecordsBeforeReattach(records, ontology);
   const moves = reattachMoves ?? ontology?.reattachMoves;
-  const steps = reattachSteps;
+  const steps = reattachSteps ?? ontology?.reattachSteps;
   const chains = buildTrieReparentInput(afterTopicPaths, {
     segmentEquivalences: ontology?.segmentEquivalences,
     ontologyNodes: ontology?.nodes,
@@ -88,7 +88,10 @@ export function prepareRecordsForFinalTrie(
     ? applyReattachStepsToRecords(afterTopicPaths, steps, chains)
     : applyReattachMovesSequentially(afterTopicPaths, moves, chains);
   const equivalences = ontology?.segmentEquivalences;
-  return applySegmentEquivalencesToRecords(afterReattach, equivalences);
+  if (MERGE_APPLY_SEGMENT_EQUIVALENCES && equivalences?.length) {
+    return applySegmentEquivalencesToRecords(afterReattach, equivalences);
+  }
+  return afterReattach;
 }
 
 function prepareRecordsForTrie(opts: UpdateConceptTrieOpts): SessionRecord[] {

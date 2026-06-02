@@ -56,7 +56,6 @@ import {
   type ConceptMergeLlmOpts,
 } from "./store/conceptMergeContext";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
-import { mergeWithLlm } from "./store/mergeLlm";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { getProvider } from "./llm";
 import { clearOntologyCache } from "./store/ontologyStore";
@@ -1284,97 +1283,6 @@ async function pickRecordsManually(
   return picked?.map((p) => p.record);
 }
 
-async function commandLlmMergeRefine(): Promise<void> {
-  const storeDir = getStoreDir();
-  await ensureStore(storeDir);
-  const all = await listRecords(storeDir);
-  if (!all.length) {
-    vscode.window.showWarningMessage(
-      t(
-        "ui.library.empty.hint",
-        "Agent Mind Map: Library is empty. Analyze at least one session first (e.g. “Open Latest Session”)."
-      )
-    );
-    return;
-  }
-  const mergeHost = await getActiveHost(extensionContext);
-  const scope = await pickMergeScope(getWorkspaceSlug(mergeHost));
-  if (!scope) {
-    return;
-  }
-  let selected: SessionRecord[];
-  switch (scope.kind) {
-    case "all":
-      selected = all;
-      break;
-    case "current":
-      selected = all.filter((r) => r.meta.projectSlug === scope.slug);
-      if (!selected.length) {
-        vscode.window.showInformationMessage(
-          t(
-            "ui.library.empty.currentProject",
-            "Agent Mind Map: No analyzed sessions in the library for current project ({0}).",
-            scope.slug
-          )
-        );
-        return;
-      }
-      break;
-    case "select": {
-      const picked = await pickRecordsManually(all);
-      if (!picked || !picked.length) {
-        return;
-      }
-      selected = picked;
-      break;
-    }
-  }
-
-  const llmOpts = await readLlmOptions(extensionContext);
-  const config = vscode.workspace.getConfiguration("agentMindmap");
-  const maxTopics = Math.max(
-    2,
-    config.get<number>("merge.llm.maxTopics", 8) ?? 8
-  );
-  const maxItemsPerTopic = Math.max(
-    1,
-    config.get<number>("merge.llm.maxItemsPerTopic", 6) ?? 6
-  );
-
-  const panel = createOrShowMindMap();
-  panel.setLoading(true, t("ui.merge.progress.preparing", "Preparing LLM merge…"));
-  try {
-    const merge = await withCancellableProgress(
-      async ({ signal, progress }) => {
-        const provider = getProvider(llmOpts);
-        return mergeWithLlm(
-          selected,
-          {
-            maxTopics,
-            maxItemsPerTopic,
-            model: llmOpts.model || undefined,
-            hostId: mergeHost.id,
-          },
-          provider,
-          storeDir,
-          signal,
-          progress
-        );
-      },
-      t("ui.merge.progress.title", "Agent Mind Map: Merging topics…"),
-      panel
-    );
-
-    if (!merge) {
-      return;
-    }
-    panel.setMindMapData(merge.mindMap);
-    panel.setTitle("Agent Mind Map · LLM 合并");
-  } finally {
-    panel.setLoading(false);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Search library
 // ---------------------------------------------------------------------------
@@ -1938,10 +1846,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.analyzeAndMergeCurrentProject",
       commandAnalyzeAndMergeCurrentProject
-    ),
-    vscode.commands.registerCommand(
-      "agent-mindmap.llmMergeRefine",
-      commandLlmMergeRefine
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.searchLibrary",

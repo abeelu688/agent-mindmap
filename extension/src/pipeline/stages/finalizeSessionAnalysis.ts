@@ -8,7 +8,9 @@ import type {
   SessionTreeSnapshot,
   TopicGraph,
 } from "../../llm/types";
+import { buildConceptContextsFromAnalysis } from "../../llm/buildConceptContexts";
 import { buildSessionTree } from "./buildSessionTree";
+import type { ConceptContextForMerge } from "../../store/storeTypes";
 
 export type FinalizeSessionAnalysisMeta = {
   sessionId: string;
@@ -23,6 +25,7 @@ export type FinalizedSessionAnalysis = {
   conceptExtract: SessionConceptExtract;
   sessionSynonyms: SessionSynonymRefine;
   treeSnapshot: SessionTreeSnapshot;
+  conceptContexts: ConceptContextForMerge[];
 };
 
 export function analysisToConceptExtract(
@@ -66,6 +69,10 @@ export function finalizeSessionAnalysis(
     sessionId: meta.sessionId,
     projectSlug: meta.projectSlug,
   });
+  const conceptContexts = buildConceptContextsFromAnalysis(
+    { ...analysis, outline },
+    meta
+  );
   const graph = outlineToTopicGraph(outline);
 
   return {
@@ -75,5 +82,6 @@ export function finalizeSessionAnalysis(
     conceptExtract,
     sessionSynonyms,
     treeSnapshot,
+    conceptContexts,
   };
 }

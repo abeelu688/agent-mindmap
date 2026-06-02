@@ -39,8 +39,11 @@ import {
 } from "../llm/ontologyValidate";
 import type { PromptLanguage } from "../llm/promptLanguage";
 import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
-import { mergeSynonyms } from "../pipeline/stages/mergeSynonyms";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import {
+  collectSessionSegmentEquivalences,
+  mergeSegmentEquivalencesLists,
+} from "../llm/segmentContext";
 
 function format(message: string, args: Array<string | number | boolean>): string {
   return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
@@ -170,7 +173,6 @@ export function computeOntologyCacheKey(
       ontology: ONTOLOGY_PROMPT_VERSION,
       topicPaths: TOPIC_PATHS_PROMPT_VERSION,
       reattach: REATTACH_PROMPT_VERSION,
-      refine: ONTOLOGY_REFINE_PROMPT_VERSION,
       outlineSchema: OUTLINE_PROMPT_VERSION,
       sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
     },
@@ -328,7 +330,8 @@ export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean
   return (
     record.nodes.length > 0 &&
     record.topicPaths.length > 0 &&
-    record.meta.promptVersions.refine === ONTOLOGY_REFINE_PROMPT_VERSION &&
+    record.meta.promptVersions.sessionAnalysis ===
+      SESSION_ANALYSIS_PROMPT_VERSION &&
     record.meta.promptVersions.reattach === REATTACH_PROMPT_VERSION &&
     record.segmentEquivalences !== undefined
   );
@@ -366,7 +369,7 @@ export async function writeOntologyRecord(
         ontology: ONTOLOGY_PROMPT_VERSION,
         topicPaths: TOPIC_PATHS_PROMPT_VERSION,
         reattach: REATTACH_PROMPT_VERSION,
-        refine: ONTOLOGY_REFINE_PROMPT_VERSION,
+        refine: 0,
         outlineSchema: OUTLINE_PROMPT_VERSION,
         sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
       },
@@ -449,13 +452,8 @@ export async function ensureOntologyMemory(
         "ontology refine-only requires existing nodes/mappings in cache"
       );
     }
-    const segmentEquivalences = await runOntologyRefine(
-      records,
-      { nodes, mappings, topicPaths, reattachMoves },
-      opts,
-      provider,
-      signal,
-      progress
+    const segmentEquivalences = mergeSegmentEquivalencesLists(
+      collectSessionSegmentEquivalences(records)
     );
     return writeOntologyRecord(
       storeDir,
@@ -482,17 +480,9 @@ export async function ensureOntologyMemory(
 
   let segmentEquivalences: ConceptOntologyRecord["segmentEquivalences"];
   if (flags.forceRefine || cached?.segmentEquivalences === undefined) {
-    segmentEquivalences = await mergeSynonyms(
-      {
-        records,
-        collected,
-        model: opts.model,
-        hostId: opts.hostId,
-        promptLanguage: opts.promptLanguage,
-      },
-      provider,
-      signal,
-      progress
+    segmentEquivalences = mergeSegmentEquivalencesLists(
+      reusableBase?.segmentEquivalences ?? [],
+      collectSessionSegmentEquivalences(records)
     );
   } else {
     segmentEquivalences = cached!.segmentEquivalences;

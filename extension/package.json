@@ -26,7 +26,6 @@
     "onCommand:agent-mindmap.openConceptMerged",
     "onCommand:agent-mindmap.openConceptMergedCurrentProject",
     "onCommand:agent-mindmap.analyzeAndMergeCurrentProject",
-    "onCommand:agent-mindmap.llmMergeRefine",
     "onCommand:agent-mindmap.searchLibrary",
     "onCommand:agent-mindmap.browseLibrary",
     "onCommand:agent-mindmap.openStoreDir",
@@ -98,11 +97,6 @@
       {
         "command": "agent-mindmap.analyzeAndMergeCurrentProject",
         "title": "Agent Mind Map: Analyze All Sessions & Concept Merge (Current Project)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.llmMergeRefine",
-        "title": "Agent Mind Map: LLM Merge Refine…",
         "category": "Agent Mind Map"
       },
       {
@@ -283,20 +277,6 @@
           "type": "boolean",
           "default": true,
           "description": "After a session is analysed and written to the library, automatically rebuild storeDir/merges/deterministic.json so 'Open Merged View' opens instantly."
-        },
-        "agentMindmap.merge.llm.maxTopics": {
-          "type": "number",
-          "default": 8,
-          "minimum": 2,
-          "maximum": 20,
-          "description": "Target number of top-level topic nodes the LLM merge command should produce across selected sessions."
-        },
-        "agentMindmap.merge.llm.maxItemsPerTopic": {
-          "type": "number",
-          "default": 6,
-          "minimum": 1,
-          "maximum": 16,
-          "description": "Maximum sub-items per topic the LLM merge command should produce."
         },
         "agentMindmap.ui.preset": {
           "type": "string",

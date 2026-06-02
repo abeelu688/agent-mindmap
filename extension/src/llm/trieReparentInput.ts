@@ -2,7 +2,8 @@ import {
   buildConceptTrieStructure,
   type ConceptTrieNode,
 } from "../store/mergeConceptTrie";
-import type { SessionRecord } from "../store/storeTypes";
+import { collectConceptContextsForMerge } from "./buildConceptContexts";
+import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import { segmentKeyForMerge } from "./topicGraphValidate";
 import {
   buildReattachNodeCatalog,
@@ -157,6 +158,8 @@ export function buildTopBranchSynonymHints(
 }
 
 export type TrieReparentInput = {
+  /** Part I per-node context for M-merge LLM (domain, parent, child, evidence). */
+  conceptContexts: ConceptContextForMerge[];
   /** Each entry = one parallel top-level tree (chain). */
   chains: ReparentChain[];
   /** @deprecated Use chains */
@@ -360,6 +363,7 @@ export function buildTrieReparentInput(
   );
 
   return {
+    conceptContexts: collectConceptContextsForMerge(records),
     chains,
     topBranches: chains,
     nodeCatalog,
