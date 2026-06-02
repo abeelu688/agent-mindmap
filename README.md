@@ -210,7 +210,7 @@ Open the `airecorder` folder as workspace, run at least one Agent chat, then exe
 
 #### LLM input/output dumps (prompt tuning)
 
-When `agentMindmap.llm.dumpIo` is **true** (default), each dump is written to **both**:
+When `agentMindmap.llm.dumpIo` is **true** (default **off** — enable for prompt tuning), each dump is written to **both**:
 
 1. `~/.agent-mindmap/agent-mindmap-llm-dumps/` (always — same tree as `llm-cache/`)
 2. `<workspace>/agent-mindmap-llm-dumps/` when a workspace folder is open

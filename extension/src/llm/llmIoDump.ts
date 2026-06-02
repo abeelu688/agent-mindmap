@@ -28,7 +28,7 @@ export function isLlmDumpEnabled(): boolean {
   return (
     vscode.workspace
       .getConfiguration("agentMindmap")
-      .get<boolean>("llm.dumpIo", true) ?? true
+      .get<boolean>("llm.dumpIo", false) ?? false
   );
 }
 
