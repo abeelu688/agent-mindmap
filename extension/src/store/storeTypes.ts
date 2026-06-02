@@ -1,6 +1,9 @@
 import type { AgentHostId } from "../host/types";
 import type {
   PipelineVersions,
+  ReattachMove,
+  ReattachStep,
+  SegmentEquivalence,
   SessionAnalysis,
   SessionConceptExtract,
   SessionOutline,
@@ -8,6 +11,7 @@ import type {
   SessionTreeSnapshot,
   TopicGraph,
 } from "../llm/types";
+import type { TopicConceptPathDecision } from "./ontologyTypes";
 import type { MindMapRoot } from "../transcript/types";
 
 /** S2 DET: per-node context for Part II concept-merge LLM. */
@@ -126,4 +130,32 @@ export type MergeRecordMeta = {
   llm?: { provider: string; model?: string };
   /** Human-readable title shown as the root node. */
   title?: string;
+};
+
+/**
+ * Stable project mind-map projection for delta M-merge (one virtual session).
+ * Lives at `<storeDir>/merges/<projectSlug>/merge-snapshot.json`.
+ */
+export type MergeSnapshot = {
+  schemaVersion: 1;
+  meta: MergeSnapshotMeta;
+  treeSnapshot: SessionTreeSnapshot;
+  sessionAnalysis: SessionAnalysis;
+  conceptContexts: ConceptContextForMerge[];
+  segmentEquivalences: SegmentEquivalence[];
+  reattachSteps?: ReattachStep[];
+  reattachMoves?: ReattachMove[];
+  topicPaths: TopicConceptPathDecision[];
+};
+
+export type MergeSnapshotMeta = {
+  builtAt: number;
+  projectSlug: string;
+  /** Real session ids covered by this snapshot (excludes virtual id). */
+  sessionIds: string[];
+  hostId?: AgentHostId;
+  promptVersions: {
+    reattach: number;
+    sessionAnalysis: number;
+  };
 };

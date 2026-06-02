@@ -1,14 +1,23 @@
 import type { AgentHostId } from "../host/types";
 import type { PromptLanguage } from "./promptLanguage";
 import type { ConceptContextForMerge } from "../store/storeTypes";
-import type { TrieReparentInput } from "./trieReparentInput";
+import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
   "claude-code": "Claude Code Agent",
 };
 
-export const REATTACH_PROMPT_VERSION = 18;
+export const REATTACH_PROMPT_VERSION = 20;
+
+export type ReattachPromptChunkMeta = {
+  chunkIndex: number;
+  chunkCount: number;
+};
+
+function compactJson(value: unknown): string {
+  return JSON.stringify(value);
+}
 
 /**
  * Single LLM call: numbered draft map → ordered `steps[]` referencing node ids (N1…).
@@ -16,7 +25,9 @@ export const REATTACH_PROMPT_VERSION = 18;
 export function buildReattachPrompt(
   input: TrieReparentInput,
   hostId: AgentHostId = "cursor",
-  _promptLanguage?: PromptLanguage
+  _promptLanguage?: PromptLanguage,
+  mergeMode: MergeInputMode = input.mergeMode ?? "full",
+  chunkMeta?: ReattachPromptChunkMeta
 ): string {
   const agentLabel = HOST_LABELS[hostId];
   const catalog = input.nodeCatalog;
@@ -27,13 +38,13 @@ export function buildReattachPrompt(
   if (input.topBranchSynonymHints.length) {
     hintParts.push(
       "### 并列顶级链同义线索（segmentEquivalences，须结合语境验证）",
-      JSON.stringify(input.topBranchSynonymHints, null, 2)
+      compactJson(input.topBranchSynonymHints)
     );
   }
   if (input.rootChildSynonymHints.length) {
     hintParts.push(
       "### 链根与其直接子段同义线索（须结合语境验证）",
-      JSON.stringify(input.rootChildSynonymHints, null, 2)
+      compactJson(input.rootChildSynonymHints)
     );
   }
   const sh = input.structuralHints;
@@ -41,26 +52,65 @@ export function buildReattachPrompt(
     hintParts.push(
       "### 并列顶根重复（某链 childSegments 已含另一顶根）",
       "→ 用 `merge_synonym`：`sourceNodeId` = duplicateTopNodeId，`targetNodeId` = parentNodeId。",
-      JSON.stringify(sh.duplicateTopRoots, null, 2)
+      compactJson(sh.duplicateTopRoots)
     );
   }
   if (sh.listedChildCollapses.length) {
     hintParts.push(
       "### 链内根/子段同义（segmentEquivalences 已支持折叠）",
       "→ 勿保留「链根 → 同义子段」连续两层；并列顶根用 merge_synonym（按节点 id）。",
-      JSON.stringify(sh.listedChildCollapses, null, 2)
+      compactJson(sh.listedChildCollapses)
     );
   }
   if (sh.ontologySubordinates.length) {
     hintParts.push(
       "### ontology 下位关系（parentKeys）",
       "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
-      JSON.stringify(sh.ontologySubordinates, null, 2)
+      compactJson(sh.ontologySubordinates)
+    );
+  }
+  if (sh.prefixSubordinates.length) {
+    hintParts.push(
+      "### segment key 前缀下位（专精顶根 extends hub key）",
+      "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
+      "例：android-app、android-framework 与 android 并列时，须挂到 android 下，禁止保留为并列顶根。",
+      compactJson(sh.prefixSubordinates)
     );
   }
   const hintsBlock = hintParts.length
     ? ["", "## ontology / 结构线索", "", ...hintParts].join("\n")
     : "";
+
+  const chunkBlock =
+    chunkMeta && chunkMeta.chunkCount > 1
+      ? [
+          "",
+          "## 分治合并（本批为子任务）",
+          "",
+          `- 完整导图过大，已拆成 ${chunkMeta.chunkCount} 批；当前为第 ${chunkMeta.chunkIndex + 1} 批。`,
+          "- 仅处理本批 `numberedChains` 中的链；已稳定/其它批次的链不在本批输入中，但 nodeCatalog 仍含本批可见的全部节点 id。",
+          "- 新链须并入本批 nodeCatalog 中已有节点 id（含稳定顶根）。",
+        ].join("\n")
+      : "";
+
+  const frozenLabels =
+    input.frozenChainIndices?.length
+      ? input.frozenChainIndices
+          .map((i) => input.chains[i]?.from)
+          .filter(Boolean)
+      : [];
+  const deltaBlock =
+    mergeMode === "delta" && input.frozenChainCount
+      ? [
+          "",
+          "## 增量合并（delta）",
+          "",
+          `- 以下 numberedChains 来自**已稳定项目导图**（虚拟会话 ${input.snapshotSessionId ?? "snapshot"}），其结构视为已生效，**不要**对它们输出 Step A/B：${frozenLabels.length ? frozenLabels.join("、") : `共 ${input.frozenChainCount} 条`}。`,
+      "- 仅对**新会话**引入的并列顶级链：在 Step A 做链内折叠，在 Step B 用 `merge_synonym` / `attach_under` 把它们并入已有节点 id（禁止仅用 segment 名）。",
+      "- **新批顶根**若与已稳定 nodeCatalog 中某节点 domain/evidence 同义或下位，**必须**输出 merge/attach steps；禁止因「已稳定链」而返回空 steps。",
+      "- 若无新链需调整则 `{\"steps\":[]}`。",
+        ].join("\n")
+      : "";
 
   return [
     `你是「思维导图树归并」助手。下面是 ${agentLabel} 多会话合并后的**整幅草稿思维导图**。`,
@@ -111,6 +161,8 @@ export function buildReattachPrompt(
     "- 仅用 segment 名、不用 nodeCatalog id。",
     "- 同义顶根未 merge_synonym 仍并列。",
     "- attach_under 的 targetNodeIds 末 id 不是 sourceNodeId。",
+    deltaBlock,
+    chunkBlock,
     hintsBlock,
     "",
     "## 输出（严格 JSON，仅 steps）",
@@ -124,19 +176,19 @@ export function buildReattachPrompt(
     "- 无调整则 `{\"steps\":[]}`。",
     "",
     "## 输入 nodeCatalog（全图节点索引）",
-    JSON.stringify(catalog.nodes, null, 2),
+    compactJson(catalog.nodes),
     "",
     "## 输入 numberedChains（带 id 的并列链与子树）",
-    JSON.stringify(catalog.numberedChains, null, 2),
+    compactJson(catalog.numberedChains),
     "",
     "## 输入 segmentEquivalences（各会话 S1，供 Step A/B 参考）",
-    JSON.stringify(input.segmentEquivalences.slice(0, 24), null, 2),
+    compactJson(input.segmentEquivalences.slice(0, 24)),
     "",
     "## 输入 conceptContexts（Part I 概念语境：domain / 上级 / 下级 / evidence）",
-    JSON.stringify(formatConceptContexts(input.conceptContexts), null, 2),
+    compactJson(formatConceptContexts(input.conceptContexts)),
     "",
     "## 输入 ontology nodes",
-    JSON.stringify(input.nodes.slice(0, 48), null, 2),
+    compactJson(input.nodes.slice(0, 48)),
   ].join("\n");
 }
 

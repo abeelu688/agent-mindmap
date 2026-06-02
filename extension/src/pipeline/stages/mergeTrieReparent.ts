@@ -10,7 +10,12 @@ import {
   buildReattachPrompt,
   REATTACH_PROMPT_VERSION,
 } from "../../llm/promptReattach";
-import { buildTrieReparentInput } from "../../llm/trieReparentInput";
+import { buildReattachChunkExecutions } from "../../llm/reattachChunking";
+import {
+  buildTrieReparentInput,
+  type MergeInputMode,
+  type TrieReparentInput,
+} from "../../llm/trieReparentInput";
 import type {
   ConceptOntologyMapping,
   ConceptOntologyNode,
@@ -21,6 +26,7 @@ import type {
   SegmentEquivalence,
   TopicPathDecision,
 } from "../../llm/types";
+import { appendReattachSteps } from "../../store/mergeSnapshot";
 import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 import type { MindMapProgress } from "../../progress";
 import { createHeartbeat } from "../../progress";
@@ -36,6 +42,8 @@ export type MergeTrieReparentOpts = {
   model?: string;
   hostId?: AgentHostId;
   promptLanguage?: "zh" | "en";
+  mergeMode?: MergeInputMode;
+  snapshotSessionId?: string;
 };
 
 export type MergeTrieReparentResult = {
@@ -43,8 +51,51 @@ export type MergeTrieReparentResult = {
   steps: ReattachStep[];
 };
 
+async function runOneReattachLlmCall(
+  slice: TrieReparentInput,
+  opts: MergeTrieReparentOpts,
+  provider: LlmProvider,
+  signal: AbortSignal,
+  chunkMeta?: { chunkIndex: number; chunkCount: number }
+): Promise<ReattachStep[]> {
+  const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
+  const mergeMode = opts.mergeMode ?? "full";
+  const prompt = buildReattachPrompt(
+    slice,
+    hostId,
+    opts.promptLanguage ?? "zh",
+    mergeMode,
+    chunkMeta
+  );
+
+  const res = await provider.summarize(
+    {
+      events: [],
+      prompt,
+      model: opts.model,
+      maxTopics: 8,
+      maxItemsPerTopic: 8,
+      responseSchema: "reattach-moves",
+      dumpMeta: {
+        stageId: "reattach-moves",
+        projectSlug: opts.projectSlug,
+        chunkIndex: chunkMeta?.chunkIndex,
+        chunkCount: chunkMeta?.chunkCount,
+      },
+    },
+    signal
+  );
+  const parsed: ReattachParseResult =
+    res &&
+    typeof res === "object" &&
+    ("steps" in res || "moves" in res)
+      ? (res as ReattachParseResult)
+      : tryParseReattachResponse(res);
+  return resolveReattachStepsWithCatalog(parsed.steps, slice.nodeCatalog);
+}
+
 /**
- * M2.5 LLM: one call with all chains; returns ordered steps + derived moves.
+ * M2.5 LLM: one or more chunked calls with all chains; returns ordered steps + derived moves.
  */
 export async function mergeTrieReparent(
   opts: MergeTrieReparentOpts,
@@ -64,14 +115,13 @@ export async function mergeTrieReparent(
     ontologyNodes: opts.ontologyNodes,
     topicPaths: opts.topicPaths,
     projectSlug: opts.projectSlug,
+    mergeMode: opts.mergeMode,
+    snapshotSessionId: opts.snapshotSessionId,
   });
 
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
-  const prompt = buildReattachPrompt(
-    input,
-    hostId,
-    opts.promptLanguage ?? "zh"
-  );
+  const promptLanguage = opts.promptLanguage ?? "zh";
+  const mergeMode = opts.mergeMode ?? "full";
 
   if (input.chains.length < 2) {
     void dumpLlmReplay({
@@ -79,7 +129,7 @@ export async function mergeTrieReparent(
       responseSchema: "reattach-moves",
       providerId: provider.id,
       model: opts.model,
-      prompt,
+      prompt: buildReattachPrompt(input, hostId, promptLanguage, mergeMode),
       parsed: { moves: [], steps: [] },
       source: "skipped",
       skipReason: "chains<2",
@@ -88,43 +138,47 @@ export async function mergeTrieReparent(
     return { moves: [], steps: [] };
   }
 
+  const executions = buildReattachChunkExecutions(
+    input,
+    hostId,
+    promptLanguage,
+    mergeMode
+  );
+  const chunked = executions.length > 1;
+
   const heartbeat = createHeartbeat(
     progress,
-    "Merging concept mind maps (fold + reattach)…"
+    chunked
+      ? `Merging concept mind maps (${executions.length} chunks)…`
+      : "Merging concept mind maps (fold + reattach)…"
   );
+
+  let collectedSteps: ReattachStep[] = [];
   try {
-    const res = await provider.summarize(
-      {
-        events: [],
-        prompt,
-        model: opts.model,
-        maxTopics: 8,
-        maxItemsPerTopic: 8,
-        responseSchema: "reattach-moves",
-        dumpMeta: {
-          stageId: "reattach-moves",
-          projectSlug: opts.projectSlug,
-        },
-      },
-      signal
-    );
-    const parsed: ReattachParseResult =
-      res &&
-      typeof res === "object" &&
-      ("steps" in res || "moves" in res)
-        ? (res as ReattachParseResult)
-        : tryParseReattachResponse(res);
-    const resolved = resolveReattachStepsWithCatalog(
-      parsed.steps,
-      input.nodeCatalog
-    );
+    for (let i = 0; i < executions.length; i++) {
+      const exec = executions[i]!;
+      if (chunked) {
+        progress?.report(
+          `M-merge chunk ${i + 1}/${executions.length} (${exec.promptBytes}B)…`
+        );
+      }
+      const chunkSteps = await runOneReattachLlmCall(
+        exec.slice,
+        opts,
+        provider,
+        signal,
+        chunked ? { chunkIndex: i, chunkCount: executions.length } : undefined
+      );
+      collectedSteps = appendReattachSteps(collectedSteps, chunkSteps);
+    }
+
     const steps = normalizeSynonymAttachSteps(
-      resolved,
+      collectedSteps,
       input.topBranchSynonymHints,
       input.segmentEquivalences,
       input.chains.map((c) => c.from)
     );
-    const moves = steps.length > 0 ? reattachStepsToMoves(steps) : parsed.moves;
+    const moves = steps.length > 0 ? reattachStepsToMoves(steps) : [];
 
     return { steps, moves };
   } catch {

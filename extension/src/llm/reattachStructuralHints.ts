@@ -34,11 +34,24 @@ export type OntologySubordinateHint = {
   hubNodeId?: string;
 };
 
+/** Top root whose merge key extends a shorter top root (e.g. androidapp → android). */
+export type PrefixSubordinateHint = {
+  kind: "prefix_subordinate";
+  specialistFrom: string;
+  hubFrom: string;
+  specialistNodeId?: string;
+  hubNodeId?: string;
+};
+
 export type StructuralReattachHints = {
   duplicateTopRoots: DuplicateTopRootHint[];
   listedChildCollapses: ListedChildCollapseHint[];
   ontologySubordinates: OntologySubordinateHint[];
+  prefixSubordinates: PrefixSubordinateHint[];
 };
+
+/** Minimum hub merge-key length to avoid spurious art→artificial-style matches. */
+const PREFIX_HUB_MIN_KEY_LEN = 4;
 
 function aliasKeysFor(eq: SegmentEquivalence): string[] {
   const keys = new Set<string>();
@@ -227,6 +240,54 @@ export function buildListedChildCollapseHints(
   return hints.slice(0, 24);
 }
 
+/**
+ * Domain-agnostic: specialist top root merge key extends hub key (android-app → android).
+ */
+export function buildPrefixSubordinateHints(
+  chains: CatalogChainInput[]
+): PrefixSubordinateHint[] {
+  if (chains.length < 2) {
+    return [];
+  }
+
+  const tops = chains.map((c) => ({
+    from: c.from,
+    key: segmentKeyForMerge(c.from),
+  }));
+  const hints: PrefixSubordinateHint[] = [];
+  const seen = new Set<string>();
+
+  for (const spec of tops) {
+    if (!spec.key || spec.key.length <= PREFIX_HUB_MIN_KEY_LEN) {
+      continue;
+    }
+    const hub = tops
+      .filter(
+        (h) =>
+          h.key !== spec.key &&
+          h.key.length >= PREFIX_HUB_MIN_KEY_LEN &&
+          spec.key.startsWith(h.key) &&
+          spec.key.length > h.key.length
+      )
+      .sort((a, b) => a.key.length - b.key.length)[0];
+    if (!hub) {
+      continue;
+    }
+    const id = `${spec.from}|${hub.from}`;
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    hints.push({
+      kind: "prefix_subordinate",
+      specialistFrom: spec.from,
+      hubFrom: hub.from,
+    });
+  }
+
+  return hints.slice(0, 24);
+}
+
 export function buildOntologySubordinateHints(
   chains: CatalogChainInput[],
   nodes: ConceptOntologyNode[] | undefined
@@ -279,6 +340,7 @@ export function buildStructuralReattachHints(
     duplicateTopRoots: buildDuplicateTopRootHints(chains),
     listedChildCollapses: buildListedChildCollapseHints(chains, equivalences),
     ontologySubordinates: buildOntologySubordinateHints(chains, nodes),
+    prefixSubordinates: buildPrefixSubordinateHints(chains),
   };
 }
 
@@ -298,6 +360,11 @@ export function enrichStructuralHintsWithNodeIds(
     })),
     listedChildCollapses: hints.listedChildCollapses,
     ontologySubordinates: hints.ontologySubordinates.map((h) => ({
+      ...h,
+      hubNodeId: rootId(h.hubFrom),
+      specialistNodeId: rootId(h.specialistFrom),
+    })),
+    prefixSubordinates: hints.prefixSubordinates.map((h) => ({
       ...h,
       hubNodeId: rootId(h.hubFrom),
       specialistNodeId: rootId(h.specialistFrom),

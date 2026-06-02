@@ -168,7 +168,19 @@
         "agentMindmap.library.batchFinalRefine": {
           "type": "boolean",
           "default": true,
-          "description": "After all sessions in a batch analyze run finish, run one additional ontology refine pass (no extra topic-path LLM calls) before showing the final concept mind map."
+          "description": "After all sessions in a batch analyze run finish, refresh the merge snapshot and concept trie (DET only; no extra M-merge LLM call)."
+        },
+        "agentMindmap.library.mergeMode": {
+          "type": "string",
+          "enum": ["full", "delta"],
+          "default": "delta",
+          "description": "Batch concept merge: delta = M-merge LLM on project snapshot + new sessions only; full = every batch sends all sessions to M-merge (legacy, higher token use)."
+        },
+        "agentMindmap.library.mergeFullReconcileEvery": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "description": "When mergeMode is delta, run a full M-merge on all sessions every N batch milestones (default 4 ≈ every 20 sessions at batch size 5)."
         },
         "agentMindmap.library.incrementalOntologyOnSessionAdd": {
           "type": "boolean",
