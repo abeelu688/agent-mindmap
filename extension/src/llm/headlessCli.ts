@@ -24,6 +24,8 @@ import {
   type SummarizeInput,
   type TopicGraph,
 } from "./types";
+import { dumpLlmCallResult } from "./llmIoDump";
+import { agentDebugLog } from "../debugLog";
 import { validateTopicGraph } from "./topicGraphValidate";
 
 export type HeadlessCliConfig = {
@@ -119,7 +121,9 @@ export function runCli(
         reject(
           new LlmProviderError(
             "timeout",
-            `${providerLabel} timed out after ${timeoutMs}ms`
+            `${providerLabel} timed out after ${timeoutMs}ms`,
+            undefined,
+            { stdout, stderr }
           )
         );
       }, timeoutMs);
@@ -175,7 +179,9 @@ export function runCli(
         reject(
           new LlmProviderError(
             "cli-failed",
-            `${bin} exited with code ${code}: ${stderr.trim().slice(0, 500)}`
+            `${bin} exited with code ${code}: ${stderr.trim().slice(0, 500)}`,
+            undefined,
+            { stdout, stderr }
           )
         );
         return;
@@ -514,6 +520,17 @@ export class HeadlessCliProvider {
     signal: AbortSignal
   ): Promise<import("./types").LlmSummarizeResult> {
     const responseSchema = input.responseSchema ?? "session-outline";
+    agentDebugLog(
+      "headlessCli.ts:summarize",
+      "CLI summarize enter",
+      {
+        responseSchema,
+        hasDumpMeta: input.dumpMeta != null,
+        dumpStageId: input.dumpMeta?.stageId ?? null,
+        providerId: this.id,
+      },
+      "C"
+    );
     const promptBytes = Buffer.byteLength(input.prompt, "utf8");
     if (promptBytes > MAX_PROMPT_BYTES) {
       throw new LlmProviderError(
@@ -536,31 +553,68 @@ export class HeadlessCliProvider {
       input.onAttempt?.(attempt, maxAttempts);
       let allMissing: LlmProviderError | undefined;
       let runErr: LlmProviderError | undefined;
+      const attemptStarted = performance.now();
 
       for (const bin of candidates) {
+        const started = performance.now();
+        let stdout = "";
+        let stderr = "";
         try {
-          const { stdout } = await runCli(
+          const run = await runCli(
             bin,
             args,
             signal,
             this.options.timeoutMs,
             this.config.providerLabel
           );
+          stdout = run.stdout;
+          stderr = run.stderr;
+          const durationMs = performance.now() - started;
           if (attempt > 1) {
             console.info(
               `[agent-mindmap] LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`
             );
           }
-          return parseBySchema(
-            stdout,
-            this.config.providerLabel,
-            responseSchema
-          );
+          try {
+            const parsed = parseBySchema(
+              stdout,
+              this.config.providerLabel,
+              responseSchema
+            );
+            await dumpLlmCallResult({
+              input,
+              providerId: this.id,
+              stdout,
+              stderr,
+              parsed,
+              attempt,
+              maxAttempts,
+              durationMs,
+            });
+            return parsed;
+          } catch (parseErr) {
+            const durationMs = performance.now() - started;
+            await dumpLlmCallResult({
+              input,
+              providerId: this.id,
+              stdout,
+              stderr,
+              error: parseErr,
+              attempt,
+              maxAttempts,
+              durationMs,
+            });
+            throw parseErr;
+          }
         } catch (err) {
           const lpe =
             err instanceof LlmProviderError
               ? err
               : new LlmProviderError("cli-failed", String(err), err);
+          if (lpe.cliCapture) {
+            stdout = lpe.cliCapture.stdout;
+            stderr = lpe.cliCapture.stderr;
+          }
           if (lpe.code === "cli-missing") {
             allMissing = lpe;
             continue;
@@ -576,6 +630,22 @@ export class HeadlessCliProvider {
         new LlmProviderError("cli-missing", this.config.missingInstallHint);
 
       const isLastAttempt = attempt >= maxAttempts;
+      const shouldDumpFailure =
+        input.dumpMeta != null &&
+        (!isRetryableError(attemptErr) || isLastAttempt);
+      if (shouldDumpFailure) {
+        const cap = attemptErr.cliCapture;
+        await dumpLlmCallResult({
+          input,
+          providerId: this.id,
+          stdout: cap?.stdout ?? "",
+          stderr: cap?.stderr,
+          error: attemptErr,
+          attempt,
+          maxAttempts,
+          durationMs: performance.now() - attemptStarted,
+        });
+      }
       if (!isRetryableError(attemptErr) || isLastAttempt) {
         throw attemptErr;
       }

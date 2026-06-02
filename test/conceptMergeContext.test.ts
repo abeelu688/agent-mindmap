@@ -12,6 +12,8 @@ import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { SegmentEquivalence } from "../extension/src/llm/types";
 import { topicIdForTopic } from "../extension/src/llm/topicId";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
+import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
 
 const equivalences: SegmentEquivalence[] = [
   {
@@ -86,9 +88,10 @@ describe("prepareRecordsForConceptMerge", () => {
         promptVersions: {
           ontology: 1,
           topicPaths: 1,
-          reattach: 1,
+          reattach: REATTACH_PROMPT_VERSION,
           refine: 1,
           outlineSchema: 1,
+          sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
         },
       },
       nodes: [],

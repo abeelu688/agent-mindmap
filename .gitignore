@@ -20,6 +20,13 @@ test/eval/eval.config.local.json
 test/eval/reports/
 test/eval/.cache/
 
+# LLM prompt/stdout debug dumps (may contain full transcripts)
+.agent-mindmap-llm-dumps/
+agent-mindmap-llm-dumps/
+
+# also under storeDir when mirroring workspace dumps
+llm-io-dumps/
+
 # local dev / agent artifacts
 _git-*.txt
 _vitest-exit.txt

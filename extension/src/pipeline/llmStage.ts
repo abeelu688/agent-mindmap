@@ -12,6 +12,8 @@ import {
 } from "../llm/types";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
+import { dumpLlmReplay } from "../llm/llmIoDump";
+import { agentDebugLog } from "../debugLog";
 import type { PipelineKind } from "./pipelineTiming";
 
 export type LlmStageTimingOut = {
@@ -50,6 +52,8 @@ export type LlmStageOptions<T> = {
   cacheDir?: string;
   cache: boolean;
   hostId?: AgentHostId;
+  sessionId?: string;
+  projectSlug?: string;
   responseSchema: LlmResponseSchema;
   maxTopics: number;
   maxItemsPerTopic: number;
@@ -134,6 +138,27 @@ export async function runLlmStage<T>(
       if (opts.timingOut) {
         opts.timingOut.cacheHit = true;
       }
+      agentDebugLog(
+        "llmStage.ts:runLlmStage",
+        "llm hash cache hit",
+        {
+          stageId: opts.stageId,
+          sessionId: opts.sessionId ?? null,
+          cacheDir: opts.cacheDir ?? null,
+        },
+        "F"
+      );
+      void dumpLlmReplay({
+        stageId: opts.stageId,
+        responseSchema: opts.responseSchema,
+        providerId: provider.id,
+        model: opts.modelHint,
+        prompt: opts.prompt,
+        parsed: cached,
+        source: "llm-cache",
+        sessionId: opts.sessionId,
+        projectSlug: opts.projectSlug,
+      });
       return cached;
     }
   }
@@ -143,6 +168,16 @@ export async function runLlmStage<T>(
   }
 
   const heartbeat = createHeartbeat(progress, opts.heartbeatMessage);
+  agentDebugLog(
+    "llmStage.ts:runLlmStage",
+    "live LLM path",
+    {
+      stageId: opts.stageId,
+      sessionId: opts.sessionId ?? null,
+      projectSlug: opts.projectSlug ?? null,
+    },
+    "E"
+  );
   try {
     const result = await provider.summarize(
       {
@@ -152,6 +187,11 @@ export async function runLlmStage<T>(
         maxTopics: opts.maxTopics,
         maxItemsPerTopic: opts.maxItemsPerTopic,
         responseSchema: opts.responseSchema,
+        dumpMeta: {
+          stageId: opts.stageId,
+          sessionId: opts.sessionId,
+          projectSlug: opts.projectSlug,
+        },
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
             progress?.report(

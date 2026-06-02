@@ -9,6 +9,7 @@ import type {
   TopicGraph,
 } from "../../llm/types";
 import { buildConceptContextsFromAnalysis } from "../../llm/buildConceptContexts";
+import { enrichAnalysisNodesFromOutline } from "../../llm/enrichNodeChildrenFromOutline";
 import { buildSessionTree } from "./buildSessionTree";
 import type { ConceptContextForMerge } from "../../store/storeTypes";
 
@@ -63,20 +64,24 @@ export function finalizeSessionAnalysis(
   meta: FinalizeSessionAnalysisMeta
 ): FinalizedSessionAnalysis {
   const outline = sanitizeSessionOutline(analysis.outline, meta.userQueryCount);
-  const conceptExtract = analysisToConceptExtract(analysis);
-  const sessionSynonyms = analysisToSessionSynonyms(analysis);
+  const enrichedAnalysis = enrichAnalysisNodesFromOutline({
+    ...analysis,
+    outline,
+  });
+  const conceptExtract = analysisToConceptExtract(enrichedAnalysis);
+  const sessionSynonyms = analysisToSessionSynonyms(enrichedAnalysis);
   const treeSnapshot = buildSessionTree(conceptExtract, sessionSynonyms, {
     sessionId: meta.sessionId,
     projectSlug: meta.projectSlug,
   });
   const conceptContexts = buildConceptContextsFromAnalysis(
-    { ...analysis, outline },
+    enrichedAnalysis,
     meta
   );
   const graph = outlineToTopicGraph(outline);
 
   return {
-    sessionAnalysis: { ...analysis, outline },
+    sessionAnalysis: enrichedAnalysis,
     outline,
     graph,
     conceptExtract,

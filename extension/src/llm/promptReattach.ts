@@ -8,7 +8,7 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const REATTACH_PROMPT_VERSION = 17;
+export const REATTACH_PROMPT_VERSION = 18;
 
 /**
  * Single LLM call: numbered draft map → ordered `steps[]` referencing node ids (N1…).
@@ -82,11 +82,12 @@ export function buildReattachPrompt(
     "",
     "### Step A — 链内：父子同义折叠",
     "遍历 `nodeCatalog` 中每个节点：若该节点与其**直接上级**在 `conceptContexts` 的 domain/parent/child/evidence 语境下同义，",
-    "输出折叠步骤（避免「顶根 → 同义子段」连续两层）。同义判断须有 evidence，禁止跨 domain 乱并。",
+    "输出折叠步骤（避免「顶根 → 同义子段」连续两层）。**childKeys 已含 Part I outline conceptPath 补齐的下级**，须与 parentKeys、evidence 一并参考。",
+    "同义判断须有 evidence，禁止跨 domain 乱并。",
     "",
     "### Step B — 跨根：顶根同义或挂靠",
     "在假定 Step A 的 steps 已生效后，遍历各并列顶根：与其他树上的节点",
-    "同义 → `merge_synonym`；专精/下位 → `attach_under`。必须使用 `conceptContexts` 中的 domainKeys、parentKeys、childKeys、evidence。",
+    "同义 → `merge_synonym`；专精/下位 → `attach_under`。必须使用 `conceptContexts` 中的 domainKeys、parentKeys、childKeys（含 outline 补齐）、evidence。",
     "",
     "1) 读完全部 `nodeCatalog`、`numberedChains`、`conceptContexts`。",
     "2) 先完成 Step A 的 steps，再完成 Step B（step 从 1 递增；执行 step n 时假定 1…n-1 已生效）。",

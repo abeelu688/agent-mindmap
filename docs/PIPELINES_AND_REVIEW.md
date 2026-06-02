@@ -159,16 +159,20 @@ flowchart TB
 
 ## P5 — Concept Trie 构建（纯 DET）
 
-**触发**：`buildConceptMergeRecord` / `buildConceptTrieMindMap`
+**触发**：`buildConceptMergeRecord`（唯一建图闸门；内部调用 `buildConceptTrieMindMap`）
+
+合并图 **必须** 使用 reattach 之后的 `graph.topics[].conceptPath`。`sanitizeSessionRecord` 会从 `outline` 重建 graph（顶段回到 Part I 原始 path），因此建图前必经 [`prepareRecordsForFinalTrie`](../extension/src/store/prepareConceptMergeRecords.ts)（topicPaths → reattach（含 nodeCatalog 解析）→ segmentEquivalences）。
 
 ```mermaid
 flowchart TB
-    start([buildConceptMergeWithOntology]) --> IO1[IO: loadSegmentEquivalencesForRecords]
-    IO1 --> DET1[DET: prepareRecordsForConceptMerge]
-    DET1 --> apply{ontology 会话集完全匹配?}
-    apply -->|是| DET2[DET: applyTopicPathsFromOntology]
-    apply -->|否| trie
-    DET2 --> trie
+    start([buildConceptMergeRecord]) --> prep{ontologyForPrep 且未 alreadyPrepared?}
+    prep -->|是| DET0[DET: prepareRecordsForFinalTrie]
+    prep -->|否| trie
+    DET0 --> DET0a[applyTopicPathsFromOntology]
+    DET0a --> DET0b[applyReattachStepsToRecords + nodeCatalog]
+    DET0b --> DET0c[applySegmentEquivalencesToRecords]
+    DET0c --> DET0d[warnIfStaleReattachTopRoots]
+    DET0d --> trie
 
     subgraph trie [buildConceptTrieStructure]
         trie --> DET3[DET: 遍历 topics]
@@ -181,6 +185,8 @@ flowchart TB
     DET7 --> DET8[DET: renderNode → MindMapRoot]
     DET8 --> end_node([MergeRecord])
 ```
+
+Ontology 缓存应用条件：当前 records 的 `sessionId` 均为 ontology 构建集的子集（`recordsSubsetOfOntologySessions`）；`topicPaths` 按当前 session 过滤。
 
 Path 解析：[`resolveConceptPathWithEquivalences.ts`](../extension/src/llm/resolveConceptPathWithEquivalences.ts) → [`normalizeConceptPath.ts`](../extension/src/llm/normalizeConceptPath.ts)（仅机械去重/截断，无硬编码域名）。
 

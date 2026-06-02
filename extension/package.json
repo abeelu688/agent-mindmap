@@ -140,6 +140,16 @@
           "default": "",
           "description": "Path to the LLM cache directory. Empty = <storeDir>/llm-cache."
         },
+        "agentMindmap.llm.dumpIo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write LLM prompts and responses under <workspace>/agent-mindmap-llm-dumps/ (live CLI, llm-cache, library-cache, ontology-cache)."
+        },
+        "agentMindmap.llm.dumpDir": {
+          "type": "string",
+          "default": "",
+          "description": "Override LLM dump directory. Empty = workspace/agent-mindmap-llm-dumps, or ~/.agent-mindmap/agent-mindmap-llm-dumps if no workspace folder is open."
+        },
         "agentMindmap.storeDir": {
           "type": "string",
           "default": "",

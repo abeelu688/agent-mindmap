@@ -10,12 +10,16 @@ import {
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES, MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
-import { prepareRecordsForFinalTrie } from "../pipeline/stages/updateConceptTrie";
-import { applyTopicPathsFromOntology } from "./applyOntology";
+import {
+  ontologySliceForPrep,
+  prepareRecordsForFinalTrie,
+  recordsSubsetOfOntologySessions,
+} from "./prepareConceptMergeRecords";
 import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,
   type ConceptMergeOptions,
+  type ConceptMergePrepOntology,
 } from "./mergeConceptTrie";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import {
@@ -48,16 +52,45 @@ function sessionIdsSubsetOf(
   return subset.every((id) => set.has(id));
 }
 
-function recordsMatchOntologySessions(
-  records: SessionRecord[],
-  ontology: ConceptOntologyRecord
-): boolean {
-  const recordIds = new Set(records.map((r) => r.meta.sessionId));
-  const ontologyIds = ontology.meta.sessionIds;
-  if (recordIds.size !== ontologyIds.length) {
-    return false;
+function ontologyPrepSliceForRecords(
+  ctx: LoadedConceptMergeContext,
+  records: SessionRecord[]
+): ConceptMergePrepOntology | undefined {
+  const ont = ctx.ontology;
+  if (!ont) {
+    return undefined;
   }
-  return ontologyIds.every((id) => recordIds.has(id));
+  if (!recordsSubsetOfOntologySessions(records, ont)) {
+    return undefined;
+  }
+  if (ont.meta.promptVersions.reattach !== REATTACH_PROMPT_VERSION) {
+    return undefined;
+  }
+  const hasPrep =
+    (ont.topicPaths?.length ?? 0) > 0 ||
+    (ont.reattachSteps?.length ?? 0) > 0 ||
+    (ont.reattachMoves?.length ?? 0) > 0;
+  if (!hasPrep) {
+    return undefined;
+  }
+  return ontologySliceForPrep(ont, records);
+}
+
+function mergeOptionsWithContext(
+  records: SessionRecord[],
+  options: ConceptMergeOptions,
+  ctx: LoadedConceptMergeContext
+): ConceptMergeOptions {
+  const ontologyForPrep = ontologyPrepSliceForRecords(ctx, records);
+  return {
+    ...options,
+    ontologyForPrep: ontologyForPrep ?? options.ontologyForPrep,
+    segmentEquivalences:
+      options.segmentEquivalences ?? ctx.segmentEquivalences,
+    applySegmentEquivalences:
+      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
+    recordsAlreadyPrepared: options.recordsAlreadyPrepared ?? false,
+  };
 }
 
 function fallbackSegmentEquivalences(
@@ -164,7 +197,7 @@ export function isOntologyReadyForConceptMerge(
   if (!ont?.topicPaths?.length) {
     return false;
   }
-  if (!recordsMatchOntologySessions(records, ont)) {
+  if (!recordsSubsetOfOntologySessions(records, ont)) {
     return false;
   }
   if (!isCompleteOntologyRecord(ont)) {
@@ -205,7 +238,7 @@ export async function buildConceptMergeForRecords(
   );
   const ontologyReady = isOntologyReadyForConceptMerge(ctx, records);
 
-  if (ontologyReady) {
+  if (ontologyReady && !opts.forceReattach) {
     return {
       merge: buildConceptMergeWithOntology(
         records,
@@ -232,20 +265,13 @@ export function prepareRecordsForConceptMerge(
   records: SessionRecord[],
   ctx: LoadedConceptMergeContext
 ): SessionRecord[] {
-  const ontologySlice = ctx.ontology
-    ? {
-        nodes: ctx.ontology.nodes,
-        mappings: ctx.ontology.mappings,
-        topicPaths: ctx.ontology.topicPaths,
-        segmentEquivalences: ctx.ontology.segmentEquivalences,
-        reattachMoves: ctx.ontology.reattachMoves,
-        reattachSteps: ctx.ontology.reattachSteps,
-      }
-    : undefined;
-
+  const ontologyForPrep = ontologyPrepSliceForRecords(ctx, records);
+  if (!ontologyForPrep) {
+    return records;
+  }
   return prepareRecordsForFinalTrie(
     records,
-    ontologySlice,
+    ontologyForPrep,
     ctx.ontology?.reattachMoves,
     ctx.ontology?.reattachSteps
   );
@@ -256,14 +282,10 @@ export function buildConceptMergeWithOntology(
   options: ConceptMergeOptions = {},
   ctx: LoadedConceptMergeContext = {}
 ): MergeRecord {
-  const enriched = prepareRecordsForConceptMerge(records, ctx);
-  return buildConceptMergeRecord(enriched, {
-    ...options,
-    segmentEquivalences:
-      options.segmentEquivalences ?? ctx.segmentEquivalences,
-    applySegmentEquivalences:
-      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
-  });
+  return buildConceptMergeRecord(
+    records,
+    mergeOptionsWithContext(records, options, ctx)
+  );
 }
 
 export async function resolveAndBuildConceptMergeAsync(
@@ -278,17 +300,13 @@ export async function resolveAndBuildConceptMergeAsync(
     llmOpts
   );
   const { sanitizeSessionRecord } = await import("./sanitizeRecords");
-  const enriched = prepareRecordsForConceptMerge(
-    await Promise.all(records.map((r) => sanitizeSessionRecord(r))),
-    ctx
+  const sanitized = await Promise.all(
+    records.map((r) => sanitizeSessionRecord(r))
   );
-  return buildConceptMergeRecordAsync(enriched, {
-    ...options,
-    segmentEquivalences:
-      options.segmentEquivalences ?? ctx.segmentEquivalences,
-    applySegmentEquivalences:
-      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
-  });
+  return buildConceptMergeRecordAsync(
+    sanitized,
+    mergeOptionsWithContext(sanitized, options, ctx)
+  );
 }
 
 function flagsToRefineMode(flags: EnsureOntologyMemoryFlags): MergeRefineMode {

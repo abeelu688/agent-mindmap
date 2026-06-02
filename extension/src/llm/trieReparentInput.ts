@@ -178,6 +178,7 @@ export type TrieReparentInput = {
     label: string;
     aliases?: string[];
     parentKeys?: string[];
+    childKeys?: string[];
     evidence?: string[];
   }[];
 };
@@ -303,6 +304,7 @@ function collectOntologyNodes(
       label: node.label,
       aliases: node.aliases,
       parentKeys: node.parentKeys,
+      childKeys: node.childKeys,
       evidence: node.evidence,
     });
   }
@@ -317,6 +319,7 @@ function collectOntologyNodes(
           label: node.label,
           aliases: node.aliases,
           parentKeys: node.parentKeys,
+          childKeys: node.childKeys,
           evidence: node.evidence,
         });
       }
