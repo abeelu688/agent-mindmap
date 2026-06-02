@@ -142,7 +142,7 @@
         },
         "agentMindmap.llm.dumpIo": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Write LLM prompts and responses under <workspace>/agent-mindmap-llm-dumps/ (live CLI, llm-cache, library-cache, ontology-cache)."
         },
         "agentMindmap.llm.dumpDir": {
