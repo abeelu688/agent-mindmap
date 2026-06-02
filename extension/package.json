@@ -16,25 +16,7 @@
     "onStartupFinished",
     "onCommand:agent-mindmap.openLatest",
     "onCommand:agent-mindmap.pickSession",
-    "onCommand:agent-mindmap.refresh",
-    "onCommand:agent-mindmap.exportJson",
-    "onCommand:agent-mindmap.downloadPackage",
-    "onCommand:agent-mindmap.openDownloadedPackage",
-    "onCommand:agent-mindmap.openMerged",
-    "onCommand:agent-mindmap.openMergedCurrentProject",
-    "onCommand:agent-mindmap.rebuildOntologyCache",
-    "onCommand:agent-mindmap.openConceptMerged",
-    "onCommand:agent-mindmap.openConceptMergedCurrentProject",
-    "onCommand:agent-mindmap.analyzeAndMergeCurrentProject",
-    "onCommand:agent-mindmap.searchLibrary",
-    "onCommand:agent-mindmap.browseLibrary",
-    "onCommand:agent-mindmap.openStoreDir",
-    "onCommand:agent-mindmap.testJump",
-    "onCommand:agent-mindmap.diagnoseJump",
-    "onCommand:agent-mindmap.tryOpenAgentShapes",
-    "onCommand:agent-mindmap.dumpGlassState",
-    "onCommand:agent-mindmap.inspectComposerHeader",
-    "onCommand:agent-mindmap.dumpStateDbKey"
+    "onCommand:agent-mindmap.analyzeAndMergeCurrentProject"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -50,98 +32,8 @@
         "category": "Agent Mind Map"
       },
       {
-        "command": "agent-mindmap.refresh",
-        "title": "Agent Mind Map: Refresh",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.exportJson",
-        "title": "Agent Mind Map: Export Mind Map JSON",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.downloadPackage",
-        "title": "Agent Mind Map: Download Mind Map Package…",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openDownloadedPackage",
-        "title": "Agent Mind Map: Open Downloaded Package in Browser…",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openMerged",
-        "title": "Agent Mind Map: Open Merged View (All Projects)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openMergedCurrentProject",
-        "title": "Agent Mind Map: Open Merged View (Current Project)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.rebuildOntologyCache",
-        "title": "Agent Mind Map: Rebuild Concept Ontology Cache",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openConceptMerged",
-        "title": "Agent Mind Map: Open Concept Mind Map (All Projects)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openConceptMergedCurrentProject",
-        "title": "Agent Mind Map: Open Concept Mind Map (Current Project)",
-        "category": "Agent Mind Map"
-      },
-      {
         "command": "agent-mindmap.analyzeAndMergeCurrentProject",
-        "title": "Agent Mind Map: Analyze All Sessions & Concept Merge (Current Project)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.searchLibrary",
-        "title": "Agent Mind Map: Search Library…",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.browseLibrary",
-        "title": "Agent Mind Map: Browse Library…",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.openStoreDir",
-        "title": "Agent Mind Map: Open Store Directory",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.testJump",
-        "title": "Agent Mind Map: Test Jump (Debug)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.diagnoseJump",
-        "title": "Agent Mind Map: Diagnose Jump Commands",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.tryOpenAgentShapes",
-        "title": "Agent Mind Map: Try Open Agent Shapes (Debug)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.dumpGlassState",
-        "title": "Agent Mind Map: Dump Glass State (Debug)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.inspectComposerHeader",
-        "title": "Agent Mind Map: Inspect Composer Header (Debug)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.dumpStateDbKey",
-        "title": "Agent Mind Map: Dump state.vscdb Key (Debug)",
+        "title": "Agent Mind Map: Analyze All Sessions (Current Project)",
         "category": "Agent Mind Map"
       }
     ],
