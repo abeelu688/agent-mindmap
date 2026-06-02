@@ -40,6 +40,8 @@ import {
 } from "./store/conceptMergeContext";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
 import { getProvider } from "./llm";
+import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
+import { agentDebugLog } from "./debugLog";
 import {
   LlmProviderError,
   type LlmProvider,
@@ -892,6 +894,18 @@ async function maybeWarnEmptyClaudeTranscripts(
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
+  agentDebugLog(
+    "extension.ts:activate",
+    "extension activated",
+    {
+      extensionPath: context.extensionPath,
+      workspaceFolder:
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+      dumpFolder: "agent-mindmap-llm-dumps",
+    },
+    "E"
+  );
+  logLlmDumpLocationsOnce();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (

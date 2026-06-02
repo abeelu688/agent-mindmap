@@ -2,8 +2,12 @@ import { uiTranslate } from "../l10n/uiTranslate";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence, Topic } from "../llm/types";
+import type { ReattachMove, ReattachStep, SegmentEquivalence, Topic } from "../llm/types";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import {
+  prepareRecordsForFinalTrie,
+  type ConceptMergePrepOntology,
+} from "./prepareConceptMergeRecords";
 import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
 import {
   leafRefs,
@@ -196,12 +200,20 @@ function renderNode(node: TrieNode): MindMapNodeData {
   return withOrigin(trieNode, unionChildRefs(childNodes));
 }
 
+export type { ConceptMergePrepOntology } from "./prepareConceptMergeRecords";
+
 export type ConceptMergeOptions = {
   title?: string;
   projectSlug?: string;
   segmentEquivalences?: SegmentEquivalence[];
   /** When false, paths insert as-is (mechanical normalize only). */
   applySegmentEquivalences?: boolean;
+  /** When set, apply topicPaths + reattach + equivalences before trie build. */
+  ontologyForPrep?: ConceptMergePrepOntology;
+  reattachMoves?: ReattachMove[];
+  reattachSteps?: ReattachStep[];
+  /** Skip prep when records were already prepared (default false). */
+  recordsAlreadyPrepared?: boolean;
 };
 
 /** Stats useful for UI / tests / progress messages. */
@@ -364,6 +376,21 @@ export async function buildConceptMergeRecordAsync(
   return buildConceptMergeRecord(sanitized, options);
 }
 
+function recordsForTrieBuild(
+  records: SessionRecord[],
+  options: ConceptMergeOptions
+): SessionRecord[] {
+  if (options.recordsAlreadyPrepared || !options.ontologyForPrep) {
+    return records;
+  }
+  return prepareRecordsForFinalTrie(
+    records,
+    options.ontologyForPrep,
+    options.reattachMoves,
+    options.reattachSteps
+  );
+}
+
 export function buildConceptMergeRecord(
   records: SessionRecord[],
   options: ConceptMergeOptions = {}
@@ -375,7 +402,8 @@ export function buildConceptMergeRecord(
   const projectSlugs = Array.from(
     new Set(filtered.map((r) => r.meta.projectSlug))
   ).sort();
-  const { mindMap } = buildConceptTrieMindMap(records, options);
+  const trieRecords = recordsForTrieBuild(records, options);
+  const { mindMap } = buildConceptTrieMindMap(trieRecords, options);
   return {
     schemaVersion: 1,
     meta: {

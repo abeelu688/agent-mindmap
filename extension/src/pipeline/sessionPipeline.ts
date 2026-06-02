@@ -94,6 +94,8 @@ export async function runSessionPipeline(
             cacheDir: opts.cacheDir,
             cache: opts.cache,
             hostId: opts.hostId,
+            sessionId: opts.sessionId,
+            projectSlug: opts.projectSlug,
             timingRunId: timing?.runId,
             timingOut: s1Timing,
           },

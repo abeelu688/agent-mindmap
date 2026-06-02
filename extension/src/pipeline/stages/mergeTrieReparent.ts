@@ -5,6 +5,7 @@ import {
   normalizeSynonymAttachSteps,
   reattachStepsToMoves,
 } from "../../llm/reattachSteps";
+import { dumpLlmReplay } from "../../llm/llmIoDump";
 import {
   buildReattachPrompt,
   REATTACH_PROMPT_VERSION,
@@ -65,16 +66,27 @@ export async function mergeTrieReparent(
     projectSlug: opts.projectSlug,
   });
 
-  if (input.chains.length < 2) {
-    return { moves: [], steps: [] };
-  }
-
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
   const prompt = buildReattachPrompt(
     input,
     hostId,
     opts.promptLanguage ?? "zh"
   );
+
+  if (input.chains.length < 2) {
+    void dumpLlmReplay({
+      stageId: "reattach-moves",
+      responseSchema: "reattach-moves",
+      providerId: provider.id,
+      model: opts.model,
+      prompt,
+      parsed: { moves: [], steps: [] },
+      source: "skipped",
+      skipReason: "chains<2",
+      projectSlug: opts.projectSlug,
+    });
+    return { moves: [], steps: [] };
+  }
 
   const heartbeat = createHeartbeat(
     progress,
@@ -89,6 +101,10 @@ export async function mergeTrieReparent(
         maxTopics: 8,
         maxItemsPerTopic: 8,
         responseSchema: "reattach-moves",
+        dumpMeta: {
+          stageId: "reattach-moves",
+          projectSlug: opts.projectSlug,
+        },
       },
       signal
     );

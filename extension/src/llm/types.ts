@@ -79,6 +79,8 @@ export type ConceptOntologyNode = {
   label: string;
   aliases?: string[];
   parentKeys?: string[];
+  /** S2 DET: direct children (from parentKeys inverse + outline conceptPath). */
+  childKeys?: string[];
   confidence?: number;
   evidence?: string[];
 };
@@ -223,6 +225,12 @@ export type LlmResponseSchema =
   | "reattach-moves"
   | "ontology-refine";
 
+export type LlmDumpMeta = {
+  stageId: string;
+  sessionId?: string;
+  projectSlug?: string;
+};
+
 export type SummarizeInput = {
   events: ChatEvent[];
   prompt: string;
@@ -233,6 +241,8 @@ export type SummarizeInput = {
   responseSchema?: LlmResponseSchema;
   /** Called before each CLI attempt (1-based). */
   onAttempt?: (attempt: number, maxAttempts: number) => void;
+  /** Workspace LLM IO dump (live CLI only). */
+  dumpMeta?: LlmDumpMeta;
 };
 
 export type LlmProviderOptions = {
@@ -285,7 +295,9 @@ export class LlmProviderError extends Error {
   constructor(
     public readonly code: LlmErrorCode,
     message: string,
-    public readonly cause?: unknown
+    public readonly cause?: unknown,
+    /** Partial CLI stdout/stderr when the subprocess ran but failed. */
+    public readonly cliCapture?: { stdout: string; stderr: string }
   ) {
     super(message);
     this.name = "LlmProviderError";

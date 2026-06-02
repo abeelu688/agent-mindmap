@@ -1,3 +1,8 @@
+import {
+  collectChildEdgesFromParentKeys,
+  enrichAnalysisNodesFromOutline,
+  normalizeConceptKey,
+} from "./enrichNodeChildrenFromOutline";
 import type { ConceptOntologyNode, SessionAnalysis } from "./types";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 
@@ -6,10 +11,6 @@ export type BuildConceptContextsMeta = {
   projectSlug: string;
 };
 
-function normalizeKey(key: string): string {
-  return key.toLowerCase().trim();
-}
-
 function resolveDomainKeys(
   key: string,
   nodesByKey: Map<string, ConceptOntologyNode>,
@@ -17,7 +18,7 @@ function resolveDomainKeys(
 ): string[] {
   const path: string[] = [];
   const visited = new Set<string>();
-  let current = normalizeKey(key);
+  let current = normalizeConceptKey(key);
 
   while (current && !visited.has(current)) {
     visited.add(current);
@@ -27,7 +28,7 @@ function resolveDomainKeys(
     }
     const node = nodesByKey.get(current);
     const parent = node?.parentKeys?.[0]
-      ? normalizeKey(node.parentKeys[0])
+      ? normalizeConceptKey(node.parentKeys[0])
       : "";
     if (!parent || parent === current) {
       break;
@@ -36,8 +37,8 @@ function resolveDomainKeys(
     current = parent;
   }
 
-  if (!path.length && domainSet.has(normalizeKey(key))) {
-    return [normalizeKey(key)];
+  if (!path.length && domainSet.has(normalizeConceptKey(key))) {
+    return [normalizeConceptKey(key)];
   }
 
   const domains = path.filter((s) => domainSet.has(s));
@@ -48,50 +49,55 @@ function resolveDomainKeys(
   return firstDomain ? [firstDomain] : [];
 }
 
+function unionChildKeys(
+  ...lists: (string[] | undefined)[]
+): string[] {
+  const set = new Set<string>();
+  for (const list of lists) {
+    for (const k of list ?? []) {
+      const nk = normalizeConceptKey(k);
+      if (nk) {
+        set.add(nk);
+      }
+    }
+  }
+  return [...set].sort();
+}
+
 /**
- * S2 DET: derive childKeys from parentKeys and build per-node merge context for Part II.
+ * S2 DET: build per-node merge context for Part II (uses enriched node.childKeys).
  */
 export function buildConceptContextsFromAnalysis(
   analysis: SessionAnalysis,
   meta: BuildConceptContextsMeta
 ): ConceptContextForMerge[] {
   const domainSet = new Set(
-    (analysis.domains ?? []).map((d) => normalizeKey(d)).filter(Boolean)
+    (analysis.domains ?? []).map((d) => normalizeConceptKey(d)).filter(Boolean)
   );
   const nodesByKey = new Map<string, ConceptOntologyNode>();
   for (const node of analysis.nodes ?? []) {
-    const k = normalizeKey(node.key);
+    const k = normalizeConceptKey(node.key);
     if (!k) {
       continue;
     }
     nodesByKey.set(k, node);
   }
 
-  const childKeysByParent = new Map<string, Set<string>>();
-  for (const node of nodesByKey.values()) {
-    const childKey = normalizeKey(node.key);
-    for (const p of node.parentKeys ?? []) {
-      const pk = normalizeKey(p);
-      if (!pk || pk === childKey) {
-        continue;
-      }
-      let set = childKeysByParent.get(pk);
-      if (!set) {
-        set = new Set();
-        childKeysByParent.set(pk, set);
-      }
-      set.add(childKey);
-    }
-  }
+  const childKeysByParent = collectChildEdgesFromParentKeys(
+    analysis.nodes ?? []
+  );
 
   const contexts: ConceptContextForMerge[] = [];
   for (const node of nodesByKey.values()) {
-    const key = normalizeKey(node.key);
+    const key = normalizeConceptKey(node.key);
     const parentKeys = (node.parentKeys ?? [])
-      .map(normalizeKey)
+      .map(normalizeConceptKey)
       .filter((p) => p && p !== key);
-    const childSet = childKeysByParent.get(key);
-    const childKeys = childSet ? [...childSet].sort() : [];
+    const fromInverse = childKeysByParent.get(key);
+    const childKeys = unionChildKeys(
+      node.childKeys,
+      fromInverse ? [...fromInverse] : []
+    );
     const evidence =
       node.evidence?.length ? node.evidence : [node.label || key];
     contexts.push({
@@ -121,8 +127,12 @@ export function collectConceptContextsForMerge(
       continue;
     }
     if (record.sessionAnalysis) {
+      const enriched = enrichAnalysisNodesFromOutline({
+        ...record.sessionAnalysis,
+        outline: record.outline,
+      });
       out.push(
-        ...buildConceptContextsFromAnalysis(record.sessionAnalysis, {
+        ...buildConceptContextsFromAnalysis(enriched, {
           sessionId: record.meta.sessionId,
           projectSlug: record.meta.projectSlug,
         })

@@ -6,6 +6,9 @@ import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
+import { dumpLlmReplay } from "./llm/llmIoDump";
+import { agentDebugLog } from "./debugLog";
+import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import {
   currentPipelineVersions,
@@ -386,6 +389,38 @@ export async function loadSession(
           existing.outline,
           userQueryCount
         );
+        const analysisPrompt = buildSessionAnalysisPrompt(
+          events,
+          {
+            maxDomains: Math.min(10, settings.llm.maxTopics),
+            maxNodes: Math.max(6, settings.llm.maxTopics * 2),
+            maxBranches: settings.llm.maxTopics,
+            maxDetailsPerNode: settings.llm.maxItemsPerTopic,
+          },
+          host.id
+        );
+        agentDebugLog(
+          "sessionLoader.ts:loadSession",
+          "library cache hit",
+          {
+            sessionId: session.id,
+            projectSlug: ctx.projectSlug,
+          },
+          "F"
+        );
+        void dumpLlmReplay({
+          stageId: "session-analysis",
+          responseSchema: "session-analysis",
+          providerId: settings.llm.provider,
+          model: settings.llm.model || undefined,
+          prompt: analysisPrompt,
+          parsed:
+            existing.sessionAnalysis ??
+            ({ outline: existing.outline } as const),
+          source: "library-cache",
+          sessionId: session.id,
+          projectSlug: ctx.projectSlug,
+        });
         return {
           session: {
             ...session,

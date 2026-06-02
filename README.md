@@ -208,6 +208,36 @@ Open the `airecorder` folder as workspace, run at least one Agent chat, then exe
 3. In the Extension Development Host, open the Output panel → "Agent Mind Map" / DevTools console — `[agent-mindmap]` lines log LLM failures with the underlying error code (`cli-missing`, `cli-failed`, `timeout`, `bad-json`, `bad-shape`, `cancelled`, `empty`).
 4. Cache lives in `~/.config/Code/User/globalStorage/airecorder.agent-mindmap/llm-cache/` (path varies by platform); delete the `.json` file or toggle `agentMindmap.cacheLlmResult` to force a re-summarization.
 
+#### LLM input/output dumps (prompt tuning)
+
+When `agentMindmap.llm.dumpIo` is **true** (default), each dump is written to **both**:
+
+1. `~/.agent-mindmap/agent-mindmap-llm-dumps/` (always — same tree as `llm-cache/`)
+2. `<workspace>/agent-mindmap-llm-dumps/` when a workspace folder is open
+
+Override with `agentMindmap.llm.dumpDir`. On extension start, **View → Output → Agent Mind Map** logs the exact paths.
+
+**Important:** dumps follow the **currently open VS Code workspace folder**, not necessarily the `airecorder` repo. If you analyze `aosp14` while that folder is open, dumps appear under `/path/to/aosp14/agent-mindmap-llm-dumps/` as well as `~/.agent-mindmap/agent-mindmap-llm-dumps/`.
+
+| Subfolder | Pipeline | Files |
+|-----------|----------|--------|
+| `session-analysis/` | Part I S1 | `prompt.txt`, `stdout.txt`, `parsed.json`, optional `stderr.txt` / `error.json`, `meta.json` |
+| `reattach-moves/` | Part II M-merge | same layout |
+
+| `meta.source` | Meaning |
+|---------------|---------|
+| `live-cli` | Real `cursor-agent` / `agent` subprocess |
+| `llm-cache` | Hash cache under `<storeDir>/llm-cache/` (still writes `prompt.txt` + `parsed.json`) |
+| `library-cache` | Session already in library (`sessions/…`) — no S1 CLI |
+| `ontology-cache` | M-merge reattach result reused from ontology cache |
+| `skipped` | e.g. `chains<2` — prompt saved, no LLM call |
+
+Batch **Skip cached sessions** often produces only `library-cache` dumps until you pick **Force re-analyze all** or disable `agentMindmap.library.enabled`. After each batch milestone (5/10), check `reattach-moves/` for M-merge (`forceReattach` runs the LLM when ≥2 top branches).
+
+Reload the Extension Development Host after rebuilding so dump code is active.
+
+Dumps contain full transcripts (privacy). The folder is gitignored; do not commit it.
+
 ## On-disk paths
 
 **Cursor** — for `/home/welde/cursor/airecorder`, slug `home-welde-cursor-airecorder` (strip leading `/`, `/` → `-`):

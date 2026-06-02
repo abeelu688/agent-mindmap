@@ -18,6 +18,8 @@ export type AnalyzeSessionOpts = StageTimingOpts & {
   cacheDir?: string;
   cache: boolean;
   hostId?: AgentHostId;
+  sessionId?: string;
+  projectSlug?: string;
 };
 
 export async function analyzeSession(
@@ -41,6 +43,8 @@ export async function analyzeSession(
       cacheDir: opts.cacheDir,
       cache: opts.cache,
       hostId: opts.hostId,
+      sessionId: opts.sessionId,
+      projectSlug: opts.projectSlug,
       responseSchema: "session-analysis",
       maxTopics: opts.prompt.maxNodes,
       maxItemsPerTopic: opts.prompt.maxDetailsPerNode,

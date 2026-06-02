@@ -2,8 +2,11 @@ import {
   applyReattachMovesToRecords,
   normalizeHubAttachMoves,
 } from "./applyReattachMoves";
+import { resolveReattachStepsWithCatalog } from "./reattachNodeCatalog";
+import type { ReattachNodeCatalog } from "./reattachNodeCatalog";
 import { segmentsInSameEquivalenceGroup } from "./reattachStructuralHints";
 import type { ReparentChain, TopBranchSynonymHint } from "./trieReparentInput";
+import { mindMapLog } from "../webview/MindMapLog";
 import type { ReattachMove, ReattachStep, ReattachStepKind } from "./types";
 import type { SegmentEquivalence } from "./types";
 import { segmentKeyForMerge } from "./topicGraphValidate";
@@ -126,13 +129,30 @@ export function applyReattachStepsToRecords(
   records: SessionRecord[],
   steps: ReattachStep[] | undefined,
   chains?: ReparentChain[],
-  minConfidence = 0.55
+  minConfidence = 0.55,
+  nodeCatalog?: ReattachNodeCatalog
 ): SessionRecord[] {
   if (!steps?.length) {
     return records;
   }
 
-  const sorted = sortReattachStepsForApply(steps);
+  let resolved = steps;
+  if (nodeCatalog) {
+    resolved = resolveReattachStepsWithCatalog(steps, nodeCatalog);
+    if (!resolved.length) {
+      mindMapLog(
+        "[agent-mindmap] reattach: all steps failed nodeCatalog resolution; paths unchanged"
+      );
+      return records;
+    }
+    if (resolved.length < steps.length) {
+      mindMapLog(
+        `[agent-mindmap] reattach: ${steps.length - resolved.length} step(s) dropped after catalog resolution`
+      );
+    }
+  }
+
+  const sorted = sortReattachStepsForApply(resolved);
   let moves = reattachStepsToMoves(sorted);
   if (chains?.length) {
     moves = normalizeHubAttachMoves(moves, chains);

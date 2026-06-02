@@ -16,7 +16,11 @@ import {
   updateConceptTrieAsync,
 } from "./stages/updateConceptTrie";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
-import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
+import { dumpLlmReplay } from "../llm/llmIoDump";
+import {
+  buildReattachPrompt,
+  REATTACH_PROMPT_VERSION,
+} from "../llm/promptReattach";
 import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
@@ -194,6 +198,25 @@ export async function runMergePipeline(
     reattachSteps = cached?.reattachSteps;
     reattachMoves = cached?.reattachMoves;
     progress?.report("M-merge: Concept merge cache hit…");
+    const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
+    const reattachPrompt = buildReattachPrompt(
+      reparentInput,
+      hostId,
+      opts.promptLanguage ?? "zh"
+    );
+    void dumpLlmReplay({
+      stageId: "reattach-moves",
+      responseSchema: "reattach-moves",
+      providerId: opts.providerId,
+      model: opts.model,
+      prompt: reattachPrompt,
+      parsed: {
+        steps: reattachSteps ?? [],
+        moves: reattachMoves ?? [],
+      },
+      source: "ontology-cache",
+      projectSlug: opts.projectSlug,
+    });
     await runStage("M-merge conceptMerge", async () => reattachMoves, () => ({
       kind: "llm",
       cacheHit: true,

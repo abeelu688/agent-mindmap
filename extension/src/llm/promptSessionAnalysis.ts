@@ -8,7 +8,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 5;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 7;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -50,15 +50,22 @@ export function buildSessionAnalysisPrompt(
     "",
     "### Step 3 — 概念分级 + 第一次同义归并 → 完善 nodes[].parentKeys[]",
     "基于 Step 1 的 domains 与 Step 2 的 nodes，建立 DAG 上下级（parentKeys[]）。",
-    "**每个 node 必须含 parentKeys[]（根概念用 []）与 evidence[]**——将用于跨会话合并时的 domain/上级/下级语境，不可省略。",
+    "**每个 node 必须含 parentKeys[]（根概念用 []）与 evidence[]**——供 Step 4 同义判断时作 domain/上级/下级提示，并用于跨会话合并，不可省略。",
     "**在本步合并同层/同链上的同义说法**（第一次归并）：",
     "- **同层并列**：同一 parent 下多个 key 若指同一概念，保留更短更稳的 canonical key，其余写入 aliases 并删除重复 node",
     "- **同链上下级**：若 outer/inner 实际同指（如 platform-wrapper/subsystem 与 subsystem 单独出现），合并为单一 canonical key，调整 parentKeys 使层级不重复",
     "- 禁止无 evidence 的合并；跨 domain（Step 1 中无关领域）禁止合并",
     "",
     "### Step 4 — 本对话第二次同义归并 → segmentEquivalences[] + termAliases[]",
-    "在 Step 3 定稿的层级上，再扫全文做 **path 段**同义（必须带 scope，禁止无 scope 全局合并）：",
-    "- 判断须同时看 **domain（Step 1 + nodes.parentKeys）+ 上级 + 下级**",
+    "在 Step 3 定稿的层级上，再扫全文，对**可能同义的 path 段**逐对判断（必须带 scope，禁止无 scope 全局合并）。",
+    "",
+    "**工作方式（以理解为主，结构提示为辅）：**",
+    "1. 先锁定该段所在的 **domain**（Step 1 的 domains[] + 该段在 nodes 上经 parentKeys 链所属领域）。",
+    "2. 用 Step 3 给出的 **上级（parentKeys）与下级（同层兄弟 / 子概念 / evidence 中的从属）** 作为语境提示，弄清该段在概念树中的位置。",
+    "3. 对每一对候选段 A、B：**先分别理解** A、B 在本对话、该 domain、该上下级语境下各自指什么（结合 nodes[].evidence 与 transcript，形成你对两个名词的语义判断）。",
+    "4. **仅当你基于上述理解认为 A 与 B 指同一概念** 时，才写入 segmentEquivalences；禁止只因字面相近/相同就合并，也禁止与理解矛盾的硬并。",
+    "",
+    "scope 用于限定「在何种 path 语境下该等价成立」：",
     "- **并列兄弟**：scope.pathPrefix = 该段之前的 path（根级用 []）；若两并列段共享 downstream，用 downstreamFirst / evidenceKeywords 限定",
     "- **同链折叠**：outer/inner/suffix 与 inner/suffix 同指时，canonical 取 inner，aliases 含 outer，scope 含 pathPrefix + downstreamFirst",
     "- segmentEquivalences[]：{ canonical, aliases[], scope, confidence? }",
