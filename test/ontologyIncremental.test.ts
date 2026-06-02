@@ -17,6 +17,8 @@ import {
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
+import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {
   return buildSessionRecord(
@@ -56,9 +58,10 @@ function baseOntology(sessionIds: string[]): ConceptOntologyRecord {
       promptVersions: {
         ontology: 1,
         topicPaths: 1,
-        reattach: 1,
-        refine: 3,
+        reattach: REATTACH_PROMPT_VERSION,
+        refine: 0,
         outlineSchema: 7,
+        sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
       },
     },
     nodes: [{ key: "android", label: "Android" }],
@@ -117,7 +120,7 @@ describe("findReusableOntologyBase", () => {
 });
 
 describe("ensureOntologyMemory incremental", () => {
-  it("forceRefine re-runs refine even when cache is complete", async () => {
+  it("forceRefine refresh segmentEquivalences from sessions without ontology-refine LLM", async () => {
     const records = [sessionRecord("s1")];
     const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-onto-"));
     await ensureStore(storeDir);
@@ -139,16 +142,6 @@ describe("ensureOntologyMemory incremental", () => {
       async summarize(input) {
         if (input.responseSchema === "ontology-refine") {
           refineCalls += 1;
-          return {
-            segmentEquivalences: [
-              {
-                canonical: "art",
-                aliases: ["runtime"],
-                scope: { pathPrefix: ["android"] },
-                confidence: 0.95,
-              },
-            ],
-          };
         }
         throw new Error(`unexpected schema ${input.responseSchema}`);
       },
@@ -163,7 +156,7 @@ describe("ensureOntologyMemory incremental", () => {
       undefined,
       { forceRefine: true, refineOnly: true }
     );
-    expect(refineCalls).toBe(1);
-    expect(out.segmentEquivalences?.[0]?.confidence).toBe(0.95);
+    expect(refineCalls).toBe(0);
+    expect(out.segmentEquivalences).toBeDefined();
   });
 });

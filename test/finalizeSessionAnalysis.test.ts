@@ -55,5 +55,10 @@ describe("finalizeSessionAnalysis", () => {
     expect(finalized.graph.topics.length).toBeGreaterThan(0);
     expect(finalized.treeSnapshot.topicPathDecisions.length).toBeGreaterThan(0);
     expect(finalized.sessionAnalysis.outline.title).toBe("React Hooks");
+    expect(finalized.conceptContexts.length).toBeGreaterThan(0);
+    const react = finalized.conceptContexts.find((c) => c.key === "react");
+    expect(react?.parentKeys).toEqual(["frontend"]);
+    expect(react?.childKeys).toEqual([]);
+    expect(react?.domainKeys).toContain("frontend");
   });
 });

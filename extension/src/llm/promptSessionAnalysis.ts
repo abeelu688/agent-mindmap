@@ -8,7 +8,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 4;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 5;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -50,6 +50,7 @@ export function buildSessionAnalysisPrompt(
     "",
     "### Step 3 — 概念分级 + 第一次同义归并 → 完善 nodes[].parentKeys[]",
     "基于 Step 1 的 domains 与 Step 2 的 nodes，建立 DAG 上下级（parentKeys[]）。",
+    "**每个 node 必须含 parentKeys[]（根概念用 []）与 evidence[]**——将用于跨会话合并时的 domain/上级/下级语境，不可省略。",
     "**在本步合并同层/同链上的同义说法**（第一次归并）：",
     "- **同层并列**：同一 parent 下多个 key 若指同一概念，保留更短更稳的 canonical key，其余写入 aliases 并删除重复 node",
     "- **同链上下级**：若 outer/inner 实际同指（如 platform-wrapper/subsystem 与 subsystem 单独出现），合并为单一 canonical key，调整 parentKeys 使层级不重复",

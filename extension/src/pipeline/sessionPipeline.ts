@@ -10,6 +10,7 @@ import type {
   SessionSynonymRefine,
   SessionTreeSnapshot,
 } from "../llm/types";
+import type { ConceptContextForMerge } from "../store/storeTypes";
 import { currentPipelineVersions } from "./pipelineVersions";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { LlmStageTimingOut } from "./llmStage";
@@ -43,6 +44,7 @@ export type SessionPipelineResult = {
   conceptExtract: SessionConceptExtract;
   sessionSynonyms: SessionSynonymRefine;
   treeSnapshot: SessionTreeSnapshot;
+  conceptContexts: ConceptContextForMerge[];
   outline: SessionOutline;
   pipelineVersions: ReturnType<typeof currentPipelineVersions>;
 };
@@ -128,6 +130,7 @@ export async function runSessionPipeline(
     conceptExtract: finalized.conceptExtract,
     sessionSynonyms: finalized.sessionSynonyms,
     treeSnapshot: finalized.treeSnapshot,
+    conceptContexts: finalized.conceptContexts,
     outline: finalized.outline,
     pipelineVersions: currentPipelineVersions(),
   };

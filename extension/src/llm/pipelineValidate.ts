@@ -177,6 +177,14 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
     mappings: root.mappings ?? [],
     topicPaths: [],
   });
+  for (const node of ontologyPartial.nodes) {
+    if (!node.evidence?.length) {
+      throw new LlmProviderError(
+        "bad-shape",
+        `Node "${node.key}" missing evidence (required for merge context)`
+      );
+    }
+  }
   const outline = validateSessionOutline(root.outline);
   const equivRaw = Array.isArray(root.segmentEquivalences)
     ? root.segmentEquivalences

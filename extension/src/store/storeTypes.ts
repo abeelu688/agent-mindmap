@@ -10,6 +10,19 @@ import type {
 } from "../llm/types";
 import type { MindMapRoot } from "../transcript/types";
 
+/** S2 DET: per-node context for Part II concept-merge LLM. */
+export type ConceptContextForMerge = {
+  key: string;
+  label: string;
+  aliases?: string[];
+  domainKeys: string[];
+  parentKeys: string[];
+  childKeys: string[];
+  evidence: string[];
+  sessionId: string;
+  projectSlug: string;
+};
+
 /**
  * Persisted analysis of a single agent session.
  *
@@ -31,6 +44,8 @@ export type SessionRecord = {
   treeSnapshot?: SessionTreeSnapshot;
   /** S1 one-shot LLM analysis (primary artifact). */
   sessionAnalysis?: SessionAnalysis;
+  /** S2: merge-ready concept context (domain, parent, child, evidence). */
+  conceptContexts?: ConceptContextForMerge[];
 };
 
 export type SessionRecordMeta = {

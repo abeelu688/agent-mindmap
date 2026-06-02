@@ -78,7 +78,7 @@ export async function mergeTrieReparent(
 
   const heartbeat = createHeartbeat(
     progress,
-    "Reparenting top-level chains (whole mind map)…"
+    "Merging concept mind maps (fold + reattach)…"
   );
   try {
     const res = await provider.summarize(

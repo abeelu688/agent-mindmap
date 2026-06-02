@@ -498,6 +498,7 @@ export async function loadSession(
         conceptExtract: pipelineResult.conceptExtract,
         sessionSynonyms: pipelineResult.sessionSynonyms,
         treeSnapshot: pipelineResult.treeSnapshot,
+        conceptContexts: pipelineResult.conceptContexts,
       });
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);

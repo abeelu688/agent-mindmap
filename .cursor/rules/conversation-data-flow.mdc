@@ -1,44 +1,61 @@
 ---
-description: Canonical conversation → concept tree → merge data flow for agent-mindmap
+description: Canonical two-LLM conversation → mind map data flow for agent-mindmap
 globs: agent-mindmap/**/*
 alwaysApply: true
 ---
 
 # Conversation data flow (pipeline contract)
 
-## Session pipeline (per transcript)
+## Architecture: two parts, two LLMs
 
-Production code must follow this **fixed order** in [`extension/src/pipeline/sessionPipeline.ts`](extension/src/pipeline/sessionPipeline.ts):
+| Part | Goal | LLM | DET follow-up | Primary artifact |
+|------|------|-----|---------------|------------------|
+| **I — Single-session mind map** | Extract transcript + **merge-ready concept context** | **LLM1** `session-analysis` (S1) | **S2** finalize | [`SessionRecord`](extension/src/store/storeTypes.ts) |
+| **II — Multi-session mind map** | Merge sessions (fold synonyms, reattach roots) | **LLM2** `concept-merge` / `reattach-moves` (M-merge) | **M1** collect + **M3** apply trie | [`MergeRecord`](extension/src/store/storeTypes.ts) `concept-trie.json` |
 
-1. **S1 Analyze** (`session-analysis`) — one LLM call: domains, professional terms + hierarchy, content-based outline, session-scoped synonyms
-2. **S2 Finalize** (DET) — [`finalizeSessionAnalysis.ts`](extension/src/pipeline/stages/finalizeSessionAnalysis.ts): validate/sanitize outline, derive `conceptExtract` / `sessionSynonyms`, [`buildSessionTree`](extension/src/pipeline/stages/buildSessionTree.ts), `outlineToTopicGraph`
+Do **not** add a third production LLM (`ontology-refine` / M2, or `merged-outline` / P7).
 
-Do **not** call legacy [`summarizeSession`](extension/src/llm/summarizeSession.ts) / single-shot [`buildOutlinePrompt`](extension/src/llm/promptOutline.ts) or the deprecated S1–S4 split stages from production entry points.
+Entry: Part I [`sessionPipeline.ts`](extension/src/pipeline/sessionPipeline.ts); Part II [`mergePipeline.ts`](extension/src/pipeline/mergePipeline.ts).
 
-Persist on [`SessionRecord`](extension/src/store/storeTypes.ts): `sessionAnalysis`, plus derived `conceptExtract`, `sessionSynonyms`, `treeSnapshot`, `pipelineVersions`.
+## Part I — Session pipeline (per transcript)
 
-## Merge pipeline (cross-session / batch / new session)
+1. **S1 Analyze** (`session-analysis`) — [`promptSessionAnalysis.ts`](extension/src/llm/promptSessionAnalysis.ts)
+2. **S2 Finalize** (DET) — [`finalizeSessionAnalysis.ts`](extension/src/pipeline/stages/finalizeSessionAnalysis.ts): outline, `conceptContexts`, `treeSnapshot`
 
-All merge entry points use [`runMergePipeline`](extension/src/pipeline/mergePipeline.ts):
+Do **not** call legacy split stages or one-shot outline as the primary path.
 
-1. **M1** `collectMergeTerms` — aggregate global + new session terms **with context** (`TermWithContext.evidence`, outline index)
-2. **M2** `mergeSynonyms` — cross-session `ontology-refine`; **must** use ontology cache (`computeOntologyCacheKey` / `readOntologyRecord`)
-3. **M3** `updateConceptTrie` — deterministic concept trie (does **not** rewrite session outlines)
+### LLM1 must return merge-ready concept context
 
-Batch (`ensureIncrementalOntologyAndBuildConceptMerge`) and P8 background merge: `incrementalFromIndex: true` only (no M4 reorganize).
+| Field | LLM1 | S2 DET |
+|-------|------|--------|
+| Concept name | `nodes[].key`, `label`, `aliases` | validate |
+| Domain | `domains[]` + parent chain | `domainKeys[]` on `conceptContexts` |
+| Parent | `nodes[].parentKeys[]` | required |
+| Children | optional in LLM | **`childKeys[]` required** on `conceptContexts` |
+| Evidence | `nodes[].evidence[]` | required |
+| Session synonyms | `segmentEquivalences`, `termAliases` | persist |
+
+S2 persists `conceptContexts` on `SessionRecord`. UI: outline mind map only ([`buildOutlineMindMap`](extension/src/mindmap/buildOutlineMindMap.ts)).
+
+## Part II — Merge pipeline (cross-session)
+
+1. **M1** `collectMergeTerms` (DET)
+2. **M-merge** (LLM2) — [`mergeTrieReparent`](extension/src/pipeline/stages/mergeTrieReparent.ts) / [`promptReattach.ts`](extension/src/llm/promptReattach.ts): Step A in-chain synonym fold; Step B cross-root merge/attach; input includes `conceptContexts`
+3. **M2b** `writeOntologyRecord` (IO)
+4. **M3** `updateConceptTrie` (DET) — does not rewrite session outlines
+
+Cross-session `segmentEquivalences` for trie insert: **session records only** (no M2 `ontology-refine` LLM). Equivalence decisions during M-merge traversal when needed.
 
 ## Rules
 
-- **Single conceptPath source**: S1 `session-analysis` outline leaves + S2 DET tree. Do not add a second TopicPaths LLM pass in production.
-- **Context required**: terms need `evidence[]`; equivalences need `scope` (see [`promptOntologyRefine.ts`](extension/src/llm/promptOntologyRefine.ts)).
-- **No hardcoded domain segments**: see [`no-hardcoded-concept-nodes.mdc`](no-hardcoded-concept-nodes.mdc); use `resolveConceptPathWithEquivalences` + ontology cache only.
-- **Stage cache**: per-stage LLM cache via [`pipeline/llmStage.ts`](extension/src/pipeline/llmStage.ts); invalidate via `pipelineVersions` / prompt version bumps.
-- **Timing logs**: each S1–S2 / M1–M3 stage logs duration to VS Code **Output → Agent Mind Map** and appends NDJSON to `<storeDir>/logs/pipeline-timing.ndjson` (see [`pipeline/pipelineTiming.ts`](extension/src/pipeline/pipelineTiming.ts)).
+- **Two LLMs only**: S1 + M-merge.
+- **Single conceptPath source**: S1 outline + S2 tree.
+- **Context required**: evidence, scoped equivalences, `childKeys` on `conceptContexts`.
+- **No hardcoded domain segments**: [`no-hardcoded-concept-nodes.mdc`](no-hardcoded-concept-nodes.mdc).
+- **Stage cache**: [`pipeline/llmStage.ts`](extension/src/pipeline/llmStage.ts); bump `SESSION_ANALYSIS_PROMPT_VERSION` / `REATTACH_PROMPT_VERSION` when schemas change.
 
 ## Deprecated (do not wire to commands)
 
-- Per-session split extract / synonyms / organize (S1–S4 legacy stages)
-- M4 `reorganizeSessions` full outline rewrite after merge
-- Bulk `concept-ontology` Extract on session summaries
-- Per-session `topic-paths` LLM
-- One-shot outline-only session analysis as the primary path
+- M2 `mergeSynonyms` LLM / [`promptOntologyRefine.ts`](extension/src/llm/promptOntologyRefine.ts) in production merge
+- P7 `llmMergeRefine` / [`mergeWithLlm`](extension/src/store/mergeLlm.ts)
+- Legacy S1–S4 split, M4 `reorganizeSessions`, `topic-paths` LLM, bulk `concept-ontology` extract
