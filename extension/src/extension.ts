@@ -38,6 +38,15 @@ import {
   buildConceptMergeForRecords,
   type ConceptMergeLlmOpts,
 } from "./store/conceptMergeContext";
+import {
+  runDeltaMergePipeline,
+  runFinalSnapshotRefresh,
+  type ProjectMergeMode,
+} from "./pipeline/deltaMergePipeline";
+import {
+  deleteMergeSnapshot,
+  filterRealSessionRecords,
+} from "./store/mergeSnapshot";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
 import { getProvider } from "./llm";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
@@ -396,7 +405,8 @@ async function buildProjectConceptMergeFromCache(
 
 async function buildProjectConceptMergeForBatch(
   storeDir: string,
-  records: SessionRecord[],
+  allRecords: SessionRecord[],
+  batchRecords: SessionRecord[],
   opts: {
     projectSlug: string;
     conceptLlm: ConceptMergeLlmOpts;
@@ -404,21 +414,25 @@ async function buildProjectConceptMergeForBatch(
     signal: AbortSignal;
     progress?: MindMapProgress;
     batchRefineOntology: boolean;
-    refineOnly?: boolean;
-    batchNo?: number;
+    batchNo: number;
     processed?: number;
     total?: number;
-    /** After each batch milestone (e.g. 5/10): run M2.5 reattach before building final mind map. */
     forceReattach?: boolean;
+    mergeMode: ProjectMergeMode;
+    mergeFullReconcileEvery: number;
+    forceRefresh?: boolean;
   }
 ): Promise<import("./store/storeTypes").MergeRecord> {
-  const sanitized = await Promise.all(
-    records.map((r) => sanitizeSessionRecord(r))
+  const sanitizedAll = await Promise.all(
+    filterRealSessionRecords(allRecords).map((r) => sanitizeSessionRecord(r))
+  );
+  const sanitizedBatch = await Promise.all(
+    filterRealSessionRecords(batchRecords).map((r) => sanitizeSessionRecord(r))
   );
   if (!opts.batchRefineOntology) {
     return buildProjectConceptMergeFromCache(
       storeDir,
-      sanitized,
+      sanitizedAll,
       opts.conceptLlm,
       opts.projectSlug,
       opts.provider,
@@ -427,7 +441,7 @@ async function buildProjectConceptMergeForBatch(
       false
     );
   }
-  if (opts.batchNo !== undefined && opts.processed !== undefined && opts.total !== undefined) {
+  if (opts.processed !== undefined && opts.total !== undefined) {
     opts.progress?.report(
       t(
         "ui.batch.progress.refineOntology",
@@ -445,18 +459,26 @@ async function buildProjectConceptMergeForBatch(
       )
     );
   }
-  const { merge } = await buildConceptMergeForRecords(sanitized, {
-    storeDir,
-    projectSlug: opts.projectSlug,
-    llm: opts.conceptLlm,
-    provider: opts.provider,
-    signal: opts.signal,
-    progress: opts.progress,
-    forceReattach: opts.forceReattach ?? true,
-    ontologyFlags: opts.refineOnly
-      ? { refineOnly: true, forceRefine: true }
-      : { incrementalFromIndex: true, forceRefine: true },
-  });
+  const { merge } = await runDeltaMergePipeline(
+    {
+      storeDir,
+      projectSlug: opts.projectSlug,
+      allRecords: sanitizedAll,
+      batchRecords: sanitizedBatch,
+      batchNo: opts.batchNo,
+      mergeMode: opts.mergeMode,
+      mergeFullReconcileEvery: opts.mergeFullReconcileEvery,
+      forceRefresh: opts.forceRefresh,
+      model: opts.conceptLlm.model,
+      hostId: opts.conceptLlm.hostId,
+      providerId: opts.conceptLlm.providerId,
+      promptLanguage: opts.conceptLlm.promptLanguage,
+      signal: opts.signal,
+      forceReattach: opts.forceReattach ?? true,
+    },
+    opts.provider,
+    opts.progress
+  );
   return merge;
 }
 
@@ -579,6 +601,9 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
 
         const storeDir = getStoreDir();
         await ensureStore(storeDir);
+        if (mode.forceRefresh) {
+          await deleteMergeSnapshot(storeDir, slug);
+        }
         const projectRecordsById = new Map<string, SessionRecord>();
 
         pendingMergeMindMap = undefined;
@@ -620,6 +645,15 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           vscode.workspace
             .getConfiguration("agentMindmap")
             .get<boolean>("library.batchFinalRefine", true) ?? true;
+        const mergeMode =
+          (vscode.workspace
+            .getConfiguration("agentMindmap")
+            .get<string>("library.mergeMode", "delta") as ProjectMergeMode) ||
+          "delta";
+        const mergeFullReconcileEvery =
+          vscode.workspace
+            .getConfiguration("agentMindmap")
+            .get<number>("library.mergeFullReconcileEvery", 4) ?? 4;
         let batchOntologyFailed = false;
 
         const deps: LoadDeps = { context: extensionContext, signal, progress };
@@ -661,9 +695,17 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               if (signal.aborted) {
                 return;
               }
+              const batchRecords: SessionRecord[] = [];
+              for (const sessionId of info.batchSessionIds) {
+                const rec = projectRecordsById.get(sessionId);
+                if (rec) {
+                  batchRecords.push(rec);
+                }
+              }
               const conceptMerge = await buildProjectConceptMergeForBatch(
                 storeDir,
                 [...projectRecordsById.values()],
+                batchRecords,
                 {
                   projectSlug: slug,
                   conceptLlm,
@@ -675,6 +717,9 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                   processed: info.processed,
                   total: info.total,
                   forceReattach: true,
+                  mergeMode,
+                  mergeFullReconcileEvery,
+                  forceRefresh: mode.forceRefresh,
                 }
               );
 
@@ -786,19 +831,18 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
             )
           );
           try {
-            const finalMerge = await buildProjectConceptMergeForBatch(
+            const finalMerge = await runFinalSnapshotRefresh(
               storeDir,
               batchRecords,
+              slug,
+              provider,
               {
-                projectSlug: slug,
-                conceptLlm,
-                provider,
+                model: conceptLlm.model,
+                hostId: conceptLlm.hostId,
+                providerId: conceptLlm.providerId,
                 signal,
-                progress,
-                batchRefineOntology: true,
-                refineOnly: true,
-                forceReattach: true,
-              }
+              },
+              progress
             );
             if (autoApplyUpdates) {
               panel.setMindMapData(finalMerge.mindMap);

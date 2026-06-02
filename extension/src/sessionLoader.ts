@@ -27,10 +27,12 @@ import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import type { SessionMeta } from "./mindmap/origin";
 import { getStoreDir } from "./paths";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
+import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
 import {
-  ensureIncrementalOntologyAndBuildConceptMerge,
-  resolveAndBuildConceptMergeAsync,
-} from "./store/conceptMergeContext";
+  runDeltaMergePipeline,
+  type ProjectMergeMode,
+} from "./pipeline/deltaMergePipeline";
+import { readMergeSnapshot } from "./store/mergeSnapshot";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -557,6 +559,11 @@ export async function loadSession(
                 "library.incrementalOntologyOnSessionAdd",
                 true
               ) ?? true);
+            const mergeMode =
+              (config.get<string>("library.mergeMode", "delta") as ProjectMergeMode) ||
+              "delta";
+            const mergeFullReconcileEvery =
+              config.get<number>("library.mergeFullReconcileEvery", 4) ?? 4;
             const conceptLlm = {
               providerId: provider.id,
               model: settings.llm.model,
@@ -566,19 +573,46 @@ export async function loadSession(
             const projectRecords = all.filter(
               (r) => r.meta.projectSlug === projectSlug
             );
+            const records = projectRecords.length ? projectRecords : all;
             const concept = incrementalOntology
-              ? (
-                  await ensureIncrementalOntologyAndBuildConceptMerge(
-                    projectRecords.length ? projectRecords : all,
-                    {
-                      storeDir,
-                      projectSlug,
-                      llm: conceptLlm,
-                      provider,
-                      signal: new AbortController().signal,
-                    }
-                  )
-                ).merge
+              ? mergeMode === "delta" &&
+                (await readMergeSnapshot(storeDir, projectSlug))
+                ? (
+                    await runDeltaMergePipeline(
+                      {
+                        storeDir,
+                        projectSlug,
+                        allRecords: records,
+                        batchRecords: [record],
+                        batchNo: 1,
+                        mergeMode: "delta",
+                        mergeFullReconcileEvery,
+                        providerId: provider.id,
+                        model: settings.llm.model,
+                        hostId: host.id,
+                        signal: new AbortController().signal,
+                      },
+                      provider
+                    )
+                  ).merge
+                : (
+                    await runDeltaMergePipeline(
+                      {
+                        storeDir,
+                        projectSlug,
+                        allRecords: records,
+                        batchRecords: records,
+                        batchNo: 1,
+                        mergeMode: "full",
+                        mergeFullReconcileEvery,
+                        providerId: provider.id,
+                        model: settings.llm.model,
+                        hostId: host.id,
+                        signal: new AbortController().signal,
+                      },
+                      provider
+                    )
+                  ).merge
               : await resolveAndBuildConceptMergeAsync(
                   storeDir,
                   all,

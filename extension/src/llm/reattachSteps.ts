@@ -4,7 +4,11 @@ import {
 } from "./applyReattachMoves";
 import { resolveReattachStepsWithCatalog } from "./reattachNodeCatalog";
 import type { ReattachNodeCatalog } from "./reattachNodeCatalog";
-import { segmentsInSameEquivalenceGroup } from "./reattachStructuralHints";
+import {
+  buildPrefixSubordinateHints,
+  segmentsInSameEquivalenceGroup,
+  type PrefixSubordinateHint,
+} from "./reattachStructuralHints";
 import type { ReparentChain, TopBranchSynonymHint } from "./trieReparentInput";
 import { mindMapLog } from "../webview/MindMapLog";
 import type { ReattachMove, ReattachStep, ReattachStepKind } from "./types";
@@ -122,6 +126,59 @@ export function normalizeSynonymAttachSteps(
   });
 
   return sortReattachStepsForApply(normalized);
+}
+
+/**
+ * DET: attach_under for parallel top roots whose merge key extends a shorter hub
+ * (e.g. android-app / android-framework → android). Skips sources already in steps.
+ */
+export function inferPrefixSubordinateSteps(
+  chains: ReparentChain[],
+  existingSteps: ReattachStep[]
+): ReattachStep[] {
+  if (chains.length < 2) {
+    return [];
+  }
+
+  const covered = new Set(
+    existingSteps
+      .map((s) => segmentKeyForMerge(s.sourceFrom))
+      .filter(Boolean)
+  );
+  const hints = buildPrefixSubordinateHints(chains);
+  const out: ReattachStep[] = [];
+  let stepNum =
+    existingSteps.reduce(
+      (m, s) => Math.max(m, typeof s.step === "number" ? s.step : 0),
+      0
+    ) + 1;
+
+  for (const hint of hints) {
+    const specKey = segmentKeyForMerge(hint.specialistFrom);
+    if (!specKey || covered.has(specKey)) {
+      continue;
+    }
+    out.push(prefixHintToAttachStep(hint, stepNum++));
+    covered.add(specKey);
+  }
+
+  return out;
+}
+
+function prefixHintToAttachStep(
+  hint: PrefixSubordinateHint,
+  step: number
+): ReattachStep {
+  return {
+    step,
+    kind: "attach_under",
+    sourceFrom: hint.specialistFrom,
+    targetPath: [hint.hubFrom, hint.specialistFrom],
+    action: `将专精顶根 ${hint.specialistFrom} 挂在 ${hint.hubFrom} 下（segment key 前缀下位）`,
+    result: `${hint.specialistFrom} 为 ${hint.hubFrom} 的一级子概念`,
+    confidence: 0.88,
+    evidence: ["prefixSubordinate: merge key extends hub key"],
+  };
 }
 
 /** Apply LLM steps: batch hub normalization, then rewrite topic conceptPaths. */

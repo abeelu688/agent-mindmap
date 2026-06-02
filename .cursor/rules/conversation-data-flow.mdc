@@ -46,6 +46,16 @@ S2 persists `conceptContexts` on `SessionRecord`. UI: outline mind map only ([`b
 
 Cross-session `segmentEquivalences` for trie insert: **session records only** (no M2 `ontology-refine` LLM). Equivalence decisions during M-merge traversal when needed.
 
+### Delta batch merge (`library.mergeMode` = `delta`)
+
+After a successful merge, DET writes **`merges/<projectSlug>/merge-snapshot.json`** ([`MergeSnapshot`](extension/src/store/storeTypes.ts)) — a bounded projection of the stable project map. It is exposed to M-merge as **one virtual session** (`__project_merge_snapshot__`) via [`snapshotToSessionRecord`](extension/src/store/mergeSnapshot.ts).
+
+- **M-merge LLM input**: `[snapshot, …new batch sessions]` (≤6 records), not all N sessions.
+- **M3 / UI trie**: always **all real** `SessionRecord`s (DET).
+- **Full reconcile**: every `library.mergeFullReconcileEvery` batch milestones, or when snapshot is missing / `forceRefresh` / stale top roots.
+
+Entry: [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts).
+
 ## Rules
 
 - **Two LLMs only**: S1 + M-merge.

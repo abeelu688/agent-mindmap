@@ -157,7 +157,16 @@ export function buildTopBranchSynonymHints(
   return hints.slice(0, 24);
 }
 
+export type MergeInputMode = "full" | "delta";
+
 export type TrieReparentInput = {
+  mergeMode?: MergeInputMode;
+  /** Virtual session id when mergeMode is delta (stable project map). */
+  snapshotSessionId?: string;
+  /** Chains from snapshot session (stable); remainder are new batch. */
+  frozenChainCount?: number;
+  /** 0-based chain indices whose sessions are all snapshot-only (delta). */
+  frozenChainIndices?: number[];
   /** Part I per-node context for M-merge LLM (domain, parent, child, evidence). */
   conceptContexts: ConceptContextForMerge[];
   /** Each entry = one parallel top-level tree (chain). */
@@ -328,6 +337,21 @@ function collectOntologyNodes(
   return [...byKey.values()].slice(0, 80);
 }
 
+function filterConceptContextsForMerge(
+  records: SessionRecord[],
+  contexts: ConceptContextForMerge[],
+  opts: {
+    mergeMode?: MergeInputMode;
+    snapshotSessionId?: string;
+  }
+): ConceptContextForMerge[] {
+  if (opts.mergeMode !== "delta" || !opts.snapshotSessionId) {
+    return contexts;
+  }
+  const allowed = new Set(records.map((r) => r.meta.sessionId));
+  return contexts.filter((c) => allowed.has(c.sessionId));
+}
+
 /** Draft trie top branches for LLM root-reparent (post M2 segment equivalences). */
 export function buildTrieReparentInput(
   records: SessionRecord[],
@@ -336,6 +360,8 @@ export function buildTrieReparentInput(
     ontologyNodes?: ConceptOntologyNode[];
     topicPaths?: TopicConceptPathDecision[];
     projectSlug?: string;
+    mergeMode?: MergeInputMode;
+    snapshotSessionId?: string;
   } = {}
 ): TrieReparentInput {
   const { root } = buildConceptTrieStructure(records, {
@@ -348,8 +374,26 @@ export function buildTrieReparentInput(
   );
 
   const chains = sortedTop.map((node, i) => summarizeTopBranch(node, i + 1));
+  const snapshotId = opts.snapshotSessionId;
+  let frozenChainIndices: number[] = [];
+  if (opts.mergeMode === "delta" && snapshotId) {
+    frozenChainIndices = chains
+      .map((c, i) =>
+        c.sessionIds.length > 0 &&
+        c.sessionIds.every((id) => id === snapshotId)
+          ? i
+          : -1
+      )
+      .filter((i) => i >= 0);
+  }
+  const frozenChainCount = frozenChainIndices.length;
   const segmentEquivalences = (opts.segmentEquivalences ?? []).slice(0, 40);
   const nodeCatalog = buildReattachNodeCatalog(chains);
+  const rawContexts = collectConceptContextsForMerge(records);
+  const conceptContexts = filterConceptContextsForMerge(records, rawContexts, {
+    mergeMode: opts.mergeMode,
+    snapshotSessionId: opts.snapshotSessionId,
+  });
   const rootNodeIdByFrom = new Map(
     nodeCatalog.numberedChains.map(
       (c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const
@@ -366,7 +410,11 @@ export function buildTrieReparentInput(
   );
 
   return {
-    conceptContexts: collectConceptContextsForMerge(records),
+    mergeMode: opts.mergeMode,
+    snapshotSessionId: opts.snapshotSessionId,
+    frozenChainCount,
+    frozenChainIndices,
+    conceptContexts,
     chains,
     topBranches: chains,
     nodeCatalog,

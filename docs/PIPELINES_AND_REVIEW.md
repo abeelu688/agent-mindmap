@@ -243,8 +243,9 @@ flowchart TB
 | 阶段 | 次数（量级） | 条件 |
 |------|--------------|------|
 | SessionAnalysis | ≤ N | 每未缓存/强制刷新会话 **1 次**（S1 analyze） |
-| Refine（批内） | ⌈processed/5⌉ | `batchRefineOntology=true` → MergePipeline M2 |
-| Refine（最终） | 1 | `batchFinalRefine=true` |
+| M-merge（批内） | ⌈processed/5⌉（delta 时 prompt≈快照+5） | `batchRefineOntology=true` |
+| 全量 reconcile | ⌈processed/(5×every)⌉ | `mergeMode=delta`，默认 every=4 |
+| Final | 0 LLM | `batchFinalRefine` → DET 刷新 snapshot + trie |
 
 配置项：`agentMindmap.library.batchRefineOntology`、`batchFinalRefine`（默认均为 true）。
 
@@ -298,17 +299,15 @@ flowchart LR
 
 ### #4 批处理 Refine 频率
 
-**现状**：每处理 5 会话 → `ensureIncrementalOntologyAndBuildConceptMerge`（`forceRefine: true`）；全部结束后再 `refineOnly` 一次。
+**现状（已实现 delta）**：每 5 会话 → [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts)：`mergeMode=delta` 时 M-merge LLM 只见 **虚拟快照 + 本批新会话**；M3 仍用全库 records。`merges/<slug>/merge-snapshot.json` 存稳定导图投影。每 `mergeFullReconcileEvery` 批（默认 4）或 `forceRefresh` / stale 顶根时全量 M-merge。`batchFinalRefine` 默认仅 DET 刷新快照（无额外 LLM）。
 
-| 方案 | LLM 成本 | 合并质量 | 实现量 | 说明 |
-|------|----------|----------|--------|------|
-| A 维持现状 | 高（~N/5 + 1 次 refine） | 高，边分析边修正同义段 | 无 | 当前默认 |
-| B 仅 final refine | 低（+1 次） | 中，批中树可能短暂不一致 | 小 | 关 `batchRefineOntology` 或批内跳过 refine |
-| C 仅批内 refine | 中（~N/5） | 中–高，无最终全局 pass | 小 | 关 `batchFinalRefine` |
-| D 增量 refine 输入 diff | 中 | 高 | 中 | 仅把**新 session 的 contextSamples** 送入 refine prompt，不全量 records |
-| E 缓存键按 project 单键 + 版本号 | 中–低 | 高 | 大 | session 集合变化时 refine-only 追加，避免重跑 Extract/TopicPaths |
+| 方案 | LLM 成本 | 合并质量 | 说明 |
+|------|----------|----------|------|
+| **delta（默认）** | 低–中（~N/5 次小 prompt + 偶发全量） | 高 | `library.mergeMode=delta` |
+| full | 高（每批全库 trie 进 prompt） | 高 | `library.mergeMode=full` 调试/对照 |
+| 关 `batchRefineOntology` | 无 M-merge | 机械 path | 仅缓存 equivalences |
 
-**建议**：短期 **B+C 可配置**已存在；中期 **D**；长期 **E**。
+配置：`library.mergeMode`、`library.mergeFullReconcileEvery`、`library.batchFinalRefine`。
 
 ---
 

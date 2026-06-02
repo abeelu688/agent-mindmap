@@ -25,14 +25,22 @@ import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "../llm/segmentContext";
-import { buildTrieReparentInput } from "../llm/trieReparentInput";
+import { appendReattachSteps } from "../store/mergeSnapshot";
+import {
+  inferPrefixSubordinateSteps,
+  reattachStepsToMoves,
+} from "../llm/reattachSteps";
+import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
 
 export type MergePipelineOpts = {
   storeDir: string;
+  /** All real sessions — M3 trie + ontology sessionIds. */
   records: SessionRecord[];
+  /** Subset for M-merge LLM (defaults to records). */
+  llmRecords?: SessionRecord[];
   projectSlug?: string;
   model?: string;
   hostId?: AgentHostId;
@@ -47,6 +55,10 @@ export type MergePipelineOpts = {
   skipTiming?: boolean;
   /** Batch milestone: always run M-merge even when ontology cache has reattachMoves. */
   forceReattach?: boolean;
+  mergeMode?: MergeInputMode;
+  snapshotSessionId?: string;
+  /** Prior reattach steps (delta); new LLM steps are appended. */
+  existingReattachSteps?: ReattachStep[];
 };
 
 export type MergePipelineResult = {
@@ -81,6 +93,7 @@ export async function runMergePipeline(
   progress?: MindMapProgress
 ): Promise<MergePipelineResult> {
   const refineMode = opts.refineMode ?? "batch";
+  const llmRecords = opts.llmRecords ?? opts.records;
   const cacheKey = enhancedOntologyCacheKey(opts.records, {
     model: opts.model,
     hostId: opts.hostId,
@@ -144,11 +157,37 @@ export async function runMergePipeline(
     topicPaths: collected.topicPaths,
     segmentEquivalences,
   };
+  const llmCollected = await runStage("M1 collectTerms (llm)", async () =>
+    collectMergeTerms(llmRecords, baseOntology)
+  );
+
   const recordsForReparent = prepareRecordsBeforeReattach(
-    opts.records,
-    ontologyForReparent
+    llmRecords,
+    {
+      nodes: llmCollected.nodes,
+      mappings: llmCollected.mappings,
+      topicPaths: llmCollected.topicPaths,
+      segmentEquivalences,
+    }
   );
   const reparentInput = buildTrieReparentInput(recordsForReparent, {
+    segmentEquivalences,
+    ontologyNodes: llmCollected.nodes,
+    topicPaths: llmCollected.topicPaths,
+    projectSlug: opts.projectSlug,
+    mergeMode: opts.mergeMode,
+    snapshotSessionId: opts.snapshotSessionId,
+  });
+  const allRecordsForReparent = prepareRecordsBeforeReattach(
+    opts.records,
+    {
+      nodes: collected.nodes,
+      mappings: collected.mappings,
+      topicPaths: collected.topicPaths,
+      segmentEquivalences,
+    }
+  );
+  const allReparentInput = buildTrieReparentInput(allRecordsForReparent, {
     segmentEquivalences,
     ontologyNodes: collected.nodes,
     topicPaths: collected.topicPaths,
@@ -176,15 +215,17 @@ export async function runMergePipeline(
       () =>
         mergeTrieReparent(
           {
-            records: opts.records,
+            records: llmRecords,
             segmentEquivalences,
-            ontologyNodes: collected.nodes,
-            topicPaths: collected.topicPaths,
-            ontologyMappings: collected.mappings,
+            ontologyNodes: llmCollected.nodes,
+            topicPaths: llmCollected.topicPaths,
+            ontologyMappings: llmCollected.mappings,
             projectSlug: opts.projectSlug,
             model: opts.model,
             hostId: opts.hostId,
             promptLanguage: opts.promptLanguage,
+            mergeMode: opts.mergeMode,
+            snapshotSessionId: opts.snapshotSessionId,
           },
           provider,
           opts.signal,
@@ -192,8 +233,34 @@ export async function runMergePipeline(
         ),
       () => ({ kind: "llm" })
     );
-    reattachMoves = reparent.moves;
-    reattachSteps = reparent.steps.length ? reparent.steps : undefined;
+    const deltaSteps = reparent.steps.length ? reparent.steps : [];
+    if (opts.existingReattachSteps?.length && deltaSteps.length) {
+      reattachSteps = appendReattachSteps(opts.existingReattachSteps, deltaSteps);
+    } else if (opts.existingReattachSteps?.length && !deltaSteps.length) {
+      reattachSteps = opts.existingReattachSteps;
+    } else if (deltaSteps.length) {
+      reattachSteps = deltaSteps;
+    } else if (cached?.reattachSteps?.length) {
+      reattachSteps = cached.reattachSteps;
+    } else {
+      reattachSteps = undefined;
+    }
+    reattachMoves =
+      reattachSteps?.length && reparentInput.chains.length
+        ? reattachStepsToMoves(reattachSteps)
+        : reparent.moves;
+  } else if (opts.existingReattachSteps?.length) {
+    reattachSteps = opts.existingReattachSteps;
+    reattachMoves =
+      reattachSteps.length && reparentInput.chains.length
+        ? reattachStepsToMoves(reattachSteps)
+        : cached?.reattachMoves;
+    progress?.report("M-merge: Using snapshot reattach steps (no LLM)…");
+    await runStage("M-merge conceptMerge", async () => reattachMoves, () => ({
+      kind: "llm",
+      cacheHit: true,
+      skipped: true,
+    }));
   } else if (cached?.reattachMoves || cached?.reattachSteps) {
     reattachSteps = cached?.reattachSteps;
     reattachMoves = cached?.reattachMoves;
@@ -202,7 +269,8 @@ export async function runMergePipeline(
     const reattachPrompt = buildReattachPrompt(
       reparentInput,
       hostId,
-      opts.promptLanguage ?? "zh"
+      opts.promptLanguage ?? "zh",
+      opts.mergeMode
     );
     void dumpLlmReplay({
       stageId: "reattach-moves",
@@ -222,6 +290,18 @@ export async function runMergePipeline(
       cacheHit: true,
       skipped: true,
     }));
+  }
+
+  const prefixInferred = inferPrefixSubordinateSteps(
+    allReparentInput.chains,
+    reattachSteps ?? []
+  );
+  if (prefixInferred.length) {
+    reattachSteps = appendReattachSteps(reattachSteps ?? [], prefixInferred);
+    reattachMoves =
+      reattachSteps.length && allReparentInput.chains.length
+        ? reattachStepsToMoves(reattachSteps)
+        : reattachMoves;
   }
 
   const ontologyPayload = {
