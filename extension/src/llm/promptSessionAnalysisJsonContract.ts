@@ -3,7 +3,7 @@ export const SCOPE_PATH_PREFIX_GUIDANCE_LINES: string[] = [
   "**scope.pathPrefix（与校验器一致，写错会 bad-shape）：**",
   "- **有上级 path**：`pathPrefix` 为该段之前的各段 key（≥1 段）；可再加 `downstreamFirst` / `evidenceKeywords` 收窄语境",
   "- **根级 / conceptPath 第 0 段**（并列顶根、兄弟段）：语义上前缀为空 → 写 `\"pathPrefix\":[]`，但**禁止只写这一项**；必须**同时**提供非空的 `evidenceKeywords` 和/或 `downstreamFirst`（或 `projectSlugs`）",
-  "- 例（根级顶段同义）：`\"scope\":{\"pathPrefix\":[],\"evidenceKeywords\":[\"platform\",\"aosp\"]}`",
+  "- 例（根级顶段同义）：`\"scope\":{\"pathPrefix\":[],\"evidenceKeywords\":[\"platform\",\"platform-alpha\"]}`",
   "- 例（链内段同义）：`\"scope\":{\"pathPrefix\":[\"platform-alpha\"]}` 或再加 `evidenceKeywords`",
 ];
 
