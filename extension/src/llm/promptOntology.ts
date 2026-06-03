@@ -1,6 +1,5 @@
 import type { AgentHostId } from "../host/types";
 import type { SessionRecord } from "../store/storeTypes";
-import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "./promptOutline";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -72,7 +71,6 @@ export function buildOntologyPrompt(
     "只输出严格 JSON，不要 markdown、不要解释、不要 ```：",
     '{"nodes":[{"key":"frontend","label":"Frontend","parentKeys":["software"]},{"key":"react","label":"React","aliases":["ReactJS"],"parentKeys":["frontend"]}],"mappings":[{"mention":"ReactJS","key":"react"}],"topicPaths":[]}',
     "",
-    `附：当前 outline promptVersion=${OUTLINE_PROMPT_VERSION}（仅供参考，不要输出该字段）`,
     "===",
     blocks.join("\n\n") || "(空)",
   ].join("\n");

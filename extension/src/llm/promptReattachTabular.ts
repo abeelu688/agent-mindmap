@@ -137,7 +137,7 @@ function joinEvidence(values: string[] | undefined): string {
   return values.map((v) => escapeTabularCell(v)).join(";;");
 }
 
-function formatRow(cells: (string | number | undefined | null)[]): string {
+export function formatRow(cells: (string | number | undefined | null)[]): string {
   return cells.map((c) => escapeTabularCell(c)).join("\t");
 }
 

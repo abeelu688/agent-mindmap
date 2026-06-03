@@ -1,3 +1,4 @@
+import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
 import { buildConceptContextsFromAnalysis } from "./buildConceptContexts";
 import { enrichAnalysisNodesFromOutline } from "./enrichNodeChildrenFromOutline";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
@@ -341,7 +342,7 @@ export function buildMergeSessionAnalysisInput(
 export function formatMergeSessionAnalysisInput(
   input: MergeSessionAnalysisInput
 ): string {
-  return JSON.stringify(input);
+  return buildMergeSessionAnalysisTabularInput(input);
 }
 
 export const __testing = {

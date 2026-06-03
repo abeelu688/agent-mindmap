@@ -1,6 +1,10 @@
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 import { __testing as promptTesting } from "./prompt";
+import {
+  formatSessionAnalysisJsonContract,
+  SCOPE_PATH_PREFIX_GUIDANCE_LINES,
+} from "./promptSessionAnalysisJsonContract";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -8,7 +12,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 7;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 9;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -66,9 +70,9 @@ export function buildSessionAnalysisPrompt(
     "4. **仅当你基于上述理解认为 A 与 B 指同一概念** 时，才写入 segmentEquivalences；禁止只因字面相近/相同就合并，也禁止与理解矛盾的硬并。",
     "",
     "scope 用于限定「在何种 path 语境下该等价成立」：",
-    "- **并列兄弟**：scope.pathPrefix = 该段之前的 path（根级用 []）；若两并列段共享 downstream，用 downstreamFirst / evidenceKeywords 限定",
-    "- **同链折叠**：outer/inner/suffix 与 inner/suffix 同指时，canonical 取 inner，aliases 含 outer，scope 含 pathPrefix + downstreamFirst",
-    "- segmentEquivalences[]：{ canonical, aliases[], scope, confidence? }",
+    ...SCOPE_PATH_PREFIX_GUIDANCE_LINES,
+    "- **同链折叠**：outer/inner/suffix 与 inner/suffix 同指时，canonical 取 inner，aliases 含 outer；scope 用非空 pathPrefix + 可选 downstreamFirst",
+    "- segmentEquivalences[]：{ canonical, aliases[]（≥1，必填）, scope（必填，见 JSON 契约）, confidence? }",
     "- termAliases[]（可选）：term 级别名 { canonical, aliases[], evidence[] }",
     "",
     "### Step 5 — 内容大纲 → outline",
@@ -78,6 +82,8 @@ export function buildSessionAnalysisPrompt(
     "- 叶子：summary（必填）+ details[]（≤40 字）+ conceptPath（3-5 段，与 Step 3 nodes 层级一致，段名用 canonical key）",
     "- 同一 domain 内 conceptPath 根段尽量统一；每叶子 1-" + maxDetails + " 条细节",
     "- 引用本 transcript 用户提问时 details[].sourceTurnIndices（0-based）",
+    "",
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true }),
     "",
     "只输出严格 JSON，示例（neutral，勿照搬字面）：",
     '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}}',
