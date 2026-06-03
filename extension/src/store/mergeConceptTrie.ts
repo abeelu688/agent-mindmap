@@ -123,8 +123,6 @@ function locSessionMeta(loc: TopicLocation): SessionMeta {
   };
 }
 
-const TOPIC_HEADLINE_MAX = 60;
-
 function lastTitleSegment(title: string): string {
   const parts = title
     .split(/\s*\/\s*/)
@@ -133,17 +131,17 @@ function lastTitleSegment(title: string): string {
   return parts.length ? parts[parts.length - 1] : title.trim();
 }
 
-/** Concise penultimate label: summary first, else last title segment. */
+/** Penultimate topic label: full LLM summary when present, else title segment. */
 function topicHeadline(topic: Topic): string {
   const summary = topic.summary?.trim();
   if (summary) {
-    return truncate(summary, TOPIC_HEADLINE_MAX);
+    return summary;
   }
   const last = lastTitleSegment(topic.title);
   if (last) {
-    return truncate(last, TOPIC_HEADLINE_MAX);
+    return truncate(last, MAX_LABEL);
   }
-  return truncate(topic.title, TOPIC_HEADLINE_MAX);
+  return truncate(topic.title.trim(), MAX_LABEL);
 }
 
 function topicBranch(loc: TopicLocation): MindMapNodeData {

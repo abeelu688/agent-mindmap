@@ -214,6 +214,10 @@ body,
 /* Read-only browse: nodes with jump metadata look clickable. */
 #mindMapContainer me-tpc {
   cursor: pointer;
+  /* mind-elixir default is 35em; allow topic summaries to wrap with more width */
+  max-width: min(48em, 90vw);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* mind-elixir toolbar is disabled in options; hide any stray chrome. */
