@@ -11,6 +11,7 @@ try {
     bundle: true,
     platform: "node",
     outfile: path.join(ext, "dist/eval-run.js"),
+    external: ["@vscode/sqlite3"],
     alias: { vscode: path.join(ROOT, "test/vscode-stub.cjs") },
     logLevel: "info",
   });

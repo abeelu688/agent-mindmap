@@ -2,7 +2,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
+import {
+  clearStateDbBackend,
+  getStateDbValue,
+  queryStateDb,
+} from "./cursorStateDb";
 
 /**
  * Resolve Cursor's globalStorage `state.vscdb` path.
@@ -74,19 +78,6 @@ type CacheEntry = {
 };
 
 let cached: { path: string; entry: CacheEntry } | undefined;
-let sqlPromise: Promise<SqlJsStatic> | undefined;
-
-function loadSql(): Promise<SqlJsStatic> {
-  if (!sqlPromise) {
-    sqlPromise = initSqlJs({
-      // sql.js needs to know where sql-wasm.wasm lives. The esbuild step
-      // copies it next to the bundled extension entry (dist/extension.js),
-      // so resolve relative to __dirname.
-      locateFile: (file) => path.join(__dirname, file),
-    });
-  }
-  return sqlPromise;
-}
 
 /**
  * Load Cursor's sidebar composer titles keyed by agent id.
@@ -96,7 +87,7 @@ function loadSql(): Promise<SqlJsStatic> {
  *
  * Defaults (or `"New Agent"` placeholders) are filtered out so callers can
  * cleanly fall back to other naming strategies. Any failure (missing file,
- * locked DB, WASM init error) results in an empty Map and a console warn —
+ * locked DB, native module error) results in an empty Map and a console warn —
  * this function never throws.
  */
 export async function loadComposerTitles(): Promise<Map<string, string>> {
@@ -120,24 +111,13 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
     return cached.entry.titles;
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await fs.readFile(dbPath);
-  } catch (err) {
-    console.warn("[agent-mindmap] failed to read Cursor state.vscdb:", err);
-    return new Map();
-  }
-
-  let db: Database | undefined;
   const titles = new Map<string, string>();
   try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    const stmt = db.prepare(
+    const rows = await queryStateDb<{ key?: string; value?: string }>(
+      dbPath,
       "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'"
     );
-    while (stmt.step()) {
-      const row = stmt.getAsObject() as { key?: string; value?: string };
+    for (const row of rows) {
       const key = row.key;
       const value = row.value;
       if (typeof key !== "string" || typeof value !== "string") {
@@ -166,12 +146,9 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
       }
       titles.set(id, trimmed);
     }
-    stmt.free();
   } catch (err) {
     console.warn("[agent-mindmap] failed to parse Cursor state.vscdb:", err);
     // Fall through to cache an empty map so we don't retry on every call.
-  } finally {
-    db?.close();
   }
 
   cached = {
@@ -184,8 +161,9 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
 /** Invalidate the in-memory cache (used by tests, mostly). */
 export function clearComposerTitleCache(): void {
   cached = undefined;
-  sqlPromise = undefined;
-  resumableCache = undefined;
+  composerHeadersCache = undefined;
+  agentProjectsCache = undefined;
+  clearStateDbBackend();
 }
 
 // ---------------------------------------------------------------------------
@@ -259,58 +237,44 @@ export async function loadComposerHeaders(): Promise<
     return composerHeadersCache.headers;
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return new Map();
-  }
-
   const headers = new Map<string, ComposerHeaderMeta>();
-  let db: Database | undefined;
   try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    const stmt = db.prepare(
-      "SELECT value FROM ItemTable WHERE key = 'composer.composerHeaders'"
+    const value = await getStateDbValue(
+      dbPath,
+      "ItemTable",
+      "composer.composerHeaders"
     );
-    if (stmt.step()) {
-      const row = stmt.getAsObject() as { value?: string };
-      if (typeof row.value === "string") {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(row.value);
-        } catch {
-          parsed = undefined;
-        }
-        const all = (parsed as { allComposers?: unknown })?.allComposers;
-        if (Array.isArray(all)) {
-          for (const entry of all) {
-            const e = entry as Record<string, unknown>;
-            const id = e.composerId;
-            if (typeof id !== "string" || !id) continue;
-            const ws = (e.workspaceIdentifier as
-              | { uri?: { fsPath?: unknown } }
-              | undefined)?.uri?.fsPath;
-            headers.set(id, {
-              composerId: id,
-              workspacePath: typeof ws === "string" ? ws : undefined,
-              name: typeof e.name === "string" ? e.name : undefined,
-              isArchived: e.isArchived === true,
-              type: typeof e.type === "string" ? e.type : "<missing>",
-            });
-          }
+    if (typeof value === "string") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        parsed = undefined;
+      }
+      const all = (parsed as { allComposers?: unknown })?.allComposers;
+      if (Array.isArray(all)) {
+        for (const entry of all) {
+          const e = entry as Record<string, unknown>;
+          const id = e.composerId;
+          if (typeof id !== "string" || !id) continue;
+          const ws = (e.workspaceIdentifier as
+            | { uri?: { fsPath?: unknown } }
+            | undefined)?.uri?.fsPath;
+          headers.set(id, {
+            composerId: id,
+            workspacePath: typeof ws === "string" ? ws : undefined,
+            name: typeof e.name === "string" ? e.name : undefined,
+            isArchived: e.isArchived === true,
+            type: typeof e.type === "string" ? e.type : "<missing>",
+          });
         }
       }
     }
-    stmt.free();
   } catch (err) {
     console.warn(
       "[agent-mindmap] failed to read composer.composerHeaders:",
       err
     );
-  } finally {
-    db?.close();
   }
 
   composerHeadersCache = { path: dbPath, mtimeMs: stat.mtimeMs, headers };
@@ -392,75 +356,58 @@ export async function loadAgentProjects(): Promise<{
     };
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return empty;
-  }
-
   const projects = new Map<string, AgentProject>();
   const membership = new Map<string, string>();
-  let db: Database | undefined;
   try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-
-    const projStmt = db.prepare(
-      "SELECT value FROM ItemTable WHERE key = 'glass.localAgentProjects.v1'"
+    const projValue = await getStateDbValue(
+      dbPath,
+      "ItemTable",
+      "glass.localAgentProjects.v1"
     );
-    if (projStmt.step()) {
-      const row = projStmt.getAsObject() as { value?: string };
-      if (typeof row.value === "string") {
-        try {
-          const list = JSON.parse(row.value) as Array<Record<string, unknown>>;
-          if (Array.isArray(list)) {
-            for (const p of list) {
-              const id = p.id;
-              if (typeof id !== "string") continue;
-              const ws = (p.workspace as
-                | { uri?: { fsPath?: unknown } }
-                | undefined)?.uri?.fsPath;
-              projects.set(id, {
-                id,
-                name: typeof p.name === "string" ? p.name : undefined,
-                workspacePath: typeof ws === "string" ? ws : undefined,
-                isArchived: p.isArchived === true,
-              });
-            }
+    if (typeof projValue === "string") {
+      try {
+        const list = JSON.parse(projValue) as Array<Record<string, unknown>>;
+        if (Array.isArray(list)) {
+          for (const p of list) {
+            const id = p.id;
+            if (typeof id !== "string") continue;
+            const ws = (p.workspace as
+              | { uri?: { fsPath?: unknown } }
+              | undefined)?.uri?.fsPath;
+            projects.set(id, {
+              id,
+              name: typeof p.name === "string" ? p.name : undefined,
+              workspacePath: typeof ws === "string" ? ws : undefined,
+              isArchived: p.isArchived === true,
+            });
           }
-        } catch {
-          // ignore parse error
         }
+      } catch {
+        // ignore parse error
       }
     }
-    projStmt.free();
 
-    const memStmt = db.prepare(
-      "SELECT value FROM ItemTable WHERE key = 'glass.localAgentProjectMembership.v1'"
+    const memValue = await getStateDbValue(
+      dbPath,
+      "ItemTable",
+      "glass.localAgentProjectMembership.v1"
     );
-    if (memStmt.step()) {
-      const row = memStmt.getAsObject() as { value?: string };
-      if (typeof row.value === "string") {
-        try {
-          const map = JSON.parse(row.value) as Record<string, unknown>;
-          if (map && typeof map === "object") {
-            for (const [composerId, projectId] of Object.entries(map)) {
-              if (typeof projectId === "string") {
-                membership.set(composerId, projectId);
-              }
+    if (typeof memValue === "string") {
+      try {
+        const map = JSON.parse(memValue) as Record<string, unknown>;
+        if (map && typeof map === "object") {
+          for (const [composerId, projectId] of Object.entries(map)) {
+            if (typeof projectId === "string") {
+              membership.set(composerId, projectId);
             }
           }
-        } catch {
-          // ignore
         }
+      } catch {
+        // ignore
       }
     }
-    memStmt.free();
   } catch (err) {
     console.warn("[agent-mindmap] loadAgentProjects failed:", err);
-  } finally {
-    db?.close();
   }
 
   agentProjectsCache = {
@@ -483,39 +430,30 @@ export async function findKeysReferencingComposer(
 ): Promise<Array<{ table: string; key: string; valuePreview: string }>> {
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return [];
-  let buffer: Buffer;
-  try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return [];
-  }
   const hits: Array<{ table: string; key: string; valuePreview: string }> = [];
-  let db: Database | undefined;
   try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    for (const table of ["ItemTable", "cursorDiskKV"]) {
-      const stmt = db.prepare(
-        `SELECT key, value FROM ${table} WHERE value LIKE :needle`
+    for (const table of ["ItemTable", "cursorDiskKV"] as const) {
+      const rows = await queryStateDb<{ key?: string; value?: string }>(
+        dbPath,
+        `SELECT key, value FROM ${table} WHERE value LIKE ?`,
+        [`%${composerId}%`]
       );
-      stmt.bind({ ":needle": `%${composerId}%` });
-      while (stmt.step()) {
-        const row = stmt.getAsObject() as { key?: string; value?: string };
-        if (typeof row.key !== "string" || typeof row.value !== "string") continue;
+      for (const row of rows) {
+        if (typeof row.key !== "string" || typeof row.value !== "string") {
+          continue;
+        }
         hits.push({
           table,
           key: row.key,
-          valuePreview: row.value.length > 200
-            ? row.value.slice(0, 200) + "…"
-            : row.value,
+          valuePreview:
+            row.value.length > 200
+              ? row.value.slice(0, 200) + "…"
+              : row.value,
         });
       }
-      stmt.free();
     }
   } catch (err) {
     console.warn("[agent-mindmap] findKeysReferencingComposer failed:", err);
-  } finally {
-    db?.close();
   }
   return hits;
 }
@@ -543,27 +481,14 @@ export async function inspectComposerHeader(
   };
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return empty;
-  let buffer: Buffer;
   try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return empty;
-  }
-  let db: Database | undefined;
-  try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    const stmt = db.prepare(
-      "SELECT value FROM ItemTable WHERE key = 'composer.composerHeaders'"
+    const value = await getStateDbValue(
+      dbPath,
+      "ItemTable",
+      "composer.composerHeaders"
     );
-    if (!stmt.step()) {
-      stmt.free();
-      return empty;
-    }
-    const row = stmt.getAsObject() as { value?: string };
-    stmt.free();
-    if (typeof row.value !== "string") return empty;
-    const parsed = JSON.parse(row.value) as {
+    if (typeof value !== "string") return empty;
+    const parsed = JSON.parse(value) as {
       allComposers?: Array<Record<string, unknown>>;
     };
     const composers = Array.isArray(parsed.allComposers)
@@ -585,8 +510,6 @@ export async function inspectComposerHeader(
   } catch (err) {
     console.warn("[agent-mindmap] inspectComposerHeader failed:", err);
     return empty;
-  } finally {
-    db?.close();
   }
 }
 
@@ -598,30 +521,13 @@ export async function inspectComposerHeader(
 export async function readStateDbKey(key: string): Promise<string | undefined> {
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return undefined;
-  let buffer: Buffer;
   try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return undefined;
-  }
-  let db: Database | undefined;
-  try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    for (const table of ["ItemTable", "cursorDiskKV"]) {
-      const stmt = db.prepare(`SELECT value FROM ${table} WHERE key = :k`);
-      stmt.bind({ ":k": key });
-      if (stmt.step()) {
-        const row = stmt.getAsObject() as { value?: string };
-        stmt.free();
-        if (typeof row.value === "string") return row.value;
-      }
-      stmt.free();
+    for (const table of ["ItemTable", "cursorDiskKV"] as const) {
+      const value = await getStateDbValue(dbPath, table, key);
+      if (typeof value === "string") return value;
     }
   } catch (err) {
     console.warn(`[agent-mindmap] readStateDbKey(${key}) failed:`, err);
-  } finally {
-    db?.close();
   }
   return undefined;
 }
@@ -636,26 +542,17 @@ export async function listAgentRelatedKeys(): Promise<
 > {
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return [];
-  let buffer: Buffer;
-  try {
-    buffer = await fs.readFile(dbPath);
-  } catch {
-    return [];
-  }
   const out: Array<{ table: string; key: string; valueSize: number }> = [];
-  let db: Database | undefined;
   try {
-    const SQL = await loadSql();
-    db = new SQL.Database(new Uint8Array(buffer));
-    for (const table of ["ItemTable", "cursorDiskKV"]) {
-      const stmt = db.prepare(
+    for (const table of ["ItemTable", "cursorDiskKV"] as const) {
+      const rows = await queryStateDb<{ key?: string; sz?: number }>(
+        dbPath,
         `SELECT key, length(value) AS sz FROM ${table}
           WHERE key LIKE '%glass%'
              OR key LIKE '%composer%'
              OR key LIKE '%agent%'`
       );
-      while (stmt.step()) {
-        const row = stmt.getAsObject() as { key?: string; sz?: number };
+      for (const row of rows) {
         if (typeof row.key !== "string") continue;
         out.push({
           table,
@@ -663,13 +560,9 @@ export async function listAgentRelatedKeys(): Promise<
           valueSize: typeof row.sz === "number" ? row.sz : 0,
         });
       }
-      stmt.free();
     }
   } catch (err) {
     console.warn("[agent-mindmap] listAgentRelatedKeys failed:", err);
-  } finally {
-    db?.close();
   }
   return out;
 }
-

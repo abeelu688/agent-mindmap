@@ -42,7 +42,11 @@
       "properties": {
         "agentMindmap.host": {
           "type": "string",
-          "enum": ["auto", "cursor", "claude-code"],
+          "enum": [
+            "auto",
+            "cursor",
+            "claude-code"
+          ],
           "default": "auto",
           "description": "Which AI product's on-disk transcripts to read. auto = detect from app name and existing transcript folders."
         },
@@ -81,7 +85,11 @@
         },
         "agentMindmap.llm.provider": {
           "type": "string",
-          "enum": ["auto", "cursor-cli", "claude-cli"],
+          "enum": [
+            "auto",
+            "cursor-cli",
+            "claude-cli"
+          ],
           "default": "auto",
           "description": "LLM provider for topic extraction. auto follows agentMindmap.host (cursor-cli or claude-cli)."
         },
@@ -172,7 +180,10 @@
         },
         "agentMindmap.library.mergeMode": {
           "type": "string",
-          "enum": ["full", "delta"],
+          "enum": [
+            "full",
+            "delta"
+          ],
           "default": "delta",
           "description": "Batch concept merge: delta (default) = batch 1 full on milestone sessions, batch 2+ snapshot delta only. Setting full does not trigger all-session or periodic M-merge on batch 2+ (see merge-snapshot-delta rule)."
         },
@@ -194,19 +205,32 @@
         },
         "agentMindmap.ui.preset": {
           "type": "string",
-          "enum": ["auto", "dark", "light"],
+          "enum": [
+            "auto",
+            "dark",
+            "light"
+          ],
           "default": "auto",
           "description": "Mind map color preset. auto follows the editor theme; dark and light use mind-elixir built-in themes."
         },
         "agentMindmap.ui.locale": {
           "type": "string",
-          "enum": ["auto", "en", "zh-cn"],
+          "enum": [
+            "auto",
+            "en",
+            "zh-cn"
+          ],
           "default": "auto",
           "description": "Language for extension notifications (e.g. CLI install guide). auto follows Configure Display Language; en or zh-cn override."
         },
         "agentMindmap.ui.direction": {
           "type": "string",
-          "enum": ["side", "side-lr", "left", "right"],
+          "enum": [
+            "side",
+            "side-lr",
+            "left",
+            "right"
+          ],
           "default": "side",
           "description": "Mind map layout direction: both sides with first branch on the right (side, default), both sides with first branch on the left (side-lr), left only, or right only."
         },
@@ -227,21 +251,20 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs",
+    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --external:@vscode/sqlite3 --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "test": "node dist/test-run.js",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20.14.10",
-    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.23.1"
   },
   "dependencies": {
-    "markdown-it": "^14.1.0",
-    "sql.js": "^1.14.1"
+    "@vscode/sqlite3": "^5.1.12-vscode",
+    "markdown-it": "^14.1.0"
   }
 }
