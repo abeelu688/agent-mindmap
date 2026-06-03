@@ -191,7 +191,7 @@ describe("mergeSessionAnalysis input enrichment", () => {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(2);
+    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(4);
     expect(prompt).toContain("domainKeys");
     expect(prompt).toContain("frozenTopRootKeys");
     expect(prompt).toContain("outline.tree");
@@ -262,6 +262,9 @@ describe("mergeSessionAnalysis prompt", () => {
     });
     expect(prompt).toContain("session-analysis");
     expect(prompt).toContain("segmentEquivalences");
+    expect(prompt).toContain("domainKeys");
+    expect(prompt).toContain("childKeys");
+    expect(prompt).toContain("子孙");
     expect(prompt).not.toContain("changes[]");
   });
 });

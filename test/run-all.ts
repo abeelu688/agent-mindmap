@@ -886,7 +886,7 @@ async function main(): Promise<void> {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 2, "merge prompt v2");
+    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 4, "merge prompt v4");
     assert(prompt.includes("frozenTopRootKeys"), "merge prompt: frozen tops");
   }
 
