@@ -823,7 +823,8 @@ async function main(): Promise<void> {
     assert(node?.aliases?.includes("hub-alias") ?? false, "merge input: aliases");
     assert(Array.isArray(input.sessions[0]?.outline.tree), "merge input: outline.tree");
     const body = formatMergeSessionAnalysisInput(input);
-    assert(!body.includes("\n  "), "merge input: compact json");
+    assert(body.includes("### nodes"), "merge input: tabular nodes");
+    assert(!body.includes('"domainKeys":'), "merge input: no json node keys");
   }
 
   {
@@ -886,7 +887,7 @@ async function main(): Promise<void> {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 4, "merge prompt v4");
+    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 8, "merge prompt v8");
     assert(prompt.includes("frozenTopRootKeys"), "merge prompt: frozen tops");
   }
 

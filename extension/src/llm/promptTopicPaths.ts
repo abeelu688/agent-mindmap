@@ -1,8 +1,6 @@
 import type { AgentHostId } from "../host/types";
 import type { SegmentEquivalence } from "../llm/types";
 import type { SessionRecord } from "../store/storeTypes";
-import { ONTOLOGY_PROMPT_VERSION } from "./promptOntology";
-import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "./promptOutline";
 import { topicIdForTopic } from "./topicId";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -69,8 +67,6 @@ export function buildTopicPathsPrompt(
     "",
     "只输出严格 JSON：",
     '{"topicPaths":[{"topicId":"...","sessionId":"...","projectSlug":"...","conceptPath":["domain","subsystem","concept"],"confidence":0.8,"evidence":["..."]}]}',
-    "",
-    `附：promptVersions ontology=${ONTOLOGY_PROMPT_VERSION}, topicPaths=${TOPIC_PATHS_PROMPT_VERSION}, outlineSchema=${OUTLINE_PROMPT_VERSION}`,
   ].join("\n");
 
   return { prompt, topics: topics.map((t) => ({ topicId: t.topicId, title: t.title })) };

@@ -7,6 +7,10 @@ import {
   __testing,
 } from "../extension/src/llm/mergeSessionAnalysisInput";
 import {
+  buildMergeSessionAnalysisTabularInput,
+  estimateMergeJsonInputBytes,
+} from "../extension/src/llm/mergeSessionAnalysisTabular";
+import {
   buildMergeSessionAnalysisPrompt,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../extension/src/llm/promptMergeSessionAnalysis";
@@ -167,15 +171,44 @@ describe("mergeSessionAnalysis input enrichment", () => {
     expect(kept.length).toBe(10);
   });
 
-  it("uses compact JSON without pretty-print", () => {
+  it("uses tabular input with schema once and no per-node JSON keys", () => {
     const input = buildMergeSessionAnalysisInput(
       [sessionRecord("s1", ["a", "b"]), sessionRecord("s2", ["a", "c"])],
       "full"
     );
     const body = formatMergeSessionAnalysisInput(input);
-    expect(body).not.toContain("\n  ");
-    expect(body).toContain('"domainKeys"');
-    expect(body).toContain('"tree"');
+    expect(body.match(/## 输入 schema/g)?.length).toBe(1);
+    expect(body).toContain("### mergeMeta");
+    expect(body).toContain("### nodes");
+    expect(body).toContain("### outlineRows");
+    expect(body).not.toContain('"domainKeys":');
+    expect(body).not.toContain('"sessionId":"');
+    expect(body).not.toContain("旧版");
+    expect(body).toContain("outlineRows");
+  });
+
+  it("tabular input is smaller than legacy JSON at scale", () => {
+    const nodes = Array.from({ length: 40 }, (_, i) => ({
+      key: `node-${i}`,
+      label: `Node ${i}`,
+      domainKeys: ["platform"],
+      parentKeys: i > 0 ? [`node-${i - 1}`] : [],
+      childKeys: i < 39 ? [`node-${i + 1}`] : [],
+      aliases: [`alias-${i}`, `syn-${i}`],
+      evidence: [`Evidence line ${i} with context`, `Second line ${i}`],
+    }));
+    const rec = sessionRecord("s-scale", ["android", "art"], {
+      conceptContexts: nodes.map((n, i) => ({
+        ...n,
+        sessionId: "s-scale",
+        projectSlug: "proj-a",
+      })),
+    });
+    const input = buildMergeSessionAnalysisInput([rec, rec], "full");
+    const tabular = buildMergeSessionAnalysisTabularInput(input);
+    const jsonBytes = estimateMergeJsonInputBytes(input);
+    const tabularBytes = Buffer.byteLength(tabular, "utf8");
+    expect(tabularBytes).toBeLessThan(jsonBytes * 0.85);
   });
 
   it("prompt v2 documents domainKeys, frozenTopRootKeys, and merge constraints", () => {
@@ -191,10 +224,16 @@ describe("mergeSessionAnalysis input enrichment", () => {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(4);
+    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(8);
+    expect(prompt).toContain("JSON 契约");
+    expect(prompt).toContain("pathPrefix");
+    expect(prompt).toContain("禁止只写这一项");
     expect(prompt).toContain("domainKeys");
     expect(prompt).toContain("frozenTopRootKeys");
-    expect(prompt).toContain("outline.tree");
+    expect(prompt).toContain("outlineRows");
+    expect(prompt).toContain("输入 schema");
+    expect(prompt).toContain("如何读输入");
+    expect(prompt).not.toContain("旧版");
     expect(prompt).toContain("parentKeys=[] 的根节点最多 2 个");
     expect(prompt).toContain("增量合并");
   });
@@ -243,7 +282,7 @@ describe("snapConceptPathToVirtualSession", () => {
 });
 
 describe("mergeSessionAnalysis prompt", () => {
-  it("formats multi-session input and references session-analysis schema", () => {
+  it("formats multi-session input with self-contained output contract", () => {
     const input = buildMergeSessionAnalysisInput(
       [
         sessionRecord("s1", ["android", "art"]),
@@ -253,14 +292,17 @@ describe("mergeSessionAnalysis prompt", () => {
     );
     expect(input.sessions).toHaveLength(2);
     const body = formatMergeSessionAnalysisInput(input);
-    expect(body).toContain('"sessionId":"s1"');
+    expect(body).toContain("s1");
+    expect(body).toContain("### sessions");
     const prompt = buildMergeSessionAnalysisPrompt(input, {
       maxDomains: 8,
       maxNodes: 64,
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    expect(prompt).toContain("session-analysis");
+    expect(prompt).toContain("domains[]");
+    expect(prompt).not.toContain("session-analysis");
+    expect(prompt).not.toMatch(/schema v\d/i);
     expect(prompt).toContain("segmentEquivalences");
     expect(prompt).toContain("domainKeys");
     expect(prompt).toContain("childKeys");

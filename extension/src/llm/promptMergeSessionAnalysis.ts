@@ -3,10 +3,13 @@ import {
   formatMergeSessionAnalysisInput,
   type MergeSessionAnalysisInput,
 } from "./mergeSessionAnalysisInput";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "./promptSessionAnalysis";
+import {
+  formatSessionAnalysisJsonContract,
+  SCOPE_PATH_PREFIX_GUIDANCE_LINES,
+} from "./promptSessionAnalysisJsonContract";
 
 /** Bump when {@link buildMergeSessionAnalysisPrompt} JSON schema / instructions change. */
-export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 4;
+export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 8;
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -20,9 +23,7 @@ export type MergeSessionAnalysisPromptOptions = {
   maxDetailsPerNode: number;
 };
 
-/**
- * M-merge LLM: same JSON schema as Part I session-analysis — one virtual combined session.
- */
+/** M-merge LLM: one virtual combined session (domains / nodes / outline JSON). */
 export function buildMergeSessionAnalysisPrompt(
   input: MergeSessionAnalysisInput,
   options: MergeSessionAnalysisPromptOptions,
@@ -47,21 +48,21 @@ export function buildMergeSessionAnalysisPrompt(
           `- 第一个 \`role=snapshot\` 的会话是**已稳定的项目综合导图**（虚拟 id ${input.snapshotSessionId ?? "__project_merge_snapshot__"}）。`,
           `- **frozenTopRootKeys**（必须保留为输出顶根）：${frozenRoots || "见 snapshot.frozenTopRootKeys"}`,
           `- **frozenDomains**：见 snapshot.frozenDomains；输出 domains[] 只能在其基础上收拢，禁止 batch 新增并列顶 domain。`,
-          "- 在其 nodes / outline.tree / segmentEquivalences 基础上，整合后续 `role=batch` 新会话；**保持 snapshot 顶根与主层级稳定**，只扩展或归并新内容。",
+          "- 在其 nodes / outlineRows / segmentEquivalences 基础上，整合后续 `role=batch` 新会话；**保持 snapshot 顶根与主层级稳定**，只扩展或归并新内容。",
           "- 禁止发明与 frozenTopRootKeys 平行的 generic hub；batch 新概念必须 parentKeys 指向 frozen 顶根或其子孙。",
           "- 输出仍是**完整**虚拟综合会话 JSON（不是 diff / steps / changes）。",
         ].join("\n")
       : "";
 
   return [
-    `你是跨会话综合分析助手。下面有 ${sessionCount} 个 ${agentLabel} 会话的概念树 + 大纲（JSON）。`,
+    `你是跨会话综合分析助手。下面有 ${sessionCount} 个 ${agentLabel} 会话的概念树 + 大纲（TAB 表，列名见输入 schema）。`,
     "任务：理解各会话结构，整理成**一个**虚拟综合会话，就好像它们原本就是同一次长对话。",
     "",
-    "## 输入 JSON 字段说明",
-    "- 每会话 `nodes[]`：key、label、**domainKeys[]**、parentKeys[]、**childKeys[]**（直接子概念 key）、**aliases[]**、evidence[]",
-    "- `childKeys[]` 可递归展开：`childKeys` → 对应 node 的 `childKeys` → …，得到该节点的**子孙子树**（用于 domain / 从属判断，勿只看 node 自身 evidence）",
-    "- 每会话 `outline.tree[]`：2-4 层大纲树（含中间 children；叶子含 summary、details、conceptPath）；conceptPath 前缀落在某 node 下时，该 outline 子树内容也属于该 node 的语境",
-    "- `role=snapshot` 时另有 **frozenTopRootKeys[]**、**frozenDomains[]**（delta 必须遵守）",
+    "## 如何读输入",
+    "下方 `===` 之后为 **输入 schema**（各表列名与含义）及 TAB 数据。读表时注意：",
+    "- **nodes**：按 sessionId 过滤；用 childKeys 递归展开子孙子树（domain / 从属判断勿只看单 node 的 evidence）",
+    "- **outlineRows**：用 row/parentRow 还原树；conceptPath 以某 node.key（或 aliases）为前缀的枝，内容也属于该 node 语境",
+    "- **sessions** 中 role=snapshot：frozenTopRootKeys、frozenDomains 在 delta 下必须遵守（见上文增量合并）",
     "",
     "## Working order（必须按序完成，再输出 JSON）",
     "在脑中**依次**完成下面 1→2→3→4→5，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
@@ -74,7 +75,7 @@ export function buildMergeSessionAnalysisPrompt(
     "**领域信号来源（由浅到深）：**",
     "1. 各会话已有 `domains[]`、`nodes[].domainKeys[]`",
     "2. 每个 node 的 **子孙子树**：沿 `childKeys[]` 递归找到所有后代 node，汇总其 label / aliases / evidence",
-    "3. **outline.tree** 中 conceptPath 以该 node（或其 alias key）为前缀的枝：读 summary、details、中间层 title",
+    "3. **outlineRows** 中 conceptPath 以该 node（或其 alias key）为前缀的枝：读 summary、中间层 title",
     "4. 若 node 自身 evidence 含糊但子孙/outline 内容高度一致 → 以子树所揭示的主题归纳 domain；若子树跨多个不相关主题 → 该 node 可能不应作为单一 domain 顶根",
     "",
     "delta 时：**继承并收拢** snapshot.frozenDomains，禁止为 batch 新增与 frozen 并列的顶 domain。",
@@ -107,7 +108,9 @@ export function buildMergeSessionAnalysisPrompt(
     "2. 用 parentKeys / childKeys（含递归后代）/ evidence / outline.conceptPath 弄清位置。",
     "3. 对候选 A、B：**先分别理解** 在各会话、该 domain、该上下级语境下各自指什么。",
     "4. **仅当基于上述理解认为 A 与 B 指同一概念** 时写入 segmentEquivalences；禁止仅因字面相近合并，禁止与 domainKeys/evidence 矛盾的硬并。",
-    "5. scope.pathPrefix 限定等价成立语境；并列顶根同义须 scope.pathPrefix=[] 且 domain 一致。",
+    "5. scope 限定等价成立语境（须与 Step 1 domain 一致；见下列 pathPrefix 约束）：",
+    ...SCOPE_PATH_PREFIX_GUIDANCE_LINES,
+    "- **并列顶根同义**：domain 须一致；根级写 pathPrefix:[] 时必须**同时**写 evidenceKeywords 或 downstreamFirst，禁止仅 pathPrefix:[]",
     "",
     "### Step 5 — 综合内容大纲 → outline",
     "按**概念**组织（不要按会话 id / 时间平铺）：",
@@ -116,10 +119,17 @@ export function buildMergeSessionAnalysisPrompt(
     "- 叶子：summary（必填）+ details[]（≤40 字）+ conceptPath（3-5 段）；**conceptPath[0] 必须是 Step 3 统一顶根之一**",
     "- 每叶子 1-" + maxDetails + " 条细节；details 不含 sourceTurnIndices（跨会话无 turn 锚点）",
     "",
-    "只输出严格 JSON，字段与单会话 session-analysis 完全一致（schema v" +
-      SESSION_ANALYSIS_PROMPT_VERSION +
-      "）：",
-    '{"domains":[],"nodes":[{"key":"...","label":"...","aliases":[],"parentKeys":[],"evidence":["..."]}],"mappings":[],"segmentEquivalences":[{"canonical":"...","aliases":[],"scope":{"pathPrefix":[]}}],"termAliases":[],"outline":{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["..."],"details":[{"text":"..."}]}]}]}}',
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: false }),
+    "",
+    "只输出严格 JSON（不要 markdown、解释、```）。顶层字段：",
+    "- domains[]：顶层领域 key（小写，3-" + maxDomains + " 个）",
+    "- nodes[]：{ key, label, aliases[], parentKeys[]（根用 []）, evidence[]（必填，≤80 字） }；可选 mappings[]",
+    "- segmentEquivalences[]：{ canonical, aliases[]（≥1，必填）, scope（必填，见 JSON 契约）, confidence? }",
+    "- termAliases[]（可选）",
+    "- outline：{ title, summary?, outline[] } 2-4 层；叶子含 summary、details[{ text }]、conceptPath（3-5 段）；**不要** details.sourceTurnIndices",
+    "",
+    "示例（neutral，勿照搬字面）：",
+    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["多会话归并 platform-alpha"]},{"key":"subsystem","label":"Subsystem","parentKeys":["platform-alpha"],"evidence":["subsystem 路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"..."}]}]}]}}',
     "",
     "===",
     body,
