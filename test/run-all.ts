@@ -30,6 +30,16 @@ import {
   buildDeterministicMergeMindMap,
   buildDeterministicMergeRecord,
 } from "../extension/src/store/mergeDeterministic";
+import {
+  buildMergeSessionAnalysisInput,
+  formatMergeSessionAnalysisInput,
+  prioritizeNodesForMergeInput,
+  serializeOutlineTree,
+} from "../extension/src/llm/mergeSessionAnalysisInput";
+import {
+  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+  buildMergeSessionAnalysisPrompt,
+} from "../extension/src/llm/promptMergeSessionAnalysis";
 import { resolveConceptPathWithEquivalences } from "../extension/src/llm/resolveConceptPathWithEquivalences";
 import type { SegmentEquivalence } from "../extension/src/llm/types";
 import {
@@ -58,6 +68,18 @@ import type { SessionMeta } from "../extension/src/mindmap/origin";
 import { runProjectSessionBatch } from "../extension/src/sessionLoader";
 import type { TranscriptSession } from "../extension/src/transcript/types";
 import type { AgentHost } from "../extension/src/host/types";
+import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
+import {
+  buildReattachPrompt,
+  REATTACH_PROMPT_VERSION,
+} from "../extension/src/llm/promptReattach";
+import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
+import {
+  DeltaReattachValidationError,
+  validateDeltaReattachSteps,
+} from "../extension/src/llm/validateDeltaReattachSteps";
+import { reattachChangesToSteps } from "../extension/src/llm/reattachChanges";
+import { MERGE_SNAPSHOT_SESSION_ID } from "../extension/src/store/mergeSnapshot";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -643,6 +665,256 @@ async function main(): Promise<void> {
     );
     assert(report.conceptMerge.totalTopics === 3, "eval: total topics");
     assert(report.conceptMerge.mindMapNodeCount > 0, "eval: mind map nodes");
+  }
+
+  // delta batch-2: prompt v22 frozen hubs + parallel-hub validation (aosp14 regression)
+  {
+    function deltaChain(
+      from: string,
+      sessionIds: string[],
+      chainIndex: number
+    ): ReparentChain {
+      return {
+        chainIndex,
+        from,
+        label: from,
+        topicCount: 1,
+        sessionIds,
+        childSegments: [],
+        pathSamples: [[from]],
+        keywords: [],
+        subtree: {
+          segment: from,
+          label: from,
+          topicCount: 1,
+          childSegments: [],
+          children: [],
+        },
+      };
+    }
+
+    const frozenSegments = [
+      "art-runtime",
+      "forest",
+      "androidplatform",
+      "cplusplus",
+      "column-truncation",
+    ];
+    const newSegments = [
+      "android",
+      "androidcomponents",
+      "androidlogging",
+      "intent",
+      "aosp",
+    ];
+    const chains: ReparentChain[] = [
+      ...frozenSegments.map((from, i) =>
+        deltaChain(from, [MERGE_SNAPSHOT_SESSION_ID], i + 1)
+      ),
+      ...newSegments.map((from, i) =>
+        deltaChain(from, [`batch2-${i}`], frozenSegments.length + i + 1)
+      ),
+    ];
+    const nodeCatalog = buildReattachNodeCatalog(chains);
+    const frozenChainIndices = frozenSegments.map((_, i) => i);
+    const deltaInput: TrieReparentInput = {
+      mergeMode: "delta",
+      snapshotSessionId: MERGE_SNAPSHOT_SESSION_ID,
+      frozenChainCount: frozenSegments.length,
+      frozenChainIndices,
+      conceptContexts: [],
+      chains,
+      topBranches: chains,
+      segmentEquivalences: [],
+      rootChildSynonymHints: [],
+      topBranchSynonymHints: [],
+      structuralHints: {
+        duplicateTopRoots: [],
+        listedChildCollapses: [],
+        ontologySubordinates: [],
+        prefixSubordinates: [],
+      },
+      nodeCatalog,
+      nodes: [],
+    };
+
+    assert(REATTACH_PROMPT_VERSION === 23, "delta: reattach prompt v23");
+    const platformChain = nodeCatalog.numberedChains.find(
+      (c) => c.from === "androidplatform"
+    );
+    assert(platformChain, "delta: androidplatform chain");
+    const prompt = buildReattachPrompt(deltaInput, "cursor", "zh", "delta");
+    assert(prompt.includes("仅 changes"), "delta: changes output");
+    assert(prompt.includes(`${platformChain!.rootNodeId} (androidplatform)`), "delta: frozen id listed");
+
+    const androidChain = nodeCatalog.numberedChains.find((c) => c.from === "android");
+    const intentChain = nodeCatalog.numberedChains.find((c) => c.from === "intent");
+    const aospChain = nodeCatalog.numberedChains.find((c) => c.from === "aosp");
+    assert(androidChain && intentChain && aospChain, "delta: batch2 chains");
+
+    let parallelRejected = false;
+    try {
+      validateDeltaReattachSteps(
+        deltaInput,
+        reattachChangesToSteps([
+          { kind: "attach", hub: "android", node: "intent" },
+        ])
+      );
+    } catch (err) {
+      parallelRejected = err instanceof DeltaReattachValidationError;
+      if (!parallelRejected) {
+        throw err;
+      }
+    }
+    assert(parallelRejected, "delta: parallel hub changes must throw");
+
+    validateDeltaReattachSteps(
+      deltaInput,
+      reattachChangesToSteps([
+        { kind: "attach", hub: "androidplatform", node: "aosp" },
+      ])
+    );
+  }
+
+  {
+    const rec = buildSessionRecord(
+      buildRecordMeta({
+        sessionId: "ctx-s1",
+        projectSlug: "proj-a",
+        transcriptPath: "/tmp/ctx.jsonl",
+        transcriptMtimeMs: 1,
+        transcriptSha256: sha256Hex("ctx"),
+        analyzedAt: 1,
+        llm: { provider: "fake" },
+        promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+        promptVersion: 5,
+        sessionLabel: "ctx",
+      }),
+      topicGraphToOutline({
+        topics: [{ title: "t", conceptPath: ["hub", "leaf"], items: [{ text: "x" }] }],
+      }),
+      {
+        sessionAnalysis: {
+          domains: ["hub-domain"],
+          nodes: [{ key: "hub", label: "Hub", parentKeys: [], evidence: ["e"] }],
+          segmentEquivalences: [],
+          outline: topicGraphToOutline({
+            topics: [{ title: "t", conceptPath: ["hub", "leaf"], items: [{ text: "x" }] }],
+          }),
+        },
+        conceptContexts: [
+          {
+            key: "hub",
+            label: "Hub",
+            domainKeys: ["hub-domain"],
+            parentKeys: [],
+            childKeys: ["leaf"],
+            aliases: ["hub-alias"],
+            evidence: ["ev1"],
+            sessionId: "ctx-s1",
+            projectSlug: "proj-a",
+          },
+        ],
+      }
+    );
+    const input = buildMergeSessionAnalysisInput([rec], "full");
+    const node = input.sessions[0]?.nodes[0];
+    assert(Boolean(node?.domainKeys?.length), "merge input: domainKeys");
+    assert(node?.aliases?.includes("hub-alias") ?? false, "merge input: aliases");
+    assert(Array.isArray(input.sessions[0]?.outline.tree), "merge input: outline.tree");
+    const body = formatMergeSessionAnalysisInput(input);
+    assert(!body.includes("\n  "), "merge input: compact json");
+  }
+
+  {
+    const snap = buildSessionRecord(
+      buildRecordMeta({
+        sessionId: MERGE_SNAPSHOT_SESSION_ID,
+        projectSlug: "proj-a",
+        transcriptPath: "/tmp/snap.jsonl",
+        transcriptMtimeMs: 1,
+        transcriptSha256: sha256Hex("snap"),
+        analyzedAt: 1,
+        llm: { provider: "fake" },
+        promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+        promptVersion: 5,
+        sessionLabel: "snap",
+      }),
+      topicGraphToOutline({
+        topics: [{ title: "t", conceptPath: ["hub", "x"], items: [{ text: "x" }] }],
+      }),
+      {
+        sessionAnalysis: {
+          domains: ["d1"],
+          nodes: [
+            { key: "hub", label: "Hub", parentKeys: [], evidence: ["e"] },
+            { key: "x", label: "X", parentKeys: ["hub"], evidence: ["e2"] },
+          ],
+          segmentEquivalences: [],
+          outline: topicGraphToOutline({
+            topics: [{ title: "t", conceptPath: ["hub", "x"], items: [{ text: "x" }] }],
+          }),
+        },
+      }
+    );
+    const input = buildMergeSessionAnalysisInput(
+      [snap, buildSessionRecord(
+        buildRecordMeta({
+          sessionId: "batch1",
+          projectSlug: "proj-a",
+          transcriptPath: "/tmp/b1.jsonl",
+          transcriptMtimeMs: 1,
+          transcriptSha256: sha256Hex("b1"),
+          analyzedAt: 1,
+          llm: { provider: "fake" },
+          promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+          promptVersion: 5,
+          sessionLabel: "b1",
+        }),
+        topicGraphToOutline({
+          topics: [{ title: "t", conceptPath: ["a", "b"], items: [{ text: "x" }] }],
+        })
+      )],
+      "delta",
+      MERGE_SNAPSHOT_SESSION_ID
+    );
+    assert(input.sessions[0]?.frozenTopRootKeys?.includes("hub") ?? false, "merge input: frozen tops");
+    assert(input.sessions[0]?.frozenDomains?.includes("d1") ?? false, "merge input: frozen domains");
+    const prompt = buildMergeSessionAnalysisPrompt(input, {
+      maxDomains: 8,
+      maxNodes: 64,
+      maxBranches: 8,
+      maxDetailsPerNode: 4,
+    });
+    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 2, "merge prompt v2");
+    assert(prompt.includes("frozenTopRootKeys"), "merge prompt: frozen tops");
+  }
+
+  {
+    const tree = serializeOutlineTree([
+      {
+        title: "Top",
+        children: [
+          {
+            title: "Mid",
+            children: [{ title: "Leaf", conceptPath: ["a", "b"] }],
+          },
+        ],
+      },
+    ]);
+    assert(tree[0]?.children?.[0]?.children?.[0]?.conceptPath?.[0] === "a", "merge outline tree depth");
+    const nodes = Array.from({ length: 50 }, (_, i) => ({
+      key: `n${i}`,
+      label: `N${i}`,
+      domainKeys: ["d"],
+      parentKeys: i === 0 ? [] : [`n${i - 1}`],
+      childKeys: [] as string[],
+      aliases: [] as string[],
+      evidence: ["e"],
+    }));
+    const kept = prioritizeNodesForMergeInput(nodes, new Set(["n25"]), 5);
+    assert(kept[0]?.key === "n0", "merge prioritize: keeps root");
+    assert(kept.length === 5, "merge prioritize: cap");
   }
 
   console.log("All tests passed.");

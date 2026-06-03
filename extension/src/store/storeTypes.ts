@@ -155,7 +155,9 @@ export type MergeSnapshotMeta = {
   sessionIds: string[];
   hostId?: AgentHostId;
   promptVersions: {
-    reattach: number;
     sessionAnalysis: number;
+    mergeSessionAnalysis: number;
+    /** @deprecated legacy reattach-moves path */
+    reattach?: number;
   };
 };

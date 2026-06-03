@@ -374,6 +374,7 @@ function toConceptMergeLlmOpts(
     model: llmOpts.model,
     hostId: llmOpts.hostId,
     providerId,
+    timeoutMs: llmOpts.timeoutMs,
   };
 }
 
@@ -473,6 +474,7 @@ async function buildProjectConceptMergeForBatch(
       hostId: opts.conceptLlm.hostId,
       providerId: opts.conceptLlm.providerId,
       promptLanguage: opts.conceptLlm.promptLanguage,
+      llmTimeoutMs: opts.conceptLlm.timeoutMs,
       signal: opts.signal,
       forceReattach: opts.forceReattach ?? true,
     },

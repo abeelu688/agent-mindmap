@@ -40,29 +40,26 @@ S2 persists `conceptContexts` on `SessionRecord`. UI: outline mind map only ([`b
 ## Part II — Merge pipeline (cross-session)
 
 1. **M1** `collectMergeTerms` (DET)
-2. **M-merge** (LLM2) — [`mergeTrieReparent`](extension/src/pipeline/stages/mergeTrieReparent.ts) / [`promptReattach.ts`](extension/src/llm/promptReattach.ts): Step A in-chain synonym fold; Step B cross-root merge/attach; input includes `conceptContexts`
+2. **M-merge** (LLM2) — [`mergeSessionAnalysis`](extension/src/pipeline/stages/mergeSessionAnalysis.ts) / [`promptMergeSessionAnalysis.ts`](extension/src/llm/promptMergeSessionAnalysis.ts): same JSON as Part I `session-analysis` → one **virtual combined session**; input includes per-node `domainKeys`, `outline.tree`, and snapshot `frozenTopRootKeys` / `frozenDomains` for delta
 3. **M2b** `writeOntologyRecord` (IO)
-4. **M3** `updateConceptTrie` (DET) — does not rewrite session outlines
+4. **M3** `updateConceptTrie` (DET) — snap real session topic paths onto virtual session hierarchy; does not rewrite session outlines
 
 Cross-session `segmentEquivalences` for trie insert: **session records only** (no M2 `ontology-refine` LLM). Equivalence decisions during M-merge traversal when needed.
 
 ### Delta batch merge (`library.mergeMode` = `delta`)
 
-After a successful merge, DET writes **`merges/<projectSlug>/merge-snapshot.json`** ([`MergeSnapshot`](extension/src/store/storeTypes.ts)) — a bounded projection of the stable project map. It is exposed to M-merge as **one virtual session** (`__project_merge_snapshot__`) via [`snapshotToSessionRecord`](extension/src/store/mergeSnapshot.ts).
+Full contract: [`merge-snapshot-delta.mdc`](merge-snapshot-delta.mdc).
 
-- **M-merge LLM input**: `[snapshot, …new batch sessions]` (≤6 records), not all N sessions.
-- **M3 / UI trie**: always **all real** `SessionRecord`s (DET).
-- **Full reconcile**: every `library.mergeFullReconcileEvery` batch milestones, or when snapshot is missing / `forceRefresh` / stale top roots.
-
-Entry: [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts).
+**Batch 1 only**: M-merge LLM on milestone sessions (no prior snapshot). **Batch 2+**: always `[snapshot, …new batch]` delta; LLM outputs a refreshed **virtual combined session** (not reattach steps). M3 on all real sessions. **No** periodic full reconcile, **no** forceRefresh/mergeMode-full re-merge. **No rollback** — imperfect merges OK; invalid LLM JSON **throws** ([`validateSessionAnalysis`](extension/src/llm/pipelineValidate.ts)).
 
 ## Rules
 
+- **Dev phase fail loud**: [`dev-fail-loud.mdc`](dev-fail-loud.mdc) — unexpected conditions **throw**; no silent rollback/degraded fallback.
 - **Two LLMs only**: S1 + M-merge.
 - **Single conceptPath source**: S1 outline + S2 tree.
 - **Context required**: evidence, scoped equivalences, `childKeys` on `conceptContexts`.
 - **No hardcoded domain segments**: [`no-hardcoded-concept-nodes.mdc`](no-hardcoded-concept-nodes.mdc).
-- **Stage cache**: [`pipeline/llmStage.ts`](extension/src/pipeline/llmStage.ts); bump `SESSION_ANALYSIS_PROMPT_VERSION` / `REATTACH_PROMPT_VERSION` when schemas change.
+- **Stage cache**: [`pipeline/llmStage.ts`](extension/src/pipeline/llmStage.ts); bump `SESSION_ANALYSIS_PROMPT_VERSION` / `MERGE_SESSION_ANALYSIS_PROMPT_VERSION` when schemas change.
 
 ## Deprecated (do not wire to commands)
 

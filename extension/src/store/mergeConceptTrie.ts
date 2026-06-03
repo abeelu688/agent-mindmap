@@ -2,7 +2,7 @@ import { uiTranslate } from "../l10n/uiTranslate";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { ReattachMove, ReattachStep, SegmentEquivalence, Topic } from "../llm/types";
+import type { ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import {
   prepareRecordsForFinalTrie,
@@ -212,6 +212,8 @@ export type ConceptMergeOptions = {
   ontologyForPrep?: ConceptMergePrepOntology;
   reattachMoves?: ReattachMove[];
   reattachSteps?: ReattachStep[];
+  /** M-merge virtual combined session (preferred over reattach when set). */
+  virtualSessionAnalysis?: SessionAnalysis;
   /** Skip prep when records were already prepared (default false). */
   recordsAlreadyPrepared?: boolean;
 };
@@ -387,7 +389,8 @@ function recordsForTrieBuild(
     records,
     options.ontologyForPrep,
     options.reattachMoves,
-    options.reattachSteps
+    options.reattachSteps,
+    options.virtualSessionAnalysis
   );
 }
 

@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { LlmProvider, ReattachStep } from "../llm/types";
+import type { LlmProvider, SessionAnalysis } from "../llm/types";
 import type { MindMapProgress } from "../progress";
 import {
   computeOntologyCacheKey,
@@ -10,28 +10,26 @@ import {
 import type { ConceptOntologyRecord } from "../store/ontologyTypes";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
-import { mergeTrieReparent } from "./stages/mergeTrieReparent";
+import {
+  mergeSessionAnalysis,
+  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+} from "./stages/mergeSessionAnalysis";
 import {
   prepareRecordsBeforeReattach,
   updateConceptTrieAsync,
 } from "./stages/updateConceptTrie";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
-import { dumpLlmReplay } from "../llm/llmIoDump";
-import {
-  buildReattachPrompt,
-  REATTACH_PROMPT_VERSION,
-} from "../llm/promptReattach";
 import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "../llm/segmentContext";
-import { appendReattachSteps } from "../store/mergeSnapshot";
-import {
-  inferPrefixSubordinateSteps,
-  reattachStepsToMoves,
-} from "../llm/reattachSteps";
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
 import { createPipelineTimingCollector } from "./pipelineTiming";
+import {
+  finalizeSessionAnalysis,
+  type FinalizedSessionAnalysis,
+} from "./stages/finalizeSessionAnalysis";
+import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
 
@@ -53,19 +51,30 @@ export type MergePipelineOpts = {
   cacheLlm?: boolean;
   signal: AbortSignal;
   skipTiming?: boolean;
-  /** Batch milestone: always run M-merge even when ontology cache has reattachMoves. */
+  /** Batch milestone: always run M-merge even when ontology cache has mergeSessionAnalysis. */
   forceReattach?: boolean;
   mergeMode?: MergeInputMode;
   snapshotSessionId?: string;
-  /** Prior reattach steps (delta); new LLM steps are appended. */
-  existingReattachSteps?: ReattachStep[];
+  /** Base CLI timeout (ms); passed to M-merge. */
+  llmTimeoutMs?: number;
 };
 
 export type MergePipelineResult = {
   merge: MergeRecord;
   ontology: ConceptOntologyRecord;
   records: SessionRecord[];
+  /** M-merge ran (1) or skipped (0). */
+  reattachLlmStepCount?: number;
+  uiTopLevelCount?: number;
+  /** M-merge virtual combined session when LLM or cache produced one. */
+  virtualSession?: FinalizedSessionAnalysis;
 };
+
+export function mindMapTopLevelCount(merge: MergeRecord): number {
+  const children =
+    merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
+  return children.length;
+}
 
 function sessionSegmentEquivalences(records: SessionRecord[]) {
   return collectSessionSegmentEquivalences(records);
@@ -82,7 +91,7 @@ function enhancedOntologyCacheKey(
   );
   const stageVersions = [
     SESSION_ANALYSIS_PROMPT_VERSION,
-    REATTACH_PROMPT_VERSION,
+    MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
   ].join(":");
   return `${base}:${stageVersions}`;
 }
@@ -149,44 +158,24 @@ export async function runMergePipeline(
     () => ({ kind: "det" })
   );
 
-  let reattachMoves = cached?.reattachMoves;
-  let reattachSteps: ReattachStep[] | undefined = cached?.reattachSteps;
-  const ontologyForReparent = {
-    nodes: collected.nodes,
-    mappings: collected.mappings,
-    topicPaths: collected.topicPaths,
-    segmentEquivalences,
-  };
+  let virtualSession: FinalizedSessionAnalysis | undefined;
+  let reattachLlmStepCount: number | undefined;
   const llmCollected = await runStage("M1 collectTerms (llm)", async () =>
     collectMergeTerms(llmRecords, baseOntology)
   );
 
-  const recordsForReparent = prepareRecordsBeforeReattach(
-    llmRecords,
-    {
-      nodes: llmCollected.nodes,
-      mappings: llmCollected.mappings,
-      topicPaths: llmCollected.topicPaths,
-      segmentEquivalences,
-    }
-  );
-  const reparentInput = buildTrieReparentInput(recordsForReparent, {
-    segmentEquivalences,
-    ontologyNodes: llmCollected.nodes,
+  const recordsForMergeInput = prepareRecordsBeforeReattach(llmRecords, {
+    nodes: llmCollected.nodes,
+    mappings: llmCollected.mappings,
     topicPaths: llmCollected.topicPaths,
-    projectSlug: opts.projectSlug,
-    mergeMode: opts.mergeMode,
-    snapshotSessionId: opts.snapshotSessionId,
+    segmentEquivalences,
   });
-  const allRecordsForReparent = prepareRecordsBeforeReattach(
-    opts.records,
-    {
-      nodes: collected.nodes,
-      mappings: collected.mappings,
-      topicPaths: collected.topicPaths,
-      segmentEquivalences,
-    }
-  );
+  const allRecordsForReparent = prepareRecordsBeforeReattach(opts.records, {
+    nodes: collected.nodes,
+    mappings: collected.mappings,
+    topicPaths: collected.topicPaths,
+    segmentEquivalences,
+  });
   const allReparentInput = buildTrieReparentInput(allRecordsForReparent, {
     segmentEquivalences,
     ontologyNodes: collected.nodes,
@@ -194,26 +183,28 @@ export async function runMergePipeline(
     projectSlug: opts.projectSlug,
   });
 
-  const hasCachedReattach =
-    (cached?.reattachSteps?.length ?? 0) > 0 ||
-    (cached?.reattachMoves?.length ?? 0) > 0;
-  const reattachVersionStale =
+  const hasCachedVirtual = Boolean(cached?.mergeSessionAnalysis);
+  const mergeAnalysisVersionStale =
     cached != null &&
-    cached.meta.promptVersions.reattach !== REATTACH_PROMPT_VERSION;
+    cached.meta.promptVersions.mergeSessionAnalysis !==
+      MERGE_SESSION_ANALYSIS_PROMPT_VERSION;
+  const llmInputCount = recordsForMergeInput.length;
   const needsConceptMerge =
-    reparentInput.topBranches.length >= 2 &&
+    llmInputCount >= 2 &&
     (opts.forceReattach ||
-      reattachVersionStale ||
+      mergeAnalysisVersionStale ||
       refineMode === "batch" ||
       refineMode === "final" ||
-      !hasCachedReattach);
+      !hasCachedVirtual);
 
   if (needsConceptMerge) {
-    progress?.report("M-merge: LLM concept mind map merge (fold + reattach)…");
-    const reparent = await runStage(
+    progress?.report(
+      "M-merge: LLM virtual combined session (session-analysis schema)…"
+    );
+    const finalized = await runStage(
       "M-merge conceptMerge",
       () =>
-        mergeTrieReparent(
+        mergeSessionAnalysis(
           {
             records: llmRecords,
             segmentEquivalences,
@@ -223,9 +214,9 @@ export async function runMergePipeline(
             projectSlug: opts.projectSlug,
             model: opts.model,
             hostId: opts.hostId,
-            promptLanguage: opts.promptLanguage,
             mergeMode: opts.mergeMode,
             snapshotSessionId: opts.snapshotSessionId,
+            llmTimeoutMs: opts.llmTimeoutMs,
           },
           provider,
           opts.signal,
@@ -233,84 +224,42 @@ export async function runMergePipeline(
         ),
       () => ({ kind: "llm" })
     );
-    const deltaSteps = reparent.steps.length ? reparent.steps : [];
-    if (opts.existingReattachSteps?.length && deltaSteps.length) {
-      reattachSteps = appendReattachSteps(opts.existingReattachSteps, deltaSteps);
-    } else if (opts.existingReattachSteps?.length && !deltaSteps.length) {
-      reattachSteps = opts.existingReattachSteps;
-    } else if (deltaSteps.length) {
-      reattachSteps = deltaSteps;
-    } else if (cached?.reattachSteps?.length) {
-      reattachSteps = cached.reattachSteps;
+    if (finalized) {
+      virtualSession = finalized;
+      reattachLlmStepCount = 1;
+      segmentEquivalences = mergeSegmentEquivalencesLists(
+        segmentEquivalences,
+        finalized.sessionSynonyms.segmentEquivalences ?? []
+      );
     } else {
-      reattachSteps = undefined;
+      reattachLlmStepCount = 0;
     }
-    reattachMoves =
-      reattachSteps?.length && reparentInput.chains.length
-        ? reattachStepsToMoves(reattachSteps)
-        : reparent.moves;
-  } else if (opts.existingReattachSteps?.length) {
-    reattachSteps = opts.existingReattachSteps;
-    reattachMoves =
-      reattachSteps.length && reparentInput.chains.length
-        ? reattachStepsToMoves(reattachSteps)
-        : cached?.reattachMoves;
-    progress?.report("M-merge: Using snapshot reattach steps (no LLM)…");
-    await runStage("M-merge conceptMerge", async () => reattachMoves, () => ({
-      kind: "llm",
-      cacheHit: true,
-      skipped: true,
-    }));
-  } else if (cached?.reattachMoves || cached?.reattachSteps) {
-    reattachSteps = cached?.reattachSteps;
-    reattachMoves = cached?.reattachMoves;
-    progress?.report("M-merge: Concept merge cache hit…");
-    const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
-    const reattachPrompt = buildReattachPrompt(
-      reparentInput,
-      hostId,
-      opts.promptLanguage ?? "zh",
-      opts.mergeMode
-    );
-    void dumpLlmReplay({
-      stageId: "reattach-moves",
-      responseSchema: "reattach-moves",
-      providerId: opts.providerId,
-      model: opts.model,
-      prompt: reattachPrompt,
-      parsed: {
-        steps: reattachSteps ?? [],
-        moves: reattachMoves ?? [],
-      },
-      source: "ontology-cache",
-      projectSlug: opts.projectSlug,
+  } else if (cached?.mergeSessionAnalysis) {
+    progress?.report("M-merge: Virtual session cache hit…");
+    virtualSession = finalizeSessionAnalysis(cached.mergeSessionAnalysis, {
+      sessionId: MERGE_SNAPSHOT_SESSION_ID,
+      projectSlug: opts.projectSlug ?? opts.records[0]?.meta.projectSlug ?? "",
+      userQueryCount: 0,
     });
-    await runStage("M-merge conceptMerge", async () => reattachMoves, () => ({
+    await runStage("M-merge conceptMerge", async () => virtualSession, () => ({
       kind: "llm",
       cacheHit: true,
       skipped: true,
     }));
   }
 
-  const prefixInferred = inferPrefixSubordinateSteps(
-    allReparentInput.chains,
-    reattachSteps ?? []
-  );
-  if (prefixInferred.length) {
-    reattachSteps = appendReattachSteps(reattachSteps ?? [], prefixInferred);
-    reattachMoves =
-      reattachSteps.length && allReparentInput.chains.length
-        ? reattachStepsToMoves(reattachSteps)
-        : reattachMoves;
-  }
+  const virtualAnalysis: SessionAnalysis | undefined =
+    virtualSession?.sessionAnalysis;
+  const ontologyNodes = virtualAnalysis?.nodes?.length
+    ? virtualAnalysis.nodes
+    : collected.nodes;
 
   const ontologyPayload = {
-    nodes: collected.nodes,
+    nodes: ontologyNodes,
     mappings: collected.mappings,
     topicPaths: collected.topicPaths,
     segmentEquivalences,
-    reattachMoves: reattachMoves?.length ? reattachMoves : undefined,
-    reattachSteps: reattachSteps?.length ? reattachSteps : undefined,
+    mergeSessionAnalysis: virtualAnalysis,
   };
 
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
@@ -336,15 +285,54 @@ export async function runMergePipeline(
       updateConceptTrieAsync({
         records: opts.records,
         segmentEquivalences,
-        reattachMoves: ontology.reattachMoves,
-        reattachSteps,
+        virtualSessionAnalysis: ontology.mergeSessionAnalysis,
         ontology,
         projectSlug: opts.projectSlug,
       }),
     () => ({ kind: "det" })
   );
 
+  // #region agent log
+  const mindMapChildren =
+    merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
+  fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "0cd37d",
+    },
+    body: JSON.stringify({
+      sessionId: "0cd37d",
+      runId: "post-fix-v10",
+      hypothesisId: "H4-H5",
+      location: "mergePipeline.ts:m3Done",
+      message: "M3 trie top-level count",
+      data: {
+        sessionCount: opts.records.length,
+        mergeMode: opts.mergeMode ?? "full",
+        hasVirtualSession: Boolean(ontology.mergeSessionAnalysis),
+        draftTopChainCount: allReparentInput.chains.length,
+        uiTopLevelCount: mindMapChildren.length,
+        uiTopLabels: mindMapChildren
+          .slice(0, 12)
+          .map(
+            (c: { nodeData?: { data?: { text?: string } }; data?: { text?: string } }) =>
+              c.nodeData?.data?.text ?? c.data?.text ?? "?"
+          ),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   await timing?.finish();
 
-  return { merge, ontology, records: opts.records };
+  return {
+    merge,
+    ontology,
+    records: opts.records,
+    reattachLlmStepCount,
+    uiTopLevelCount: mindMapChildren.length,
+    virtualSession,
+  };
 }

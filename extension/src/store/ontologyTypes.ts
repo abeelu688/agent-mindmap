@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { ReattachStep, SegmentEquivalence } from "../llm/types";
+import type { ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
 
 /**
  * A persistent, cross-session concept memory used to reduce future LLM calls.
@@ -27,6 +27,8 @@ export type ConceptOntologyRecord = {
       refine: number;
       outlineSchema: number;
       sessionAnalysis?: number;
+      /** M-merge virtual combined session prompt version. */
+      mergeSessionAnalysis?: number;
       /** @deprecated legacy session pipeline */
       extract?: number;
       /** @deprecated legacy session pipeline */
@@ -63,6 +65,8 @@ export type ConceptOntologyRecord = {
    * under frontend + React evidence).
    */
   segmentEquivalences?: SegmentEquivalence[];
+  /** M-merge LLM2 output — one virtual combined session (Part I schema). */
+  mergeSessionAnalysis?: SessionAnalysis;
 };
 
 export type ConceptNode = {

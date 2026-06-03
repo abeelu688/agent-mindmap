@@ -1,0 +1,42 @@
+---
+description: Development phase — fail loud on unexpected conditions (no silent fallback)
+globs: agent-mindmap/**/*
+alwaysApply: true
+---
+
+# Development phase: fail loud
+
+**Agent Mind Map is in active development.** Default behavior for **unexpected / non-contract** conditions is **throw and surface to the developer** — not hide the problem behind rollback, degraded output, or alternate code paths.
+
+## Expected vs unexpected
+
+| Kind | Example | Behavior |
+|------|---------|----------|
+| **Expected imperfection** | Delta merge leaves extra top roots; LLM fold incomplete but steps valid | **Allow** — write result; developer inspects UI/logs |
+| **Contract violation** | Parallel hub in delta steps; frozen top moved; step-order conflict | **`throw`** — batch fails, error in UI / output channel |
+| **Unexpected pipeline state** | Missing required field after LLM; validation failure; stale cache with wrong schema | **`throw`** — do not substitute silent fallback |
+| **Infrastructure failure** | LLM timeout, network error | **Report** error; do not pretend success with empty/prior steps unless explicitly documented as that stage’s contract |
+
+## Forbidden silent strategies (development)
+
+Do **not** implement or re-introduce without explicit product decision + rule update:
+
+- **Rollback** to prior snapshot / prior steps when a new path fails or “looks worse”
+- **Auto-discard** LLM output and re-run an alternate merge (full re-merge, wide delta, DET-only substitute)
+- **Swallow** errors (`catch` → continue with degraded trie / empty steps) without user-visible failure
+- **Hidden DET fixes** after LLM (e.g. prefix-inferred attach on delta) that change merge outcome without going through LLM contract
+- **Fallback** to cache / `priorReattachSteps` when the current stage was supposed to produce fresh LLM output — except where **documented** in pipeline rules (e.g. batch 1 full + LLM returns 0 steps → `priorReattachSteps` is an explicit contract)
+
+When adding a fallback for production later, it must be **opt-in**, **logged**, and **documented** — not the default during development.
+
+## Implementation checklist
+
+- Prefer **`throw new …Error`** (typed where useful, e.g. `DeltaReattachValidationError`) over returning partial success.
+- Propagate to **batch analyze** / command handler so the run **stops** and the message appears in VS Code (warning/error + Agent Mind Map output).
+- Use **`mindMapLog` / progress.report** for context, but logging alone is **not** a substitute for failure.
+- Tests should assert **failure** on invalid input, not only happy path.
+
+## Related rules
+
+- Merge delta contract: [`merge-snapshot-delta.mdc`](merge-snapshot-delta.mdc)
+- Pipeline LLM boundaries: [`conversation-data-flow.mdc`](conversation-data-flow.mdc)

@@ -15,6 +15,7 @@ import {
   TOPIC_PATHS_PROMPT_VERSION,
   type OntologyLite,
 } from "../llm/promptTopicPaths";
+import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import {
   REATTACH_PROMPT_VERSION,
   buildReattachPrompt,
@@ -355,6 +356,7 @@ export async function writeOntologyRecord(
     | "reattachMoves"
     | "reattachSteps"
     | "segmentEquivalences"
+    | "mergeSessionAnalysis"
   >
 ): Promise<ConceptOntologyRecord> {
   const record: ConceptOntologyRecord = {
@@ -372,6 +374,7 @@ export async function writeOntologyRecord(
         refine: 0,
         outlineSchema: OUTLINE_PROMPT_VERSION,
         sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
+        mergeSessionAnalysis: MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
       },
       hostId,
     },
@@ -381,6 +384,7 @@ export async function writeOntologyRecord(
     reattachMoves: payload.reattachMoves,
     reattachSteps: payload.reattachSteps,
     segmentEquivalences: payload.segmentEquivalences,
+    mergeSessionAnalysis: payload.mergeSessionAnalysis,
   };
   await writeJsonAtomic(ontologyCachePath(storeDir, cacheKey), record);
   await writeOntologyIndex(storeDir, {

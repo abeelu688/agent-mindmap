@@ -2,7 +2,7 @@ import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,
 } from "../../store/mergeConceptTrie";
-import type { ReattachMove, ReattachStep, SegmentEquivalence } from "../../llm/types";
+import type { ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../../llm/types";
 import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 import {
   enrichRecordsWithTopicPaths,
@@ -26,6 +26,8 @@ export type UpdateConceptTrieOpts = {
   segmentEquivalences?: SegmentEquivalence[];
   reattachMoves?: ReattachMove[];
   reattachSteps?: ReattachStep[];
+  /** M-merge virtual combined session (preferred over reattach when set). */
+  virtualSessionAnalysis?: SessionAnalysis;
   ontology?: PrepOntology;
   projectSlug?: string;
 };
@@ -52,6 +54,7 @@ export function updateConceptTrie(opts: UpdateConceptTrieOpts): MergeRecord {
     ontologyForPrep: opts.ontology,
     reattachMoves: opts.reattachMoves,
     reattachSteps: opts.reattachSteps,
+    virtualSessionAnalysis: opts.virtualSessionAnalysis,
   });
 }
 
@@ -66,5 +69,6 @@ export async function updateConceptTrieAsync(
     ontologyForPrep: opts.ontology,
     reattachMoves: opts.reattachMoves,
     reattachSteps: opts.reattachSteps,
+    virtualSessionAnalysis: opts.virtualSessionAnalysis,
   });
 }
