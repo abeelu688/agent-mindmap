@@ -547,6 +547,7 @@ export class HeadlessCliProvider {
     const args = this.config.buildArgs(this.options, input.prompt);
     const maxAttempts = Math.max(1, this.options.maxAttempts || 1);
     const backoffBase = Math.max(0, this.options.retryBackoffMs || 0);
+    const timeoutMs = input.timeoutMs ?? this.options.timeoutMs;
 
     let lastErr: LlmProviderError | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -564,7 +565,7 @@ export class HeadlessCliProvider {
             bin,
             args,
             signal,
-            this.options.timeoutMs,
+            timeoutMs,
             this.config.providerLabel
           );
           stdout = run.stdout;

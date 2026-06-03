@@ -299,15 +299,15 @@ flowchart LR
 
 ### #4 批处理 Refine 频率
 
-**现状（已实现 delta）**：每 5 会话 → [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts)：`mergeMode=delta` 时 M-merge LLM 只见 **虚拟快照 + 本批新会话**；M3 仍用全库 records。`merges/<slug>/merge-snapshot.json` 存稳定导图投影。每 `mergeFullReconcileEvery` 批（默认 4）或 `forceRefresh` / stale 顶根时全量 M-merge。`batchFinalRefine` 默认仅 DET 刷新快照（无额外 LLM）。
+**现状（已实现 delta）**：每 5 会话 → [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts)：**仅 batch 1** 对 milestone 会话做 full M-merge；**batch 2+** 恒为 **虚拟快照 + 本批新会话** delta append（M3 仍用全库 records）。`merges/<slug>/merge-snapshot.json` 每批重写。**禁止**：`batchNo % N` 周期性全量、`forceRefresh` / `mergeMode=full` 触发 batch 2+ 全量、快照缺失/过期时对全库再跑 full LLM（缺失快照时仅本批 batch-only；delta 失败回滚 snapshot steps）。规则见 [`merge-snapshot-delta.mdc`](../.cursor/rules/merge-snapshot-delta.mdc)。`batchFinalRefine` 默认仅 DET 刷新快照（无额外 LLM）。
 
 | 方案 | LLM 成本 | 合并质量 | 说明 |
 |------|----------|----------|------|
-| **delta（默认）** | 低–中（~N/5 次小 prompt + 偶发全量） | 高 | `library.mergeMode=delta` |
-| full | 高（每批全库 trie 进 prompt） | 高 | `library.mergeMode=full` 调试/对照 |
+| **delta（默认）** | 低（batch 1 full + 后续小 delta） | 高 | `library.mergeMode=delta` |
+| full | 同上 batch 2+ 行为 | — | 配置项保留，**不**恢复每批全库 M-merge |
 | 关 `batchRefineOntology` | 无 M-merge | 机械 path | 仅缓存 equivalences |
 
-配置：`library.mergeMode`、`library.mergeFullReconcileEvery`、`library.batchFinalRefine`。
+配置：`library.mergeMode`、`library.batchFinalRefine`（`mergeFullReconcileEvery` 已废弃/忽略）。
 
 ---
 

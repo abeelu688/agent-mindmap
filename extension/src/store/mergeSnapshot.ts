@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
 import type {
@@ -38,6 +39,7 @@ import type {
   MergeSnapshotMeta,
   SessionRecord,
 } from "./storeTypes";
+import type { FinalizedSessionAnalysis } from "../pipeline/stages/finalizeSessionAnalysis";
 
 /** Virtual session id for delta M-merge (one record = stabilized project map). */
 export const MERGE_SNAPSHOT_SESSION_ID = "__project_merge_snapshot__";
@@ -244,6 +246,58 @@ function buildSnapshotAnalysis(
 }
 
 /**
+ * DET: materialize MergeSnapshot from M-merge virtual combined session.
+ */
+export function buildMergeSnapshotFromVirtualSession(
+  allRecords: SessionRecord[],
+  virtual: FinalizedSessionAnalysis,
+  projectSlug: string,
+  segmentEquivalences: SegmentEquivalence[]
+): MergeSnapshot {
+  const realRecords = filterRealSessionRecords(allRecords);
+  const prep = prepareRecordsForFinalTrie(
+    realRecords,
+    { segmentEquivalences, nodes: virtual.sessionAnalysis.nodes },
+    undefined,
+    undefined,
+    virtual.sessionAnalysis
+  );
+  const preparedTopicPaths = topicPathDecisionsFromPrepared(prep, projectSlug);
+  const sessionIds = realRecords.map((r) => r.meta.sessionId).sort();
+
+  const meta: MergeSnapshotMeta = {
+    builtAt: Date.now(),
+    projectSlug,
+    sessionIds,
+    hostId: realRecords[0]?.meta.hostId,
+    promptVersions: {
+      sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
+      mergeSessionAnalysis: MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+    },
+  };
+
+  return {
+    schemaVersion: 1,
+    meta,
+    treeSnapshot: {
+      ...virtual.treeSnapshot,
+      topicPathDecisions: preparedTopicPaths.map((tp) => ({
+        topicId: tp.topicId,
+        sessionId: tp.sessionId,
+        projectSlug: tp.projectSlug,
+        conceptPath: tp.conceptPath,
+        confidence: tp.confidence,
+        evidence: tp.evidence,
+      })),
+    },
+    sessionAnalysis: virtual.sessionAnalysis,
+    conceptContexts: virtual.conceptContexts,
+    segmentEquivalences,
+    topicPaths: preparedTopicPaths,
+  };
+}
+
+/**
  * DET: materialize MergeSnapshot after a successful full-library merge.
  */
 export function buildMergeSnapshotFromOntology(
@@ -302,8 +356,9 @@ export function buildMergeSnapshotFromOntology(
     sessionIds,
     hostId: realRecords[0]?.meta.hostId,
     promptVersions: {
-      reattach: REATTACH_PROMPT_VERSION,
       sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
+      mergeSessionAnalysis: MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+      reattach: REATTACH_PROMPT_VERSION,
     },
   };
 

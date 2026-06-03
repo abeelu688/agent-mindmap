@@ -1,8 +1,10 @@
 import { applySegmentEquivalencesToRecords } from "../llm/applySegmentEquivalencesToRecords";
+import { snapRecordsToVirtualSession } from "../llm/applyVirtualSessionToRecords";
 import {
   applyReattachMovesSequentially,
   applyReattachStepsToRecords,
 } from "../llm/reattachSteps";
+import type { SessionAnalysis } from "../llm/types";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import type { ReattachMove, ReattachStep } from "../llm/types";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
@@ -144,14 +146,27 @@ export function enrichRecordsWithTopicPaths(
   return applyTopicPathsFromOntology(records, full);
 }
 
-/** Topic paths (if any) then LLM reattach moves — single entry before concept trie build. */
+/** Topic paths, then virtual session snap or legacy reattach — entry before concept trie build. */
 export function prepareRecordsForFinalTrie(
   records: SessionRecord[],
   ontology: ConceptMergePrepOntology | undefined,
   reattachMoves?: ReattachMove[],
-  reattachSteps?: ReattachStep[]
+  reattachSteps?: ReattachStep[],
+  virtualSessionAnalysis?: SessionAnalysis
 ): SessionRecord[] {
   const afterTopicPaths = enrichRecordsWithTopicPaths(records, ontology);
+  if (virtualSessionAnalysis) {
+    const snapped = snapRecordsToVirtualSession(
+      afterTopicPaths,
+      virtualSessionAnalysis,
+      ontology?.segmentEquivalences
+    );
+    const equivalences = ontology?.segmentEquivalences;
+    if (MERGE_APPLY_SEGMENT_EQUIVALENCES && equivalences?.length) {
+      return applySegmentEquivalencesToRecords(snapped, equivalences);
+    }
+    return snapped;
+  }
   const moves = reattachMoves ?? ontology?.reattachMoves;
   const steps = reattachSteps ?? ontology?.reattachSteps;
   const reparentInput = buildTrieReparentInput(afterTopicPaths, {

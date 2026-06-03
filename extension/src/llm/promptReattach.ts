@@ -1,6 +1,10 @@
 import type { AgentHostId } from "../host/types";
 import type { PromptLanguage } from "./promptLanguage";
-import type { ConceptContextForMerge } from "../store/storeTypes";
+import {
+  buildReattachDataTables,
+  buildReattachHintTables,
+  formatInputSchema,
+} from "./promptReattachTabular";
 import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -8,16 +12,12 @@ const HOST_LABELS: Record<AgentHostId, string> = {
   "claude-code": "Claude Code Agent",
 };
 
-export const REATTACH_PROMPT_VERSION = 20;
+export const REATTACH_PROMPT_VERSION = 23;
 
 export type ReattachPromptChunkMeta = {
   chunkIndex: number;
   chunkCount: number;
 };
-
-function compactJson(value: unknown): string {
-  return JSON.stringify(value);
-}
 
 /**
  * Single LLM call: numbered draft map → ordered `steps[]` referencing node ids (N1…).
@@ -34,51 +34,9 @@ export function buildReattachPrompt(
   const chainCount = catalog.numberedChains.length;
   const nodeCount = catalog.nodes.length;
 
-  const hintParts: string[] = [];
-  if (input.topBranchSynonymHints.length) {
-    hintParts.push(
-      "### 并列顶级链同义线索（segmentEquivalences，须结合语境验证）",
-      compactJson(input.topBranchSynonymHints)
-    );
-  }
-  if (input.rootChildSynonymHints.length) {
-    hintParts.push(
-      "### 链根与其直接子段同义线索（须结合语境验证）",
-      compactJson(input.rootChildSynonymHints)
-    );
-  }
-  const sh = input.structuralHints;
-  if (sh.duplicateTopRoots.length) {
-    hintParts.push(
-      "### 并列顶根重复（某链 childSegments 已含另一顶根）",
-      "→ 用 `merge_synonym`：`sourceNodeId` = duplicateTopNodeId，`targetNodeId` = parentNodeId。",
-      compactJson(sh.duplicateTopRoots)
-    );
-  }
-  if (sh.listedChildCollapses.length) {
-    hintParts.push(
-      "### 链内根/子段同义（segmentEquivalences 已支持折叠）",
-      "→ 勿保留「链根 → 同义子段」连续两层；并列顶根用 merge_synonym（按节点 id）。",
-      compactJson(sh.listedChildCollapses)
-    );
-  }
-  if (sh.ontologySubordinates.length) {
-    hintParts.push(
-      "### ontology 下位关系（parentKeys）",
-      "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
-      compactJson(sh.ontologySubordinates)
-    );
-  }
-  if (sh.prefixSubordinates.length) {
-    hintParts.push(
-      "### segment key 前缀下位（专精顶根 extends hub key）",
-      "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
-      "例：android-app、android-framework 与 android 并列时，须挂到 android 下，禁止保留为并列顶根。",
-      compactJson(sh.prefixSubordinates)
-    );
-  }
-  const hintsBlock = hintParts.length
-    ? ["", "## ontology / 结构线索", "", ...hintParts].join("\n")
+  const hintTables = buildReattachHintTables(input);
+  const hintsBlock = hintTables.length
+    ? ["", "## ontology / 结构线索", "", hintTables].join("\n")
     : "";
 
   const chunkBlock =
@@ -88,7 +46,7 @@ export function buildReattachPrompt(
           "## 分治合并（本批为子任务）",
           "",
           `- 完整导图过大，已拆成 ${chunkMeta.chunkCount} 批；当前为第 ${chunkMeta.chunkIndex + 1} 批。`,
-          "- 仅处理本批 `numberedChains` 中的链；已稳定/其它批次的链不在本批输入中，但 nodeCatalog 仍含本批可见的全部节点 id。",
+          "- 仅处理本批 `chainMeta` / `treeEdges` 中的链；已稳定/其它批次的链不在本批输入中，但 `nodeCatalog` 仍含本批可见的全部节点 id。",
           "- 新链须并入本批 nodeCatalog 中已有节点 id（含稳定顶根）。",
         ].join("\n")
       : "";
@@ -99,18 +57,87 @@ export function buildReattachPrompt(
           .map((i) => input.chains[i]?.from)
           .filter(Boolean)
       : [];
+  const frozenTopRoots =
+    mergeMode === "delta" && input.frozenChainIndices?.length
+      ? input.frozenChainIndices
+          .map((i) => {
+            const c = input.chains[i];
+            const numbered = input.nodeCatalog.numberedChains.find(
+              (nc) => nc.chainIndex === c?.chainIndex
+            );
+            if (!numbered) {
+              return c?.from;
+            }
+            return `${numbered.rootNodeId} (${numbered.from})`;
+          })
+          .filter(Boolean)
+      : [];
   const deltaBlock =
     mergeMode === "delta" && input.frozenChainCount
       ? [
           "",
           "## 增量合并（delta）",
           "",
-          `- 以下 numberedChains 来自**已稳定项目导图**（虚拟会话 ${input.snapshotSessionId ?? "snapshot"}），其结构视为已生效，**不要**对它们输出 Step A/B：${frozenLabels.length ? frozenLabels.join("、") : `共 ${input.frozenChainCount} 条`}。`,
-      "- 仅对**新会话**引入的并列顶级链：在 Step A 做链内折叠，在 Step B 用 `merge_synonym` / `attach_under` 把它们并入已有节点 id（禁止仅用 segment 名）。",
-      "- **新批顶根**若与已稳定 nodeCatalog 中某节点 domain/evidence 同义或下位，**必须**输出 merge/attach steps；禁止因「已稳定链」而返回空 steps。",
-      "- 若无新链需调整则 `{\"steps\":[]}`。",
+          `- 以下 chainMeta 行来自**已稳定项目导图**（虚拟会话 ${input.snapshotSessionId ?? "snapshot"}），其结构视为已生效，**不要**对它们输出 Step A/B：${frozenLabels.length ? frozenLabels.join("、") : `共 ${input.frozenChainCount} 条`}。`,
+          `- **已稳定顶根 hub（仅此列表可作 merge/attach 的目标顶根）**：${frozenTopRoots.length ? frozenTopRoots.join("、") : "见 nodeCatalog isTopRoot=1 且 chain 来自 snapshot 的行"}。`,
+          "- 仅对**新会话**引入的并列顶级链：在 Step A 做链内折叠，在 Step B 用 `merge_synonym` / `attach_under` 把它们并入**上述 frozen 顶根 id**（禁止仅用 segment 名）。",
+          "- **`attach_under` 的 `targetNodeIds[0]` 必须是 frozen 顶根 id**；禁止以新 batch 顶根（editable chain 的 rootNodeId）作 hub — 那会发明与 snapshot 平行的顶层。",
+          "- 新 batch 顶根之间可先 `merge`，再 `attach` 到 frozen 顶根；禁止新建 generic hub（如单独的 `android`）收纳本应挂到 `androidplatform` 等 frozen 顶的链。",
+          "- **新批顶根**若与 frozen nodeCatalog 节点 domain/evidence 同义或下位，**必须**输出 change；禁止因「已稳定链」而返回空 changes。",
+          '- 若无新链需调整则 `{"changes":[]}`。',
         ].join("\n")
       : "";
+
+  const deltaOutputBlock =
+    mergeMode === "delta" && input.frozenChainCount
+      ? [
+          "",
+          "## 输出（严格 JSON，仅 changes）",
+          "",
+          "只写**本批相对 snapshot 有变化**的结构调整（不要重复已稳定部分）。用 **segment key**（与 chainMeta.from / nodeCatalog.segment 一致），**不要**写 N 编号或 steps/moves。",
+          "",
+          "### attach — `hub->node`",
+          "含义：专精顶根 **node** 挂到 **hub** 下，**node 顶根去除**。",
+          '{"kind":"attach","hub":"androidplatform","node":"aosp"}',
+          "",
+          "### merge — remove 并进 keep",
+          "含义：**remove** 与 **keep** 同义合并，remove 的子节点归 keep，**remove 顶根去除**。",
+          '{"kind":"merge","keep":"androidlogging","remove":"debugging"}',
+          "",
+          '{"changes":[',
+          '{"kind":"attach","hub":"androidplatform","node":"aosp","note":"AOSP 源码检索挂到 Android Platform 下"},',
+          '{"kind":"merge","keep":"androidlogging","remove":"debugging","note":"debugging 与 android-logging 同义"}',
+          "]}",
+          "",
+          '- 无变化则 `{"changes":[]}`。**禁止**输出 `steps` / `moves`。',
+        ].join("\n")
+      : "";
+
+  const dataTables = buildReattachDataTables(input);
+
+  if (mergeMode === "delta" && input.frozenChainCount) {
+    return [
+      `你是「思维导图树归并」助手。下面是 ${agentLabel} 多会话合并后的**草稿思维导图**（含已稳定 snapshot + 本批新会话）。`,
+      `共 ${chainCount} 条并列顶级链。`,
+      "",
+      "## 任务",
+      "",
+      "比较 **已稳定顶根** 与 **本批新顶根**，只输出需要执行的 **changes**（挂接或同义合并）。",
+      "读 `nodeCatalog`、`chainMeta`、`conceptContexts` 判断 domain/evidence；输出用 **segment key**，不用节点 id。",
+      deltaBlock,
+      chunkBlock,
+      "",
+      formatInputSchema(),
+      hintsBlock,
+      deltaOutputBlock,
+      "",
+      "## 输入数据（TAB 表，列名见 schema）",
+      "",
+      dataTables,
+    ].join("\n");
+  }
+
+  const dataTablesFull = dataTables;
 
   return [
     `你是「思维导图树归并」助手。下面是 ${agentLabel} 多会话合并后的**整幅草稿思维导图**。`,
@@ -118,9 +145,9 @@ export function buildReattachPrompt(
     "",
     "## 节点编号（必须遵守）",
     "",
-    "- 每个概念段在 `nodeCatalog[]` 有唯一 `id`（N1、N2…）；`path` 为从导图根到该节点的段 key 序列。",
-    "- `numberedChains[].tree` 为带 id 的子树；**所有 steps 必须用节点 id 引用**，禁止仅用 segment 名（易歧义）。",
-    "- `isTopRoot: true` 的节点才可作 `merge_synonym` / `attach_under` 的 `sourceNodeId`（移动整条顶级链）。",
+    "- 每个概念段在 `nodeCatalog` 表有唯一 `id`（N1、N2…）；`path` 为从导图根到该节点的段 key（`/` 分隔）。",
+    "- `treeEdges` 表描述带 id 的子树父子关系；**所有 steps 必须用节点 id 引用**，禁止仅用 segment 名（易歧义）。",
+    "- `isTopRoot=1` 的节点才可作 `merge_synonym` / `attach_under` 的 `sourceNodeId`（移动整条顶级链）。",
     "",
     "## 重要前提",
     "",
@@ -139,7 +166,7 @@ export function buildReattachPrompt(
     "在假定 Step A 的 steps 已生效后，遍历各并列顶根：与其他树上的节点",
     "同义 → `merge_synonym`；专精/下位 → `attach_under`。必须使用 `conceptContexts` 中的 domainKeys、parentKeys、childKeys（含 outline 补齐）、evidence。",
     "",
-    "1) 读完全部 `nodeCatalog`、`numberedChains`、`conceptContexts`。",
+    "1) 读完全部输入 schema 定义的表（`nodeCatalog`、`chainMeta`、`treeEdges`、`conceptContexts` 等）。",
     "2) 先完成 Step A 的 steps，再完成 Step B（step 从 1 递增；执行 step n 时假定 1…n-1 已生效）。",
     "3) 每步写清 **action** 与 **result**（可提及节点 id）。",
     "",
@@ -163,6 +190,8 @@ export function buildReattachPrompt(
     "- attach_under 的 targetNodeIds 末 id 不是 sourceNodeId。",
     deltaBlock,
     chunkBlock,
+    "",
+    formatInputSchema(),
     hintsBlock,
     "",
     "## 输出（严格 JSON，仅 steps）",
@@ -173,35 +202,10 @@ export function buildReattachPrompt(
     "]}",
     "",
     "- 每步必须含 `sourceNodeId`；merge 用 `targetNodeId`，attach 用 `targetNodeIds`。",
-    "- 无调整则 `{\"steps\":[]}`。",
+    '- 无调整则 `{"steps":[]}`。',
     "",
-    "## 输入 nodeCatalog（全图节点索引）",
-    compactJson(catalog.nodes),
+    "## 输入数据（TAB 表，列名见 schema）",
     "",
-    "## 输入 numberedChains（带 id 的并列链与子树）",
-    compactJson(catalog.numberedChains),
-    "",
-    "## 输入 segmentEquivalences（各会话 S1，供 Step A/B 参考）",
-    compactJson(input.segmentEquivalences.slice(0, 24)),
-    "",
-    "## 输入 conceptContexts（Part I 概念语境：domain / 上级 / 下级 / evidence）",
-    compactJson(formatConceptContexts(input.conceptContexts)),
-    "",
-    "## 输入 ontology nodes",
-    compactJson(input.nodes.slice(0, 48)),
+    dataTablesFull,
   ].join("\n");
-}
-
-function formatConceptContexts(
-  contexts: ConceptContextForMerge[]
-): unknown[] {
-  return contexts.slice(0, 120).map((c) => ({
-    key: c.key,
-    label: c.label,
-    domainKeys: c.domainKeys,
-    parentKeys: c.parentKeys,
-    childKeys: c.childKeys,
-    evidence: c.evidence.slice(0, 4),
-    sessionId: c.sessionId,
-  }));
 }

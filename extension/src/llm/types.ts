@@ -243,6 +243,8 @@ export type SummarizeInput = {
   onAttempt?: (attempt: number, maxAttempts: number) => void;
   /** Workspace LLM IO dump (live CLI only). */
   dumpMeta?: LlmDumpMeta;
+  /** Override provider default timeout for this call (ms). */
+  timeoutMs?: number;
 };
 
 export type LlmProviderOptions = {

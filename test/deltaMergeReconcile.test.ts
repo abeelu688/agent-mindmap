@@ -120,7 +120,20 @@ describe("shouldFullReconcile", () => {
     ).toBe(false);
   });
 
-  it("batch 2 can use delta when new sessions add unstale-looking top roots", () => {
+  it("batch 2 stays delta when batch adds new top-level segments (wide delta)", () => {
+    const snap = minimalSnapshot(["s1"]);
+    const s2 = sessionRecord("s2");
+    s2.graph.topics[0]!.conceptPath = ["zeta", "child"];
+    const current = [sessionRecord("s1"), s2];
+    const opts = baseOpts({
+      batchNo: 2,
+      allRecords: current,
+      batchRecords: [s2],
+    });
+    expect(shouldFullReconcile(opts, snap, current)).toBe(false);
+  });
+
+  it("batch 2 can delta when batch shares snapshot top roots", () => {
     const snap = minimalSnapshot(["s1"]);
     snap.reattachSteps = [
       {
@@ -133,15 +146,47 @@ describe("shouldFullReconcile", () => {
       },
     ];
     const current = [sessionRecord("s1"), sessionRecord("s2")];
-    const opts = baseOpts({ batchNo: 2 });
+    const opts = baseOpts({
+      batchNo: 2,
+      allRecords: current,
+      batchRecords: [sessionRecord("s2")],
+    });
     expect(shouldFullReconcile(opts, snap, current)).toBe(false);
   });
 
-  it("batch 4 triggers periodic full reconcile", () => {
+  it("batch 2 stays delta when snapshot missing (no full re-merge)", () => {
+    const current = [sessionRecord("s1"), sessionRecord("s2")];
+    expect(
+      shouldFullReconcile(baseOpts({ batchNo: 2 }), undefined, current)
+    ).toBe(false);
+  });
+
+  it("batch 2 stays delta when snapshot session set is stale", () => {
+    const snap = minimalSnapshot(["old-1"]);
+    const current = [sessionRecord("s1"), sessionRecord("s2")];
+    expect(snapshotCoversCurrentSessions(snap, current)).toBe(false);
+    expect(
+      shouldFullReconcile(baseOpts({ batchNo: 2 }), snap, current)
+    ).toBe(false);
+  });
+
+  it("forceRefresh does not trigger full reconcile on batch 2+", () => {
+    const snap = minimalSnapshot(["s1"]);
+    const current = [sessionRecord("s1"), sessionRecord("s2")];
+    expect(
+      shouldFullReconcile(
+        baseOpts({ batchNo: 2, forceRefresh: true, mergeMode: "full" }),
+        snap,
+        current
+      )
+    ).toBe(false);
+  });
+
+  it("batch 4 stays delta (no periodic full reconcile)", () => {
     const snap = minimalSnapshot(["s1"]);
     const current = [sessionRecord("s1")];
     expect(
       shouldFullReconcile(baseOpts({ batchNo: 4 }), snap, current)
-    ).toBe(true);
+    ).toBe(false);
   });
 });

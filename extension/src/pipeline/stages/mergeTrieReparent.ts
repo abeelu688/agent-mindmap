@@ -26,11 +26,16 @@ import type {
   SegmentEquivalence,
   TopicPathDecision,
 } from "../../llm/types";
+import { tryParseReattachChangesResponse } from "../../llm/reattachChanges";
+import {
+  DeltaReattachValidationError,
+  validateDeltaReattachSteps,
+} from "../../llm/validateDeltaReattachSteps";
 import { appendReattachSteps } from "../../store/mergeSnapshot";
 import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 import type { MindMapProgress } from "../../progress";
 import { createHeartbeat } from "../../progress";
-import type { SessionRecord } from "../../store/storeTypes";
+import { scaleReattachTimeoutMs } from "../../llm/reattachTimeout";
 
 export type MergeTrieReparentOpts = {
   records: SessionRecord[];
@@ -44,6 +49,8 @@ export type MergeTrieReparentOpts = {
   promptLanguage?: "zh" | "en";
   mergeMode?: MergeInputMode;
   snapshotSessionId?: string;
+  /** Base CLI timeout (ms); scaled up by chain count for reattach-moves. */
+  llmTimeoutMs?: number;
 };
 
 export type MergeTrieReparentResult = {
@@ -51,13 +58,13 @@ export type MergeTrieReparentResult = {
   steps: ReattachStep[];
 };
 
-async function runOneReattachLlmCall(
+async function runOneReattachLlmCallDetailed(
   slice: TrieReparentInput,
   opts: MergeTrieReparentOpts,
   provider: LlmProvider,
   signal: AbortSignal,
   chunkMeta?: { chunkIndex: number; chunkCount: number }
-): Promise<ReattachStep[]> {
+): Promise<{ steps: ReattachStep[]; rawCount: number; resolved: number }> {
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
   const mergeMode = opts.mergeMode ?? "full";
   const prompt = buildReattachPrompt(
@@ -67,6 +74,10 @@ async function runOneReattachLlmCall(
     mergeMode,
     chunkMeta
   );
+  const timeoutMs =
+    opts.llmTimeoutMs != null
+      ? scaleReattachTimeoutMs(opts.llmTimeoutMs, slice.chains.length)
+      : undefined;
 
   const res = await provider.summarize(
     {
@@ -76,6 +87,7 @@ async function runOneReattachLlmCall(
       maxTopics: 8,
       maxItemsPerTopic: 8,
       responseSchema: "reattach-moves",
+      timeoutMs,
       dumpMeta: {
         stageId: "reattach-moves",
         projectSlug: opts.projectSlug,
@@ -88,10 +100,57 @@ async function runOneReattachLlmCall(
   const parsed: ReattachParseResult =
     res &&
     typeof res === "object" &&
-    ("steps" in res || "moves" in res)
-      ? (res as ReattachParseResult)
+    ("steps" in res || "moves" in res || "changes" in res)
+      ? (res as ReattachParseResult & { changes?: unknown })
       : tryParseReattachResponse(res);
-  return resolveReattachStepsWithCatalog(parsed.steps, slice.nodeCatalog);
+
+  let steps: ReattachStep[];
+  if (mergeMode === "delta") {
+    const root =
+      res && typeof res === "object"
+        ? (res as Record<string, unknown>)
+        : undefined;
+    if (Array.isArray(root?.steps) && (root.steps as unknown[]).length > 0) {
+      throw new DeltaReattachValidationError(
+        "M-merge delta must return changes[] not steps[]",
+        ["Use {\"changes\":[{\"kind\":\"attach\",...}]} for delta merge"]
+      );
+    }
+    steps = tryParseReattachChangesResponse(res ?? parsed);
+    validateDeltaReattachSteps(slice, steps);
+  } else {
+    const rawSteps = parsed.steps ?? [];
+    steps = resolveReattachStepsWithCatalog(rawSteps, slice.nodeCatalog);
+  }
+  return {
+    steps,
+    rawCount:
+      mergeMode === "delta"
+        ? (Array.isArray(
+            (res as Record<string, unknown> | undefined)?.changes
+          )
+            ? ((res as Record<string, unknown>).changes as unknown[]).length
+            : steps.length)
+        : (parsed.steps ?? []).length,
+    resolved: steps.length,
+  };
+}
+
+async function runOneReattachLlmCall(
+  slice: TrieReparentInput,
+  opts: MergeTrieReparentOpts,
+  provider: LlmProvider,
+  signal: AbortSignal,
+  chunkMeta?: { chunkIndex: number; chunkCount: number }
+): Promise<ReattachStep[]> {
+  const result = await runOneReattachLlmCallDetailed(
+    slice,
+    opts,
+    provider,
+    signal,
+    chunkMeta
+  );
+  return result.steps;
 }
 
 /**
@@ -154,6 +213,9 @@ export async function mergeTrieReparent(
   );
 
   let collectedSteps: ReattachStep[] = [];
+  let lastError: string | undefined;
+  let rawParsedCount = 0;
+  let resolvedCount = 0;
   try {
     for (let i = 0; i < executions.length; i++) {
       const exec = executions[i]!;
@@ -162,13 +224,15 @@ export async function mergeTrieReparent(
           `M-merge chunk ${i + 1}/${executions.length} (${exec.promptBytes}B)…`
         );
       }
-      const chunkSteps = await runOneReattachLlmCall(
+      const { steps: chunkSteps, rawCount, resolved } = await runOneReattachLlmCallDetailed(
         exec.slice,
         opts,
         provider,
         signal,
         chunked ? { chunkIndex: i, chunkCount: executions.length } : undefined
       );
+      rawParsedCount += rawCount;
+      resolvedCount += resolved;
       collectedSteps = appendReattachSteps(collectedSteps, chunkSteps);
     }
 
@@ -178,10 +242,68 @@ export async function mergeTrieReparent(
       input.segmentEquivalences,
       input.chains.map((c) => c.from)
     );
+    if (mergeMode === "delta") {
+      validateDeltaReattachSteps(input, steps);
+    }
     const moves = steps.length > 0 ? reattachStepsToMoves(steps) : [];
 
+    // #region agent log
+    fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "0cd37d",
+      },
+      body: JSON.stringify({
+        sessionId: "0cd37d",
+        runId: "post-fix-v9",
+        hypothesisId: "H6-H8",
+        location: "mergeTrieReparent.ts:done",
+        message: "M-merge LLM step resolution",
+        data: {
+          mergeMode: mergeMode ?? "full",
+          chainCount: input.chains.length,
+          chunkCount: executions.length,
+          chunked,
+          scaledTimeoutMs: opts.llmTimeoutMs
+            ? scaleReattachTimeoutMs(opts.llmTimeoutMs, input.chains.length)
+            : null,
+          rawParsedCount,
+          resolvedCount,
+          normalizedStepCount: steps.length,
+          lastError,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
     return { steps, moves };
-  } catch {
+  } catch (err) {
+    lastError = err instanceof Error ? err.message : String(err);
+    // #region agent log
+    fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "0cd37d",
+      },
+      body: JSON.stringify({
+        sessionId: "0cd37d",
+        runId: "post-fix-v9",
+        hypothesisId: "H6-H9",
+        location: "mergeTrieReparent.ts:catch",
+        message: "M-merge LLM failed",
+        data: {
+          mergeMode: mergeMode ?? "full",
+          chainCount: input.chains.length,
+          chunkCount: executions.length,
+          error: lastError,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     return { moves: [], steps: [] };
   } finally {
     heartbeat.stop();

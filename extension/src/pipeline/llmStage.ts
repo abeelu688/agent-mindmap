@@ -59,6 +59,8 @@ export type LlmStageOptions<T> = {
   maxItemsPerTopic: number;
   heartbeatMessage: string;
   validate: (value: unknown) => T;
+  /** Override provider default CLI timeout for this stage (ms). */
+  timeoutMs?: number;
   /** Which pipeline run owns this stage (for Output timing logs). */
   pipelineKind?: PipelineKind;
   timingRunId?: string;
@@ -187,6 +189,7 @@ export async function runLlmStage<T>(
         maxTopics: opts.maxTopics,
         maxItemsPerTopic: opts.maxItemsPerTopic,
         responseSchema: opts.responseSchema,
+        timeoutMs: opts.timeoutMs,
         dumpMeta: {
           stageId: opts.stageId,
           sessionId: opts.sessionId,

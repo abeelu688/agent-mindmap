@@ -162,8 +162,8 @@ Known limitations:
 - `agentMindmap.storeDir` — path to the cross-project library; empty = `~/.agent-mindmap`. Supports a leading `~/`. Point at a sync folder to share the library across machines.
 - `agentMindmap.library.enabled` — persist each analysed session to the library and skip the LLM on reopen when the transcript is unchanged (default `true`)
 - `agentMindmap.library.batchRefineOntology` — incremental ontology + contextual refine (v3: outline siblings, upstream/downstream path slices, evidence) after each batch and on new session add (default `true`)
-- `agentMindmap.library.mergeMode` — `delta` (default): M-merge LLM on project snapshot + new batch only; `full`: legacy all-sessions prompt each batch
-- `agentMindmap.library.mergeFullReconcileEvery` — in delta mode, full M-merge on all sessions every N batch milestones (default `4` ≈ 20 sessions)
+- `agentMindmap.library.mergeMode` — `delta` (default): batch 1 full M-merge on milestone sessions, batch 2+ snapshot delta only; `full` legacy label (does **not** re-enable periodic or all-session M-merge on batch 2+ — see `.cursor/rules/merge-snapshot-delta.mdc`)
+- `agentMindmap.library.mergeFullReconcileEvery` — **deprecated / ignored** (was periodic full reconcile; forbidden by merge contract)
 - `agentMindmap.library.batchFinalRefine` — after batch analyze, DET refresh of merge snapshot + concept trie (default `true`, no extra LLM)
 - `agentMindmap.library.incrementalOntologyOnSessionAdd` — incremental ontology when a single session is saved (default `true`)
 - `agentMindmap.merge.autoRebuildDeterministic` — rebuild `merges/deterministic.json` after each new session lands (default `true`)

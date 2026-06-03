@@ -174,13 +174,13 @@
           "type": "string",
           "enum": ["full", "delta"],
           "default": "delta",
-          "description": "Batch concept merge: delta = M-merge LLM on project snapshot + new sessions only; full = every batch sends all sessions to M-merge (legacy, higher token use)."
+          "description": "Batch concept merge: delta (default) = batch 1 full on milestone sessions, batch 2+ snapshot delta only. Setting full does not trigger all-session or periodic M-merge on batch 2+ (see merge-snapshot-delta rule)."
         },
         "agentMindmap.library.mergeFullReconcileEvery": {
           "type": "number",
           "default": 4,
           "minimum": 1,
-          "description": "When mergeMode is delta, run a full M-merge on all sessions every N batch milestones (default 4 ≈ every 20 sessions at batch size 5)."
+          "description": "Deprecated — ignored. Periodic full reconcile (every N batches) is forbidden; only batch 1 uses full M-merge."
         },
         "agentMindmap.library.incrementalOntologyOnSessionAdd": {
           "type": "boolean",

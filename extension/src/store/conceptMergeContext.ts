@@ -36,6 +36,7 @@ export type ConceptMergeLlmOpts = {
   hostId?: AgentHostId;
   providerId: string;
   promptLanguage?: "zh" | "en";
+  timeoutMs?: number;
 };
 
 export type LoadedConceptMergeContext = {

@@ -4,6 +4,7 @@ import type { MindMapProgress } from "../progress";
 import {
   batchIntroducesNewTopRoots,
   buildMergeSnapshotFromOntology,
+  buildMergeSnapshotFromVirtualSession,
   filterRealSessionRecords,
   MERGE_SNAPSHOT_SESSION_ID,
   readMergeSnapshot,
@@ -12,6 +13,7 @@ import {
 } from "../store/mergeSnapshot";
 import type { MergeRecord, MergeSnapshot, SessionRecord } from "../store/storeTypes";
 import { runMergePipeline, type MergePipelineResult } from "./mergePipeline";
+import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 
 export type ProjectMergeMode = "full" | "delta";
 
@@ -30,6 +32,8 @@ export type RunDeltaMergePipelineOpts = {
   promptLanguage?: "zh" | "en";
   signal: AbortSignal;
   forceReattach?: boolean;
+  /** Base CLI timeout (ms); passed to M-merge. */
+  llmTimeoutMs?: number;
 };
 
 export type RunDeltaMergePipelineResult = MergePipelineResult & {
@@ -49,30 +53,18 @@ export function snapshotCoversCurrentSessions(
   return snapIds.every((id) => current.has(id));
 }
 
+/** True only for batch 1 milestone (no prior snapshot to delta from). */
 export function shouldFullReconcile(
   opts: RunDeltaMergePipelineOpts,
-  snapshot: MergeSnapshot | undefined,
-  allRecords: SessionRecord[]
+  _snapshot: MergeSnapshot | undefined,
+  _allRecords: SessionRecord[]
 ): boolean {
-  if (opts.mergeMode === "full" || opts.forceRefresh) {
-    return true;
-  }
-  if (!snapshot) {
-    return true;
-  }
-  /** First batch milestone must not reuse delta against a stale snapshot file. */
-  if (opts.batchNo <= 1) {
-    return true;
-  }
-  if (!snapshotCoversCurrentSessions(snapshot, allRecords)) {
-    return true;
-  }
-  const every = Math.max(1, opts.mergeFullReconcileEvery);
-  return opts.batchNo % every === 0;
+  return opts.batchNo <= 1;
 }
 
 /**
  * Delta batch merge: LLM on [virtual snapshot + new batch]; M3 on all real sessions.
+ * See .cursor/rules/merge-snapshot-delta.mdc — never widen LLM input to allReal on delta.
  */
 export async function runDeltaMergePipeline(
   opts: RunDeltaMergePipelineOpts,
@@ -84,29 +76,55 @@ export async function runDeltaMergePipeline(
 
   const snapshot = await readMergeSnapshot(opts.storeDir, opts.projectSlug);
   const fullReconcile = shouldFullReconcile(opts, snapshot, allReal);
-  const useDelta =
-    opts.mergeMode === "delta" &&
-    snapshot != null &&
-    !fullReconcile;
+  const useDelta = opts.batchNo > 1 && snapshot != null;
+  const batchNewTopRoots = snapshot
+    ? batchIntroducesNewTopRoots(snapshot, batchReal)
+    : false;
+
+  // #region agent log
+  fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "0cd37d",
+    },
+    body: JSON.stringify({
+      sessionId: "0cd37d",
+      runId: "post-fix-v10",
+      hypothesisId: "H1-H2",
+      location: "deltaMergePipeline.ts:entry",
+      message: "delta merge batch decision",
+      data: {
+        batchNo: opts.batchNo,
+        allSessionCount: allReal.length,
+        batchSessionCount: batchReal.length,
+        mergeMode: opts.mergeMode,
+        fullReconcile,
+        useDelta,
+        snapshotSessionCount: snapshot?.meta.sessionIds.length ?? 0,
+        batchNewTopRoots,
+        mergeFullReconcileEvery: opts.mergeFullReconcileEvery,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   let llmRecords: SessionRecord[];
-  let existingReattachSteps = snapshot?.reattachSteps;
 
   if (useDelta && snapshot) {
     llmRecords = [snapshotToSessionRecord(snapshot), ...batchReal];
     progress?.report(
       `M-merge (delta): project snapshot + ${batchReal.length} new session(s)…`
     );
+  } else if (opts.batchNo > 1 && !snapshot) {
+    llmRecords = batchReal;
+    progress?.report(
+      `M-merge (batch-only): no snapshot yet; merging ${batchReal.length} new session(s)…`
+    );
   } else {
     llmRecords = allReal;
-    if (fullReconcile) {
-      existingReattachSteps = undefined;
-    }
-    progress?.report(
-      fullReconcile && opts.batchNo > 1
-        ? "M-merge (full reconcile): all sessions…"
-        : "M-merge (full): all sessions…"
-    );
+    progress?.report("M-merge (full): first batch milestone sessions…");
   }
 
   const result = await runMergePipeline(
@@ -124,61 +142,68 @@ export async function runDeltaMergePipeline(
       forceReattach: opts.forceReattach ?? true,
       mergeMode: useDelta ? "delta" : "full",
       snapshotSessionId: useDelta ? MERGE_SNAPSHOT_SESSION_ID : undefined,
-      existingReattachSteps,
+      llmTimeoutMs: opts.llmTimeoutMs,
       signal: opts.signal,
     },
     provider,
     progress
   );
 
-  let mergeModeUsed: ProjectMergeMode = useDelta ? "delta" : "full";
-  let finalResult = result;
-  const stepsBefore = existingReattachSteps?.length ?? 0;
-  const stepsAfterDelta = result.ontology.reattachSteps?.length ?? 0;
-  const needFullFallback =
-    useDelta &&
-    snapshot != null &&
-    stepsAfterDelta <= stepsBefore &&
-    batchIntroducesNewTopRoots(snapshot, batchReal);
+  const mergeModeUsed: ProjectMergeMode = useDelta ? "delta" : "full";
 
-  if (needFullFallback) {
-    progress?.report(
-      "M-merge: delta produced no new merge steps; re-merging all sessions…"
-    );
-    finalResult = await runMergePipeline(
-      {
-        storeDir: opts.storeDir,
-        records: allReal,
-        llmRecords: allReal,
-        projectSlug: opts.projectSlug,
-        model: opts.model,
-        hostId: opts.hostId,
-        providerId: opts.providerId,
-        promptLanguage: opts.promptLanguage,
-        refineMode: "batch",
-        incrementalFromIndex: true,
-        forceReattach: true,
-        mergeMode: "full",
-        existingReattachSteps:
-          result.ontology.reattachSteps ?? existingReattachSteps,
-        signal: opts.signal,
+  // #region agent log
+  fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "0cd37d",
+    },
+    body: JSON.stringify({
+      sessionId: "0cd37d",
+      runId: "post-fix-v10",
+      hypothesisId: "H1-H4",
+      location: "deltaMergePipeline.ts:postMerge",
+      message: "delta merge virtual session outcome",
+      data: {
+        batchNo: opts.batchNo,
+        mergeModeUsed,
+        mergeLlmRan: result.reattachLlmStepCount ?? 0,
+        hasVirtualSession: Boolean(result.virtualSession),
+        batchNewTopRoots,
+        topLevelCount: result.uiTopLevelCount,
       },
-      provider,
-      progress
-    );
-    mergeModeUsed = "full";
-  }
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
-  const snap = buildMergeSnapshotFromOntology(
-    allReal,
-    finalResult.ontology,
-    finalResult.merge,
-    opts.projectSlug
-  );
+  const virtualSession =
+    result.virtualSession ??
+    (result.ontology.mergeSessionAnalysis
+      ? finalizeSessionAnalysis(result.ontology.mergeSessionAnalysis, {
+          sessionId: MERGE_SNAPSHOT_SESSION_ID,
+          projectSlug: opts.projectSlug,
+          userQueryCount: 0,
+        })
+      : undefined);
+
+  const snap = virtualSession
+    ? buildMergeSnapshotFromVirtualSession(
+        allReal,
+        virtualSession,
+        opts.projectSlug,
+        result.ontology.segmentEquivalences ?? []
+      )
+    : buildMergeSnapshotFromOntology(
+        allReal,
+        result.ontology,
+        result.merge,
+        opts.projectSlug
+      );
   await writeMergeSnapshot(opts.storeDir, snap);
 
   return {
-    ...finalResult,
+    ...result,
     mergeModeUsed,
   };
 }
@@ -214,12 +239,28 @@ export async function runFinalSnapshotRefresh(
     provider,
     progress
   );
-  const snap = buildMergeSnapshotFromOntology(
-    allReal,
-    result.ontology,
-    result.merge,
-    projectSlug
-  );
+  const virtualSession =
+    result.virtualSession ??
+    (result.ontology.mergeSessionAnalysis
+      ? finalizeSessionAnalysis(result.ontology.mergeSessionAnalysis, {
+          sessionId: MERGE_SNAPSHOT_SESSION_ID,
+          projectSlug,
+          userQueryCount: 0,
+        })
+      : undefined);
+  const snap = virtualSession
+    ? buildMergeSnapshotFromVirtualSession(
+        allReal,
+        virtualSession,
+        projectSlug,
+        result.ontology.segmentEquivalences ?? []
+      )
+    : buildMergeSnapshotFromOntology(
+        allReal,
+        result.ontology,
+        result.merge,
+        projectSlug
+      );
   await writeMergeSnapshot(storeDir, snap);
   return result.merge;
 }
