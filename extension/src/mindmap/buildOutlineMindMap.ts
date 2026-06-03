@@ -52,7 +52,11 @@ function renderOutlineNode(
     );
   }
 
-  const title = truncate(node.title, 80);
+  const label =
+    node.details?.length && node.summary?.trim()
+      ? node.summary.trim()
+      : node.title;
+  const title = truncate(label, MAX_LABEL);
   if (!children.length) {
     const titleLeaf = leaf(title);
     return sessionMeta ? withOrigin(titleLeaf, [{ ...sessionMeta }]) : titleLeaf;

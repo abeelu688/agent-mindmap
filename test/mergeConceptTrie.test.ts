@@ -139,6 +139,30 @@ describe("buildConceptTrieMindMap", () => {
     expect(leafTexts.some((t) => t.includes("tr.code"))).toBe(true);
   });
 
+  it("does not truncate long topic summaries at the penultimate level", () => {
+    const longSummary =
+      "从 Zygote fork 到 Activity 可见的完整启动链路，含 ART 初始化、ClassLoader 与 Binder 事务分派要点说明";
+    const records = [
+      makeRecord("s1", "proj", {
+        topics: [
+          {
+            title: "Android / boot / zygote",
+            summary: longSummary,
+            conceptPath: ["android", "boot"],
+            items: [{ text: "init 拉起 zygote" }],
+          },
+        ],
+      }),
+    ];
+    const { mindMap } = buildConceptTrieMindMap(records);
+    const boot = mindMap.children?.[0]?.children?.[0];
+    const topicNode = boot?.children?.find(
+      (c) => !isTrieSegmentLabel(c.data.text)
+    );
+    expect(topicNode?.data.text).toBe(longSummary);
+    expect(topicNode?.data.text).not.toMatch(/\.\.\.$/);
+  });
+
   it("uses summary as penultimate headline with detail-only leaves", () => {
     const records = [
       makeRecord("s1", "proj", {
