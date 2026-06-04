@@ -113,7 +113,10 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`[agent-mindmap] failed to read ${filePath}:`, err);
+    }
     return undefined;
   }
 }
@@ -195,7 +198,11 @@ export async function readRecord(
       return undefined;
     }
     return ensureRecordGraph(raw);
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[agent-mindmap] corrupt session record ${projectSlug}/${sessionId}:`,
+      err
+    );
     return undefined;
   }
 }
