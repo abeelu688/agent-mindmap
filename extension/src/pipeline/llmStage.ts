@@ -14,34 +14,12 @@ import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 import { dumpLlmReplay } from "../llm/llmIoDump";
 import { agentDebugLog } from "../debugLog";
+import { format, t as safeT } from "../l10n/uiTranslate";
 import type { PipelineKind } from "./pipelineTiming";
 
 export type LlmStageTimingOut = {
   cacheHit?: boolean;
 };
-
-function format(message: string, args: Array<string | number | boolean>): string {
-  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
-    const idx = Number(rawIdx);
-    const v = args[idx];
-    return v === undefined ? "" : String(v);
-  });
-}
-
-function safeT(
-  key: string,
-  message: string,
-  ...args: Array<string | number | boolean>
-): string {
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message, args });
-  }
-  return format(message, args);
-}
 
 export type LlmStageOptions<T> = {
   stageId: string;

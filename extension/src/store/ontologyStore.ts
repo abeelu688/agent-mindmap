@@ -4,12 +4,12 @@ import * as vscode from "vscode";
 import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import { writeJsonAtomic } from "./atomicWrite";
+import { format, t as safeT } from "../l10n/uiTranslate";
 import {
   ONTOLOGY_PROMPT_VERSION,
 } from "../llm/promptOntology";
 import {
-  buildOntologyRefinePrompt,
-  buildRefineInputFromRecords,
+  buildOntologyRefinePrompt,  buildRefineInputFromRecords,
   ONTOLOGY_REFINE_PROMPT_VERSION,
 } from "../llm/promptOntologyRefine";
 import {
@@ -46,29 +46,6 @@ import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "../llm/segmentContext";
-
-function format(message: string, args: Array<string | number | boolean>): string {
-  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
-    const idx = Number(rawIdx);
-    const v = args[idx];
-    return v === undefined ? "" : String(v);
-  });
-}
-
-function safeT(
-  key: string,
-  message: string,
-  ...args: Array<string | number | boolean>
-): string {
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message, args });
-  }
-  return format(message, args);
-}
 
 export type OntologyIndex = {
   schemaVersion: 1;
