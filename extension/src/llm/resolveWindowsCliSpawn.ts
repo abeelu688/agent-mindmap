@@ -111,9 +111,17 @@ function tryResolveCursorAgentNode(bin: string): NodeIndexPair | undefined {
   return undefined;
 }
 
+/** Escape an argument for cmd.exe when shell: true on Windows. */
+function escapeCmdArg(arg: string): string {
+  // Double-quote and escape internal double-quotes with backslash.
+  // This prevents cmd.exe from interpreting shell metacharacters in the arg.
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
+
 /**
  * On Windows, `.cmd` shims run under cmd.exe (~8k argv limit) and often drop
  * multiline prompts. Prefer `node.exe index.js` when we can locate Cursor Agent.
+ * When falling back to shell mode, escape args to prevent cmd.exe injection.
  */
 export function resolveCliSpawnTarget(
   bin: string,
@@ -129,11 +137,18 @@ export function resolveCliSpawnTarget(
         mode: "node-direct",
       };
     }
+    // Shell-shim fallback: escape args to prevent cmd.exe metacharacter injection
+    return {
+      command: bin,
+      args: args.map(escapeCmdArg),
+      shell: true,
+      mode: "shell-shim",
+    };
   }
   return {
     command: bin,
     args,
-    shell: process.platform === "win32",
+    shell: false,
     mode: "shell-shim",
   };
 }
