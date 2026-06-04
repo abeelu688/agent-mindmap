@@ -61,7 +61,11 @@ function openReadonlyStateDb(dbPath: string): Promise<Sqlite3Database | undefine
           resolve(undefined);
           return;
         }
-        db.run("PRAGMA busy_timeout = 3000");
+        db.run("PRAGMA busy_timeout = 3000", (err: Error | null) => {
+          if (err) {
+            console.warn("[agent-mindmap] PRAGMA busy_timeout failed:", err);
+          }
+        });
         openDbs.set(dbPath, db);
         resolve(db);
       }

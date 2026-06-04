@@ -4,7 +4,8 @@ import {
   handleNodeClicked,
   consumeTranscriptDocUriIfAutoReveal,
 } from "./jumpToOrigin";
-import { loadGlassResumableIds } from "./transcript/composerTitles";
+import { loadGlassResumableIds, clearComposerTitleCache } from "./transcript/composerTitles";
+import { closeStateDb } from "./transcript/cursorStateDb";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import type { BatchStatus } from "./webview/MindMapHost";
@@ -1064,4 +1065,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   activeSession = undefined;
+  closeStateDb();
+  clearComposerTitleCache();
 }
