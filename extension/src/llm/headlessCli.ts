@@ -89,16 +89,25 @@ export function runCli(
     let settled = false;
     let timer: NodeJS.Timeout | undefined;
 
+    const killProc = () => {
+      try {
+        // On Windows, SIGTERM is not supported and results in a hard kill
+        // (TerminateProcess). Using no argument sends SIGTERM on POSIX and
+        // uses TerminateProcess on Windows, which is the same behavior but
+        // more idiomatic. For a graceful shutdown on Windows, we'd need
+        // taskkill, but child CLI processes don't have cleanup needs.
+        proc.kill();
+      } catch {
+        // ignore
+      }
+    };
+
     const onAbort = () => {
       if (settled) {
         return;
       }
       settled = true;
-      try {
-        proc.kill("SIGTERM");
-      } catch {
-        // ignore
-      }
+      killProc();
       reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
     };
     if (signal.aborted) {
@@ -113,11 +122,7 @@ export function runCli(
           return;
         }
         settled = true;
-        try {
-          proc.kill("SIGTERM");
-        } catch {
-          // ignore
-        }
+        killProc();
         reject(
           new LlmProviderError(
             "timeout",
