@@ -77,6 +77,9 @@ type Settings = {
   turnOptions: { includeToolCalls: boolean; maxConclusionItems: number };
 };
 
+/** Guard against concurrent background merge rebuilds. */
+let pendingMergeRebuild: Promise<void> | undefined;
+
 function resolveLlmProviderId(
   setting: string,
   hostDefault: LlmProviderId
@@ -544,7 +547,7 @@ export async function loadSession(
         settings.library.autoRebuildDeterministic &&
         !options.skipAutoMerge
       ) {
-        void (async () => {
+        const runMerge = async () => {
           try {
             const all = await listRecords(storeDir);
             await rebuildIndex(storeDir, all);
@@ -577,7 +580,7 @@ export async function loadSession(
               providerId: provider.id,
               model: settings.llm.model,
               hostId: host.id,
-              signal: new AbortController().signal,
+              signal: AbortSignal.timeout(10 * 60 * 1000),
             };
             const concept = incrementalOntology
               ? await (async () => {
@@ -621,7 +624,11 @@ export async function loadSession(
               `Agent Mind Map: Background concept merge failed: ${detail}`
             );
           }
-        })();
+        };
+        // Deduplicate: if a previous merge is still running, chain after it
+        pendingMergeRebuild = pendingMergeRebuild
+          ? pendingMergeRebuild.then(runMerge)
+          : runMerge();
       }
     } catch (err) {
       console.warn("[agent-mindmap] library write failed:", err);
