@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { writeJsonAtomic } from "./atomicWrite";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
@@ -113,13 +114,6 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
   } catch {
     return undefined;
   }
-}
-
-async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await fs.rename(tmp, filePath);
 }
 
 function isMergeSnapshot(parsed: unknown): parsed is MergeSnapshot {

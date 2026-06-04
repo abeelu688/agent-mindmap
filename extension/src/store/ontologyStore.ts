@@ -3,6 +3,7 @@ import type { LlmProvider } from "../llm/types";
 import * as vscode from "vscode";
 import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
+import { writeJsonAtomic } from "./atomicWrite";
 import {
   ONTOLOGY_PROMPT_VERSION,
 } from "../llm/promptOntology";
@@ -201,15 +202,6 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
   } catch {
     return undefined;
   }
-}
-
-async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
-  const fs = await import("fs/promises");
-  const path = await import("path");
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
-  await fs.rename(tmp, filePath);
 }
 
 export async function readOntologyRecord(
