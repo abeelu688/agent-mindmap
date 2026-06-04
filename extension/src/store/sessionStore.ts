@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { writeJsonAtomic } from "./atomicWrite";
 import {
   validateSessionOutline,
   validateTopicGraph,
@@ -106,14 +107,6 @@ async function pathExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
-  await ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  const data = JSON.stringify(value, null, 2);
-  await fs.writeFile(tmp, data, "utf8");
-  await fs.rename(tmp, filePath);
 }
 
 async function readJson<T>(filePath: string): Promise<T | undefined> {
@@ -440,3 +433,5 @@ export const __testing = {
   readJson,
   pathExists,
 };
+
+export { writeJsonAtomic } from "./atomicWrite";
