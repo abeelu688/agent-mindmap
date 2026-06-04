@@ -16,7 +16,7 @@ import type {
   TopicPathDecision,
 } from "../../llm/types";
 import type { MindMapProgress } from "../../progress";
-import { MERGE_SNAPSHOT_SESSION_ID } from "../../store/mergeSnapshot";
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
 import type { SessionRecord } from "../../store/storeTypes";
 import {
   finalizeSessionAnalysis,
@@ -70,7 +70,7 @@ export async function mergeSessionAnalysis(
   });
 
   const realCount = recordsForInput.filter(
-    (r) => r.meta.sessionId !== MERGE_SNAPSHOT_SESSION_ID
+    (r) => !isMergeSnapshotSessionId(r.meta.sessionId)
   ).length;
   if (recordsForInput.length < 2 && mergeMode !== "delta") {
     return undefined;

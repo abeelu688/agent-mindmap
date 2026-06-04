@@ -299,7 +299,7 @@ flowchart LR
 
 ### #4 批处理 Refine 频率
 
-**现状（已实现 delta）**：每 5 会话 → [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts)：**仅 batch 1** 对 milestone 会话做 full M-merge；**batch 2+** 恒为 **虚拟快照 + 本批新会话** delta append（M3 仍用全库 records）。`merges/<slug>/merge-snapshot.json` 每批重写。**禁止**：`batchNo % N` 周期性全量、`forceRefresh` / `mergeMode=full` 触发 batch 2+ 全量、快照缺失/过期时对全库再跑 full LLM（缺失快照时仅本批 batch-only；delta 失败回滚 snapshot steps）。规则见 [`merge-snapshot-delta.mdc`](../.cursor/rules/merge-snapshot-delta.mdc)。`batchFinalRefine` 默认仅 DET 刷新快照（无额外 LLM）。
+**现状（多级 snapshot）**：每 5 会话 → L1 snapshot（[`runLeafSnapshotMerge`](extension/src/pipeline/snapshotHierarchy.ts)）；每 5 个同级 snapshot 晋升 L2+；[`rebuildProjectRoot`](extension/src/pipeline/snapshotHierarchy.ts) 合并 topLevel 节点，M3 仍用全库 records。索引见 `snapshot-manifest.json` + `snapshots/`。规则见 [`merge-snapshot-delta.mdc`](../.cursor/rules/merge-snapshot-delta.mdc)。`batchFinalRefine` 默认仅 DET 刷新 root trie（无额外 LLM）。
 
 | 方案 | LLM 成本 | 合并质量 | 说明 |
 |------|----------|----------|------|

@@ -29,10 +29,10 @@ import { getStoreDir } from "./paths";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
 import {
-  runDeltaMergePipeline,
-  type ProjectMergeMode,
-} from "./pipeline/deltaMergePipeline";
-import { readMergeSnapshot } from "./store/mergeSnapshot";
+  runBatchSnapshotPipeline,
+  refreshSnapshotForSession,
+} from "./pipeline/snapshotHierarchy";
+import { readSnapshotManifest } from "./store/mergeSnapshot";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -559,11 +559,6 @@ export async function loadSession(
                 "library.incrementalOntologyOnSessionAdd",
                 true
               ) ?? true);
-            const mergeMode =
-              (config.get<string>("library.mergeMode", "delta") as ProjectMergeMode) ||
-              "delta";
-            const mergeFullReconcileEvery =
-              config.get<number>("library.mergeFullReconcileEvery", 4) ?? 4;
             const conceptLlm = {
               providerId: provider.id,
               model: settings.llm.model,
@@ -574,45 +569,41 @@ export async function loadSession(
               (r) => r.meta.projectSlug === projectSlug
             );
             const records = projectRecords.length ? projectRecords : all;
+            const hierarchyBase = {
+              storeDir,
+              projectSlug,
+              allRecords: records,
+              provider,
+              providerId: provider.id,
+              model: settings.llm.model,
+              hostId: host.id,
+              signal: new AbortController().signal,
+            };
             const concept = incrementalOntology
-              ? mergeMode === "delta" &&
-                (await readMergeSnapshot(storeDir, projectSlug))
-                ? (
-                    await runDeltaMergePipeline(
-                      {
-                        storeDir,
-                        projectSlug,
-                        allRecords: records,
-                        batchRecords: [record],
-                        batchNo: 1,
-                        mergeMode: "delta",
-                        mergeFullReconcileEvery,
-                        providerId: provider.id,
-                        model: settings.llm.model,
-                        hostId: host.id,
-                        signal: new AbortController().signal,
-                      },
-                      provider
-                    )
-                  ).merge
-                : (
-                    await runDeltaMergePipeline(
-                      {
-                        storeDir,
-                        projectSlug,
-                        allRecords: records,
-                        batchRecords: records,
-                        batchNo: 1,
-                        mergeMode: "full",
-                        mergeFullReconcileEvery,
-                        providerId: provider.id,
-                        model: settings.llm.model,
-                        hostId: host.id,
-                        signal: new AbortController().signal,
-                      },
-                      provider
-                    )
-                  ).merge
+              ? await (async () => {
+                  const manifest = await readSnapshotManifest(
+                    storeDir,
+                    projectSlug
+                  );
+                  if (manifest?.sessionToLeafId[record.meta.sessionId]) {
+                    return (
+                      await refreshSnapshotForSession({
+                        ...hierarchyBase,
+                        sessionId: record.meta.sessionId,
+                      })
+                    ).merge;
+                  }
+                  const batchNo =
+                    (manifest?.nodes.filter((n) => n.level === 1).length ??
+                      0) + 1;
+                  return (
+                    await runBatchSnapshotPipeline({
+                      ...hierarchyBase,
+                      batchRecords: [record],
+                      batchNo,
+                    })
+                  ).merge;
+                })()
               : await resolveAndBuildConceptMergeAsync(
                   storeDir,
                   all,
@@ -621,9 +612,13 @@ export async function loadSession(
                 );
             await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
           } catch (err) {
+            const detail = err instanceof Error ? err.message : String(err);
             console.warn(
               "[agent-mindmap] background merge rebuild failed:",
               err
+            );
+            void vscode.window.showErrorMessage(
+              `Agent Mind Map: Background concept merge failed: ${detail}`
             );
           }
         })();

@@ -38,13 +38,13 @@ import {
   buildConceptMergeForRecords,
   type ConceptMergeLlmOpts,
 } from "./store/conceptMergeContext";
+import type { ProjectMergeMode } from "./pipeline/deltaMergePipeline";
 import {
-  runDeltaMergePipeline,
-  runFinalSnapshotRefresh,
-  type ProjectMergeMode,
-} from "./pipeline/deltaMergePipeline";
+  runBatchSnapshotPipeline,
+  runFinalRootRefresh,
+} from "./pipeline/snapshotHierarchy";
 import {
-  deleteMergeSnapshot,
+  deleteSnapshotHierarchy,
   filterRealSessionRecords,
 } from "./store/mergeSnapshot";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
@@ -460,28 +460,24 @@ async function buildProjectConceptMergeForBatch(
       )
     );
   }
-  const { merge } = await runDeltaMergePipeline(
+  return runBatchSnapshotPipeline(
     {
       storeDir,
       projectSlug: opts.projectSlug,
       allRecords: sanitizedAll,
       batchRecords: sanitizedBatch,
       batchNo: opts.batchNo,
-      mergeMode: opts.mergeMode,
-      mergeFullReconcileEvery: opts.mergeFullReconcileEvery,
-      forceRefresh: opts.forceRefresh,
+      provider: opts.provider,
+      providerId: opts.conceptLlm.providerId,
       model: opts.conceptLlm.model,
       hostId: opts.conceptLlm.hostId,
-      providerId: opts.conceptLlm.providerId,
       promptLanguage: opts.conceptLlm.promptLanguage,
       llmTimeoutMs: opts.conceptLlm.timeoutMs,
       signal: opts.signal,
       forceReattach: opts.forceReattach ?? true,
     },
-    opts.provider,
     opts.progress
   );
-  return merge;
 }
 
 function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
@@ -604,7 +600,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         const storeDir = getStoreDir();
         await ensureStore(storeDir);
         if (mode.forceRefresh) {
-          await deleteMergeSnapshot(storeDir, slug);
+          await deleteSnapshotHierarchy(storeDir, slug);
         }
         const projectRecordsById = new Map<string, SessionRecord>();
 
@@ -704,26 +700,49 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                   batchRecords.push(rec);
                 }
               }
-              const conceptMerge = await buildProjectConceptMergeForBatch(
-                storeDir,
-                [...projectRecordsById.values()],
-                batchRecords,
-                {
-                  projectSlug: slug,
-                  conceptLlm,
-                  provider,
-                  signal,
-                  progress,
-                  batchRefineOntology,
-                  batchNo: info.batchNo,
-                  processed: info.processed,
-                  total: info.total,
-                  forceReattach: true,
-                  mergeMode,
-                  mergeFullReconcileEvery,
-                  forceRefresh: mode.forceRefresh,
+              let conceptMerge;
+              try {
+                conceptMerge = await buildProjectConceptMergeForBatch(
+                  storeDir,
+                  [...projectRecordsById.values()],
+                  batchRecords,
+                  {
+                    projectSlug: slug,
+                    conceptLlm,
+                    provider,
+                    signal,
+                    progress,
+                    batchRefineOntology,
+                    batchNo: info.batchNo,
+                    processed: info.processed,
+                    total: info.total,
+                    forceReattach: true,
+                    mergeMode,
+                    mergeFullReconcileEvery,
+                    forceRefresh: mode.forceRefresh,
+                  }
+                );
+              } catch (err) {
+                if (signal.aborted) {
+                  return;
                 }
-              );
+                batchOntologyFailed = true;
+                const detail =
+                  err instanceof Error ? err.message : String(err);
+                console.error(
+                  `[agent-mindmap] batch ${info.batchNo} concept merge failed:`,
+                  err
+                );
+                void vscode.window.showErrorMessage(
+                  t(
+                    "ui.batch.mergeFailed",
+                    "Agent Mind Map: Batch {0} concept merge failed: {1}",
+                    info.batchNo,
+                    detail
+                  )
+                );
+                return;
+              }
 
               if (autoApplyUpdates) {
                 pendingMergeMindMap = undefined;
@@ -833,15 +852,15 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
             )
           );
           try {
-            const finalMerge = await runFinalSnapshotRefresh(
-              storeDir,
-              batchRecords,
-              slug,
-              provider,
+            const finalMerge = await runFinalRootRefresh(
               {
+                storeDir,
+                projectSlug: slug,
+                allRecords: batchRecords,
+                provider,
+                providerId: conceptLlm.providerId,
                 model: conceptLlm.model,
                 hostId: conceptLlm.hostId,
-                providerId: conceptLlm.providerId,
                 signal,
               },
               progress
@@ -852,8 +871,17 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               pendingMergeMindMap = finalMerge.mindMap;
               pendingMergeBatchNo = Math.max(1, Math.ceil(result.total / 5));
             }
-          } catch {
+          } catch (err) {
             batchOntologyFailed = true;
+            const detail = err instanceof Error ? err.message : String(err);
+            console.error("[agent-mindmap] final root refresh failed:", err);
+            void vscode.window.showErrorMessage(
+              t(
+                "ui.batch.finalRefineFailed",
+                "Agent Mind Map: Final concept map refresh failed: {0}",
+                detail
+              )
+            );
           }
         }
 

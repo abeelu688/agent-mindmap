@@ -1,7 +1,7 @@
 import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
 import { buildConceptContextsFromAnalysis } from "./buildConceptContexts";
 import { enrichAnalysisNodesFromOutline } from "./enrichNodeChildrenFromOutline";
-import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../store/mergeSnapshot";
 import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import type { MergeInputMode } from "./trieReparentInput";
@@ -324,7 +324,9 @@ export function buildMergeSessionAnalysisInput(
   for (const record of records) {
     const isSnapshot =
       record.meta.sessionId === snapshotSessionId ||
-      record.meta.sessionId === MERGE_SNAPSHOT_SESSION_ID;
+      record.meta.sessionId === MERGE_SNAPSHOT_SESSION_ID ||
+      (mergeMode === "delta" &&
+        isMergeSnapshotSessionId(record.meta.sessionId));
     sessions.push(
       sessionFromRecord(
         record,
