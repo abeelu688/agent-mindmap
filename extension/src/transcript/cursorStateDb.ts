@@ -88,11 +88,23 @@ export function closeStateDb(): void {
   clearStateDbBackend();
 }
 
+const VALID_TABLE_RE = /^(ItemTable|cursorDiskKV)$/;
+
 export async function queryStateDb<T extends Record<string, unknown>>(
   dbPath: string,
   sql: string,
   params: SqlBindValue[] = []
 ): Promise<T[]> {
+  // Validate any interpolated table names in the SQL
+  const tablesInSql = sql.match(/\bFROM\s+(\w+)/ig);
+  if (tablesInSql) {
+    for (const fragment of tablesInSql) {
+      const tableName = fragment.replace(/^FROM\s+/i, "");
+      if (!VALID_TABLE_RE.test(tableName)) {
+        throw new Error(`Disallowed table name in SQL: ${tableName}`);
+      }
+    }
+  }
   const db = await openReadonlyStateDb(dbPath);
   if (!db) {
     return [];
@@ -111,11 +123,16 @@ export async function queryStateDb<T extends Record<string, unknown>>(
   }
 }
 
+const ALLOWED_TABLES = new Set(["ItemTable", "cursorDiskKV"]);
+
 export async function getStateDbValue(
   dbPath: string,
   table: "ItemTable" | "cursorDiskKV",
   key: string
 ): Promise<string | undefined> {
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(`Invalid table name: ${table}`);
+  }
   const rows = await queryStateDb<{ value?: string }>(
     dbPath,
     `SELECT value FROM ${table} WHERE key = ?`,
