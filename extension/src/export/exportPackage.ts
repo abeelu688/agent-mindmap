@@ -74,13 +74,18 @@ function cloneWithJumpHrefs(
   return walk(root);
 }
 
+/** Escape </ sequences in JSON to prevent breaking out of <script> tags. */
+function safeJsonForScript(json: string): string {
+  return json.replace(/<\//g, "<\\/");
+}
+
 function buildIndexHtml(data: MindMapRoot, ui: MindMapUiOptions): string {
-  const payload = JSON.stringify({ data, ui });
+  const payload = safeJsonForScript(JSON.stringify({ data, ui }));
   const preset = ui.preset === "auto" ? "light" : ui.preset;
   const bodyBg = preset === "light" ? "#f6f6f6" : "#252526";
   const bodyColor = preset === "light" ? "#444446" : "#cccccc";
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -100,7 +105,7 @@ function buildIndexHtml(data: MindMapRoot, ui: MindMapUiOptions): string {
 
 function buildTranscriptViewerHtml(): string {
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
