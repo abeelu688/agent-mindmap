@@ -57,6 +57,8 @@ export type MergePipelineOpts = {
   snapshotSessionId?: string;
   /** Base CLI timeout (ms); passed to M-merge. */
   llmTimeoutMs?: number;
+  /** Skip M3 trie build (L1 / promotion merges only). */
+  skipM3?: boolean;
 };
 
 export type MergePipelineResult = {
@@ -278,19 +280,35 @@ export async function runMergePipeline(
     () => ({ kind: "io" })
   );
 
-  progress?.report("M3: Updating concept trie…");
-  const merge = await runStage(
-    "M3 updateTrie",
-    () =>
-      updateConceptTrieAsync({
-        records: opts.records,
-        segmentEquivalences,
-        virtualSessionAnalysis: ontology.mergeSessionAnalysis,
-        ontology,
-        projectSlug: opts.projectSlug,
-      }),
-    () => ({ kind: "det" })
-  );
+  let merge: MergeRecord;
+  if (opts.skipM3) {
+    merge = {
+      schemaVersion: 1,
+      meta: {
+        kind: "llm-refined",
+        builtAt: Date.now(),
+        sessionIds: opts.records.map((r) => r.meta.sessionId),
+        projectSlugs: opts.projectSlug
+          ? [opts.projectSlug]
+          : [...new Set(opts.records.map((r) => r.meta.projectSlug))],
+      },
+      mindMap: { nodeData: { data: { text: "root" } } },
+    };
+  } else {
+    progress?.report("M3: Updating concept trie…");
+    merge = await runStage(
+      "M3 updateTrie",
+      () =>
+        updateConceptTrieAsync({
+          records: opts.records,
+          segmentEquivalences,
+          virtualSessionAnalysis: ontology.mergeSessionAnalysis,
+          ontology,
+          projectSlug: opts.projectSlug,
+        }),
+      () => ({ kind: "det" })
+    );
+  }
 
   // #region agent log
   const mindMapChildren =

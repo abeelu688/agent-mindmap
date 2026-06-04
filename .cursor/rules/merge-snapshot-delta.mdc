@@ -1,80 +1,52 @@
 ---
-description: Merge snapshot + delta batch M-merge contract (do not widen LLM input)
+description: Multi-level snapshot hierarchy + bounded M-merge contract
 globs: agent-mindmap/**/*
 alwaysApply: true
 ---
 
-# Merge snapshot & delta batch merge
+# Multi-level snapshot merge
 
-Canonical implementation: [`mergeSnapshot.ts`](extension/src/store/mergeSnapshot.ts), [`deltaMergePipeline.ts`](extension/src/pipeline/deltaMergePipeline.ts).
+Canonical implementation: [`mergeSnapshot.ts`](extension/src/store/mergeSnapshot.ts), [`snapshotHierarchy.ts`](extension/src/pipeline/snapshotHierarchy.ts).
 
-## What the snapshot is
+## Storage layout
 
-After each batch merge, DET writes **`merges/<projectSlug>/merge-snapshot.json`** ([`MergeSnapshot`](extension/src/store/storeTypes.ts)):
+```
+merges/<projectSlug>/
+  snapshot-manifest.json     # hierarchy index
+  snapshots/l1-0001.json     # L1 leaf snapshots
+  snapshots/l2-0001.json     # promoted groups
+  merge-snapshot.json        # root virtual session (backward-compatible read path)
+```
 
-- Stable **tree projection** (`treeSnapshot`, `conceptContexts`, `sessionAnalysis`)
-- **`meta.sessionIds`** — real sessions covered at last successful merge
+[`SnapshotManifest`](extension/src/store/storeTypes.ts): `topLevelIds`, `sessionToLeafId`, `nodes[]`.
 
-For the next batch, the snapshot becomes **one virtual session** via [`snapshotToSessionRecord`](extension/src/store/mergeSnapshot.ts) with id **`__project_merge_snapshot__`** (`MERGE_SNAPSHOT_SESSION_ID`).
+## Merge contract
 
-Legacy snapshots may still contain deprecated `reattachSteps` / `reattachMoves`; new merges store the **virtual combined session** from M-merge LLM instead.
+| Stage | M-merge LLM input | M3 trie input |
+|-------|-------------------|---------------|
+| **L1 leaf** | **本批真实 sessions only** (full, ≤ batch size) | **跳过** |
+| **L2+ promotion** | **5 个同级 snapshot virtual sessions** (full) | **跳过** |
+| **Root** | **所有 topLevel snapshot nodes** (full if >1) | **全库真实 SessionRecords** |
 
-## Delta batch contract (`library.mergeMode` = `delta`)
+Entry: [`runBatchSnapshotPipeline`](extension/src/pipeline/snapshotHierarchy.ts) → [`runLeafSnapshotMerge`](extension/src/pipeline/snapshotHierarchy.ts) → [`promoteAllLevels`](extension/src/pipeline/snapshotHierarchy.ts) → [`rebuildProjectRoot`](extension/src/pipeline/snapshotHierarchy.ts).
 
-| Stage | Input | Must |
-|-------|--------|------|
-| **M-merge LLM** | `[virtual snapshot, …new batch sessions only]` | ≤ snapshot + batch size records; **never** all N library sessions |
-| **M3 / UI trie** | **All real** `SessionRecord`s | Full library every time; topic paths snapped to virtual session hierarchy |
+### Session update cascade
 
-Entry: [`runDeltaMergePipeline`](extension/src/pipeline/deltaMergePipeline.ts) → [`runMergePipeline`](extension/src/pipeline/mergePipeline.ts) with `mergeMode: "delta"`, `snapshotSessionId: MERGE_SNAPSHOT_SESSION_ID`.
-
-### Delta M-merge semantics
-
-[`mergeSessionAnalysis`](extension/src/pipeline/stages/mergeSessionAnalysis.ts) + [`promptMergeSessionAnalysis`](extension/src/llm/promptMergeSessionAnalysis.ts):
-
-- Input: each session's `conceptContexts` / nodes / outline (snapshot first with `role=snapshot`).
-- Output: **same JSON as Part I** `session-analysis` — one refreshed **virtual combined session** (not `steps[]` / `changes[]`).
-- Parsed with [`validateSessionAnalysis`](extension/src/llm/pipelineValidate.ts); invalid JSON **throws** ([`dev-fail-loud.mdc`](dev-fail-loud.mdc)).
-- M3: [`snapRecordsToVirtualSession`](extension/src/llm/applyVirtualSessionToRecords.ts) remaps real topic `conceptPath`s onto virtual node hierarchy.
-
-## When M-merge LLM sees all batch sessions (full) — **batch 1 only**
-
-[`shouldFullReconcile`](extension/src/pipeline/deltaMergePipeline.ts) returns true **only when `batchNo <= 1`**.
-
-There is **no** periodic full refresh, **no** `forceRefresh` → full M-merge, **no** `mergeMode === "full"` → full M-merge, **no** “stale / missing snapshot → full re-merge all sessions”.
-
-| Situation | Behavior |
-|-----------|----------|
-| **Batch 1 (`batchNo ≤ 1`)** | Full M-merge on first milestone sessions (no prior snapshot to delta from). OK. |
-| **Batch 2+ with snapshot** | Always **delta**: `[snapshot, …batch]` → refreshed virtual session; rewrite snapshot each batch. |
-| **Missing snapshot file (batch 2+)** | **Not** full re-merge — batch-only M-merge on new batch sessions; snapshot recreated when batch completes. |
-| **Snapshot `sessionIds` ⊄ current library (stale)** | **Not** full re-merge — continue delta append; next snapshot write realigns incrementally. |
-| **`forceRefresh`** | Delete snapshot + re-analyze; **batch 1** full again, then batch 2+ delta only. **Does not** trigger full M-merge on batch 2+. |
-| **`mergeMode === "full"`** | **Does not** trigger full M-merge on batch 2+ (legacy setting only). |
-| **`batchNo % mergeFullReconcileEvery === 0`** | **Forbidden — do not implement.** No periodic “refresh” full M-merge. |
-
-On batch 1 full, if LLM returns invalid JSON, **throw** — no silent fallback to legacy reattach steps.
-
-M-merge uses the same `session-analysis` response schema as Part I ([`MERGE_SESSION_ANALYSIS_PROMPT_VERSION`](extension/src/llm/promptMergeSessionAnalysis.ts)).
-
-## Imperfect merges OK — no silent fallback strategies
-
-See also: [`dev-fail-loud.mdc`](dev-fail-loud.mdc) (development default).
-
-- **Accept** imperfect structure after delta when LLM JSON **passed validation**. **Do not** rollback snapshot, **do not** re-run full M-merge on batch 2+.
-- **Invalid** LLM JSON must **fail loudly** (validation error), not apply a hidden alternate strategy.
+[`refreshSnapshotForSession`](extension/src/pipeline/snapshotHierarchy.ts): rebuild L1 for `sessionToLeafId` → rebuild parent chain → promote → root + M3.
 
 ## Forbidden
 
-- **Wide delta**: `[snapshot, …allReal]` for M-merge LLM.
-- **Periodic full reconcile** (`batchNo % N`, `mergeFullReconcileEvery` as full trigger) — **do not implement**.
-- **Full re-merge all sessions** on batch 2+ for `forceRefresh`, stale snapshot, or delta failure.
-- Full reconcile merely because [`batchIntroducesNewTopRoots`](extension/src/store/mergeSnapshot.ts) is true.
-- **Silent rollback** of delta LLM output (snapshot-only re-merge, baseline top-count guard, etc.).
+- **Cumulative delta**: rewriting one project snapshot with `[old snapshot + batch]` across batches.
+- **Wide M-merge**: all N library sessions in one LLM call (except root M3 uses all N for path snapping only — no LLM).
+- **Periodic full reconcile** (`batchNo % N`, `mergeFullReconcileEvery` as full trigger).
+- **Silent rollback** on validation failure — invalid LLM JSON **throws** ([`dev-fail-loud.mdc`](dev-fail-loud.mdc)).
 
-## Deprecated (do not wire to new merges)
+## Deprecated semantics
 
-- `reattach-moves` / `changes[]` / [`mergeTrieReparent`](extension/src/pipeline/stages/mergeTrieReparent.ts) as primary M-merge path
-- [`validateDeltaReattachSteps`](extension/src/llm/validateDeltaReattachSteps.ts) for new merge output (legacy snapshots only)
+- `batchNo` driving delta vs full in [`shouldFullReconcile`](extension/src/pipeline/deltaMergePipeline.ts) — kept for tests only.
+- Single cumulative `merge-snapshot.json` rewritten each batch with all session ids.
+- `library.mergeMode` / `mergeFullReconcileEvery` — legacy labels; hierarchy always uses bounded full merges per level.
 
-On validation failure: **abort batch merge**, surface error to user; prior snapshot unchanged for that failed run (do not write degraded snapshot if merge throws before write).
+## Imperfect merges OK
+
+Accept imperfect structure when LLM JSON **passed validation**. Do not rollback sibling snapshots on batch 2+ style failures — abort the failing level write only.

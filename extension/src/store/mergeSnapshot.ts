@@ -38,11 +38,20 @@ import type {
   MergeSnapshot,
   MergeSnapshotMeta,
   SessionRecord,
+  SnapshotManifest,
+  SnapshotNode,
 } from "./storeTypes";
 import type { FinalizedSessionAnalysis } from "../pipeline/stages/finalizeSessionAnalysis";
 
 /** Virtual session id for delta M-merge (one record = stabilized project map). */
 export const MERGE_SNAPSHOT_SESSION_ID = "__project_merge_snapshot__";
+
+export const DEFAULT_SNAPSHOT_GROUP_SIZE = 5;
+
+/** Virtual session id for a hierarchy snapshot node in M-merge input. */
+export function snapshotVirtualSessionId(snapshotId: string): string {
+  return `__snapshot_${snapshotId}__`;
+}
 
 const SNAPSHOT_CONTEXT_CAP = 120;
 const HUB_CHILDREN_PER_CHAIN = 8;
@@ -68,6 +77,33 @@ export function mergeSnapshotPath(
     projectSlug,
     "merge-snapshot.json"
   );
+}
+
+export function snapshotManifestPath(
+  storeDir: string,
+  projectSlug: string
+): string {
+  return path.join(
+    storeDir,
+    STORE_LAYOUT.mergesDir,
+    projectSlug,
+    "snapshot-manifest.json"
+  );
+}
+
+export function projectSnapshotsDir(
+  storeDir: string,
+  projectSlug: string
+): string {
+  return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, "snapshots");
+}
+
+export function snapshotFilePath(
+  storeDir: string,
+  projectSlug: string,
+  relativePath: string
+): string {
+  return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, relativePath);
 }
 
 async function readJson<T>(filePath: string): Promise<T | undefined> {
@@ -129,6 +165,134 @@ export async function deleteMergeSnapshot(
   } catch {
     // missing file is fine
   }
+}
+
+function isSnapshotManifest(parsed: unknown): parsed is SnapshotManifest {
+  if (!parsed || typeof parsed !== "object") {
+    return false;
+  }
+  const m = parsed as SnapshotManifest;
+  return (
+    m.schemaVersion === 2 &&
+    Boolean(m.projectSlug) &&
+    Array.isArray(m.nodes) &&
+    Array.isArray(m.topLevelIds)
+  );
+}
+
+export function createEmptySnapshotManifest(
+  projectSlug: string,
+  groupSize: number = DEFAULT_SNAPSHOT_GROUP_SIZE
+): SnapshotManifest {
+  return {
+    schemaVersion: 2,
+    projectSlug,
+    groupSize,
+    nodes: [],
+    topLevelIds: [],
+    sessionToLeafId: {},
+  };
+}
+
+export async function readSnapshotManifest(
+  storeDir: string,
+  projectSlug: string
+): Promise<SnapshotManifest | undefined> {
+  const parsed = await readJson<unknown>(
+    snapshotManifestPath(storeDir, projectSlug)
+  );
+  return isSnapshotManifest(parsed) ? parsed : undefined;
+}
+
+export async function writeSnapshotManifest(
+  storeDir: string,
+  manifest: SnapshotManifest
+): Promise<void> {
+  await writeJsonAtomic(
+    snapshotManifestPath(storeDir, manifest.projectSlug),
+    manifest
+  );
+}
+
+export async function readSnapshotById(
+  storeDir: string,
+  projectSlug: string,
+  node: SnapshotNode
+): Promise<MergeSnapshot | undefined> {
+  const parsed = await readJson<unknown>(
+    snapshotFilePath(storeDir, projectSlug, node.path)
+  );
+  return isMergeSnapshot(parsed) ? parsed : undefined;
+}
+
+export async function writeSnapshotByPath(
+  storeDir: string,
+  projectSlug: string,
+  relativePath: string,
+  snapshot: MergeSnapshot
+): Promise<void> {
+  await writeJsonAtomic(
+    snapshotFilePath(storeDir, projectSlug, relativePath),
+    snapshot
+  );
+}
+
+export function findLeafNodeForSession(
+  manifest: SnapshotManifest,
+  sessionId: string
+): SnapshotNode | undefined {
+  const leafId = manifest.sessionToLeafId[sessionId];
+  if (!leafId) {
+    return undefined;
+  }
+  return manifest.nodes.find((n) => n.id === leafId);
+}
+
+export function findParentNode(
+  manifest: SnapshotManifest,
+  childId: string
+): SnapshotNode | undefined {
+  return manifest.nodes.find((n) => n.childIds.includes(childId));
+}
+
+/** Delete manifest, snapshots dir, and root merge-snapshot.json. */
+export async function deleteSnapshotHierarchy(
+  storeDir: string,
+  projectSlug: string
+): Promise<void> {
+  await deleteMergeSnapshot(storeDir, projectSlug);
+  try {
+    await fs.unlink(snapshotManifestPath(storeDir, projectSlug));
+  } catch {
+    // missing is fine
+  }
+  try {
+    await fs.rm(projectSnapshotsDir(storeDir, projectSlug), {
+      recursive: true,
+      force: true,
+    });
+  } catch {
+    // missing is fine
+  }
+}
+
+export type BuildMergeSnapshotMetaExtras = {
+  sessionIds?: string[];
+  snapshotId?: string;
+  level?: number;
+  childSnapshotIds?: string[];
+};
+
+function resolveSnapshotSessionIds(
+  allRecords: SessionRecord[],
+  extras?: BuildMergeSnapshotMetaExtras
+): string[] {
+  if (extras?.sessionIds?.length) {
+    return [...extras.sessionIds].sort();
+  }
+  return filterRealSessionRecords(allRecords)
+    .map((r) => r.meta.sessionId)
+    .sort();
 }
 
 function collectHubContextsFromTrie(
@@ -252,7 +416,8 @@ export function buildMergeSnapshotFromVirtualSession(
   allRecords: SessionRecord[],
   virtual: FinalizedSessionAnalysis,
   projectSlug: string,
-  segmentEquivalences: SegmentEquivalence[]
+  segmentEquivalences: SegmentEquivalence[],
+  metaExtras?: BuildMergeSnapshotMetaExtras
 ): MergeSnapshot {
   const realRecords = filterRealSessionRecords(allRecords);
   const prep = prepareRecordsForFinalTrie(
@@ -263,12 +428,15 @@ export function buildMergeSnapshotFromVirtualSession(
     virtual.sessionAnalysis
   );
   const preparedTopicPaths = topicPathDecisionsFromPrepared(prep, projectSlug);
-  const sessionIds = realRecords.map((r) => r.meta.sessionId).sort();
+  const sessionIds = resolveSnapshotSessionIds(allRecords, metaExtras);
 
   const meta: MergeSnapshotMeta = {
     builtAt: Date.now(),
     projectSlug,
     sessionIds,
+    snapshotId: metaExtras?.snapshotId,
+    level: metaExtras?.level,
+    childSnapshotIds: metaExtras?.childSnapshotIds,
     hostId: realRecords[0]?.meta.hostId,
     promptVersions: {
       sessionAnalysis: SESSION_ANALYSIS_PROMPT_VERSION,
@@ -380,19 +548,29 @@ export function buildMergeSnapshotFromOntology(
 }
 
 /** Convert persisted snapshot into a virtual SessionRecord for M-merge LLM input. */
-export function snapshotToSessionRecord(snapshot: MergeSnapshot): SessionRecord {
+export function snapshotToSessionRecord(
+  snapshot: MergeSnapshot,
+  virtualSessionId?: string
+): SessionRecord {
   const topics = aggregateTopicsFromSnapshot(snapshot);
   const graph = { topics };
   const outline = topicGraphToOutline(graph);
+  const sessionId =
+    virtualSessionId ??
+    (snapshot.meta.snapshotId
+      ? snapshotVirtualSessionId(snapshot.meta.snapshotId)
+      : MERGE_SNAPSHOT_SESSION_ID);
   const meta = buildRecordMeta({
-    sessionId: MERGE_SNAPSHOT_SESSION_ID,
+    sessionId,
     projectSlug: snapshot.meta.projectSlug,
     transcriptPath: "",
     transcriptMtimeMs: 0,
     transcriptSha256: "merge-snapshot",
     llm: { provider: "snapshot" },
     promptParams: { maxTopics: 8, maxItemsPerTopic: 8 },
-    sessionLabel: "Project merge snapshot",
+    sessionLabel: snapshot.meta.snapshotId
+      ? `Snapshot ${snapshot.meta.snapshotId}`
+      : "Project merge snapshot",
     hostId: snapshot.meta.hostId,
   });
 

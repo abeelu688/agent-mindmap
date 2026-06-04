@@ -46,11 +46,11 @@ S2 persists `conceptContexts` on `SessionRecord`. UI: outline mind map only ([`b
 
 Cross-session `segmentEquivalences` for trie insert: **session records only** (no M2 `ontology-refine` LLM). Equivalence decisions during M-merge traversal when needed.
 
-### Delta batch merge (`library.mergeMode` = `delta`)
+### Multi-level snapshot merge
 
 Full contract: [`merge-snapshot-delta.mdc`](merge-snapshot-delta.mdc).
 
-**Batch 1 only**: M-merge LLM on milestone sessions (no prior snapshot). **Batch 2+**: always `[snapshot, …new batch]` delta; LLM outputs a refreshed **virtual combined session** (not reattach steps). M3 on all real sessions. **No** periodic full reconcile, **no** forceRefresh/mergeMode-full re-merge. **No rollback** — imperfect merges OK; invalid LLM JSON **throws** ([`validateSessionAnalysis`](extension/src/llm/pipelineValidate.ts)).
+**Each batch** → L1 snapshot (M-merge on batch sessions only). **Every 5 snapshots** → promote to L2/L3/…. **Root** = merge all `topLevel` nodes; **M3** on all real sessions (DET path snap only). Session update → rebuild containing L1 + cascade up. **No** cumulative `[snapshot + batch]` delta. Invalid LLM JSON **throws** ([`validateSessionAnalysis`](extension/src/llm/pipelineValidate.ts)).
 
 ## Rules
 

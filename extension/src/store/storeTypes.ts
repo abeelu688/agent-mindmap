@@ -153,6 +153,12 @@ export type MergeSnapshotMeta = {
   projectSlug: string;
   /** Real session ids covered by this snapshot (excludes virtual id). */
   sessionIds: string[];
+  /** Hierarchy node id, e.g. `l1-0001`. */
+  snapshotId?: string;
+  /** 1 = leaf batch, 2+ = merged child snapshots. Root uses level 0. */
+  level?: number;
+  /** Child snapshot ids when level > 1. */
+  childSnapshotIds?: string[];
   hostId?: AgentHostId;
   promptVersions: {
     sessionAnalysis: number;
@@ -160,4 +166,28 @@ export type MergeSnapshotMeta = {
     /** @deprecated legacy reattach-moves path */
     reattach?: number;
   };
+};
+
+/** Index for multi-level snapshot pyramid under `merges/<projectSlug>/`. */
+export type SnapshotManifest = {
+  schemaVersion: 2;
+  projectSlug: string;
+  /** Sessions per L1 batch and snapshots per promotion group. */
+  groupSize: number;
+  nodes: SnapshotNode[];
+  /** Snapshot ids not yet absorbed into a parent. */
+  topLevelIds: string[];
+  /** Real session id → L1 snapshot id. */
+  sessionToLeafId: Record<string, string>;
+  rootSnapshotId?: string;
+};
+
+export type SnapshotNode = {
+  id: string;
+  level: number;
+  childIds: string[];
+  sessionIds: string[];
+  builtAt: number;
+  /** Relative to `merges/<projectSlug>/`, e.g. `snapshots/l1-0001.json`. */
+  path: string;
 };
