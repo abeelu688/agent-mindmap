@@ -3,7 +3,7 @@ import zhL10n from "../../l10n/bundle.l10n.zh-cn.json";
 
 export type UiLocaleSetting = "auto" | "en" | "zh-cn";
 
-function format(
+export function format(
   message: string,
   args: Array<string | number | boolean>
 ): string {
@@ -12,6 +12,26 @@ function format(
     const v = args[idx];
     return v === undefined ? "" : String(v);
   });
+}
+
+/**
+ * Translate a message using VS Code's l10n API, falling back to format().
+ * This is the shared t() function — use it instead of duplicating the
+ * l10n lookup logic in every file.
+ */
+export function t(
+  key: string,
+  message: string,
+  ...args: Array<string | number | boolean>
+): string {
+  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
+  const fn = l10n?.t as
+    | undefined
+    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
+  if (fn) {
+    return fn({ key, message, args });
+  }
+  return format(message, args);
 }
 
 export function readUiLocaleSetting(): UiLocaleSetting {

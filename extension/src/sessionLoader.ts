@@ -47,6 +47,7 @@ import {
   writeRecord,
 } from "./store/sessionStore";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
+import { format, t } from "./l10n/uiTranslate";
 import { readSessionFile } from "./transcript/listSessions";
 import type { MindMapRoot, TranscriptSession } from "./transcript/types";
 
@@ -308,29 +309,6 @@ export type AnalyzeProjectBatchInfo = AnalyzeProjectResult & {
   processed: number;
   /** Session ids processed in this batch (success or failure). */
   batchSessionIds: string[];
-};
-
-function format(message: string, args: Array<string | number | boolean>): string {
-  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
-    const idx = Number(rawIdx);
-    const v = args[idx];
-    return v === undefined ? "" : String(v);
-  });
-}
-
-const t = (
-  key: string,
-  message: string,
-  ...args: Array<string | number | boolean>
-): string => {
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message, args });
-  }
-  return format(message, args);
 };
 
 export async function loadSession(

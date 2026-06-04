@@ -28,7 +28,7 @@ import {
 } from "./host";
 import { getStoreDir } from "./paths";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
-import { uiTranslate } from "./l10n/uiTranslate";
+import { uiTranslate, format, t } from "./l10n/uiTranslate";
 import type { LlmProviderId } from "./llm/types";
 import {
   ensureStore,
@@ -90,29 +90,6 @@ function applyPendingMergeToPanel(panel: MindMapPanel): boolean {
   }
   return true;
 }
-
-function format(message: string, args: Array<string | number | boolean>): string {
-  return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
-    const idx = Number(rawIdx);
-    const v = args[idx];
-    return v === undefined ? "" : String(v);
-  });
-}
-
-const t = (
-  key: string,
-  message: string,
-  ...args: Array<string | number | boolean>
-): string => {
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message, args });
-  }
-  return format(message, args);
-};
 
 function progressTitle(): string {
   return t(
