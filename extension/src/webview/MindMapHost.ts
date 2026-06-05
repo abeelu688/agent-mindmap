@@ -70,6 +70,7 @@ export type NodeClickedListener = (payload: {
 export type DownloadRequestedListener = () => void;
 export type ApplyPendingUpdateRequestedListener = () => void;
 export type SelectModelRequestedListener = () => void;
+export type ModelUpdatedListener = () => void;
 
 /**
  * Shared mind-map webview logic for editor panels and other hosts. Keeps
@@ -86,6 +87,7 @@ export class MindMapHost {
   private static bootTitle: string | undefined;
   private static providerId: LlmProviderId | undefined;
   private static selectModelRequestedListener: SelectModelRequestedListener | undefined;
+  private static modelUpdatedListener: ModelUpdatedListener | undefined;
 
   private webviewReady = false;
   private pendingData: MindMapRoot | undefined;
@@ -235,6 +237,10 @@ export class MindMapHost {
 
   public static setProviderId(providerId: LlmProviderId): void {
     MindMapHost.providerId = providerId;
+  }
+
+  public static onModelUpdated(listener: ModelUpdatedListener | undefined): void {
+    MindMapHost.modelUpdatedListener = listener;
   }
 
   public getMindMapData(): MindMapRoot | undefined {
@@ -427,6 +433,9 @@ export class MindMapHost {
       .getConfiguration("agentMindmap")
       .update("llm.model", value, vscode.ConfigurationTarget.Global);
     mindMapLog(`model: updated llm.model=${value || "(default)"}`);
+    if (MindMapHost.modelUpdatedListener) {
+      MindMapHost.modelUpdatedListener();
+    }
     this.postStrings();
   }
 
