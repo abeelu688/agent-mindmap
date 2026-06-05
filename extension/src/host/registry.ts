@@ -4,12 +4,14 @@ import { claudeHost } from "./claudeHost";
 import { cursorHost } from "./cursorHost";
 import type { AgentHost, AgentHostId, HostSetting } from "./types";
 
+import { mindMapLog } from "../webview/MindMapLog";
+
 const HOSTS: Record<AgentHostId, AgentHost> = {
   cursor: cursorHost,
   "claude-code": claudeHost,
 };
 
-const WORKSPACE_HOST_KEY = "agentMindmap.resolvedHostId";
+export const WORKSPACE_HOST_KEY = "agentMindmap.resolvedHostId";
 
 let cachedHost: AgentHost | undefined;
 let cacheKey: string | undefined;
@@ -102,24 +104,7 @@ async function resolveAutoHost(
     return "cursor";
   }
 
-  const [cursorMtime, claudeMtime] = await Promise.all([
-    latestSessionMtime(cursorHost, workspacePath),
-    latestSessionMtime(claudeHost, workspacePath),
-  ]);
-
-  if (cursorMtime === 0 && claudeMtime === 0) {
-    return "cursor";
-  }
-  if (cursorMtime > 0 && claudeMtime === 0) {
-    return "cursor";
-  }
-  if (claudeMtime > 0 && cursorMtime === 0) {
-    return "claude-code";
-  }
-  if (cursorMtime === claudeMtime) {
-    return pickHostWhenAmbiguous(workspacePath, context);
-  }
-  return cursorMtime > claudeMtime ? "cursor" : "claude-code";
+  return pickHostWhenAmbiguous(workspacePath, context);
 }
 
 export async function resolveHostId(

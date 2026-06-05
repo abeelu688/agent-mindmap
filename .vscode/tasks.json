@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "npm run build",
       "options": {
-        "cwd": "${workspaceFolder}/agent-mindmap"
+        "cwd": "${workspaceFolder}"
       },
       "group": {
         "kind": "build",

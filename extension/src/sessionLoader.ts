@@ -8,6 +8,7 @@ import { showCliInstallGuide } from "./llm/cliInstallGuide";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
 import { dumpLlmReplay } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
+import { mindMapLog } from "./webview/MindMapLog";
 import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import {
@@ -322,6 +323,7 @@ export async function loadSession(
   progress?.report(t("ui.progress.readTranscript", "Reading transcript…"));
   const content = await readSessionFile(session.filePath);
   const events = host.parseTranscript(content);
+  mindMapLog(`[loadSession] session=${session.id} filePath=${session.filePath} contentLen=${content.length} events=${events.length}`);
   const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
   const transcriptSha256 = sha256Hex(content);
@@ -424,6 +426,7 @@ export async function loadSession(
   let pipelineResult;
   try {
     const provider = getProvider(settings.llm);
+    mindMapLog(`[loadSession] Calling LLM for session ${session.id}: provider=${provider.id}, model=${settings.llm.model || "(default)"}, hostId=${host.id}`);
     pipelineResult = await runSessionPipeline(
       {
         events,
@@ -470,6 +473,7 @@ export async function loadSession(
       }
     }
     console.warn("[agent-mindmap] LLM failure, using turn fallback:", err);
+    mindMapLog(`[loadSession] LLM failed for session ${session.id}, falling back to turn view. Error: ${err instanceof Error ? err.message : String(err)}`);
     return {
       session: { ...session, hostId: host.id },
       mindMap: buildTurnMindMap(
