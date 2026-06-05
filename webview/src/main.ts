@@ -25,7 +25,12 @@ type ExtensionMessage =
   | { type: "setLoading"; active: boolean; message?: string }
   | {
       type: "setStrings";
-      strings: { loadingTitle: string; menu: WebviewStrings["menu"] };
+      strings: {
+        loadingTitle: string;
+        menu: WebviewStrings["menu"];
+        modelOptions?: WebviewStrings["modelOptions"];
+        currentModel?: string;
+      };
     }
   | { type: "setBatchStatus"; status: BatchStatus };
 
@@ -33,9 +38,10 @@ type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
-  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
+  | { type: "updateUiSetting"; key: "preset" | "direction" | "model"; value: string }
   | { type: "requestDownload" }
-  | { type: "requestApplyPendingUpdate" };
+  | { type: "requestApplyPendingUpdate" }
+  | { type: "selectModel" };
 
 type BatchStatus = {
   total: number;
@@ -152,11 +158,19 @@ let onSelectNodes: ((nodes: NodeObj<NodeMetadata>[]) => void) | undefined;
 let currentUi: MindMapUiOptions | undefined;
 let pendingData: MindMapNodeData | undefined;
 let lastRenderedData: MindMapNodeData | undefined;
-let uiStrings: { loadingTitle: string; menu: WebviewStrings["menu"] } = {
+let uiStrings: {
+  loadingTitle: string;
+  menu: WebviewStrings["menu"];
+  modelOptions?: WebviewStrings["modelOptions"];
+  currentModel?: string;
+} = {
   loadingTitle: "Generating mind map…",
   menu: {
     sectionTheme: "Theme",
     sectionDirection: "Layout direction",
+    sectionModel: "Model",
+    modelDefault: "Default",
+    modelMore: "More models…",
     presetAuto: "Follow editor",
     presetDark: "Dark",
     presetLight: "Light",
@@ -360,7 +374,12 @@ if (!offlineMode) {
   window.addEventListener("message", (event) => {
     const msg = event.data as ExtensionMessage;
     if (msg?.type === "setStrings" && msg.strings) {
-      applyStrings(msg.strings);
+      applyStrings({
+        loadingTitle: msg.strings.loadingTitle,
+        menu: msg.strings.menu,
+        modelOptions: msg.strings.modelOptions,
+        currentModel: msg.strings.currentModel,
+      });
       return;
     }
     if (msg?.type === "setUi" && msg.ui) {
@@ -426,7 +445,11 @@ if (!offlineMode) {
       event.clientX,
       event.clientY,
       currentUi,
-      { menu: uiStrings.menu },
+      {
+        menu: uiStrings.menu,
+        modelOptions: uiStrings.modelOptions,
+        currentModel: uiStrings.currentModel,
+      },
       (pick) => {
         postToExtension({
           type: "updateUiSetting",
@@ -438,6 +461,9 @@ if (!offlineMode) {
         showDownload: true,
         onDownload: () => {
           postToExtension({ type: "requestDownload" });
+        },
+        onSelectModel: () => {
+          postToExtension({ type: "selectModel" });
         },
       }
     );

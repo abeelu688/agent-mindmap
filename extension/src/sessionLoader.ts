@@ -110,11 +110,11 @@ async function readSettings(host: AgentHost): Promise<Settings> {
       model: config.get<string>("llm.model", "").trim(),
       timeoutMs: Math.max(
         1000,
-        config.get<number>("llm.timeoutMs", 90000) ?? 90000
+        config.get<number>("llm.timeoutMs", 300000) ?? 300000
       ),
       maxAttempts: Math.max(
         1,
-        Math.min(10, config.get<number>("llm.maxAttempts", 3) ?? 3)
+        Math.min(10, config.get<number>("llm.maxAttempts", 1) ?? 1)
       ),
       retryBackoffMs: Math.max(
         0,

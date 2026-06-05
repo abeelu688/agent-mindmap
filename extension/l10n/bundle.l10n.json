@@ -143,5 +143,12 @@
   "webview.menu.direction.sideLr": "Both sides (left then right)",
   "webview.menu.direction.right": "Right",
   "webview.menu.direction.left": "Left",
-  "webview.menu.download": "Download mind map & transcripts…"
+  "webview.menu.download": "Download mind map & transcripts…",
+  "webview.menu.section.model": "Model",
+  "webview.menu.model.default": "Default",
+  "webview.menu.model.more": "More models…",
+  "ui.selectModel.placeholder": "Select a model for LLM requests",
+  "ui.selectModel.custom.label": "Custom model name…",
+  "ui.selectModel.custom.placeholder": "Model name (e.g. claude-sonnet-4-6)",
+  "ui.selectModel.applied": "Agent Mind Map: Model set to {0}."
 }

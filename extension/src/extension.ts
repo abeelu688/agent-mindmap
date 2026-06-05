@@ -8,6 +8,7 @@ import { loadGlassResumableIds, clearComposerTitleCache } from "./transcript/com
 import { closeStateDb } from "./transcript/cursorStateDb";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
+import { MindMapHost } from "./webview/MindMapHost";
 import type { BatchStatus } from "./webview/MindMapHost";
 import {
   loadLatestSession,
@@ -52,6 +53,7 @@ import {
 } from "./store/mergeSnapshot";
 import { sanitizeSessionRecord } from "./store/sanitizeRecords";
 import { getProvider } from "./llm";
+import { fetchModelList, clearModelCache } from "./llm/modelList";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import {
@@ -233,11 +235,11 @@ async function readLlmOptions(
     model: config.get<string>("llm.model", "").trim(),
     timeoutMs: Math.max(
       1000,
-      config.get<number>("llm.timeoutMs", 90000) ?? 90000
+      config.get<number>("llm.timeoutMs", 300000) ?? 300000
     ),
     maxAttempts: Math.max(
       1,
-      Math.min(10, config.get<number>("llm.maxAttempts", 3) ?? 3)
+      Math.min(10, config.get<number>("llm.maxAttempts", 1) ?? 1)
     ),
     retryBackoffMs: Math.max(
       0,
@@ -961,13 +963,23 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   logLlmDumpLocationsOnce();
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
       if (
         e.affectsConfiguration("agentMindmap.host") ||
         e.affectsConfiguration("agentMindmap.projectsDir") ||
         e.affectsConfiguration("agentMindmap.claudeProjectsDir")
       ) {
         resetHostCache();
+      }
+      if (
+        e.affectsConfiguration("agentMindmap.llm.provider") ||
+        e.affectsConfiguration("agentMindmap.host")
+      ) {
+        const host = await getActiveHost(context);
+        const config = vscode.workspace.getConfiguration("agentMindmap");
+        const providerSetting = config.get<string>("llm.provider", "auto");
+        const providerId = resolveLlmProviderId(providerSetting, host.defaultLlmProvider);
+        MindMapHost.setProviderId(providerId);
       }
     })
   );
@@ -1012,6 +1024,18 @@ export function activate(context: vscode.ExtensionContext): void {
     applyPendingMergeToPanel(panel);
   });
 
+  MindMapPanel.onSelectModelRequested(() => {
+    void vscode.commands.executeCommand("agent-mindmap.selectModel");
+  });
+
+  void resolveHostId(context).then(async (hostId) => {
+    const host = await getActiveHost(context);
+    const config = vscode.workspace.getConfiguration("agentMindmap");
+    const providerSetting = config.get<string>("llm.provider", "auto");
+    const providerId = resolveLlmProviderId(providerSetting, host.defaultLlmProvider);
+    MindMapHost.setProviderId(providerId);
+  });
+
   async function commandSelectHost(): Promise<void> {
     const items = [
       {
@@ -1039,6 +1063,81 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
+  async function commandSelectModel(): Promise<void> {
+    const llmOpts = await readLlmOptions(extensionContext);
+    const models = await fetchModelList(llmOpts.provider, llmOpts.cliPath);
+    const currentModel = llmOpts.model;
+    const CUSTOM_KEY = "__custom__";
+
+    const items: vscode.QuickPickItem[] = [
+      {
+        label: t("webview.menu.model.default", "Default"),
+        description: currentModel === "" ? "✓ current" : "",
+      },
+      ...models.map((m) => ({
+        label: m.label,
+        description: currentModel === m.id ? "✓ current" : m.id,
+        modelId: m.id,
+      })),
+      {
+        label: t(
+          "ui.selectModel.custom.label",
+          "Custom model name…"
+        ),
+        description: "",
+        modelId: CUSTOM_KEY,
+      } as vscode.QuickPickItem & { modelId: string },
+    ];
+
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: t(
+        "ui.selectModel.placeholder",
+        "Select a model for LLM requests"
+      ),
+    });
+    if (!picked) {
+      return;
+    }
+
+    const pickedItem = picked as vscode.QuickPickItem & {
+      modelId?: string;
+    };
+    let modelValue: string;
+
+    if (pickedItem.modelId === CUSTOM_KEY) {
+      const custom = await vscode.window.showInputBox({
+        prompt: t(
+          "ui.selectModel.custom.placeholder",
+          "Model name (e.g. claude-sonnet-4-6)"
+        ),
+        value: currentModel,
+      });
+      if (custom === undefined) {
+        return;
+      }
+      modelValue = custom.trim();
+    } else if (pickedItem.modelId !== undefined) {
+      modelValue = pickedItem.modelId;
+    } else {
+      modelValue = "";
+    }
+
+    await vscode.workspace
+      .getConfiguration("agentMindmap")
+      .update("llm.model", modelValue, vscode.ConfigurationTarget.Global);
+
+    const displayName = modelValue
+      ? modelValue
+      : t("webview.menu.model.default", "Default");
+    vscode.window.showInformationMessage(
+      t(
+        "ui.selectModel.applied",
+        "Agent Mind Map: Model set to {0}.",
+        displayName
+      )
+    );
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "agent-mindmap.openLatest",
@@ -1055,6 +1154,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.selectHost",
       commandSelectHost
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.selectModel",
+      commandSelectModel
     )
   );
 
