@@ -254,11 +254,33 @@ async function readLlmOptions(
   };
 }
 
+const MODEL_SELECTED_KEY = "agentMindmap.modelSelected";
+
+async function ensureModelSelected(): Promise<boolean> {
+  const selected = extensionContext.globalState.get<boolean>(MODEL_SELECTED_KEY);
+  if (selected) {
+    return true;
+  }
+  await vscode.commands.executeCommand("agent-mindmap.selectModel");
+  const nowSelected = extensionContext.globalState.get<boolean>(MODEL_SELECTED_KEY);
+  return !!nowSelected;
+}
+
+async function markModelSelected(): Promise<void> {
+  await extensionContext.globalState.update(MODEL_SELECTED_KEY, true);
+}
+
 async function commandOpenLatest(): Promise<void> {
+  if (!(await ensureModelSelected())) {
+    return;
+  }
   await loadAndShowSession((deps) => loadLatestSession(deps));
 }
 
 async function commandPickSession(): Promise<void> {
+  if (!(await ensureModelSelected())) {
+    return;
+  }
   const panel = createOrShowMindMap();
   panel.setLoading(true, t("ui.loading.preparing", "Understanding conversation…"));
   try {
@@ -495,6 +517,9 @@ function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
 }
 
 async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
+  if (!(await ensureModelSelected())) {
+    return;
+  }
   const mode = await vscode.window.showQuickPick(
     [
       {
@@ -1028,6 +1053,10 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.commands.executeCommand("agent-mindmap.selectModel");
   });
 
+  MindMapPanel.onModelUpdated(() => {
+    void markModelSelected();
+  });
+
   void resolveHostId(context).then(async (hostId) => {
     const host = await getActiveHost(context);
     const config = vscode.workspace.getConfiguration("agentMindmap");
@@ -1125,6 +1154,8 @@ export function activate(context: vscode.ExtensionContext): void {
     await vscode.workspace
       .getConfiguration("agentMindmap")
       .update("llm.model", modelValue, vscode.ConfigurationTarget.Global);
+
+    await markModelSelected();
 
     const displayName = modelValue
       ? modelValue

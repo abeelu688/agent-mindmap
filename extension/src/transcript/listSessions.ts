@@ -51,9 +51,12 @@ export async function readFirstUserQueryPreview(
         continue;
       }
       let row: {
+        type?: string;
         role?: string;
+        aiTitle?: string;
         message?: {
-          content?: { type?: string; text?: string }[];
+          role?: string;
+          content?: { type?: string; text?: string }[] | string;
         };
       };
       try {
@@ -61,10 +64,25 @@ export async function readFirstUserQueryPreview(
       } catch {
         continue;
       }
-      if (row.role !== "user") {
+      // Claude Code stores title in type="ai-title" rows
+      if (row.type === "ai-title" && row.aiTitle?.trim()) {
+        return shortenPreview(row.aiTitle.trim(), maxLen);
+      }
+      const isUser =
+        row.role === "user" ||
+        row.type === "user" ||
+        row.message?.role === "user";
+      if (!isUser) {
         continue;
       }
-      const parts = row.message?.content ?? [];
+      const rawContent = row.message?.content;
+      if (typeof rawContent === "string" && rawContent.trim()) {
+        const query = extractUserQuery(rawContent);
+        if (query) {
+          return shortenPreview(query, maxLen);
+        }
+      }
+      const parts = Array.isArray(rawContent) ? rawContent : [];
       for (const part of parts) {
         if (part.type !== "text" || typeof part.text !== "string") {
           continue;
