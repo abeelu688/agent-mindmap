@@ -5,6 +5,7 @@ import {
   type DownloadRequestedListener,
   type NodeClickedListener,
   type ApplyPendingUpdateRequestedListener,
+  type SelectModelRequestedListener,
 } from "./MindMapHost";
 
 /**
@@ -73,6 +74,12 @@ export class MindMapPanel {
     listener: ApplyPendingUpdateRequestedListener | undefined
   ): void {
     MindMapHost.onApplyPendingUpdateRequested(listener);
+  }
+
+  public static onSelectModelRequested(
+    listener: SelectModelRequestedListener | undefined
+  ): void {
+    MindMapHost.onSelectModelRequested(listener);
   }
 
   public static queueBoot(data: MindMapRoot, title?: string): void {

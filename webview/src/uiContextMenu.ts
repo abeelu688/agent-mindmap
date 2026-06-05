@@ -1,9 +1,17 @@
 import type { MindMapUiOptions, MindMapUiPreset, SideBranchOrder } from "./uiTypes";
 
+export type ModelOption = {
+  value: string;
+  label: string;
+};
+
 export type WebviewStrings = {
   menu: {
     sectionTheme: string;
     sectionDirection: string;
+    sectionModel: string;
+    modelDefault: string;
+    modelMore: string;
     presetAuto: string;
     presetDark: string;
     presetLight: string;
@@ -13,9 +21,11 @@ export type WebviewStrings = {
     directionLeft: string;
     download: string;
   };
+  modelOptions?: ModelOption[];
+  currentModel?: string;
 };
 
-export type UiSettingKey = "preset" | "direction";
+export type UiSettingKey = "preset" | "direction" | "model";
 
 export type UiSettingPick = {
   key: UiSettingKey;
@@ -163,7 +173,11 @@ export function showUiContextMenu(
   currentUi: MindMapUiOptions,
   strings: WebviewStrings,
   onPick: (pick: UiSettingPick) => void,
-  options?: { onDownload?: () => void; showDownload?: boolean }
+  options?: {
+    onDownload?: () => void;
+    showDownload?: boolean;
+    onSelectModel?: () => void;
+  }
 ): void {
   hideUiContextMenu();
   bindDismissListeners();
@@ -199,6 +213,49 @@ export function showUiContextMenu(
     })),
     (value) => onPick({ key: "direction", value })
   );
+
+  const modelOpts = strings.modelOptions;
+  const currentModel = strings.currentModel ?? "";
+  if (modelOpts && modelOpts.length > 0) {
+    const sep2 = document.createElement("div");
+    sep2.className = "mindmap-ui-menu__sep";
+    root.appendChild(sep2);
+
+    addSection(
+      root,
+      strings.menu.sectionModel,
+      [
+        { value: "", label: strings.menu.modelDefault, checked: currentModel === "" },
+        ...modelOpts.map((o) => ({
+          value: o.value,
+          label: o.label,
+          checked: currentModel === o.value,
+        })),
+      ],
+      (value) => onPick({ key: "model", value })
+    );
+
+    if (options?.onSelectModel) {
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "mindmap-ui-menu__item";
+      moreBtn.setAttribute("role", "menuitem");
+      const moreMark = document.createElement("span");
+      moreMark.className = "mindmap-ui-menu__check";
+      moreMark.textContent = "";
+      const moreLabel = document.createElement("span");
+      moreLabel.className = "mindmap-ui-menu__label";
+      moreLabel.textContent = strings.menu.modelMore;
+      moreBtn.appendChild(moreMark);
+      moreBtn.appendChild(moreLabel);
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        options.onSelectModel?.();
+        hideUiContextMenu();
+      });
+      root.appendChild(moreBtn);
+    }
+  }
 
   if (options?.showDownload && options.onDownload) {
     const sep2 = document.createElement("div");

@@ -11,14 +11,17 @@ import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 import { format, t } from "../l10n/uiTranslate";
+import { getCuratedModels } from "../llm/modelList";
+import type { LlmProviderId } from "../llm/types";
 
 export type WebviewToExtensionMessage =
   | { type: "ready" }
   | { type: "log"; message: string }
   | { type: "nodeClicked"; origin: NodeOrigin; nodeLabel?: string }
-  | { type: "updateUiSetting"; key: "preset" | "direction"; value: string }
+  | { type: "updateUiSetting"; key: "preset" | "direction" | "model"; value: string }
   | { type: "requestDownload" }
-  | { type: "requestApplyPendingUpdate" };
+  | { type: "requestApplyPendingUpdate" }
+  | { type: "selectModel" };
 
 export type ExtensionToWebviewMessage =
   | { type: "setData"; data: MindMapRoot }
@@ -43,6 +46,9 @@ export type WebviewStrings = {
   menu: {
     sectionTheme: string;
     sectionDirection: string;
+    sectionModel: string;
+    modelDefault: string;
+    modelMore: string;
     presetAuto: string;
     presetDark: string;
     presetLight: string;
@@ -52,6 +58,8 @@ export type WebviewStrings = {
     directionLeft: string;
     download: string;
   };
+  modelOptions?: { value: string; label: string }[];
+  currentModel?: string;
 };
 
 export type NodeClickedListener = (payload: {
@@ -61,6 +69,7 @@ export type NodeClickedListener = (payload: {
 
 export type DownloadRequestedListener = () => void;
 export type ApplyPendingUpdateRequestedListener = () => void;
+export type SelectModelRequestedListener = () => void;
 
 /**
  * Shared mind-map webview logic for editor panels and other hosts. Keeps
@@ -75,6 +84,8 @@ export class MindMapHost {
     | undefined;
   private static bootData: MindMapRoot | undefined;
   private static bootTitle: string | undefined;
+  private static providerId: LlmProviderId | undefined;
+  private static selectModelRequestedListener: SelectModelRequestedListener | undefined;
 
   private webviewReady = false;
   private pendingData: MindMapRoot | undefined;
@@ -158,7 +169,18 @@ export class MindMapHost {
           }
         }
         if (msg.type === "updateUiSetting") {
-          void this.handleUpdateUiSetting(msg.key, msg.value);
+          if (msg.key === "model") {
+            void this.handleUpdateModel(msg.value);
+          } else {
+            void this.handleUpdateUiSetting(msg.key, msg.value);
+          }
+        }
+        if (msg.type === "selectModel") {
+          if (MindMapHost.selectModelRequestedListener) {
+            MindMapHost.selectModelRequestedListener();
+          } else {
+            mindMapLog("WARN: selectModel with no listener registered");
+          }
         }
         if (msg.type === "requestDownload") {
           if (MindMapHost.downloadRequestedListener) {
@@ -182,6 +204,9 @@ export class MindMapHost {
           this.postUi();
           this.updateThemeFileWatcher();
         }
+        if (e.affectsConfiguration("agentMindmap.llm")) {
+          this.postStrings();
+        }
       })
     );
   }
@@ -200,6 +225,16 @@ export class MindMapHost {
     listener: ApplyPendingUpdateRequestedListener | undefined
   ): void {
     MindMapHost.applyPendingUpdateRequestedListener = listener;
+  }
+
+  public static onSelectModelRequested(
+    listener: SelectModelRequestedListener | undefined
+  ): void {
+    MindMapHost.selectModelRequestedListener = listener;
+  }
+
+  public static setProviderId(providerId: LlmProviderId): void {
+    MindMapHost.providerId = providerId;
   }
 
   public getMindMapData(): MindMapRoot | undefined {
@@ -276,11 +311,20 @@ export class MindMapHost {
   }
 
   private buildStrings(): WebviewStrings {
+    const providerId = MindMapHost.providerId ?? "cursor-cli";
+    const curated = getCuratedModels(providerId);
+    const currentModel = vscode.workspace
+      .getConfiguration("agentMindmap")
+      .get<string>("llm.model", "")
+      .trim();
     return {
       loadingTitle: t("webview.loading.title", "Generating mind map…"),
       menu: {
         sectionTheme: t("webview.menu.section.theme", "Theme"),
         sectionDirection: t("webview.menu.section.direction", "Layout direction"),
+        sectionModel: t("webview.menu.section.model", "Model"),
+        modelDefault: t("webview.menu.model.default", "Default"),
+        modelMore: t("webview.menu.model.more", "More models…"),
         presetAuto: t("webview.menu.preset.auto", "Follow editor"),
         presetDark: t("webview.menu.preset.dark", "Dark"),
         presetLight: t("webview.menu.preset.light", "Light"),
@@ -296,6 +340,8 @@ export class MindMapHost {
         directionLeft: t("webview.menu.direction.left", "Left"),
         download: t("webview.menu.download", "Download mind map & transcripts…"),
       },
+      modelOptions: curated.map((m) => ({ value: m.id, label: m.label })),
+      currentModel,
     };
   }
 
@@ -374,6 +420,14 @@ export class MindMapHost {
       return;
     }
     mindMapLog(`ui: rejected invalid setting ${key}=${value}`);
+  }
+
+  private async handleUpdateModel(value: string): Promise<void> {
+    await vscode.workspace
+      .getConfiguration("agentMindmap")
+      .update("llm.model", value, vscode.ConfigurationTarget.Global);
+    mindMapLog(`model: updated llm.model=${value || "(default)"}`);
+    this.postStrings();
   }
 
   private postUi(): void {

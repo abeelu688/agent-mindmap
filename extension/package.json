@@ -40,6 +40,11 @@
         "command": "agent-mindmap.selectHost",
         "title": "Agent Mind Map: Select Host (Cursor/Claude Code)",
         "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.selectModel",
+        "title": "Agent Mind Map: Select Model",
+        "category": "Agent Mind Map"
       }
     ],
     "configuration": {
@@ -110,14 +115,14 @@
         },
         "agentMindmap.llm.timeoutMs": {
           "type": "number",
-          "default": 90000,
+          "default": 300000,
           "minimum": 1000,
           "maximum": 600000,
           "description": "Hard timeout (ms) for a single CLI subprocess call. Total budget per summarisation is roughly timeoutMs * maxAttempts."
         },
         "agentMindmap.llm.maxAttempts": {
           "type": "number",
-          "default": 3,
+          "default": 1,
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum number of cursor-agent attempts per summarisation. Retries are triggered by timeout / cli-failed / bad-json / bad-shape; cli-missing / cancelled / empty are not retried."

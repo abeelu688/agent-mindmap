@@ -143,5 +143,12 @@
   "webview.menu.direction.sideLr": "两侧（从左到右）",
   "webview.menu.direction.right": "向右",
   "webview.menu.direction.left": "向左",
-  "webview.menu.download": "下载思维导图与对话…"
+  "webview.menu.download": "下载思维导图与对话…",
+  "webview.menu.section.model": "模型",
+  "webview.menu.model.default": "默认",
+  "webview.menu.model.more": "更多模型…",
+  "ui.selectModel.placeholder": "选择 LLM 请求使用的模型",
+  "ui.selectModel.custom.label": "自定义模型名称…",
+  "ui.selectModel.custom.placeholder": "模型名称（如 claude-sonnet-4-6）",
+  "ui.selectModel.applied": "Agent Mind Map: 模型已设为 {0}。"
 }
