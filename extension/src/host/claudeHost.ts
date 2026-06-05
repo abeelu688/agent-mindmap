@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { parseJsonl } from "../transcript/parseJsonl";
+import { parseClaudeJsonl } from "../transcript/parseClaudeJsonl";
 import {
   listFlatJsonlSessions,
   type ListSessionsContext,
@@ -117,7 +117,7 @@ export const claudeHost: AgentHost = {
   },
 
   parseTranscript(content: string): ChatEvent[] {
-    return parseJsonl(content);
+    return parseClaudeJsonl(content);
   },
 
   slugToWorkspacePath(slug: string): string {

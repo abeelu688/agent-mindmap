@@ -25,6 +25,8 @@ import {
   getWorkspaceSlug,
   resetHostCache,
   resolveHostId,
+  WORKSPACE_HOST_KEY,
+  getHostById,
 } from "./host";
 import { getStoreDir } from "./paths";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
@@ -970,6 +972,12 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      resetHostCache();
+    })
+  );
+
   void maybeWarnEmptyClaudeTranscripts(context);
 
   context.subscriptions.push(
@@ -1004,6 +1012,33 @@ export function activate(context: vscode.ExtensionContext): void {
     applyPendingMergeToPanel(panel);
   });
 
+  async function commandSelectHost(): Promise<void> {
+    const items = [
+      {
+        label: "Cursor",
+        description: "Read Cursor agent transcripts",
+        id: "cursor" as const,
+      },
+      {
+        label: "Claude Code",
+        description: "Read Claude Code transcripts",
+        id: "claude-code" as const,
+      },
+    ];
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: "Select agent host for current workspace",
+    });
+    if (!picked) {
+      return;
+    }
+    await context.workspaceState.update(WORKSPACE_HOST_KEY, picked.id);
+    resetHostCache();
+    const host = getHostById(picked.id);
+    vscode.window.showInformationMessage(
+      `Agent Mind Map: Host set to ${host.displayName} for this workspace`
+    );
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "agent-mindmap.openLatest",
@@ -1016,6 +1051,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.analyzeAndMergeCurrentProject",
       commandAnalyzeAndMergeCurrentProject
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.selectHost",
+      commandSelectHost
     )
   );
 

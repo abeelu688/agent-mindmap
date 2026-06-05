@@ -35,6 +35,11 @@
         "command": "agent-mindmap.analyzeAndMergeCurrentProject",
         "title": "Agent Mind Map: Analyze All Sessions (Current Project)",
         "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.selectHost",
+        "title": "Agent Mind Map: Select Host (Cursor/Claude Code)",
+        "category": "Agent Mind Map"
       }
     ],
     "configuration": {
