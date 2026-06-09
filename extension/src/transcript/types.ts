@@ -1,6 +1,13 @@
 export type ChatEvent =
   | { kind: "user_query"; text: string; lineIndex: number }
-  | { kind: "tool"; name: string; label: string; lineIndex: number }
+  | {
+      kind: "tool";
+      name: string;
+      label: string;
+      lineIndex: number;
+      /** Source file paths this tool_use touched (Read/Edit/Write/Grep/ReadLints...). */
+      filePaths?: string[];
+    }
   | { kind: "assistant_summary"; text: string; preview: string; lineIndex: number };
 
 import type { AgentHostId } from "../host/types";

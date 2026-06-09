@@ -382,7 +382,8 @@ export async function loadSession(
             maxBranches: settings.llm.maxTopics,
             maxDetailsPerNode: settings.llm.maxItemsPerTopic,
           },
-          host.id
+          host.id,
+          projectPath
         );
         agentDebugLog(
           "sessionLoader.ts:loadSession",
@@ -413,7 +414,12 @@ export async function loadSession(
             projectSlug: ctx.projectSlug,
             projectPath,
           },
-          mindMap: buildOutlineMindMap(outline, session.label, sessionMeta),
+          mindMap: buildOutlineMindMap(
+            outline,
+            session.label,
+            sessionMeta,
+            existing.sessionAnalysis?.codeReferences
+          ),
           source: "topic",
           fromLibrary: true,
         };
@@ -432,6 +438,7 @@ export async function loadSession(
         events,
         sessionId: session.id,
         projectSlug: ctx.projectSlug,
+        projectPath,
         prompt: {
           maxDomains: Math.min(10, settings.llm.maxTopics),
           maxTerms: Math.max(6, settings.llm.maxTopics * 2),
@@ -624,7 +631,12 @@ export async function loadSession(
       projectSlug: ctx.projectSlug,
       projectPath,
     },
-    mindMap: buildOutlineMindMap(outline, session.label, sessionMeta),
+    mindMap: buildOutlineMindMap(
+      outline,
+      session.label,
+      sessionMeta,
+      pipelineResult.sessionAnalysis?.codeReferences
+    ),
     source: "topic",
   };
 }

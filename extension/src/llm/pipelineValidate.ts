@@ -1,6 +1,7 @@
 import { LlmProviderError } from "./types";
 import { validateSessionOutline } from "./outlineValidate";
 import type {
+  CodeReference,
   SessionAnalysis,
   SessionConceptExtract,
   SessionSynonymRefine,
@@ -164,6 +165,45 @@ export function validateSessionSynonymRefine(value: unknown): SessionSynonymRefi
   return { segmentEquivalences, termAliases };
 }
 
+const MAX_CODE_REF_PATH = 200;
+const MAX_CODE_REF_LINES = 40;
+const MAX_CODE_REF_DESC = 80;
+const MAX_CODE_REFS = 50;
+
+function parseCodeReferences(raw: unknown): CodeReference[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: CodeReference[] = [];
+  for (const item of raw) {
+    const obj = asObject(item);
+    if (!obj) {
+      continue;
+    }
+    let path = pickString(obj, "path", MAX_CODE_REF_PATH);
+    if (!path) {
+      continue;
+    }
+    path = path.replace(/^\/+/, "");
+    if (!path) {
+      continue;
+    }
+    const lines = pickString(obj, "lines", MAX_CODE_REF_LINES);
+    if (!lines) {
+      continue;
+    }
+    const description = pickString(obj, "description", MAX_CODE_REF_DESC);
+    if (!description) {
+      continue;
+    }
+    out.push({ path, lines, description });
+    if (out.length >= MAX_CODE_REFS) {
+      break;
+    }
+  }
+  return out;
+}
+
 export function validateSessionAnalysis(value: unknown): SessionAnalysis {
   const root = asObject(value);
   if (!root) {
@@ -211,6 +251,7 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
       break;
     }
   }
+  const codeReferences = parseCodeReferences(root.codeReferences);
   return {
     domains,
     nodes: ontologyPartial.nodes,
@@ -220,6 +261,7 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
     segmentEquivalences,
     termAliases: termAliases.length ? termAliases : undefined,
     outline,
+    codeReferences: codeReferences.length ? codeReferences : undefined,
   };
 }
 

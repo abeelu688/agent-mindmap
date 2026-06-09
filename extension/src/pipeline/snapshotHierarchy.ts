@@ -698,6 +698,12 @@ export async function runFinalRootRefresh(
   }
 
   progress?.report("Final DET refresh of concept trie…");
+  mindMapLog(`[runFinalRootRefresh] allReal=${allReal.length} allRecords=${opts.allRecords.length} hasVirtualSession=${!!root.sessionAnalysis} nodes=${root.sessionAnalysis?.nodes?.length ?? 0} segEq=${root.segmentEquivalences?.length ?? 0}`);
+  // Log sample conceptPaths from input records
+  for (const r of allReal.slice(0, 2)) {
+    const paths = r.graph?.topics?.map((t: any) => t.conceptPath) ?? [];
+    mindMapLog(`[runFinalRootRefresh] record=${r.meta?.sessionId?.slice(0,8)} topics=${r.graph?.topics?.length ?? 0} paths=${JSON.stringify(paths.slice(0, 3))}`);
+  }
   const merge = await updateConceptTrieAsync({
     records: allReal,
     segmentEquivalences: root.segmentEquivalences,

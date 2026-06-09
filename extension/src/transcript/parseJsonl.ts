@@ -23,9 +23,9 @@ export function extractUserQuery(text: string): string | undefined {
 
 function toolLabel(name: string, input: Record<string, unknown>): string {
   const n = name || "Tool";
-  const p = input.path;
-  if (typeof p === "string" && p) {
-    return `${n}: ${basename(p)}`;
+  const fp = input.file_path ?? input.path;
+  if (typeof fp === "string" && fp) {
+    return `${n}: ${basename(fp)}`;
   }
   const pattern = input.pattern;
   if (typeof pattern === "string" && pattern) {
@@ -42,6 +42,34 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
     return `${n}: ${url}`;
   }
   return n;
+}
+
+function extractFilePaths(input: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const push = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) {
+      out.push(v.trim());
+    }
+  };
+  push(input.file_path);
+  push(input.path);
+  const paths = input.paths;
+  if (Array.isArray(paths)) {
+    for (const p of paths) {
+      push(p);
+    }
+  }
+  const edits = input.edits;
+  if (Array.isArray(edits)) {
+    for (const e of edits) {
+      if (e && typeof e === "object") {
+        push((e as Record<string, unknown>).file_path);
+      }
+    }
+  }
+  const notebook = input.notebook_path;
+  push(notebook);
+  return out;
 }
 
 function basename(p: string): string {
@@ -111,6 +139,7 @@ export function parseJsonl(content: string): ChatEvent[] {
               name,
               label: toolLabel(name, input),
               lineIndex: i,
+              filePaths: extractFilePaths(input),
             });
           }
         }

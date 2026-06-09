@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runSessionPipeline } from "../extension/src/pipeline/sessionPipeline";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
 import type { LlmProvider, SessionAnalysis, SessionOutline } from "../extension/src/llm/types";
 import type { ChatEvent } from "../extension/src/transcript/types";
 
@@ -76,7 +77,7 @@ describe("runSessionPipeline", () => {
     expect(result.outline.title).toBe("React Hooks");
     expect(result.sessionAnalysis.domains).toEqual(["frontend"]);
     expect(result.treeSnapshot.topicPathDecisions.length).toBeGreaterThan(0);
-    expect(result.pipelineVersions.sessionAnalysis).toBe(4);
+    expect(result.pipelineVersions.sessionAnalysis).toBe(SESSION_ANALYSIS_PROMPT_VERSION);
   });
 
   it("skips LLM when preloaded analysis is provided", async () => {

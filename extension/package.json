@@ -115,7 +115,7 @@
         },
         "agentMindmap.llm.timeoutMs": {
           "type": "number",
-          "default": 300000,
+          "default": 480000,
           "minimum": 1000,
           "maximum": 600000,
           "description": "Hard timeout (ms) for a single CLI subprocess call. Total budget per summarisation is roughly timeoutMs * maxAttempts."

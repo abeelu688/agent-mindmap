@@ -677,6 +677,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               }
 
               const cached = info.skippedFresh;
+              mindMapLog(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} batchSessionIds=${info.batchSessionIds.join(",")}`);
 
               progress.report(
                 t(
