@@ -28,6 +28,7 @@ export type SessionPipelineOpts = {
   events: ChatEvent[];
   sessionId: string;
   projectSlug: string;
+  projectPath?: string;
   prompt: SessionPipelinePromptOpts;
   modelHint?: string;
   cacheDir?: string;
@@ -96,6 +97,7 @@ export async function runSessionPipeline(
             hostId: opts.hostId,
             sessionId: opts.sessionId,
             projectSlug: opts.projectSlug,
+            projectPath: opts.projectPath,
             timingRunId: timing?.runId,
             timingOut: s1Timing,
           },

@@ -20,6 +20,7 @@ export type AnalyzeSessionOpts = StageTimingOpts & {
   hostId?: AgentHostId;
   sessionId?: string;
   projectSlug?: string;
+  projectPath?: string;
 };
 
 export async function analyzeSession(
@@ -31,7 +32,8 @@ export async function analyzeSession(
   const prompt = buildSessionAnalysisPrompt(
     opts.events,
     opts.prompt,
-    opts.hostId ?? "cursor"
+    opts.hostId ?? "cursor",
+    opts.projectPath
   );
   return runLlmStage(
     {

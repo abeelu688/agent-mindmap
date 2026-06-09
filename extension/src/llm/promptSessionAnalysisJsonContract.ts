@@ -26,6 +26,11 @@ export const SESSION_ANALYSIS_JSON_CONTRACT_LINES: string[] = [
   "- `outline[]`：非空数组",
   "- 最深层叶子：`summary` 必填；`details` 至少 1 条 `{ \"text\": \"非空\" }`",
   "- 中间层：须有非空 `children[]`；有 children 的节点不要挂 `details`",
+  "",
+  "**codeReferences[]**（机械触发：上文存在 `[F#]` 行则必填一条对应每个文件；无 `[F#]` 写 `[]`）：",
+  "- `path`：**必须原样**取自某 `[F#]` 行的某个路径（相对项目根，不含前导 `/`）；禁止编造、改写、拼接",
+  "- `lines`：本方案统一写 `\"-\"`",
+  "- `description`：≤60 字，结合 `[Q#]`/`[A#]` 上下文说明该文件被改动/阅读的功能或目的",
 ];
 
 export function formatSessionAnalysisJsonContract(

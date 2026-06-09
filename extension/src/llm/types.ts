@@ -198,6 +198,15 @@ export type SessionTreeSnapshot = {
   topicPathDecisions: TopicPathDecision[];
 };
 
+export type CodeReference = {
+  /** Relative path from project root, e.g. "src/foo/bar.ts". No leading slash. */
+  path: string;
+  /** Line range, e.g. "42-57" or "88". */
+  lines: string;
+  /** Brief description of the code's function/purpose, ≤80 chars. */
+  description: string;
+};
+
 /** Single LLM response: domain + terms + hierarchy + content outline + session synonyms. */
 export type SessionAnalysis = {
   domains: string[];
@@ -206,6 +215,8 @@ export type SessionAnalysis = {
   segmentEquivalences: SegmentEquivalence[];
   termAliases?: SessionTermAlias[];
   outline: SessionOutline;
+  /** Code file references extracted when session involves software code. Absent when not applicable. */
+  codeReferences?: CodeReference[];
 };
 
 export type PipelineVersions = {

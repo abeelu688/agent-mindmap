@@ -1,8 +1,9 @@
 import { uiTranslate } from "../l10n/uiTranslate";
+import { mindMapLog } from "../webview/MindMapLog";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
+import type { CodeReference, ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import {
   prepareRecordsForFinalTrie,
@@ -144,6 +145,19 @@ function topicHeadline(topic: Topic): string {
   return truncate(topic.title.trim(), MAX_LABEL);
 }
 
+function buildCodeReferencesNode(
+  refs: CodeReference[],
+  sessionMeta: SessionMeta
+): MindMapNodeData {
+  const children = refs.map((ref) =>
+    withOrigin(leaf(`${ref.path}:${ref.lines} — ${ref.description}`), [
+      { ...sessionMeta },
+    ])
+  );
+  const node = branch("相关代码", children, false);
+  return withOrigin(node, unionChildRefs(children));
+}
+
 function topicBranch(loc: TopicLocation): MindMapNodeData {
   const heading = topicHeadline(loc.topic);
   const sessionMeta = locSessionMeta(loc);
@@ -173,6 +187,10 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
         [{ ...sessionMeta }]
       )
     );
+  }
+  const codeRefs = loc.record.sessionAnalysis?.codeReferences;
+  if (codeRefs?.length) {
+    children.push(buildCodeReferencesNode(codeRefs, sessionMeta));
   }
   const node = branch(heading, children, false);
   return withOrigin(node, unionChildRefs(children));
@@ -293,6 +311,8 @@ export function buildConceptTrieStructure(
     }
   }
 
+  mindMapLog(`[buildConceptTrieStructure] filtered=${filtered.length} totalTopics=${total} orphans=${orphans.length} rootChildren=${root.children.size}`);
+
   if (applyEquivalences) {
     mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
   }
@@ -404,6 +424,13 @@ export function buildConceptMergeRecord(
     new Set(filtered.map((r) => r.meta.projectSlug))
   ).sort();
   const trieRecords = recordsForTrieBuild(records, options);
+  mindMapLog(`[buildConceptMergeRecord] input: ${records.length} records, ${filtered.length} filtered, ${trieRecords.length} trieRecords, ontologyForPrep=${!!options.ontologyForPrep}, virtualSession=${!!options.virtualSessionAnalysis}`);
+  // Log trieRecords topics detail
+  for (const r of trieRecords.slice(0, 2)) {
+    const topics = r.graph?.topics ?? [];
+    const paths = topics.map((t: any) => t.conceptPath);
+    mindMapLog(`[buildConceptMergeRecord] trieRecord=${r.meta?.sessionId?.slice(0,8)} topics=${topics.length} paths=${JSON.stringify(paths)}`);
+  }
   const { mindMap } = buildConceptTrieMindMap(trieRecords, options);
   return {
     schemaVersion: 1,

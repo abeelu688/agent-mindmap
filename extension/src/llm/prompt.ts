@@ -33,6 +33,7 @@ type Turn = {
   index: number;
   query?: string;
   tools: string[];
+  filePaths: string[];
   summary?: string;
 };
 
@@ -44,6 +45,21 @@ function clip(text: string, max: number): string {
   return t.slice(0, max - 3) + "...";
 }
 
+function toRelPath(p: string, projectPath?: string): string {
+  if (!projectPath) {
+    return p;
+  }
+  const root = projectPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const np = p.replace(/\\/g, "/");
+  if (np === root) {
+    return "";
+  }
+  if (np.startsWith(root + "/")) {
+    return np.slice(root.length + 1);
+  }
+  return np;
+}
+
 function groupTurns(events: ChatEvent[]): Turn[] {
   const turns: Turn[] = [];
   let current: Turn | undefined;
@@ -53,15 +69,27 @@ function groupTurns(events: ChatEvent[]): Turn[] {
       if (current) {
         turns.push(current);
       }
-      current = { index: turns.length, query: ev.text, tools: [] };
+      current = {
+        index: turns.length,
+        query: ev.text,
+        tools: [],
+        filePaths: [],
+      };
       continue;
     }
     if (!current) {
-      current = { index: turns.length, tools: [] };
+      current = { index: turns.length, tools: [], filePaths: [] };
     }
     if (ev.kind === "tool") {
       if (current.tools.length < MAX_TOOL_LABELS_PER_TURN) {
         current.tools.push(ev.label);
+      }
+      if (ev.filePaths?.length) {
+        for (const fp of ev.filePaths) {
+          if (!current.filePaths.includes(fp)) {
+            current.filePaths.push(fp);
+          }
+        }
       }
     } else if (ev.kind === "assistant_summary") {
       current.summary = ev.text;
@@ -73,7 +101,7 @@ function groupTurns(events: ChatEvent[]): Turn[] {
   return turns;
 }
 
-function renderTurns(turns: Turn[]): string {
+function renderTurns(turns: Turn[], projectPath?: string): string {
   const blocks: string[] = [];
   let total = 0;
   for (const turn of turns) {
@@ -83,6 +111,14 @@ function renderTurns(turns: Turn[]): string {
     }
     if (turn.tools.length) {
       parts.push(`[T${turn.index + 1}] ${turn.tools.join(" | ")}`);
+    }
+    if (turn.filePaths.length) {
+      const rels = turn.filePaths
+        .map((p) => toRelPath(p, projectPath))
+        .filter((p) => p);
+      if (rels.length) {
+        parts.push(`[F${turn.index + 1}] ${rels.join(" | ")}`);
+      }
     }
     if (turn.summary) {
       parts.push(`[A${turn.index + 1}] ${clip(turn.summary, MAX_TEXT_PER_BLOCK)}`);
@@ -104,11 +140,12 @@ function renderTurns(turns: Turn[]): string {
 export function buildPrompt(
   events: ChatEvent[],
   options: PromptOptions,
-  hostId: AgentHostId = "cursor"
+  hostId: AgentHostId = "cursor",
+  projectPath?: string
 ): string {
   const chatLabel = HOST_CHAT_LABELS[hostId];
   const turns = groupTurns(events);
-  const body = renderTurns(turns);
+  const body = renderTurns(turns, projectPath);
   const maxTopics = Math.max(1, options.maxTopics);
   const maxItems = Math.max(1, options.maxItemsPerTopic);
 

@@ -1,4 +1,4 @@
-import type { OutlineNode, SessionOutline } from "../llm/types";
+import type { CodeReference, OutlineNode, SessionOutline } from "../llm/types";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 
@@ -16,11 +16,22 @@ function leaf(text: string): MindMapNodeData {
   return { data: { text: truncate(text) } };
 }
 
-function branch(text: string, children: MindMapNodeData[]): MindMapNodeData {
+function branch(
+  text: string,
+  children: MindMapNodeData[],
+  expand = true
+): MindMapNodeData {
   return {
-    data: { text: truncate(text), expand: true },
+    data: { text: truncate(text), expand },
     children: children.length ? children : undefined,
   };
+}
+
+function buildCodeReferencesNode(refs: CodeReference[]): MindMapNodeData {
+  const children = refs.map((ref) =>
+    leaf(`${ref.path}:${ref.lines} — ${ref.description}`)
+  );
+  return branch("相关代码", children, false);
 }
 
 function renderOutlineNode(
@@ -69,7 +80,8 @@ function renderOutlineNode(
 export function buildOutlineMindMap(
   outline: SessionOutline,
   sessionLabel?: string,
-  sessionMeta?: SessionMeta
+  sessionMeta?: SessionMeta,
+  codeReferences?: CodeReference[]
 ): MindMapRoot {
   const llmTitle = outline.title?.trim();
   const rootText = llmTitle
@@ -81,6 +93,10 @@ export function buildOutlineMindMap(
   const topicNodes = outline.outline.map((node) =>
     renderOutlineNode(node, sessionMeta)
   );
+
+  if (codeReferences?.length) {
+    topicNodes.push(buildCodeReferencesNode(codeReferences));
+  }
 
   const root: MindMapNodeData = {
     data: { text: rootText, expand: true },
