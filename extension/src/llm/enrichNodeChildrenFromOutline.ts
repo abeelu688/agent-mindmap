@@ -101,7 +101,9 @@ export function enrichAnalysisNodesFromOutline(
   const nodes = analysis.nodes ?? [];
   const outline = analysis.outline;
   const fromParents = collectChildEdgesFromParentKeys(nodes);
-  const fromOutline = collectChildEdgesFromOutline(outline);
+  const fromOutline = outline
+    ? collectChildEdgesFromOutline(outline)
+    : new Map<string, Set<string>>();
   const merged = mergeChildEdgeMaps(fromParents, fromOutline);
 
   const nodesByKey = new Map<string, ConceptOntologyNode>();

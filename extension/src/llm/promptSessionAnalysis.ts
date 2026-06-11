@@ -12,7 +12,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 14;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 15;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -41,7 +41,7 @@ export function buildSessionAnalysisPrompt(
     `你是会话综合分析助手。下面是 ${chatLabel} 聊天记录（已脱敏），段标记 [Q#]/[T#]/[F#]/[A#]（[F#] 列出该 turn 涉及的源文件相对路径）。`,
     "",
     "## Working order（必须按序完成，再输出 JSON）",
-    "在脑中**依次**完成下面 1→2→3→4→5→6，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
+    "在脑中**依次**完成下面 1→2→3→4→5，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
     "后一步必须使用前一步的结果；禁止跳步或按 Q/A 时间线平铺代替概念分析。",
     "",
     "### Step 1 — 领域分析 → domains[]",
@@ -84,21 +84,10 @@ export function buildSessionAnalysisPrompt(
     "- 同一 domain 内 conceptPath 根段尽量统一；每叶子 1-" + maxDetails + " 条细节",
     "- 引用本 transcript 用户提问时 details[].sourceTurnIndices（0-based）",
     "",
-    "### Step 6 — 代码位置提取 → codeReferences[]",
-    "**机械触发规则（不需要语义判断）：**",
-    "- 若上文存在任何 `[F#]` 行 → 必须为出现过的每个文件路径生成一条 codeReferences",
-    "- 若全文无任何 `[F#]` 行 → 直接输出 `\"codeReferences\":[]`",
-    "",
-    "**字段约束：**",
-    "- `path`：**必须原样**取自某个 `[F#]` 行（禁止编造、改写、拼接、删段；保持相对路径不动）",
-    "- `lines`：统一写 `\"-\"`（本方案不发行号）",
-    "- `description`：≤60 字，结合该文件出现的 `[Q#]`/`[A#]` 上下文，说明该文件在本对话里被改动/阅读的功能或目的",
-    "- 同一文件涉及多个不同功能/目的 → **每条功能各写一条** codeReferences（path 相同，description 不同），不要合并",
-    "",
-    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true, includeCodeReferences: true }),
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true, includeCodeReferences: false }),
     "",
     "只输出严格 JSON，示例（neutral，勿照搬字面）：",
-    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]},"codeReferences":[{"path":"src/subsystem/router.ts","lines":"-","description":"路由入口，处理请求分发"},{"path":"src/subsystem/router.ts","lines":"-","description":"中间件注册与错误处理"},{"path":"src/subsystem/config.ts","lines":"-","description":"子系统集成配置"}]}',
+    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}}',
     "",
     "===",
     body || "(空会话)",

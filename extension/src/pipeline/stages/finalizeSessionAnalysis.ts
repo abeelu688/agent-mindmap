@@ -63,7 +63,9 @@ export function finalizeSessionAnalysis(
   analysis: SessionAnalysis,
   meta: FinalizeSessionAnalysisMeta
 ): FinalizedSessionAnalysis {
-  const outline = sanitizeSessionOutline(analysis.outline, meta.userQueryCount);
+  const outline = analysis.outline
+    ? sanitizeSessionOutline(analysis.outline, meta.userQueryCount)
+    : { outline: [] };
   const enrichedAnalysis = enrichAnalysisNodesFromOutline({
     ...analysis,
     outline,

@@ -58,7 +58,7 @@ describe("finalizeSessionAnalysis", () => {
     expect(finalized.conceptContexts.length).toBeGreaterThan(0);
     const react = finalized.conceptContexts.find((c) => c.key === "react");
     expect(react?.parentKeys).toEqual(["frontend"]);
-    expect(react?.childKeys).toEqual([]);
+    expect(react?.childKeys).toEqual(["hooks"]);
     expect(react?.domainKeys).toContain("frontend");
   });
 });

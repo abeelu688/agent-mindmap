@@ -74,4 +74,22 @@ describe("validateSessionAnalysis", () => {
     });
     expect(result.segmentEquivalences).toHaveLength(0);
   });
+
+  it("skips outline validation when requireOutline is false", () => {
+    const result = validateSessionAnalysis(
+      { ...validAnalysis, outline: undefined },
+      { requireOutline: false }
+    );
+    expect(result.domains).toEqual(["frontend"]);
+    expect(result.outline).toBeUndefined();
+  });
+
+  it("skips codeReferences validation when requireCodeReferences is false", () => {
+    const result = validateSessionAnalysis(
+      { ...validAnalysis, codeReferences: undefined },
+      { requireCodeReferences: false }
+    );
+    expect(result.domains).toEqual(["frontend"]);
+    expect(result.codeReferences).toBeUndefined();
+  });
 });

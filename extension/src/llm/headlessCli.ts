@@ -469,7 +469,10 @@ function parseBySchema(
     case "session-outline-by-tree":
       return parseSessionOutlineByTreeFromStdout(stdout, providerLabel);
     case "session-analysis":
-      return parseSessionAnalysisFromStdout(stdout, providerLabel);
+      // Parse JSON only; validation is handled by the caller (runLlmStage.validate)
+      return parseJsonFromStdout(stdout, providerLabel);
+    case "code-ref-descriptions":
+      return parseJsonFromStdout(stdout, providerLabel);
     case "session-outline":
     default:
       return parseSessionOutlineFromStdout(stdout, providerLabel);

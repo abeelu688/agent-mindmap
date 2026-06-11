@@ -14,6 +14,7 @@ import {
   mergeSessionAnalysis,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "./stages/mergeSessionAnalysis";
+import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
 import {
   prepareRecordsBeforeReattach,
   updateConceptTrieAsync,
@@ -238,7 +239,14 @@ export async function runMergePipeline(
     }
   } else if (cached?.mergeSessionAnalysis) {
     progress?.report("M-merge: Virtual session cache hit…");
-    virtualSession = finalizeSessionAnalysis(cached.mergeSessionAnalysis, {
+    const cachedAnalysis = cached.mergeSessionAnalysis;
+    if (!cachedAnalysis.outline) {
+      cachedAnalysis.outline = buildOutlineFromConceptTrie(
+        cachedAnalysis.domains,
+        cachedAnalysis.nodes
+      );
+    }
+    virtualSession = finalizeSessionAnalysis(cachedAnalysis, {
       sessionId: MERGE_SNAPSHOT_SESSION_ID,
       projectSlug: opts.projectSlug ?? opts.records[0]?.meta.projectSlug ?? "",
       userQueryCount: 0,

@@ -28,6 +28,7 @@ import type {
 import { runMergePipeline } from "./mergePipeline";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import type { FinalizedSessionAnalysis } from "./stages/finalizeSessionAnalysis";
+import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
 import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import { mindMapLog } from "../webview/MindMapLog";
 import {
@@ -106,7 +107,11 @@ function virtualFromSingleRecord(record: SessionRecord): FinalizedSessionAnalysi
       `[agent-mindmap] Session ${record.meta.sessionId} has no sessionAnalysis for leaf snapshot projection`
     );
   }
-  return finalizeSessionAnalysis(record.sessionAnalysis, {
+  const analysis = record.sessionAnalysis;
+  if (!analysis.outline) {
+    analysis.outline = buildOutlineFromConceptTrie(analysis.domains, analysis.nodes);
+  }
+  return finalizeSessionAnalysis(analysis, {
     sessionId: record.meta.sessionId,
     projectSlug: record.meta.projectSlug,
     userQueryCount: record.meta.userQueryCount ?? 0,
@@ -151,10 +156,17 @@ async function runBoundedMerge(
     progress
   );
 
+  const rawAnalysis = result.ontology.mergeSessionAnalysis;
+  if (rawAnalysis && !rawAnalysis.outline) {
+    rawAnalysis.outline = buildOutlineFromConceptTrie(
+      rawAnalysis.domains,
+      rawAnalysis.nodes
+    );
+  }
   const virtualSession =
     result.virtualSession ??
-    (result.ontology.mergeSessionAnalysis
-      ? finalizeSessionAnalysis(result.ontology.mergeSessionAnalysis, {
+    (rawAnalysis
+      ? finalizeSessionAnalysis(rawAnalysis, {
           sessionId: MERGE_SNAPSHOT_SESSION_ID,
           projectSlug: opts.projectSlug,
           userQueryCount: 0,

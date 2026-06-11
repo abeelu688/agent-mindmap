@@ -1,5 +1,5 @@
 import type { AgentHostId } from "../host/types";
-import type { LlmProvider, SessionAnalysis } from "../llm/types";
+import type { CodeReference, LlmProvider, SessionAnalysis } from "../llm/types";
 import type { MindMapProgress } from "../progress";
 import { analyzeSession } from "./stages/analyzeSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
@@ -48,6 +48,8 @@ export type SessionPipelineResult = {
   conceptContexts: ConceptContextForMerge[];
   outline: SessionOutline;
   pipelineVersions: ReturnType<typeof currentPipelineVersions>;
+  /** Background promise for codeReferences — await before rendering mindmap. */
+  codeRefsPromise: Promise<CodeReference[] | undefined>;
 };
 
 export async function runSessionPipeline(
@@ -76,10 +78,11 @@ export async function runSessionPipeline(
   };
 
   let analysis = opts.preloaded;
+  let codeRefsPromise: Promise<CodeReference[] | undefined> = Promise.resolve(undefined);
   if (!analysis) {
     progress?.report("S1: Analyzing session (one-shot LLM)…");
     const s1Timing: LlmStageTimingOut = {};
-    analysis = await runStage(
+    const s1Result = await runStage(
       "S1 analyze",
       () =>
         analyzeSession(
@@ -107,6 +110,8 @@ export async function runSessionPipeline(
         ),
       () => ({ kind: "llm", ...s1Timing })
     );
+    analysis = s1Result.analysis;
+    codeRefsPromise = s1Result.codeRefsPromise;
   } else {
     await runStage("S1 analyze", async () => analysis!, () => ({
       kind: "llm",
@@ -137,5 +142,6 @@ export async function runSessionPipeline(
     conceptContexts: finalized.conceptContexts,
     outline: finalized.outline,
     pipelineVersions: currentPipelineVersions(),
+    codeRefsPromise,
   };
 }
