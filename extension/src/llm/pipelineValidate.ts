@@ -230,16 +230,6 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
     ? root.segmentEquivalences
     : [];
   const segmentEquivalences = parseSegmentEquivalences(equivRaw);
-  const equivWithCanonical = equivRaw.filter((item) => {
-    const obj = asObject(item);
-    return obj && pickString(obj, "canonical", MAX_KEY);
-  }).length;
-  if (equivWithCanonical !== segmentEquivalences.length) {
-    throw new LlmProviderError(
-      "bad-shape",
-      "Invalid segment equivalence (missing scope or aliases)"
-    );
-  }
   const aliasesRaw = Array.isArray(root.termAliases) ? root.termAliases : [];
   const termAliases: SessionTermAlias[] = [];
   for (const raw of aliasesRaw) {

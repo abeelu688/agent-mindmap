@@ -1,4 +1,5 @@
 import type { CodeReference, OutlineNode, SessionOutline } from "../llm/types";
+import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 
@@ -28,9 +29,21 @@ function branch(
 }
 
 function buildCodeReferencesNode(refs: CodeReference[]): MindMapNodeData {
-  const children = refs.map((ref) =>
-    leaf(`${ref.path}:${ref.lines} — ${ref.description}`)
-  );
+  const groups = new Map<string, CodeReference[]>();
+  for (const ref of refs) {
+    let arr = groups.get(ref.path);
+    if (!arr) {
+      arr = [];
+      groups.set(ref.path, arr);
+    }
+    arr.push(ref);
+  }
+  const sortedPaths = [...groups.keys()].sort();
+  const children: MindMapNodeData[] = [];
+  for (const p of sortedPaths) {
+    const descs = groups.get(p)!.map((ref) => leaf(ref.description));
+    children.push(branch(p, descs, true));
+  }
   return branch("相关代码", children, false);
 }
 
@@ -81,7 +94,8 @@ export function buildOutlineMindMap(
   outline: SessionOutline,
   sessionLabel?: string,
   sessionMeta?: SessionMeta,
-  codeReferences?: CodeReference[]
+  codeReferences?: CodeReference[],
+  projectPath?: string
 ): MindMapRoot {
   const llmTitle = outline.title?.trim();
   const rootText = llmTitle
@@ -94,8 +108,11 @@ export function buildOutlineMindMap(
     renderOutlineNode(node, sessionMeta)
   );
 
-  if (codeReferences?.length) {
-    topicNodes.push(buildCodeReferencesNode(codeReferences));
+  const filteredRefs = codeReferences?.length
+    ? filterProjectCodeReferences(codeReferences, projectPath ?? sessionMeta?.projectPath)
+    : undefined;
+  if (filteredRefs?.length) {
+    topicNodes.push(buildCodeReferencesNode(filteredRefs));
   }
 
   const root: MindMapNodeData = {

@@ -224,7 +224,7 @@ describe("mergeSessionAnalysis input enrichment", () => {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(8);
+    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(9);
     expect(prompt).toContain("JSON 契约");
     expect(prompt).toContain("pathPrefix");
     expect(prompt).toContain("禁止只写这一项");

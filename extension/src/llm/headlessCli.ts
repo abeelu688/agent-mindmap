@@ -322,12 +322,15 @@ function extractTopicsJson(payload: string): string {
   return cleaned;
 }
 
-/** Best-effort fixes for common LLM JSON mistakes (trailing commas, smart quotes). */
+/** Best-effort fixes for common LLM JSON mistakes (trailing commas, smart quotes, missing commas between objects/arrays). */
 export function repairJsonText(s: string): string {
   return s
     .replace(/,\s*([}\]])/g, "$1")
     .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'");
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/"\s*}\s*{/g, '"},{')
+    .replace(/"\s*]\s*\[\s*"/g, '"],["')
+    .replace(/"\s*\}\s*\[\s*"/g, '"},["');
 }
 
 function tryParseJsonLoose(text: string): unknown | undefined {

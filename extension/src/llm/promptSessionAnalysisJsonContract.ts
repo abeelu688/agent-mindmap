@@ -16,7 +16,7 @@ export const SESSION_ANALYSIS_JSON_CONTRACT_LINES: string[] = [
   "- `parentKeys`：必须是数组（根概念用 `[]`，禁止省略该字段）",
   "- `evidence`：非空数组，至少 1 条 ≤80 字、去空白后非空的上下文片段",
   "",
-  "**segmentEquivalences[]**（无同义可 `[]`；写出条目则每条须完整有效，否则整条丢弃并触发 bad-shape）：",
+  "**segmentEquivalences[]**（无同义可 `[]`；写出条目则每条须完整有效，不可缺少scope/aliases条目）：",
   "- `canonical`：非空小写段名",
   "- `aliases`：非空数组，至少 1 个与 canonical 不同的非空字符串",
   "- `scope`：必填对象；其中 **至少一项** 含非空内容：`pathPrefix`（≥1 段）、`downstreamPrefix`、`downstreamFirst`、`projectSlugs`、`evidenceKeywords`",
@@ -27,20 +27,30 @@ export const SESSION_ANALYSIS_JSON_CONTRACT_LINES: string[] = [
   "- 最深层叶子：`summary` 必填；`details` 至少 1 条 `{ \"text\": \"非空\" }`",
   "- 中间层：须有非空 `children[]`；有 children 的节点不要挂 `details`",
   "",
-  "**codeReferences[]**（机械触发：上文存在 `[F#]` 行则必填一条对应每个文件；无 `[F#]` 写 `[]`）：",
+  "**codeReferences[]**（机械触发：上文存在 `[F#]` 行则必填；无 `[F#]` 写 `[]`）：",
   "- `path`：**必须原样**取自某 `[F#]` 行的某个路径（相对项目根，不含前导 `/`）；禁止编造、改写、拼接",
   "- `lines`：本方案统一写 `\"-\"`",
   "- `description`：≤60 字，结合 `[Q#]`/`[A#]` 上下文说明该文件被改动/阅读的功能或目的",
+  "- 同一文件涉及多个不同功能/目的 → 每条功能各写一条（path 相同，description 不同），不要合并",
 ];
 
 export function formatSessionAnalysisJsonContract(
-  options?: { includeSourceTurnIndices?: boolean }
+  options?: { includeSourceTurnIndices?: boolean; includeCodeReferences?: boolean }
 ): string {
   const lines = [...SESSION_ANALYSIS_JSON_CONTRACT_LINES];
   if (options?.includeSourceTurnIndices) {
     lines.push("- 叶子 `details[]` 可含 `sourceTurnIndices`（0-based，引用本 transcript）");
   } else {
     lines.push("- 跨会话合并：**不要** 在 `details` 里写 `sourceTurnIndices`");
+  }
+  if (!options?.includeCodeReferences) {
+    // Remove codeReferences contract lines for merge prompts (no [F#] lines)
+    const codeRefStart = lines.indexOf(
+      lines.find((l) => l.startsWith("**codeReferences[]**")) ?? "");
+    if (codeRefStart >= 0) {
+      // Remove the codeReferences block (header + 3 detail lines)
+      lines.splice(codeRefStart, 4);
+    }
   }
   return lines.join("\n");
 }

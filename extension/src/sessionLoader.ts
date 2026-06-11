@@ -418,7 +418,8 @@ export async function loadSession(
             outline,
             session.label,
             sessionMeta,
-            existing.sessionAnalysis?.codeReferences
+            existing.sessionAnalysis?.codeReferences,
+            projectPath
           ),
           source: "topic",
           fromLibrary: true,
@@ -635,7 +636,8 @@ export async function loadSession(
       outline,
       session.label,
       sessionMeta,
-      pipelineResult.sessionAnalysis?.codeReferences
+      pipelineResult.sessionAnalysis?.codeReferences,
+      projectPath
     ),
     source: "topic",
   };

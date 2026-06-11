@@ -9,7 +9,7 @@ import {
 } from "./promptSessionAnalysisJsonContract";
 
 /** Bump when {@link buildMergeSessionAnalysisPrompt} JSON schema / instructions change. */
-export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 8;
+export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 9;
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -119,7 +119,7 @@ export function buildMergeSessionAnalysisPrompt(
     "- 叶子：summary（必填）+ details[]（≤40 字）+ conceptPath（3-5 段）；**conceptPath[0] 必须是 Step 3 统一顶根之一**",
     "- 每叶子 1-" + maxDetails + " 条细节；details 不含 sourceTurnIndices（跨会话无 turn 锚点）",
     "",
-    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: false }),
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: false, includeCodeReferences: false }),
     "",
     "只输出严格 JSON（不要 markdown、解释、```）。顶层字段：",
     "- domains[]：顶层领域 key（小写，3-" + maxDomains + " 个）",

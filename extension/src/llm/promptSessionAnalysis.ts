@@ -12,7 +12,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 12;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 14;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -93,12 +93,12 @@ export function buildSessionAnalysisPrompt(
     "- `path`：**必须原样**取自某个 `[F#]` 行（禁止编造、改写、拼接、删段；保持相对路径不动）",
     "- `lines`：统一写 `\"-\"`（本方案不发行号）",
     "- `description`：≤60 字，结合该文件出现的 `[Q#]`/`[A#]` 上下文，说明该文件在本对话里被改动/阅读的功能或目的",
-    "- 同一文件多次出现 → **合并为一条**，description 综合各处用途",
+    "- 同一文件涉及多个不同功能/目的 → **每条功能各写一条** codeReferences（path 相同，description 不同），不要合并",
     "",
-    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true }),
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true, includeCodeReferences: true }),
     "",
     "只输出严格 JSON，示例（neutral，勿照搬字面）：",
-    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]},"codeReferences":[{"path":"src/subsystem/router.ts","lines":"42-57","description":"subsystem 路由入口，处理请求分发"}]}',
+    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]},"codeReferences":[{"path":"src/subsystem/router.ts","lines":"-","description":"路由入口，处理请求分发"},{"path":"src/subsystem/router.ts","lines":"-","description":"中间件注册与错误处理"},{"path":"src/subsystem/config.ts","lines":"-","description":"子系统集成配置"}]}',
     "",
     "===",
     body || "(空会话)",

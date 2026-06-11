@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as posixPath from "path";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 
@@ -60,6 +62,25 @@ function toRelPath(p: string, projectPath?: string): string {
   return np;
 }
 
+/** Check whether a (already relative) path refers to a file within the project. */
+function isProjectRelativePath(relPath: string, projectPath?: string): boolean {
+  if (!projectPath) {
+    return true;
+  }
+  const np = relPath.replace(/\\/g, "/");
+  // Reject dot-dirs that sit outside project root
+  if (/(?:^|\/)\.(claude|cursor|vscode|config)\b/.test(np)) {
+    return false;
+  }
+  // Check existence
+  try {
+    fs.accessSync(posixPath.resolve(projectPath, relPath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function groupTurns(events: ChatEvent[]): Turn[] {
   const turns: Turn[] = [];
   let current: Turn | undefined;
@@ -115,7 +136,7 @@ function renderTurns(turns: Turn[], projectPath?: string): string {
     if (turn.filePaths.length) {
       const rels = turn.filePaths
         .map((p) => toRelPath(p, projectPath))
-        .filter((p) => p);
+        .filter((p) => p && isProjectRelativePath(p, projectPath));
       if (rels.length) {
         parts.push(`[F${turn.index + 1}] ${rels.join(" | ")}`);
       }

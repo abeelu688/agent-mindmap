@@ -65,14 +65,13 @@ describe("validateSessionAnalysis", () => {
     ).toThrow(LlmProviderError);
   });
 
-  it("rejects segment equivalences without scope", () => {
-    expect(() =>
-      validateSessionAnalysis({
-        ...validAnalysis,
-        segmentEquivalences: [
-          { canonical: "hooks", aliases: ["react hooks"], evidence: ["x"] },
-        ],
-      })
-    ).toThrow(LlmProviderError);
+  it("silently drops segment equivalences without scope", () => {
+    const result = validateSessionAnalysis({
+      ...validAnalysis,
+      segmentEquivalences: [
+        { canonical: "hooks", aliases: ["react hooks"], evidence: ["x"] },
+      ],
+    });
+    expect(result.segmentEquivalences).toHaveLength(0);
   });
 });
