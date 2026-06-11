@@ -9,7 +9,7 @@ import {
 } from "./promptSessionAnalysisJsonContract";
 
 /** Bump when {@link buildMergeSessionAnalysisPrompt} JSON schema / instructions change. */
-export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 9;
+export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 10;
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -65,7 +65,7 @@ export function buildMergeSessionAnalysisPrompt(
     "- **sessions** 中 role=snapshot：frozenTopRootKeys、frozenDomains 在 delta 下必须遵守（见上文增量合并）",
     "",
     "## Working order（必须按序完成，再输出 JSON）",
-    "在脑中**依次**完成下面 1→2→3→4→5，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
+    "在脑中**依次**完成下面 1→2→3→4，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
     "后一步必须使用前一步的结果；禁止按会话 id 平铺代替概念归并。",
     deltaBlock,
     "",
@@ -112,24 +112,16 @@ export function buildMergeSessionAnalysisPrompt(
     ...SCOPE_PATH_PREFIX_GUIDANCE_LINES,
     "- **并列顶根同义**：domain 须一致；根级写 pathPrefix:[] 时必须**同时**写 evidenceKeywords 或 downstreamFirst，禁止仅 pathPrefix:[]",
     "",
-    "### Step 5 — 综合内容大纲 → outline",
-    "按**概念**组织（不要按会话 id / 时间平铺）：",
-    "- title / summary：整个项目库的总主题",
-    "- outline[]：2-4 层，顶层 **2-" + maxBranches + " 条**（与 Step 3 顶根一致）",
-    "- 叶子：summary（必填）+ details[]（≤40 字）+ conceptPath（3-5 段）；**conceptPath[0] 必须是 Step 3 统一顶根之一**",
-    "- 每叶子 1-" + maxDetails + " 条细节；details 不含 sourceTurnIndices（跨会话无 turn 锚点）",
-    "",
-    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: false, includeCodeReferences: false }),
+    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: false, includeCodeReferences: false, includeOutline: false }),
     "",
     "只输出严格 JSON（不要 markdown、解释、```）。顶层字段：",
     "- domains[]：顶层领域 key（小写，3-" + maxDomains + " 个）",
     "- nodes[]：{ key, label, aliases[], parentKeys[]（根用 []）, evidence[]（必填，≤80 字） }；可选 mappings[]",
     "- segmentEquivalences[]：{ canonical, aliases[]（≥1，必填）, scope（必填，见 JSON 契约）, confidence? }",
     "- termAliases[]（可选）",
-    "- outline：{ title, summary?, outline[] } 2-4 层；叶子含 summary、details[{ text }]、conceptPath（3-5 段）；**不要** details.sourceTurnIndices",
     "",
     "示例（neutral，勿照搬字面）：",
-    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["多会话归并 platform-alpha"]},{"key":"subsystem","label":"Subsystem","parentKeys":["platform-alpha"],"evidence":["subsystem 路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"..."}]}]}]}}',
+    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["多会话归并 platform-alpha"]},{"key":"subsystem","label":"Subsystem","parentKeys":["platform-alpha"],"evidence":["subsystem 路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"]},"confidence":0.9}],"termAliases":[]}',
     "",
     "===",
     body,

@@ -13,13 +13,10 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { OutlineNode } from "../extension/src/llm/types";
+import type { OutlineNode, SessionOutline } from "../extension/src/llm/types";
 
 function recordWithOutline(sessionId: string, tree: OutlineNode[]) {
-  const outline = topicGraphToOutline({
-    topics: [{ title: "t", conceptPath: ["a"], items: [{ text: "x" }] }],
-    title: "title",
-  });
+  const outline: SessionOutline = { title: "t", outline: tree.length ? tree : [{ title: "t", summary: "s", details: [{ text: "d" }] }] };
   return buildSessionRecord(
     buildRecordMeta({
       sessionId,
@@ -47,7 +44,6 @@ function recordWithOutline(sessionId: string, tree: OutlineNode[]) {
             scope: { pathPrefix: [] },
           },
         ],
-        outline: { title: "t", outline: tree },
       },
     }
   );

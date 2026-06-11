@@ -35,7 +35,7 @@ export const SESSION_ANALYSIS_JSON_CONTRACT_LINES: string[] = [
 ];
 
 export function formatSessionAnalysisJsonContract(
-  options?: { includeSourceTurnIndices?: boolean; includeCodeReferences?: boolean }
+  options?: { includeSourceTurnIndices?: boolean; includeCodeReferences?: boolean; includeOutline?: boolean }
 ): string {
   const lines = [...SESSION_ANALYSIS_JSON_CONTRACT_LINES];
   if (options?.includeSourceTurnIndices) {
@@ -50,6 +50,16 @@ export function formatSessionAnalysisJsonContract(
     if (codeRefStart >= 0) {
       // Remove the codeReferences block (header + 3 detail lines)
       lines.splice(codeRefStart, 4);
+    }
+  }
+  if (!options?.includeOutline) {
+    // Remove outline contract lines for merge prompts (outline generated deterministically)
+    const outlineStart = lines.indexOf(
+      lines.find((l) => l.startsWith("**outline**：")) ?? ""
+    );
+    if (outlineStart >= 0) {
+      // Remove outline block (header + 3 detail lines)
+      lines.splice(outlineStart, 4);
     }
   }
   return lines.join("\n");

@@ -3,7 +3,7 @@ import { mindMapLog } from "../webview/MindMapLog";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { CodeReference, ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
+import type { CodeReference, ConceptOntologyNode, OutlineNode, ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis, SessionOutline } from "../llm/types";
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import {
@@ -146,6 +146,105 @@ function topicHeadline(topic: Topic): string {
   return truncate(topic.title.trim(), MAX_LABEL);
 }
 
+/**
+ * Build a SessionOutline deterministically from the concept trie
+ * (domains + nodes with parentKeys/childKeys).
+ * Used when the merge LLM skips outline generation (Route 1).
+ */
+export function buildOutlineFromConceptTrie(
+  domains: string[],
+  nodes: ConceptOntologyNode[]
+): SessionOutline {
+  const nodesByKey = new Map<string, ConceptOntologyNode>();
+  for (const node of nodes) {
+    nodesByKey.set(node.key.toLowerCase(), node);
+  }
+
+  // Build child map: parentKey → sorted child keys
+  const childrenOf = new Map<string, string[]>();
+  for (const node of nodes) {
+    const childKey = node.key.toLowerCase();
+    for (const pk of node.parentKeys ?? []) {
+      const parent = pk.toLowerCase();
+      let arr = childrenOf.get(parent);
+      if (!arr) {
+        arr = [];
+        childrenOf.set(parent, arr);
+      }
+      if (!arr.includes(childKey)) {
+        arr.push(childKey);
+      }
+    }
+  }
+  // Also use explicit childKeys
+  for (const node of nodes) {
+    const parent = node.key.toLowerCase();
+    for (const ck of node.childKeys ?? []) {
+      const existing = childrenOf.get(parent);
+      if (!existing) {
+        childrenOf.set(parent, [ck.toLowerCase()]);
+      } else if (!existing.includes(ck.toLowerCase())) {
+        existing.push(ck.toLowerCase());
+      }
+    }
+  }
+  // Sort each child list
+  for (const [key, arr] of childrenOf) {
+    childrenOf.set(key, [...new Set(arr)].sort());
+  }
+
+  const buildNode = (key: string, pathSoFar: string[]): OutlineNode => {
+    const node = nodesByKey.get(key);
+    const title = node?.label || key;
+    const summary = node?.evidence?.[0];
+    const conceptPath = [...pathSoFar, key];
+    const childKeys = childrenOf.get(key) ?? [];
+
+    if (childKeys.length === 0) {
+      // Leaf node
+      const result: OutlineNode = { title, conceptPath };
+      if (summary) {
+        result.summary = summary.length > 80 ? summary.slice(0, 77) + "..." : summary;
+      }
+      return result;
+    }
+
+    // Interior node
+    const children = childKeys.map((ck) => buildNode(ck, conceptPath));
+    const result: OutlineNode = { title, children };
+    if (summary) {
+      result.summary = summary.length > 80 ? summary.slice(0, 77) + "..." : summary;
+    }
+    return result;
+  };
+
+  // Top-level: domains as root outline nodes
+  const outline: OutlineNode[] = [];
+  for (const domain of domains) {
+    outline.push(buildNode(domain.toLowerCase(), []));
+  }
+
+  // Handle root nodes not covered by any domain
+  const coveredKeys = new Set<string>();
+  const collectKeys = (key: string) => {
+    coveredKeys.add(key.toLowerCase());
+    for (const ck of childrenOf.get(key.toLowerCase()) ?? []) {
+      collectKeys(ck);
+    }
+  };
+  for (const domain of domains) {
+    collectKeys(domain.toLowerCase());
+  }
+  for (const node of nodes) {
+    const key = node.key.toLowerCase();
+    if (!coveredKeys.has(key) && (node.parentKeys ?? []).length === 0) {
+      outline.push(buildNode(key, []));
+    }
+  }
+
+  return { outline };
+}
+
 function buildCodeReferencesNode(
   refs: CodeReference[],
   sessionMeta: SessionMeta
@@ -206,7 +305,18 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
     ? filterProjectCodeReferences(rawCodeRefs, loc.record.meta.projectPath)
     : undefined;
   if (codeRefs?.length) {
-    children.push(buildCodeReferencesNode(codeRefs, sessionMeta));
+    // Filter to code refs relevant to this topic's turns
+    const topicTurns = new Set(
+      (loc.topic.items ?? []).flatMap((it) => it.sourceTurnIndices ?? [])
+    );
+    const filtered = topicTurns.size
+      ? codeRefs.filter((ref) =>
+          ref.sourceTurnIndices?.some((t) => topicTurns.has(t))
+        )
+      : codeRefs;
+    if (filtered.length) {
+      children.push(buildCodeReferencesNode(filtered, sessionMeta));
+    }
   }
   const node = branch(heading, children, false);
   return withOrigin(node, unionChildRefs(children));

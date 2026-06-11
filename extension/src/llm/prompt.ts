@@ -31,7 +31,7 @@ export type PromptOptions = {
   maxItemsPerTopic: number;
 };
 
-type Turn = {
+export type Turn = {
   index: number;
   query?: string;
   tools: string[];
@@ -47,7 +47,7 @@ function clip(text: string, max: number): string {
   return t.slice(0, max - 3) + "...";
 }
 
-function toRelPath(p: string, projectPath?: string): string {
+export function toRelPath(p: string, projectPath?: string): string {
   if (!projectPath) {
     return p;
   }
@@ -63,7 +63,7 @@ function toRelPath(p: string, projectPath?: string): string {
 }
 
 /** Check whether a (already relative) path refers to a file within the project. */
-function isProjectRelativePath(relPath: string, projectPath?: string): boolean {
+export function isProjectRelativePath(relPath: string, projectPath?: string): boolean {
   if (!projectPath) {
     return true;
   }
@@ -81,7 +81,7 @@ function isProjectRelativePath(relPath: string, projectPath?: string): boolean {
   }
 }
 
-function groupTurns(events: ChatEvent[]): Turn[] {
+export function groupTurns(events: ChatEvent[]): Turn[] {
   const turns: Turn[] = [];
   let current: Turn | undefined;
 

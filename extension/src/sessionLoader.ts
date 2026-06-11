@@ -497,6 +497,13 @@ export async function loadSession(
 
   const userQueryCount = countUserQueries(events);
   let outline = sanitizeSessionOutline(pipelineResult.outline, userQueryCount);
+
+  // Await background codeReferences extraction before rendering and persisting
+  const codeRefs = await pipelineResult.codeRefsPromise;
+  if (codeRefs?.length) {
+    pipelineResult.sessionAnalysis.codeReferences = codeRefs;
+  }
+
   progress?.report(t("ui.progress.renderMindMap", "Rendering mind map…"));
 
   if (settings.library.enabled) {

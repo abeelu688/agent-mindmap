@@ -288,8 +288,8 @@ function sessionFromRecord(
   const analysis = record.sessionAnalysis;
   const outline = record.outline;
   const outlinePathKeys = new Set<string>();
-  collectOutlinePathKeys(outline.outline ?? [], outlinePathKeys);
-  const tree = serializeOutlineTree(outline.outline ?? []);
+  collectOutlinePathKeys(outline?.outline ?? [], outlinePathKeys);
+  const tree = serializeOutlineTree(outline?.outline ?? []);
   const nodes = buildNodesForRecord(record, role, outlinePathKeys);
 
   const session: MergeSessionInputSession = {
@@ -300,8 +300,8 @@ function sessionFromRecord(
     nodes,
     segmentEquivalences: analysis?.segmentEquivalences ?? [],
     outline: {
-      title: truncate(outline.title ?? record.meta.sessionLabel ?? "session", 80),
-      summary: outline.summary ? truncate(outline.summary, 160) : undefined,
+      title: truncate(outline?.title ?? record.meta.sessionLabel ?? "session", 80),
+      summary: outline?.summary ? truncate(outline.summary, 160) : undefined,
       tree,
     },
   };
