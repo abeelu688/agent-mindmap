@@ -7,6 +7,7 @@ import {
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../../llm/promptMergeSessionAnalysis";
 import { validateSessionAnalysis } from "../../llm/pipelineValidate";
+import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
 import type { AgentHostId } from "../../host/types";
 import type {
   ConceptOntologyMapping,
@@ -117,13 +118,21 @@ export async function mergeSessionAnalysis(
       maxTopics: promptOpts.maxNodes,
       maxItemsPerTopic: promptOpts.maxDetailsPerNode,
       heartbeatMessage: "Merging sessions into virtual combined session…",
-      validate: validateSessionAnalysis,
+      validate: (v: unknown) => validateSessionAnalysis(v, { requireOutline: false }),
       timeoutMs,
     },
     provider,
     signal,
     progress
   );
+
+  // Build outline deterministically from concept trie (Route 1: no outline from LLM)
+  if (!analysis.outline) {
+    analysis.outline = buildOutlineFromConceptTrie(
+      analysis.domains,
+      analysis.nodes
+    );
+  }
 
   return finalizeSessionAnalysis(analysis, {
     sessionId: MERGE_SNAPSHOT_SESSION_ID,

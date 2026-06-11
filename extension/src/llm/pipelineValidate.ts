@@ -73,6 +73,20 @@ function parseStringArray(
   return out;
 }
 
+function pickNumberArray(obj: Record<string, unknown>, key: string): number[] {
+  const v = obj[key];
+  if (!Array.isArray(v)) {
+    return [];
+  }
+  const out: number[] = [];
+  for (const item of v) {
+    if (typeof item === "number" && Number.isInteger(item)) {
+      out.push(item);
+    }
+  }
+  return out;
+}
+
 function parseTerm(value: unknown): TermWithContext | undefined {
   const obj = asObject(value);
   if (!obj) {
@@ -196,7 +210,8 @@ function parseCodeReferences(raw: unknown): CodeReference[] {
     if (!description) {
       continue;
     }
-    out.push({ path, lines, description });
+    const sourceTurnIndices = pickNumberArray(obj, "sourceTurnIndices");
+    out.push({ path, lines, description, sourceTurnIndices: sourceTurnIndices.length ? sourceTurnIndices : undefined });
     if (out.length >= MAX_CODE_REFS) {
       break;
     }
@@ -204,7 +219,15 @@ function parseCodeReferences(raw: unknown): CodeReference[] {
   return out;
 }
 
-export function validateSessionAnalysis(value: unknown): SessionAnalysis {
+export type ValidateSessionAnalysisOpts = {
+  requireOutline?: boolean;
+  requireCodeReferences?: boolean;
+};
+
+export function validateSessionAnalysis(
+  value: unknown,
+  opts?: ValidateSessionAnalysisOpts
+): SessionAnalysis {
   const root = asObject(value);
   if (!root) {
     throw new LlmProviderError("bad-shape", "Expected session analysis object");
@@ -225,7 +248,9 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
       );
     }
   }
-  const outline = validateSessionOutline(root.outline);
+  const outline = opts?.requireOutline !== false
+    ? validateSessionOutline(root.outline)
+    : undefined;
   const equivRaw = Array.isArray(root.segmentEquivalences)
     ? root.segmentEquivalences
     : [];
@@ -241,7 +266,9 @@ export function validateSessionAnalysis(value: unknown): SessionAnalysis {
       break;
     }
   }
-  const codeReferences = parseCodeReferences(root.codeReferences);
+  const codeReferences = opts?.requireCodeReferences !== false
+    ? parseCodeReferences(root.codeReferences)
+    : [];
   return {
     domains,
     nodes: ontologyPartial.nodes,

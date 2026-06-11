@@ -205,6 +205,8 @@ export type CodeReference = {
   lines: string;
   /** Brief description of the code's function/purpose, ≤80 chars. */
   description: string;
+  /** 0-based turn indices where this file was referenced, for filtering by topic. */
+  sourceTurnIndices?: number[];
 };
 
 /** Single LLM response: domain + terms + hierarchy + content outline + session synonyms. */
@@ -214,7 +216,7 @@ export type SessionAnalysis = {
   mappings?: ConceptOntologyMapping[];
   segmentEquivalences: SegmentEquivalence[];
   termAliases?: SessionTermAlias[];
-  outline: SessionOutline;
+  outline?: SessionOutline;
   /** Code file references extracted when session involves software code. Absent when not applicable. */
   codeReferences?: CodeReference[];
 };
@@ -234,7 +236,8 @@ export type LlmResponseSchema =
   | "concept-ontology"
   | "topic-paths"
   | "reattach-moves"
-  | "ontology-refine";
+  | "ontology-refine"
+  | "code-ref-descriptions";
 
 export type LlmDumpMeta = {
   stageId: string;
