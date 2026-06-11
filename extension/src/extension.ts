@@ -239,7 +239,7 @@ async function readLlmOptions(
     ),
     maxAttempts: Math.max(
       1,
-      Math.min(10, config.get<number>("llm.maxAttempts", 1) ?? 1)
+      Math.min(10, config.get<number>("llm.maxAttempts", 3) ?? 3)
     ),
     retryBackoffMs: Math.max(
       0,

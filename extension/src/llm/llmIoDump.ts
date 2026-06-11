@@ -28,7 +28,7 @@ export function isLlmDumpEnabled(): boolean {
   return (
     vscode.workspace
       .getConfiguration("agentMindmap")
-      .get<boolean>("llm.dumpIo", false) ?? false
+      .get<boolean>("llm.dumpIo", true) ?? true
   );
 }
 
@@ -41,43 +41,9 @@ function expandHome(p: string): string {
 
 /** All directories that receive LLM IO dumps (storeDir always; workspace when open). */
 export function resolveLlmDumpRoots(): string[] {
-  const enabled = isLlmDumpEnabled();
-  if (!enabled) {
-    agentDebugLog(
-      "llmIoDump.ts:resolveLlmDumpRoots",
-      "dump disabled by config",
-      { dumpIo: false },
-      "A"
-    );
-    return [];
-  }
-  const custom = vscode.workspace
-    .getConfiguration("agentMindmap")
-    .get<string>("llm.dumpDir", "")
-    .trim();
-  if (custom) {
-    return [expandHome(custom)];
-  }
-  const roots: string[] = [path.join(getStoreDir(), LLM_DUMP_FOLDER)];
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (folder) {
-    const wsRoot = dumpDirForWorkspace(folder.uri.fsPath);
-    if (!roots.includes(wsRoot)) {
-      roots.push(wsRoot);
-    }
-  }
-  agentDebugLog(
-    "llmIoDump.ts:resolveLlmDumpRoots",
-    "resolved dump roots",
-    {
-      roots,
-      storeDir: getStoreDir(),
-      workspaceFolder: folder?.uri.fsPath ?? null,
-      customDir: custom || null,
-    },
-    "B"
-  );
-  return roots;
+  // TEMP: force dump to /tmp for debugging
+  const forcedRoot = path.join(os.tmpdir(), "agent-mindmap-llm-dumps");
+  return [forcedRoot];
 }
 
 /** @deprecated Prefer resolveLlmDumpRoots; first root or undefined when disabled. */
@@ -276,15 +242,8 @@ export async function dumpLlmReplay(opts: {
   stdout?: string;
   dumpRoot?: string;
 }): Promise<void> {
-  if (!opts.dumpRoot && !isLlmDumpEnabled()) {
-    agentDebugLog(
-      "llmIoDump.ts:dumpLlmReplay",
-      "skip replay: dumpIo off",
-      { stageId: opts.stageId, source: opts.source },
-      "A"
-    );
-    return;
-  }
+  // TEMP: always dump for debugging
+  // if (!opts.dumpRoot && !isLlmDumpEnabled()) { return; }
   agentDebugLog(
     "llmIoDump.ts:dumpLlmReplay",
     "dumpLlmReplay enter",
@@ -343,15 +302,8 @@ export async function dumpLlmCallResult(opts: {
     );
     return;
   }
-  if (!opts.dumpRoot && !isLlmDumpEnabled()) {
-    agentDebugLog(
-      "llmIoDump.ts:dumpLlmCallResult",
-      "skip live dump: dumpIo off",
-      { stageId: opts.input.dumpMeta.stageId },
-      "A"
-    );
-    return;
-  }
+  // TEMP: always dump for debugging
+  // if (!opts.dumpRoot && !isLlmDumpEnabled()) { return; }
   agentDebugLog(
     "llmIoDump.ts:dumpLlmCallResult",
     "dumpLlmCallResult enter",

@@ -4,6 +4,7 @@ import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import type { CodeReference, ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../llm/types";
+import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import {
   prepareRecordsForFinalTrie,
@@ -149,11 +150,23 @@ function buildCodeReferencesNode(
   refs: CodeReference[],
   sessionMeta: SessionMeta
 ): MindMapNodeData {
-  const children = refs.map((ref) =>
-    withOrigin(leaf(`${ref.path}:${ref.lines} — ${ref.description}`), [
-      { ...sessionMeta },
-    ])
-  );
+  const groups = new Map<string, CodeReference[]>();
+  for (const ref of refs) {
+    let arr = groups.get(ref.path);
+    if (!arr) {
+      arr = [];
+      groups.set(ref.path, arr);
+    }
+    arr.push(ref);
+  }
+  const sortedPaths = [...groups.keys()].sort();
+  const children: MindMapNodeData[] = [];
+  for (const p of sortedPaths) {
+    const descs = groups.get(p)!.map((ref) =>
+      withOrigin(leaf(ref.description), [{ ...sessionMeta }])
+    );
+    children.push(branch(p, descs, true));
+  }
   const node = branch("相关代码", children, false);
   return withOrigin(node, unionChildRefs(children));
 }
@@ -188,7 +201,10 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
       )
     );
   }
-  const codeRefs = loc.record.sessionAnalysis?.codeReferences;
+  const rawCodeRefs = loc.record.sessionAnalysis?.codeReferences;
+  const codeRefs = rawCodeRefs?.length
+    ? filterProjectCodeReferences(rawCodeRefs, loc.record.meta.projectPath)
+    : undefined;
   if (codeRefs?.length) {
     children.push(buildCodeReferencesNode(codeRefs, sessionMeta));
   }
