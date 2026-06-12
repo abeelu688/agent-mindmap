@@ -1,5 +1,7 @@
 # Contributing to Agent Mind Map
 
+> **[中文版 / Chinese](CONTRIBUTING.zh-cn.md)**
+
 Thank you for your interest in contributing! This guide covers everything you need to get started.
 
 ## Quick Start
@@ -119,21 +121,49 @@ Key points:
 
 ### Adding a New UI Language
 
-1. Create `extension/l10n/bundle.l10n.<locale>.json` with all keys from `bundle.l10n.json`
-2. Update `UiLocaleSetting` in `l10n/uiTranslate.ts`
-3. Update `agentMindmap.ui.locale` enum in `extension/package.json`
-4. Add a cross-link in `README.md`
-5. Add prompt translations if applicable (see below)
+The extension's UI strings (notifications, command labels, install guides) live in `extension/l10n/`. To add a new language (e.g., Japanese):
+
+1. **Copy the English bundle as a starting point.** The placeholder files `bundle.l10n.ja.json` and `bundle.l10n.ko.json` already exist as empty templates:
+
+   ```bash
+   # Replace the placeholder with the full key set
+   cat extension/l10n/bundle.l10n.json > extension/l10n/bundle.l10n.ja.json
+   ```
+
+   Then translate every value while keeping the keys intact. Placeholders like `{0}`, `{1}` must remain in the same positions.
+
+2. **Wire the bundle into the runtime loader.** Open [`extension/src/l10n/uiTranslate.ts`](extension/src/l10n/uiTranslate.ts) and add the import + map entry:
+
+   ```ts
+   import jaL10n from "../../l10n/bundle.l10n.ja.json";
+
+   const BUNDLES: Partial<Record<UiLocale, Record<string, string>>> = {
+     "zh-cn": zhL10n as Record<string, string>,
+     ja: jaL10n as Record<string, string>, // ← add
+   };
+   ```
+
+3. **Update the locale enum.** [`extension/package.json`](extension/package.json) → `agentMindmap.ui.locale.enum` already lists `ja` and `ko`. If you're adding a brand-new language, add it there too.
+
+4. **Verify key consistency.** Run `npm run check:l10n` — it ensures every locale bundle has the same keys as the English baseline.
+
+5. **Add a cross-language link in the README.** Update [`README.md`](README.md) and [`README.zh-cn.md`](README.zh-cn.md) badges, then create `README.<locale>.md` if appropriate.
 
 ### Translating LLM Prompts
 
-LLM prompts are currently in Chinese only. To add English (or other language) prompts:
+LLM prompts are currently in Chinese only. The English template scaffold is in place ([`promptOutline.ts`](extension/src/llm/promptOutline.ts) is the reference implementation), and the `agentMindmap.llm.promptLanguage` setting toggles between languages.
 
-1. Extract fixed text from `promptXxx.ts` into a `promptTexts` object keyed by `PromptLanguage`
-2. Extend `PromptLanguage` type in `llm/promptLanguage.ts`
-3. Ensure the JSON output schema remains identical across languages
-4. Add `agentMindmap.llm.promptLanguage` setting (or follow `ui.locale`)
-5. Bump `PIPELINE_VERSION` — prompt language changes invalidate caches
+To add full English (or other language) prompts:
+
+1. **Pick one prompt at a time.** Each `prompt*.ts` under `extension/src/llm/` has its own JSON output schema. Don't mass-translate — verify each one against the eval pipeline.
+
+2. **Follow the `TEXTS` pattern in [`promptOutline.ts`](extension/src/llm/promptOutline.ts)**: extract every Chinese line into a `TEXTS: Record<PromptLanguage, ...>` object, then assemble the prompt from the localized strings. The JSON schema markers (`{"title":...}`) stay identical across languages.
+
+3. **Verify the JSON output schema is unchanged.** Add a test that runs the new prompt against `validateSessionAnalysis()` (or the relevant validator) with a fixture transcript. Both `zh` and `en` outputs must validate identically.
+
+4. **Run the eval pipeline** (`npm run eval`) with both `agentMindmap.llm.promptLanguage=zh` and `=en` to compare output quality. A direct word-for-word translation often produces worse results than the original — adapt as needed.
+
+5. **Bump `PIPELINE_VERSION`** in [`pipelineVersions.ts`](extension/src/pipeline/pipelineVersions.ts) if your changes alter the JSON output shape (rare for pure language flips, but required for any schema tweak).
 
 > **Note:** LLM prompt translation requires both fluency in the target language AND familiarity with AI product usage patterns. A direct word-for-word translation may produce worse results than the original.
 
