@@ -99,6 +99,14 @@ function enhancedOntologyCacheKey(
   return `${base}:${stageVersions}`;
 }
 
+/** Same cache key formula used by runMergePipeline; exported for batchMergeCache short-circuit. */
+export function computeBatchMergeCacheKey(
+  records: SessionRecord[],
+  opts: { model?: string; hostId?: AgentHostId; providerId: string }
+): string {
+  return enhancedOntologyCacheKey(records, opts);
+}
+
 export async function runMergePipeline(
   opts: MergePipelineOpts,
   provider: LlmProvider,

@@ -30,6 +30,7 @@ import type { SessionRecord } from "./storeTypes";
 import {
   ensureStore,
   ontologyCachePath,
+  recordFreshnessToken,
   sha256Hex,
   ontologyIndexPath,
 } from "./sessionStore";
@@ -143,7 +144,7 @@ export function computeOntologyCacheKey(
   );
   const payload = JSON.stringify({
     sessionIds: sorted.map((r) => r.meta.sessionId),
-    transcriptShas: sorted.map((r) => r.meta.transcriptSha256),
+    transcriptTokens: sorted.map((r) => recordFreshnessToken(r)),
     provider: providerId,
     model: opts.model?.trim() || "",
     hostId: opts.hostId ?? sorted[0]?.meta.hostId ?? "cursor",
