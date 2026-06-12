@@ -9,6 +9,8 @@ import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
 import { dumpLlmReplay } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import { mindMapLog } from "./webview/MindMapLog";
+import { agentLog } from "./log";
+import { notify, notifyWarning, notifyError } from "./notify";
 import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import {
@@ -175,7 +177,7 @@ async function listWorkspaceSessions(
 ): Promise<{ scanDir: string; sessions: TranscriptSession[] } | undefined> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    vscode.window.showWarningMessage(
+    notifyWarning(
       "Agent Mind Map: Open a workspace folder first."
     );
     return undefined;
@@ -183,7 +185,7 @@ async function listWorkspaceSessions(
 
   const scanDir = host.getSessionsScanDir(workspacePath);
   if (!scanDir) {
-    vscode.window.showWarningMessage(
+    notifyWarning(
       "Agent Mind Map: Open a workspace folder first."
     );
     return undefined;
@@ -207,7 +209,7 @@ export async function loadLatestSession(
   }
   const { scanDir, sessions } = listed;
   if (!sessions.length) {
-    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
+    notifyWarning(host.emptyTranscriptsHint(scanDir));
     return undefined;
   }
 
@@ -224,7 +226,7 @@ export async function pickSession(
   }
   const { scanDir, sessions } = listed;
   if (!sessions.length) {
-    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
+    notifyWarning(host.emptyTranscriptsHint(scanDir));
     return undefined;
   }
 
@@ -426,7 +428,7 @@ export async function loadSession(
         };
       }
     } catch (err) {
-      console.warn("[agent-mindmap] library read failed:", err);
+      agentLog.error("Library read failed", err);
     }
   }
 
@@ -470,7 +472,7 @@ export async function loadSession(
       if (cliMissing) {
         void showCliInstallGuide(host.id, { modal: false });
       } else {
-        vscode.window.showWarningMessage(
+        notifyWarning(
           t(
             "ui.llm.failed.message",
             "Agent Mind Map: LLM summarization failed ({0}). {1}",
@@ -480,7 +482,7 @@ export async function loadSession(
         );
       }
     }
-    console.warn("[agent-mindmap] LLM failure, using turn fallback:", err);
+    agentLog.warn("LLM failure, using turn fallback", { error: String(err) });
     mindMapLog(`[loadSession] LLM failed for session ${session.id}, falling back to turn view. Error: ${err instanceof Error ? err.message : String(err)}`);
     return {
       session: { ...session, hostId: host.id },
@@ -613,12 +615,10 @@ export async function loadSession(
             await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
           } catch (err) {
             const detail = err instanceof Error ? err.message : String(err);
-            console.warn(
-              "[agent-mindmap] background merge rebuild failed:",
+            agentLog.error("Background merge rebuild failed", err);
+            notifyError(
+              `Agent Mind Map: Background concept merge failed: ${detail}`,
               err
-            );
-            void vscode.window.showErrorMessage(
-              `Agent Mind Map: Background concept merge failed: ${detail}`
             );
           }
         };
@@ -628,7 +628,7 @@ export async function loadSession(
           : runMerge();
       }
     } catch (err) {
-      console.warn("[agent-mindmap] library write failed:", err);
+      agentLog.error("Library write failed", err);
     }
   }
 
@@ -731,10 +731,7 @@ export async function runProjectSessionBatch(
         message: describeError(err),
       });
       reportComplete(t("ui.batch.item.failed", "Analysis failed"));
-      console.warn(
-        `[agent-mindmap] batch analyze failed for ${session.id}:`,
-        err
-      );
+      agentLog.warn(`Batch analyze failed for ${session.id}`, { error: String(err) });
     }
   }
 
@@ -845,10 +842,7 @@ export async function runProjectSessionBatches(
         message: describeError(err),
       });
       reportComplete(t("ui.batch.item.failed", "Analysis failed"));
-      console.warn(
-        `[agent-mindmap] batch analyze failed for ${session.id}:`,
-        err
-      );
+      agentLog.warn(`Batch analyze failed for ${session.id}`, { error: String(err) });
     }
 
     const processed = analyzed + failed;
@@ -921,7 +915,7 @@ export async function analyzeProjectSessions(
     return undefined;
   }
   if (!sessions.length) {
-    vscode.window.showWarningMessage(host.emptyTranscriptsHint(scanDir));
+    notifyWarning(host.emptyTranscriptsHint(scanDir));
     return undefined;
   }
 

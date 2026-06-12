@@ -1,4 +1,5 @@
 import { promisify } from "util";
+import { agentLog } from "../log";
 
 type SqlBindValue = string | number | bigint | Buffer | null;
 
@@ -16,7 +17,7 @@ function warnLoadFailed(err: unknown): void {
     return;
   }
   loadFailedWarned = true;
-  console.warn("[agent-mindmap] @vscode/sqlite3 failed to load:", err);
+  agentLog.error("@vscode/sqlite3 failed to load", err);
 }
 
 function loadSqlite3(): Sqlite3Static | undefined {
@@ -54,8 +55,8 @@ function openReadonlyStateDb(dbPath: string): Promise<Sqlite3Database | undefine
       sqlite3.OPEN_READONLY,
       (err: Error | null) => {
         if (err) {
-          console.warn(
-            `[agent-mindmap] failed to open Cursor state.vscdb (${dbPath}):`,
+          agentLog.error(
+            `Failed to open Cursor state.vscdb (${dbPath})`,
             err
           );
           resolve(undefined);
@@ -63,7 +64,7 @@ function openReadonlyStateDb(dbPath: string): Promise<Sqlite3Database | undefine
         }
         db.run("PRAGMA busy_timeout = 3000", (err: Error | null) => {
           if (err) {
-            console.warn("[agent-mindmap] PRAGMA busy_timeout failed:", err);
+            agentLog.error("PRAGMA busy_timeout failed", err);
           }
         });
         openDbs.set(dbPath, db);
@@ -118,7 +119,7 @@ export async function queryStateDb<T extends Record<string, unknown>>(
   try {
     return await all(sql, params);
   } catch (err) {
-    console.warn("[agent-mindmap] state.vscdb query failed:", err);
+    agentLog.error("state.vscdb query failed", err);
     return [];
   }
 }

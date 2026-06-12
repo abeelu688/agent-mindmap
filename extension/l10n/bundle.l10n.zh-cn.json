@@ -150,5 +150,6 @@
   "ui.selectModel.placeholder": "选择 LLM 请求使用的模型",
   "ui.selectModel.custom.label": "自定义模型名称…",
   "ui.selectModel.custom.placeholder": "模型名称（如 claude-sonnet-4-6）",
-  "ui.selectModel.applied": "Agent Mind Map: 模型已设为 {0}。"
+  "ui.selectModel.applied": "Agent Mind Map: 模型已设为 {0}。",
+  "notify.unexpected": "Agent Mind Map: 发生意外错误：{0}"
 }

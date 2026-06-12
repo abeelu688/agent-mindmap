@@ -7,6 +7,9 @@ import {
 import { loadGlassResumableIds, clearComposerTitleCache } from "./transcript/composerTitles";
 import { closeStateDb } from "./transcript/cursorStateDb";
 import { mindMapLog } from "./webview/MindMapLog";
+import { agentLog, initLog } from "./log";
+import { notify, notifyInfo, notifyWarning, notifyError } from "./notify";
+import { isCancellationError } from "./errors";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { MindMapHost } from "./webview/MindMapHost";
 import type { BatchStatus } from "./webview/MindMapHost";
@@ -304,7 +307,7 @@ async function commandDownloadPackage(): Promise<void> {
   const panel = MindMapPanel.getCurrent();
   const mindMap = panel?.getMindMapData();
   if (!mindMap) {
-    vscode.window.showWarningMessage(
+    notifyWarning(
       t("ui.warning.openMindMapFirst", "Agent Mind Map: Open a mind map first.")
     );
     return;
@@ -360,12 +363,13 @@ async function commandDownloadPackage(): Promise<void> {
       await vscode.env.openExternal(vscode.Uri.file(result.outDir));
     }
   } catch (err) {
-    vscode.window.showErrorMessage(
+    notifyError(
       t(
         "ui.download.exportFailed",
         "Agent Mind Map: Export failed: {0}",
         err instanceof Error ? err.message : String(err)
-      )
+      ),
+      err
     );
   }
 }
@@ -551,7 +555,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
   const host = await getActiveHost(extensionContext);
   const slug = getWorkspaceSlug(host);
   if (!slug) {
-    vscode.window.showWarningMessage(
+    notifyWarning(
       t(
         "ui.warning.openWorkspaceFolderFirst",
         "Agent Mind Map: Open a workspace folder first."
@@ -570,7 +574,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         );
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {
-          vscode.window.showWarningMessage(
+          notifyWarning(
             t(
               "ui.warning.openWorkspaceFolderFirst",
               "Agent Mind Map: Open a workspace folder first."
@@ -580,7 +584,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         }
         const scanDir = host.getSessionsScanDir(workspacePath);
         if (!scanDir) {
-          vscode.window.showWarningMessage(
+          notifyWarning(
             t(
               "ui.warning.openWorkspaceFolderFirst",
               "Agent Mind Map: Open a workspace folder first."
@@ -594,7 +598,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
         });
 
         if (sessions.length === 0) {
-          vscode.window.showInformationMessage(
+          notifyInfo(
             t(
               "ui.batch.emptyOnDisk",
               "Agent Mind Map: No agent transcripts found on disk for current project ({0}).",
@@ -677,7 +681,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
               }
 
               const cached = info.skippedFresh;
-              mindMapLog(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} batchSessionIds=${info.batchSessionIds.join(",")}`);
+              mindMapLog(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} batchSessionIds=${info.batchSessionIds.join(",")}`) // TODO: migrate to agentLog.info
 
               progress.report(
                 t(
@@ -737,17 +741,18 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                 batchOntologyFailed = true;
                 const detail =
                   err instanceof Error ? err.message : String(err);
-                console.error(
-                  `[agent-mindmap] batch ${info.batchNo} concept merge failed:`,
+                agentLog.error(
+                  `Batch ${info.batchNo} concept merge failed`,
                   err
                 );
-                void vscode.window.showErrorMessage(
+                notifyError(
                   t(
                     "ui.batch.mergeFailed",
                     "Agent Mind Map: Batch {0} concept merge failed: {1}",
                     info.batchNo,
                     detail
-                  )
+                  ),
+                  err
                 );
                 return;
               }
@@ -785,7 +790,7 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
                 if (!panel.getMindMapData()) {
                   applyPendingMergeToPanel(panel);
                 } else {
-                  void vscode.window.showInformationMessage(
+                  notifyInfo(
                     t(
                       "ui.batch.pendingRefresh",
                       "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
@@ -813,21 +818,21 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           if (allNewTurnFallbacks && allCliMissing) {
             await showCliInstallGuide(host.id, { modal: true });
           } else if (allNewTurnFallbacks && allBadJson) {
-            vscode.window.showWarningMessage(
+            notifyWarning(
               uiTranslate(
                 "ui.library.empty.llmBadJson",
                 "Agent Mind Map: cursor-agent returned invalid JSON for every session (not saved to the library). Check Output → Agent Mind Map logs, retry batch analyze, or increase agentMindmap.llm.maxAttempts."
               )
             );
           } else if (allNewTurnFallbacks) {
-            vscode.window.showWarningMessage(
+            notifyWarning(
               uiTranslate(
                 "ui.library.empty.llmTurnFallbackGeneric",
                 "Agent Mind Map: LLM summarization failed for every session. Turn-only views are not saved to the library, so Concept Mind Map stays empty."
               )
             );
           } else {
-            vscode.window.showInformationMessage(
+            notifyInfo(
               t(
                 "ui.library.empty.noRecordsAfterAnalyze",
                 "Agent Mind Map: After analysis, the library still has no usable records for current project ({0}).",
@@ -882,27 +887,28 @@ async function commandAnalyzeAndMergeCurrentProject(): Promise<void> {
           } catch (err) {
             batchOntologyFailed = true;
             const detail = err instanceof Error ? err.message : String(err);
-            console.error("[agent-mindmap] final root refresh failed:", err);
-            void vscode.window.showErrorMessage(
+            agentLog.error("Final root refresh failed", err);
+            notifyError(
               t(
                 "ui.batch.finalRefineFailed",
                 "Agent Mind Map: Final concept map refresh failed: {0}",
                 detail
-              )
+              ),
+              err
             );
           }
         }
 
-        vscode.window.showInformationMessage(formatAnalyzeProjectSummary(result));
+        notifyInfo(formatAnalyzeProjectSummary(result));
         if (projectRecordsById.size > 0 && batchOntologyFailed && batchRefineOntology) {
-          void vscode.window.showInformationMessage(
+          notifyInfo(
             t(
               "ui.batch.noOntologyEquivalences",
               "Agent Mind Map: Concept synonym rules were not generated. Run Analyze All Sessions (Current Project) again for full merge."
             )
           );
         } else if (projectRecordsById.size > 0 && !batchRefineOntology) {
-          void vscode.window.showInformationMessage(
+          notifyInfo(
             t(
               "ui.batch.noOntologyEquivalencesDisabled",
               "Agent Mind Map: Batch merge used mechanical path rules only. Enable agentMindmap.library.batchRefineOntology and run Analyze All Sessions again to refine synonyms."
@@ -968,7 +974,7 @@ async function maybeWarnEmptyClaudeTranscripts(
     return;
   }
   await context.globalState.update(key, true);
-  vscode.window.showInformationMessage(
+  notifyInfo(
     "Agent Mind Map: No Claude Code transcripts on disk for this workspace. " +
       "The VS Code extension may not persist main chats — CLI sessions are more reliable."
   );
@@ -976,6 +982,7 @@ async function maybeWarnEmptyClaudeTranscripts(
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
+  initLog(context);
   agentDebugLog(
     "extension.ts:activate",
     "extension activated",
@@ -1088,7 +1095,7 @@ export function activate(context: vscode.ExtensionContext): void {
     await context.workspaceState.update(WORKSPACE_HOST_KEY, picked.id);
     resetHostCache();
     const host = getHostById(picked.id);
-    vscode.window.showInformationMessage(
+    notifyInfo(
       `Agent Mind Map: Host set to ${host.displayName} for this workspace`
     );
   }
@@ -1161,7 +1168,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const displayName = modelValue
       ? modelValue
       : t("webview.menu.model.default", "Default");
-    vscode.window.showInformationMessage(
+    notifyInfo(
       t(
         "ui.selectModel.applied",
         "Agent Mind Map: Model set to {0}.",

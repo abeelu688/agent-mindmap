@@ -26,6 +26,7 @@ import {
 } from "./types";
 import { dumpLlmCallResult } from "./llmIoDump";
 import { agentDebugLog } from "../debugLog";
+import { agentLog } from "../log";
 import { validateTopicGraph } from "./topicGraphValidate";
 
 export type HeadlessCliConfig = {
@@ -583,8 +584,8 @@ export class HeadlessCliProvider {
           stderr = run.stderr;
           const durationMs = performance.now() - started;
           if (attempt > 1) {
-            console.info(
-              `[agent-mindmap] LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`
+            agentLog.info(
+              `LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`
             );
           }
           try {
@@ -664,8 +665,8 @@ export class HeadlessCliProvider {
 
       lastErr = attemptErr;
       const delay = computeBackoff(backoffBase, attempt);
-      console.warn(
-        `[agent-mindmap] LLM (${this.id}) attempt ${attempt}/${maxAttempts} failed (${attemptErr.code}); retrying in ${delay}ms…`
+      agentLog.warn(
+        `LLM (${this.id}) attempt ${attempt}/${maxAttempts} failed (${attemptErr.code}); retrying in ${delay}ms…`
       );
       await sleepWithCancel(delay, signal);
     }

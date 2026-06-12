@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { agentLog } from "../log";
 import { writeJsonAtomic } from "./atomicWrite";
 import {
   validateSessionOutline,
@@ -115,7 +116,7 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
     return JSON.parse(raw) as T;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(`[agent-mindmap] failed to read ${filePath}:`, err);
+      agentLog.warn(`Failed to read ${filePath}`, { error: String(err) });
     }
     return undefined;
   }
@@ -199,9 +200,9 @@ export async function readRecord(
     }
     return ensureRecordGraph(raw);
   } catch (err) {
-    console.warn(
-      `[agent-mindmap] corrupt session record ${projectSlug}/${sessionId}:`,
-      err
+    agentLog.warn(
+      `Corrupt session record ${projectSlug}/${sessionId}`,
+      { error: String(err) }
     );
     return undefined;
   }
