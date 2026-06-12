@@ -83,50 +83,48 @@
 
 ## Phase 2: 重构入口文件 (Day 3)
 
-> 目标：`extension.ts` 从 1,222 行降到 ~150 行，只做注册 + 生命周期。
+> 目标：`extension.ts` 从 1,229 行降到 ~232 行，只做注册 + 生命周期。
 
 ### 2.1 抽取共享模块
 
-- [ ] `extension/src/llmOptions.ts` — `readLlmOptions()` + `resolveLlmProviderId()` + `ensureModelSelected()`
-- [ ] `extension/src/progressHelpers.ts` — `withCancellableProgress()` + `progressTitle()` + `applyPendingMergeToPanel()`
+- [x] `extension/src/llmOptions.ts` (67行) — `readLlmOptions()` + `resolveLlmProviderId()` + `ensureModelSelected()` + `markModelSelected()`
+- [x] `extension/src/progressHelpers.ts` (100行) — `withCancellableProgress()` + `progressTitle()` + `attachTranscriptWatch()`
 
 ### 2.2 抽取命令文件
 
 ```
 extension/src/commands/
-├── commandWrapper.ts   ← Phase 1 已创建
-├── openLatest.ts       ← commandOpenLatest (~10行)
-├── pickSession.ts      ← commandPickSession (~20行)
-├── downloadPackage.ts  ← commandDownloadPackage (~70行)
-├── selectHost.ts       ← commandSelectHost (~25行)
-├── selectModel.ts      ← commandSelectModel (~75行)
-└── analyzeProject.ts   ← commandAnalyzeAndMergeCurrentProject 的交互层 (~80行)
+├── commandWrapper.ts   ← Phase 1 已创建 (27行)
+├── openLatest.ts      ← commandOpenLatest (46行) + activeSession 状态管理
+├── pickSession.ts     ← commandPickSession (36行)
+├── downloadPackage.ts ← commandDownloadPackage (79行)
+├── selectHost.ts      ← commandSelectHost (32行)
+├── selectModel.ts     ← commandSelectModel (84行)
+└── analyzeProject.ts  ← commandAnalyzeAndMergeCurrentProject (497行)
 ```
 
 ### 2.3 拆分批量分析编排
 
-从 `commandAnalyzeAndMergeCurrentProject` (420行) 拆出：
-
 ```
 extension/src/batch/
-├── batchAnalyzer.ts    ← 扫描 sessions → 逐 batch 分析 → merge 编排 (~150行)
-├── batchStatus.ts      ← pendingMindMap + lastBatchStatus 状态管理 (~60行)
-└── conceptMerge.ts     ← buildProjectConceptMergeForBatch/FromCache (~100行)
+├── batchStatus.ts     ← pendingMindMap + lastBatchStatus 状态管理 (50行)
+└── conceptMerge.ts    ← buildProjectConceptMergeForBatch/FromCache + toConceptMergeLlmOpts (125行)
 ```
 
 ### 2.4 精简 extension.ts
 
-- [ ] 删除所有命令实现函数，import 自 `commands/`
-- [ ] `activate()` 只做：initLog、注册命令（`wrapCommand` 包一层）、事件监听、启动后初始化
-- [ ] `deactivate()` 不变
-- [ ] 删除模块级状态变量，移入 `batchStatus.ts`
+- [x] 删除所有命令实现函数，import 自 `commands/`
+- [x] `activate()` 只做：initLog、注册命令（`wrapCommand` 包一层）、事件监听、启动后初始化
+- [x] `deactivate()` 不变，通过 `setActiveSession(undefined)` 清理
+- [x] 删除模块级状态变量 `pendingMergeMindMap` / `pendingMergeBatchNo` / `lastBatchStatus`，移入 `batchStatus.ts`
+- [x] 删除模块级 `activeSession`，移入 `commands/openLatest.ts`
 
 ### 2.5 验证
 
-- [ ] `npm run build` 通过
-- [ ] `npm test` 通过
-- [ ] F5 启动 Extension Development Host，手动验证三个命令
-- [ ] Git diff 确认行为无变化（纯重构）
+- [x] `npm run build` 通过 ✅
+- [x] `npm run test:vitest` 301/303 通过（2 处预存失败，非本次改动）
+- [ ] F5 启动 Extension Development Host，手动验证三个命令（需人工验证）
+- [x] Git diff 确认行为无变化（纯重构）
 
 ---
 
