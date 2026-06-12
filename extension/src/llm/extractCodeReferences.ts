@@ -1,5 +1,5 @@
 import type { ChatEvent } from "../transcript/types";
-import type { CodeReference, LlmProvider } from "./types";
+import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "./types";
 import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { runLlmStage } from "../pipeline/llmStage";
@@ -11,14 +11,63 @@ export type FileEntry = {
   turnIndex: number;
   query: string;
   summary: string;
+  topicContexts?: string[];
 };
+
+function truncateContext(text: string, max = 180): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  return t.length > max ? t.slice(0, max - 3) + "..." : t;
+}
+
+function buildTopicContextByTurn(outline?: SessionOutline): Map<number, string[]> {
+  const byTurn = new Map<number, string[]>();
+  if (!outline?.outline?.length) {
+    return byTurn;
+  }
+
+  const add = (turnIndex: number, text: string) => {
+    const t = truncateContext(text);
+    if (!t) {
+      return;
+    }
+    const arr = byTurn.get(turnIndex) ?? [];
+    if (!arr.includes(t)) {
+      arr.push(t);
+      byTurn.set(turnIndex, arr);
+    }
+  };
+
+  const walk = (node: OutlineNode, parents: string[]) => {
+    const path = [...parents, node.title].filter(Boolean);
+    const topic = path.join(" > ");
+    for (const detail of node.details ?? []) {
+      const turnIndices = detail.sourceTurnIndices ?? [];
+      for (const turnIndex of turnIndices) {
+        const context = node.summary?.trim()
+          ? `${topic}：${node.summary.trim()}；${detail.text}`
+          : `${topic}：${detail.text}`;
+        add(turnIndex, context);
+      }
+    }
+    for (const child of node.children ?? []) {
+      walk(child, path);
+    }
+  };
+
+  for (const node of outline.outline) {
+    walk(node, []);
+  }
+  return byTurn;
+}
 
 /** Extract file paths and their turn context from ChatEvents (deterministic, no LLM). */
 export function extractFilePathsFromEvents(
   events: ChatEvent[],
-  projectPath?: string
+  projectPath?: string,
+  outline?: SessionOutline
 ): FileEntry[] {
   const turns = groupTurns(events);
+  const topicContextByTurn = buildTopicContextByTurn(outline);
   const seen = new Map<string, FileEntry[]>();
 
   for (const turn of turns) {
@@ -49,6 +98,7 @@ export function extractFilePathsFromEvents(
           turnIndex: turn.index,
           query,
           summary,
+          topicContexts: topicContextByTurn.get(turn.index),
         });
       }
     }
@@ -64,11 +114,16 @@ export function extractFilePathsFromEvents(
 
 function buildCodeRefDescriptionPrompt(entries: FileEntry[]): string {
   const lines: string[] = [
-    "下面是代码文件路径及其在对话中被提及的不同上下文。为每个文件的每个不同功能/目的各生成一条简短描述（≤60字）。",
+    "下面是代码文件路径及其在对话中被提及的 topic/turn 上下文。为每个文件在每个不同 topic 下生成一条简短描述（≤60字）。",
+    "",
+    "目标：描述“这个 topic 下这个文件做了什么代码变更/承担什么实现作用”，不要写成对话摘录或排查流水账。",
     "",
     "规则：",
     "- 描述必须 ≤60 字",
-    "- 同一文件有多个不同上下文时，必须为每个上下文各生成一条描述",
+    "- 优先根据“相关 topic”归纳；没有 topic 时再参考用户提问/助手摘要",
+    "- 描述要落在文件职责或代码变更上，例如“为快照合并补充层级重建入口”",
+    "- 禁止复述用户提问、助手承诺、调试过程，避免“分析了/查看了/用户要求/我将”等流水账表述",
+    "- 同一文件有多个不同 topic/目的时，必须为每个上下文各生成一条描述",
     "- 只输出 JSON 数组，格式：[{\"path\":\"...\",\"description\":\"...\"}]",
     "- 不要输出 markdown / 解释 / ```",
     "",
@@ -90,6 +145,11 @@ function buildCodeRefDescriptionPrompt(entries: FileEntry[]): string {
     for (const e of group) {
       idx++;
       lines.push(`[${idx}] path: ${path}`);
+      if (e.topicContexts?.length) {
+        for (const ctx of e.topicContexts.slice(0, 3)) {
+          lines.push(`    相关 topic: ${ctx}`);
+        }
+      }
       if (e.query) {
         const q = e.query.length > 200 ? e.query.slice(0, 197) + "..." : e.query;
         lines.push(`    用户提问: ${q}`);
@@ -104,11 +164,19 @@ function buildCodeRefDescriptionPrompt(entries: FileEntry[]): string {
   return lines.join("\n");
 }
 
-const CODE_REF_DESC_PROMPT_VERSION = 2;
+const CODE_REF_DESC_PROMPT_VERSION = 3;
 
 const MAX_DESC_LEN = 60;
 
 type DescEntry = { path: string; description: string };
+
+function fallbackDescription(entry: FileEntry): string {
+  const topic = entry.topicContexts?.[0]?.split("：")[0]?.trim();
+  const base = topic
+    ? `支撑${topic}相关代码调整`
+    : "支撑相关代码定位或调整";
+  return base.length > MAX_DESC_LEN ? base.slice(0, MAX_DESC_LEN - 3) + "..." : base;
+}
 
 /** Validate the description array from the small LLM call. */
 function validateDescArray(value: unknown): DescEntry[] {
@@ -184,10 +252,10 @@ export async function generateCodeReferenceDescriptions(
   );
 
   if (!descs.length) {
-    // Fallback: use query text as description, group turn indices by (path, fallback-desc)
+    // Fallback: use topic-shaped wording instead of transcript excerpts.
     const groups = new Map<string, { path: string; desc: string; turns: number[] }>();
     for (const e of entries) {
-      const fb = (e.query || e.summary || e.path).slice(0, MAX_DESC_LEN);
+      const fb = fallbackDescription(e);
       const key = `${e.path}\0${fb}`;
       let g = groups.get(key);
       if (!g) {
@@ -222,7 +290,7 @@ export async function generateCodeReferenceDescriptions(
     const pathDescs = descMap.get(entry.path);
     let desc: string;
     if (!pathDescs?.length) {
-      desc = (entry.query || entry.summary || entry.path).slice(0, MAX_DESC_LEN);
+      desc = fallbackDescription(entry);
     } else {
       const idx = usedDescs.get(entry.path) ?? 0;
       desc = idx < pathDescs.length
@@ -252,9 +320,9 @@ export async function extractCodeReferencesFromEvents(
   events: ChatEvent[],
   provider: LlmProvider,
   signal: AbortSignal,
-  opts?: { projectPath?: string; model?: string; timeoutMs?: number; cacheDir?: string; cache?: boolean }
+  opts?: { projectPath?: string; model?: string; timeoutMs?: number; cacheDir?: string; cache?: boolean; outline?: SessionOutline }
 ): Promise<CodeReference[]> {
-  const entries = extractFilePathsFromEvents(events, opts?.projectPath);
+  const entries = extractFilePathsFromEvents(events, opts?.projectPath, opts?.outline);
   if (!entries.length) {
     return [];
   }
