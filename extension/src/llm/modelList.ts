@@ -6,6 +6,21 @@ export type ModelEntry = {
   label: string;
 };
 
+export type DetectedCli = {
+  providerId: LlmProviderId;
+  /** Resolved binary name or absolute path. */
+  binary: string;
+  /** Display label, e.g. "Claude Code (claude)". */
+  label: string;
+};
+
+export type CliProbeResult = {
+  /** CLIs found on this machine. */
+  available: DetectedCli[];
+  /** CLIs not found (for showing install hints). */
+  missing: DetectedCli[];
+};
+
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cachedCursorModels: { entries: ModelEntry[]; fetchedAt: number } | undefined;
@@ -107,4 +122,96 @@ export function clearModelCache(): void {
 export const __testing = {
   parseCursorModelsOutput,
   CLAUDE_KNOWN_MODELS,
+  resolveBinary,
 };
+
+// ─── CLI detection ─────────────────────────────────────────────────────────
+
+/** Resolve a binary to an absolute path using `which` (POSIX) or `where` (Windows). */
+function resolveBinary(
+  binary: string,
+  platform: NodeJS.Platform = process.platform
+): Promise<string | undefined> {
+  const cmd = platform === "win32" ? "where" : "which";
+  return new Promise<string | undefined>((resolve) => {
+    execFile(cmd, [binary], { timeout: 5000 }, (err, stdout) => {
+      if (err || !stdout?.trim()) {
+        resolve(undefined);
+        return;
+      }
+      // Take the first result line (where may return multiple)
+      const first = stdout.trim().split(/\r?\n/)[0]!.trim();
+      resolve(first || undefined);
+    });
+  });
+}
+
+type CliCandidate = {
+  binary: string;
+  providerId: LlmProviderId;
+  label: string;
+};
+
+const CLI_CANDIDATES: CliCandidate[] = [
+  { binary: "claude", providerId: "claude-cli", label: "Claude Code (claude)" },
+  { binary: "agent", providerId: "cursor-cli", label: "Cursor Agent (agent)" },
+  { binary: "cursor-agent", providerId: "cursor-cli", label: "Cursor Agent (cursor-agent)" },
+];
+
+/**
+ * Detect which LLM CLIs are installed on this machine.
+ *
+ * @param cliPathSetting Optional user-configured `agentMindmap.llm.cliPath`.
+ * @returns Available CLIs (found) and missing CLIs (not found, for UI hints).
+ */
+export async function detectAvailableClis(
+  cliPathSetting?: string
+): Promise<CliProbeResult> {
+  const available: DetectedCli[] = [];
+  const missing: DetectedCli[] = [];
+  const seenProviders = new Set<LlmProviderId>();
+
+  // If the user has a custom cliPath, probe it first
+  if (cliPathSetting?.trim()) {
+    const resolved = await resolveBinary(cliPathSetting.trim());
+    // Guess provider from the binary name
+    const lower = cliPathSetting.toLowerCase();
+    const providerId: LlmProviderId =
+      lower.includes("claude") ? "claude-cli" : "cursor-cli";
+    if (resolved) {
+      available.push({
+        providerId,
+        binary: resolved,
+        label: `Custom CLI (${cliPathSetting.trim()})`,
+      });
+      seenProviders.add(providerId);
+    }
+  }
+
+  for (const candidate of CLI_CANDIDATES) {
+    // Skip if we already found a CLI for this provider
+    if (seenProviders.has(candidate.providerId)) {
+      continue;
+    }
+    const resolved = await resolveBinary(candidate.binary);
+    if (resolved) {
+      available.push({
+        providerId: candidate.providerId,
+        binary: resolved,
+        label: candidate.label,
+      });
+      seenProviders.add(candidate.providerId);
+    } else {
+      // Only add one missing entry per provider
+      if (!missing.some((m) => m.providerId === candidate.providerId)) {
+        missing.push({
+          providerId: candidate.providerId,
+          binary: candidate.binary,
+          label: candidate.label,
+        });
+      }
+    }
+  }
+
+  return { available, missing };
+}

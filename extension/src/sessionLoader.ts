@@ -45,7 +45,7 @@ import {
   listRecords,
   readRecord,
   rebuildIndex,
-  sha256Hex,
+  recordFreshnessToken,
   writeMergeRecord,
   writeRecord,
 } from "./store/sessionStore";
@@ -312,6 +312,12 @@ export type AnalyzeProjectBatchInfo = AnalyzeProjectResult & {
   processed: number;
   /** Session ids processed in this batch (success or failure). */
   batchSessionIds: string[];
+  /**
+   * Subset of `batchSessionIds` that were actually re-analyzed by the LLM in
+   * this batch (i.e. NOT a library cache hit). When empty, the batch is a
+   * pure cache hit and the caller can skip merge work entirely.
+   */
+  freshlyAnalyzedSessionIds: string[];
 };
 
 export async function loadSession(
@@ -328,7 +334,11 @@ export async function loadSession(
   mindMapLog(`[loadSession] session=${session.id} filePath=${session.filePath} contentLen=${content.length} events=${events.length}`);
   const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
-  const transcriptSha256 = sha256Hex(content);
+  // Freshness token: count of parsed user/assistant/tool events. Stable
+  // against metadata-only appends (mode, ai-title, file-history-snapshot…)
+  // that Claude Code writes on session resume; only changes when real
+  // conversation turns are added.
+  const transcriptFreshnessToken = String(events.length);
   const transcriptMtimeMs = await tryStatMtime(session.filePath, session.mtimeMs);
   const ctx = resolveSessionContext(session, host);
   const projectPath =
@@ -351,10 +361,30 @@ export async function loadSession(
         ctx.projectSlug,
         session.id
       );
+      // Debug: surface freshness inputs so we can diagnose "why did this
+      // session re-analyze even though I didn't change anything?"
+      if (existing) {
+        const recToken = recordFreshnessToken(existing);
+        const tokenMatch = recToken === transcriptFreshnessToken;
+        mindMapLog(
+          `[loadSession] freshness check session=${session.id.slice(0, 8)} ` +
+          `recordToken=${recToken.slice(0, 16)} currentToken=${transcriptFreshnessToken} ` +
+          `tokenMatch=${tokenMatch} ` +
+          `recordModel=${existing.meta.llm.model || "(default)"} currentModel=${settings.llm.model || "(default)"} ` +
+          `recordProvider=${existing.meta.llm.provider} currentProvider=${settings.llm.provider} ` +
+          `recordHost=${existing.meta.hostId || "(none)"} currentHost=${host.id} ` +
+          `recordPipeline=${JSON.stringify(existing.meta.pipelineVersions || existing.meta.promptVersion)} ` +
+          `currentPipeline=${JSON.stringify(currentPipelineVersions())}`
+        );
+      } else {
+        mindMapLog(
+          `[loadSession] freshness check session=${session.id.slice(0, 8)} no existing record in library`
+        );
+      }
       if (
         existing &&
         isRecordFresh(existing, {
-          transcriptSha256,
+          transcriptFreshnessToken,
           promptParams: {
             maxTopics: settings.llm.maxTopics,
             maxItemsPerTopic: settings.llm.maxItemsPerTopic,
@@ -396,6 +426,9 @@ export async function loadSession(
           },
           "F"
         );
+        mindMapLog(
+          `[loadSession] HIT library cache, no LLM call session=${session.id.slice(0, 8)}`
+        );
         void dumpLlmReplay({
           stageId: "session-analysis",
           responseSchema: "session-analysis",
@@ -426,6 +459,11 @@ export async function loadSession(
           source: "topic",
           fromLibrary: true,
         };
+      }
+      if (existing) {
+        mindMapLog(
+          `[loadSession] MISS library cache session=${session.id.slice(0, 8)} → will call LLM`
+        );
       }
     } catch (err) {
       agentLog.error("Library read failed", err);
@@ -517,7 +555,7 @@ export async function loadSession(
         projectPath,
         transcriptPath: session.filePath,
         transcriptMtimeMs,
-        transcriptSha256,
+        transcriptFreshnessToken,
         llm: {
           provider: settings.llm.provider,
           model: settings.llm.model || undefined,
@@ -797,6 +835,7 @@ export async function runProjectSessionBatches(
 
   let batchNo = 0;
   let batchSessionIds: string[] = [];
+  let freshlyAnalyzedSessionIds: string[] = [];
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i]!;
     batchSessionIds.push(session.id);
@@ -829,6 +868,8 @@ export async function runProjectSessionBatches(
           t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
         );
       } else {
+        // source === "topic" and not from library → real LLM analysis ran
+        freshlyAnalyzedSessionIds.push(session.id);
         reportComplete(t("ui.batch.item.done", "Analysis completed"));
       }
     } catch (err) {
@@ -863,8 +904,10 @@ export async function runProjectSessionBatches(
         batchNo,
         processed,
         batchSessionIds,
+        freshlyAnalyzedSessionIds,
       });
       batchSessionIds = [];
+      freshlyAnalyzedSessionIds = [];
     }
   }
 
