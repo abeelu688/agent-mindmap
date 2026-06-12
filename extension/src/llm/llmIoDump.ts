@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { agentDebugLog } from "../debugLog";
+import { agentLog } from "../log";
 import { getStoreDir } from "../paths";
 import { mindMapLog } from "../webview/MindMapLog";
 import type { LlmDumpMeta, LlmErrorCode, LlmResponseSchema } from "./types";
@@ -195,7 +196,7 @@ export async function writeLlmIoDump(
         "D"
       );
     } catch (err) {
-      console.warn(`[agent-mindmap] LLM dump failed (${root}):`, err);
+      agentLog.warn(`LLM dump failed (${root})`, { error: String(err) });
       agentDebugLog(
         "llmIoDump.ts:writeLlmIoDump",
         "dump write failed",

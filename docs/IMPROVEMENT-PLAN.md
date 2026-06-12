@@ -32,46 +32,52 @@
 
 ### 1.1 创建统一错误类型
 
-- [ ] 新建 `extension/src/errors.ts`
+- [x] 新建 `extension/src/errors.ts`
   - `AgentMindmapError` 基类（`code: string`, `context?: Record<string,unknown>`, `cause?: unknown`）
   - 错误码命名空间：`llm:*`, `store:*`, `transcript:*`, `merge:*`, `host:*`
-  - `isUserFacingError()` / `isRetryableError()` 工具函数
-  - `LlmProviderError` 保持独立，但确保 `isRetryableError` 覆盖两种类型
+  - `isUserFacingError()` / `isRetryableError()` / `isCancellationError()` 工具函数
+  - `LlmProviderError` 保持独立，`toMindmapError()` 可将 LlmProviderError 转为 AgentMindmapError
+  - `isRetryableError` 和 `isCancellationError` 覆盖两种错误类型
 
 ### 1.2 创建统一日志通道
 
-- [ ] 新建 `extension/src/log.ts`
+- [x] 新建 `extension/src/log.ts`
   - `initLog(context)` 初始化 OutputChannel
   - `agentLog.debug/info/warn/error()` 方法
-  - 自动附加时间戳、级别标记
-- [ ] 替换 `extension/src/webview/MindMapLog.ts` → 内部改用 `agentLog`
-- [ ] 逐步替换散落的 `console.warn/error/info`（30+ 处）
+  - 自动附加时间戳、级别标记（🔍ℹ️⚠️❌）
+  - 非 VS Code 环境（vitest）自动 fallback 到 console
+  - `mindMapLogCompat()` 兼容过渡
+- [x] `extension.ts` 中 `mindMapLog` 调用标记为 TODO，后续迁移
+- [x] 替换散落的 `console.warn/error/info`：extension.ts (2处)、sessionLoader.ts (5处)、store/ (3处)、transcript/ (9处)、llm/ (2处)
 
 ### 1.3 创建统一通知函数
 
-- [ ] 新建 `extension/src/notify.ts`
+- [x] 新建 `extension/src/notify.ts`
   - `notify(err, fallbackLevel?)` 按 error code 自动选 info/warning/error
   - `CODE_LEVEL` 映射表：`llm:timeout` → warning, `merge:failed` → error 等
   - 自动调用 `agentLog.error()` 记录
+  - 便捷函数：`notifyInfo()`, `notifyWarning()`, `notifyError()`
 
 ### 1.4 创建命令包装器
 
-- [ ] 新建 `extension/src/commands/commandWrapper.ts`
+- [x] 新建 `extension/src/commands/commandWrapper.ts`
   - `wrapCommand(fn)` — 统一 try/catch，取消时静默，其他走 `notify()`
 
 ### 1.5 逐步替换现有代码
 
 优先级（用户可见路径优先）：
 
-1. `extension.ts` 中 24 处 `vscode.window.showXxx` → `notify()`
-2. `sessionLoader.ts` 中 9 处
-3. `store/` 和 `transcript/` 中 `console.warn` → `agentLog.warn()`
-4. 20+ 个 bare `catch {}` 至少加 `agentLog.debug()`
+1. [x] `extension.ts` 中 19 处 `vscode.window.showXxx` → `notifyXxx()`（保留 1 处带选择按钮的 `showInformationMessage` 用于下载导出交互）
+2. [x] `sessionLoader.ts` 中 6 处 `showXxx` → `notifyXxx()`，7 处 `console.warn` → `agentLog`
+3. [x] `store/` 中 3 处 `console.warn` → `agentLog`
+4. [x] `transcript/` 中 9 处 `console.warn` → `agentLog`
+5. [x] `llm/` 中 2 处 `console.warn/info` → `agentLog`
+6. [ ] 20+ 个 bare `catch {}` 至少加 `agentLog.debug()`（后续随 ESLint `no-empty` 规则逐步补齐）
 
 ### 1.6 i18n 兼容
 
-- [ ] `notify()` 中的消息使用 `t()` / `uiTranslate()`
-- [ ] 新增错误消息 key 到 `bundle.l10n.json` + `bundle.l10n.zh-cn.json`
+- [x] `notify()` 中的消息使用 `t()` / `uiTranslate()`
+- [x] 新增错误消息 key `notify.unexpected` 到 `bundle.l10n.json` + `bundle.l10n.zh-cn.json`
 
 ---
 
