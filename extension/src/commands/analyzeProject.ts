@@ -30,6 +30,7 @@ import { mindMapLog } from "../webview/MindMapLog";
 import {
   toConceptMergeLlmOpts,
   buildProjectConceptMergeForBatch,
+  refreshSnapshotsForFreshSessions,
 } from "../batch/conceptMerge";
 import {
   applyPendingMergeToPanel,
@@ -234,16 +235,11 @@ export async function commandAnalyzeAndMergeCurrentProject(
               }
 
               const cached = info.skippedFresh;
-              agentLog.info(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} batchSessionIds=${info.batchSessionIds.join(",")}`);
+              agentLog.info(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} fresh=${info.freshlyAnalyzedSessionIds.length} batchSessionIds=${info.batchSessionIds.join(",")} freshSessionIds=${info.freshlyAnalyzedSessionIds.join(",")}`);
 
-              progress.report(
-                t(
-                  "ui.batch.progress.mergingConceptMap",
-                  "Merging concept mind map ({0}/{1} sessions): synonyms + root reparent…",
-                  info.processed,
-                  info.total
-                )
-              );
+              // Refresh in-memory record cache for every session in this
+              // batch (even cache hits — we still need their latest record
+              // for the "all records" set passed to merge / final refresh).
               for (const sessionId of info.batchSessionIds) {
                 if (signal.aborted) {
                   return;
@@ -258,6 +254,12 @@ export async function commandAnalyzeAndMergeCurrentProject(
               if (signal.aborted) {
                 return;
               }
+
+              // Pure-cache batch with an existing snapshot hierarchy: skip
+              // merge entirely. The on-disk concept-trie.json is still valid
+              // because nothing in the session set changed.
+              const noFreshSessions =
+                info.freshlyAnalyzedSessionIds.length === 0;
               const batchRecords: SessionRecord[] = [];
               for (const sessionId of info.batchSessionIds) {
                 const rec = projectRecordsById.get(sessionId);
@@ -265,28 +267,82 @@ export async function commandAnalyzeAndMergeCurrentProject(
                   batchRecords.push(rec);
                 }
               }
-              let conceptMerge;
+
+              let conceptMerge: import("../store/storeTypes").MergeRecord | undefined;
               try {
-                conceptMerge = await buildProjectConceptMergeForBatch(
-                  storeDir,
-                  [...projectRecordsById.values()],
-                  batchRecords,
-                  {
-                    projectSlug: slug,
-                    conceptLlm,
-                    provider,
-                    signal,
-                    progress,
-                    batchRefineOntology,
-                    batchNo: info.batchNo,
-                    processed: info.processed,
-                    total: info.total,
-                    forceReattach: true,
-                    mergeMode,
-                    mergeFullReconcileEvery,
-                    forceRefresh: mode.forceRefresh,
+                if (mode.forceRefresh) {
+                  // Force mode: keep the original full-batch rebuild path so
+                  // every session's leaf gets recomputed from scratch.
+                  conceptMerge = await buildProjectConceptMergeForBatch(
+                    storeDir,
+                    [...projectRecordsById.values()],
+                    batchRecords,
+                    {
+                      projectSlug: slug,
+                      conceptLlm,
+                      provider,
+                      signal,
+                      progress,
+                      batchRefineOntology,
+                      batchNo: info.batchNo,
+                      processed: info.processed,
+                      total: info.total,
+                      forceReattach: true,
+                      mergeMode,
+                      mergeFullReconcileEvery,
+                      forceRefresh: mode.forceRefresh,
+                    }
+                  );
+                } else if (noFreshSessions) {
+                  // All cache hits → no LLM merge needed. Read the existing
+                  // concept-trie merge record from disk so the panel stays
+                  // up to date when the user opens the panel mid-run.
+                  agentLog.info(
+                    `[onBatchDone] batch ${info.batchNo} all cache hits, skipping merge`
+                  );
+                  progress.report(
+                    t(
+                      "ui.batch.progress.cacheHitNoMerge",
+                      "Batch {0}/{1}: all sessions cached, skipping merge…",
+                      info.processed,
+                      info.total
+                    )
+                  );
+                  // Lazy-load existing merge for first cache-only batch only.
+                  if (!panel.getMindMapData()) {
+                    const { readMergeRecord, conceptTrieMergePath } =
+                      await import("../store/sessionStore");
+                    const existingMerge = await readMergeRecord(
+                      conceptTrieMergePath(storeDir)
+                    );
+                    if (existingMerge) {
+                      conceptMerge = existingMerge;
+                    }
                   }
-                );
+                } else {
+                  // Incremental: refresh only the snapshot leaves whose
+                  // sessions actually changed, then cascade up.
+                  progress.report(
+                    t(
+                      "ui.batch.progress.incrementalMerge",
+                      "Updating snapshots for {0} changed session(s)…",
+                      info.freshlyAnalyzedSessionIds.length
+                    )
+                  );
+                  conceptMerge = await refreshSnapshotsForFreshSessions(
+                    storeDir,
+                    [...projectRecordsById.values()],
+                    info.freshlyAnalyzedSessionIds,
+                    {
+                      projectSlug: slug,
+                      conceptLlm,
+                      provider,
+                      signal,
+                      progress,
+                      llmTimeoutMs: conceptLlm.timeoutMs,
+                    }
+                  );
+                }
               } catch (err) {
                 if (signal.aborted) {
                   return;
@@ -307,6 +363,25 @@ export async function commandAnalyzeAndMergeCurrentProject(
                   ),
                   err
                 );
+                return;
+              }
+
+              // No new merge produced (e.g. cache-only batch with panel
+              // already showing data) → still update batch status.
+              if (!conceptMerge) {
+                setLastBatchStatus({
+                  total: info.total,
+                  processed: info.processed,
+                  analyzed: info.analyzed,
+                  cached,
+                  failed: info.failed,
+                  batchNo: info.batchNo,
+                  running: true,
+                  ...(autoApplyUpdates
+                    ? {}
+                    : { pendingUpdateBatchNo: getPendingBatchNo() }),
+                });
+                panel.setBatchStatus(getLastBatchStatus()!);
                 return;
               }
 
@@ -406,7 +481,12 @@ export async function commandAnalyzeAndMergeCurrentProject(
           projectRecordsById.size > 0 &&
           !signal.aborted &&
           batchRefineOntology &&
-          batchFinalRefine
+          batchFinalRefine &&
+          // Skip the DET-only final refresh when the entire run was a cache
+          // hit (no sessions re-analyzed): the existing concept-trie.json
+          // already reflects the current session set, and rebuilding it
+          // would just rewrite the same content.
+          !(result.skippedFresh === result.analyzed && result.failed === 0 && !mode.forceRefresh)
         ) {
           const batchRecords = [...projectRecordsById.values()];
           progress.report(

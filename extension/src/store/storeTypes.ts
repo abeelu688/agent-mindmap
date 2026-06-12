@@ -63,8 +63,18 @@ export type SessionRecordMeta = {
   transcriptPath: string;
   /** Filesystem mtime when the analysis was performed. */
   transcriptMtimeMs: number;
-  /** SHA-256 of transcript file content; primary "freshness" key. */
-  transcriptSha256: string;
+  /**
+   * Token used to decide whether the cached analysis is still fresh for the
+   * current transcript. Currently the count of user/assistant/tool events
+   * returned by `parseTranscript()` (as a decimal string) — monotonically
+   * grows with real conversation, ignoring metadata-only appends like
+   * `mode` / `ai-title` / `file-history-snapshot` that Claude Code writes
+   * on session resume.
+   *
+   * Stored as a string to leave room for future composite tokens (e.g.
+   * `count:lastTimestamp`).
+   */
+  transcriptFreshnessToken: string;
   /** Unix epoch ms the analysis was produced. */
   analyzedAt: number;
   /** LLM provider id + model used for analysis. */

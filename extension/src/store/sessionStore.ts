@@ -154,7 +154,16 @@ function isSessionRecord(value: unknown): value is SessionRecord {
   if (
     typeof meta.sessionId !== "string" ||
     typeof meta.projectSlug !== "string" ||
-    typeof meta.transcriptPath !== "string" ||
+    typeof meta.transcriptPath !== "string"
+  ) {
+    return false;
+  }
+  // Accept either the new `transcriptFreshnessToken` field or the legacy
+  // `transcriptSha256` for backward compatibility — old records will mismatch
+  // on first run after upgrade and trigger a one-time re-analysis to migrate
+  // to the new field.
+  if (
+    typeof meta.transcriptFreshnessToken !== "string" &&
     typeof meta.transcriptSha256 !== "string"
   ) {
     return false;
@@ -163,6 +172,14 @@ function isSessionRecord(value: unknown): value is SessionRecord {
     return false;
   }
   return true;
+}
+
+/** Read freshness token, falling back to legacy `transcriptSha256` for old records. */
+export function recordFreshnessToken(record: SessionRecord): string {
+  const meta = record.meta as SessionRecord["meta"] & {
+    transcriptSha256?: string;
+  };
+  return meta.transcriptFreshnessToken ?? meta.transcriptSha256 ?? "";
 }
 
 function ensureRecordGraph(record: SessionRecord): SessionRecord {
@@ -356,13 +373,14 @@ export async function rebuildIndex(
  * Decide whether a stored record is fresh enough to skip re-analysis.
  *
  * Re-analyze when transcript content, prompt parameters, prompt schema
- * version, or model change. `transcriptSha256` is the authoritative key;
- * `transcriptMtimeMs` is only a cheap pre-check and we never trust it alone.
+ * version, or model change. `transcriptFreshnessToken` is the authoritative
+ * key (currently a count of parsed events); `transcriptMtimeMs` is only a
+ * cheap pre-check and we never trust it alone.
  */
 export function isRecordFresh(
   record: SessionRecord,
   current: {
-    transcriptSha256: string;
+    transcriptFreshnessToken: string;
     promptParams: { maxTopics: number; maxItemsPerTopic: number };
     promptVersion: number;
     pipelineVersions?: PipelineVersions;
@@ -370,7 +388,7 @@ export function isRecordFresh(
     hostId?: string;
   }
 ): boolean {
-  if (record.meta.transcriptSha256 !== current.transcriptSha256) {
+  if (recordFreshnessToken(record) !== current.transcriptFreshnessToken) {
     return false;
   }
   if (

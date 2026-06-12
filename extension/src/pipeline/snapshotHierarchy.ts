@@ -26,6 +26,7 @@ import type {
   SnapshotNode,
 } from "../store/storeTypes";
 import { runMergePipeline } from "./mergePipeline";
+import { tryReuseBatchMerge } from "./batchMergeCache";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import type { FinalizedSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
@@ -661,6 +662,29 @@ export async function runBatchSnapshotPipeline(
   opts: RunBatchSnapshotPipelineOpts,
   progress?: MindMapProgress
 ): Promise<MergeRecord> {
+  // Cache short-circuit: when nothing about the session set has changed since
+  // the last successful merge (same sessionIds + transcriptShas + provider/
+  // model + prompt versions), reuse the existing concept-trie merge instead
+  // of re-running the M-merge LLM and rebuilding the snapshot hierarchy.
+  const cached = await tryReuseBatchMerge({
+    storeDir: opts.storeDir,
+    projectSlug: opts.projectSlug,
+    allRecords: filterRealSessionRecords(opts.allRecords),
+    llm: {
+      providerId: opts.providerId,
+      model: opts.model,
+      hostId: opts.hostId,
+    },
+  });
+  if (cached.hit) {
+    progress?.report("Concept merge cache hit, skipping LLM merge…");
+    mindMapLog(
+      `[runBatchSnapshotPipeline] cache hit: reusing concept-trie.json for ${opts.allRecords.length} session(s)`
+    );
+    return cached.merge;
+  }
+  mindMapLog(`[runBatchSnapshotPipeline] cache miss: ${cached.reason}`);
+
   try {
     await runLeafSnapshotMerge(opts, progress);
   } catch (err) {

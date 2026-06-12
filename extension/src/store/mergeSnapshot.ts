@@ -253,7 +253,7 @@ export function findParentNode(
   return manifest.nodes.find((n) => n.childIds.includes(childId));
 }
 
-/** Delete manifest, snapshots dir, and root merge-snapshot.json. */
+/** Delete manifest, snapshots dir, root merge-snapshot.json, and concept-trie merge record. */
 export async function deleteSnapshotHierarchy(
   storeDir: string,
   projectSlug: string
@@ -269,6 +269,13 @@ export async function deleteSnapshotHierarchy(
       recursive: true,
       force: true,
     });
+  } catch {
+    // missing is fine
+  }
+  // Also drop the cross-project concept-trie merge record so a stale cached
+  // mind map cannot be reused after a force refresh of this project.
+  try {
+    await fs.unlink(path.join(storeDir, STORE_LAYOUT.conceptTrieFile));
   } catch {
     // missing is fine
   }
@@ -563,7 +570,7 @@ export function snapshotToSessionRecord(
     projectSlug: snapshot.meta.projectSlug,
     transcriptPath: "",
     transcriptMtimeMs: 0,
-    transcriptSha256: "merge-snapshot",
+    transcriptFreshnessToken: "merge-snapshot",
     llm: { provider: "snapshot" },
     promptParams: { maxTopics: 8, maxItemsPerTopic: 8 },
     sessionLabel: snapshot.meta.snapshotId
