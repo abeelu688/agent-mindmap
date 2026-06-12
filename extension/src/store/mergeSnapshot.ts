@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { agentLog } from "../log";
 import { writeJsonAtomic } from "./atomicWrite";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
@@ -113,7 +114,7 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
     return JSON.parse(raw) as T;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(`[agent-mindmap] failed to read ${filePath}:`, err);
+      agentLog.warn(`Failed to read ${filePath}`, { error: String(err) });
     }
     return undefined;
   }

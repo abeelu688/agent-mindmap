@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { agentLog } from "../log";
 import {
   clearStateDbBackend,
   getStateDbValue,
@@ -147,7 +148,7 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
       titles.set(id, trimmed);
     }
   } catch (err) {
-    console.warn("[agent-mindmap] failed to parse Cursor state.vscdb:", err);
+    agentLog.error("Failed to parse Cursor state.vscdb", err);
     // Fall through to cache an empty map so we don't retry on every call.
   }
 
@@ -407,7 +408,7 @@ export async function loadAgentProjects(): Promise<{
       }
     }
   } catch (err) {
-    console.warn("[agent-mindmap] loadAgentProjects failed:", err);
+    agentLog.error("loadAgentProjects failed", err);
   }
 
   agentProjectsCache = {
@@ -453,7 +454,7 @@ export async function findKeysReferencingComposer(
       }
     }
   } catch (err) {
-    console.warn("[agent-mindmap] findKeysReferencingComposer failed:", err);
+    agentLog.error("findKeysReferencingComposer failed", err);
   }
   return hits;
 }
@@ -508,7 +509,7 @@ export async function inspectComposerHeader(
       rawHeader: parsed,
     };
   } catch (err) {
-    console.warn("[agent-mindmap] inspectComposerHeader failed:", err);
+    agentLog.error("inspectComposerHeader failed", err);
     return empty;
   }
 }
@@ -527,7 +528,7 @@ export async function readStateDbKey(key: string): Promise<string | undefined> {
       if (typeof value === "string") return value;
     }
   } catch (err) {
-    console.warn(`[agent-mindmap] readStateDbKey(${key}) failed:`, err);
+    agentLog.error(`readStateDbKey(${key}) failed`, err);
   }
   return undefined;
 }
@@ -562,7 +563,7 @@ export async function listAgentRelatedKeys(): Promise<
       }
     }
   } catch (err) {
-    console.warn("[agent-mindmap] listAgentRelatedKeys failed:", err);
+    agentLog.error("listAgentRelatedKeys failed", err);
   }
   return out;
 }

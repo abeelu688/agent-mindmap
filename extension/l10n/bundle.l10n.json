@@ -150,5 +150,6 @@
   "ui.selectModel.placeholder": "Select a model for LLM requests",
   "ui.selectModel.custom.label": "Custom model name…",
   "ui.selectModel.custom.placeholder": "Model name (e.g. claude-sonnet-4-6)",
-  "ui.selectModel.applied": "Agent Mind Map: Model set to {0}."
+  "ui.selectModel.applied": "Agent Mind Map: Model set to {0}.",
+  "notify.unexpected": "Agent Mind Map: An unexpected error occurred: {0}"
 }
