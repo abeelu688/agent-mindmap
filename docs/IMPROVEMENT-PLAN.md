@@ -1,5 +1,9 @@
 # Agent Mind Map — Improvement Plan
 
+> **Language**: 中文 · [English version pending — see roadmap.](#)
+>
+> 本文档为开源协作路线图。如需翻译为英文，请遵循 [CONTRIBUTING.zh-cn.md](../CONTRIBUTING.zh-cn.md) 中的"添加新语言"流程，并对照 [CONTRIBUTING.md](../CONTRIBUTING.md) 确认贡献规范。
+
 > 目标：将项目推进到可开源发布的状态——代码质量、工程化、国际化、社区协作基础设施全部就位。
 
 ---
@@ -132,42 +136,60 @@ extension/src/batch/
 
 ### 3.1 ESLint 配置
 
-- [ ] 安装：`@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-import`, `eslint-config-prettier`
-- [ ] `.eslintrc.json` 核心规则：
-  - `no-empty: error` — 禁止 bare catch（现有 20+ 处）
+- [x] 安装 ESLint 9 (flat config) + `typescript-eslint` 8 + `eslint-plugin-import` + `eslint-config-prettier`
+- [x] `eslint.config.mjs` flat config，包含核心规则：
+  - `no-empty: warn` — 禁止 bare catch（现有 20+ 处先标 warn，逐步收紧）
   - `no-console: warn` — 统一走 agentLog
-  - `@typescript-eslint/no-unused-vars: warn`
-  - `import/order: warn`
-  - `@typescript-eslint/explicit-function-return-type: off`（暂不强求）
-- [ ] 现有违规先标 `warn`，新代码 `error`，逐步收紧
-- [ ] `package.json` 加 `lint` / `lint:fix` scripts
+  - `@typescript-eslint/no-unused-vars: warn` — 允许 `_` 前缀
+  - `import/order: warn` — 分组排序 builtin → external → internal → parent → sibling → index → type
+  - `@typescript-eslint/consistent-type-imports: warn` — 推动 `import type`
+  - `@typescript-eslint/no-explicit-any: warn`
+  - `@typescript-eslint/no-unsafe-function-type: warn` — 禁止裸 `Function` 类型
+  - `prefer-const: warn`
+- [x] 现有违规全部 warn 级（**0 errors, 280 warnings**），新代码逐步收紧
+- [x] `package.json` 加 `lint` / `lint:fix` scripts
+- [x] test 文件放宽规则（mocks/类型断言常见）
 
 ### 3.2 Prettier 配置
 
-- [ ] `.prettierrc`：`{ "singleQuote": true, "trailingComma": "es5", "printWidth": 100 }`
-- [ ] `package.json` 加 `format` / `format:check` scripts
-- [ ] 一次性 `npm run format` 全量格式化，独立提交
+- [x] `.prettierrc.json`：`semi: true, singleQuote: false, trailingComma: "es5", printWidth: 100`
+- [x] `.prettierignore` — 排除 dist、node_modules、l10n bundle JSON、LLM dumps 等
+- [x] `package.json` 加 `format` / `format:check` scripts
+- [ ] 一次性 `npm run format` 全量格式化（**187 文件待格式化**，独立 PR）— 暂不执行避免 git diff 噪音
 
 ### 3.3 GitHub Actions CI
 
-- [ ] `.github/workflows/ci.yml`
+- [x] `.github/workflows/ci.yml`
   - 触发：push to main + PR
-  - Steps：checkout → node 20 → npm install → `tsc --noEmit` → `npm run lint` → `npm run format:check` → `npm run build` → `npm run test:vitest` → `npm test` → `npm run check:concept-nodes`
-- [ ] `.github/workflows/release.yml`（可选）
-  - 触发：tag `v*`
-  - Steps：build → `vsce package` → upload artifact / publish to marketplace
+  - Strict steps（必须通过）：`check:concept-nodes` → `build` → `test:vitest` → `test`
+  - Soft steps（`continue-on-error`，目前仅警告）：`lint`、`format:check`、`typecheck:extension`、`typecheck:webview`
+  - 缓存 npm — root + extension + webview
+- [ ] `.github/workflows/release.yml`（Phase 5 处理）
 
 ### 3.4 Pre-commit Hook
 
-- [ ] 安装 `husky` + `lint-staged`
-- [ ] `.husky/pre-commit` → `npx lint-staged`
-- [ ] `lint-staged` 配置：只对 staged `.ts` 文件跑 eslint --fix + prettier --write
+- [x] 安装 `husky` v9 + `lint-staged` v15
+- [x] `.husky/pre-commit` → `npx lint-staged`
+- [x] `lint-staged` 配置：staged `.ts` 跑 eslint --fix + prettier --write；`.json/.md/.yml` 跑 prettier --write
+- [x] `prepare` script 自动安装 husky hooks
 
 ### 3.5 Type Check 独立步骤
 
-- [ ] esbuild 不做类型检查，CI 中单独跑 `tsc --noEmit`
-- [ ] `package.json` 加 `typecheck` script
-- [ ] webview 也加 `tsc --noEmit`（如有 tsconfig）
+- [x] CI 中单独跑 `tsc --noEmit`（esbuild 不做类型检查）
+- [x] `package.json` 加 `typecheck` / `typecheck:extension` / `typecheck:webview` scripts
+- [x] webview 新增 `tsconfig.json`（之前缺失）
+- [x] 加 `check` 综合脚本：typecheck + lint + format:check + check:concept-nodes
+- ⚠️ **现状**：extension 49 个 + webview 17 个预存类型错误，`continue-on-error` 暂不阻断 CI；逐步修复列入 Phase 4 待办
+
+### 3.6 已知失败（非本 Phase 引入）
+
+`npm run test:vitest` 现有 3 个测试失败，全部为预先存在问题：
+
+- `sessionStore.test.ts > isRecordFresh detects transcript / param / model / promptVersion changes` — 上游 commit `2cb43f2` 改了 `transcriptSha256` → `transcriptFreshnessToken` API，测试未同步
+- `workspaceToSlug.test.ts > decodes windows slugs with drive letter`
+- `reattachTimeout.test.ts > scaleMergeSessionAnalysisTimeoutMs > adds slot for large prompts`
+
+这些不阻断 CI，列入 Phase 4 后续清理。
 
 ---
 
@@ -177,75 +199,62 @@ extension/src/batch/
 
 ### 4.1 UI 通知 i18n（已有基础，需扩展）
 
-现状：`bundle.l10n.json`（英文）+ `bundle.l10n.zh-cn.json`（中文）共 154 条。
+现状：`bundle.l10n.json`（英文，153 条）+ `bundle.l10n.zh-cn.json`（中文，153 条）。
 
-- [ ] 审计所有 `t()` / `uiTranslate()` 调用，确保 key 与 bundle 一致
-- [ ] 补充 Phase 1 新增的错误消息 key
-- [ ] 新增语言包结构规范：
+- [x] 审计所有 `t()` / `uiTranslate()` 调用，确认 key 与 bundle 一致 — `npm run check:l10n` 通过
+- [x] Phase 1 新增的错误消息 key (`notify.unexpected`) 已同步两份 bundle
+- [x] 新增语言包占位文件：
   ```
   extension/l10n/
-  ├── bundle.l10n.json          ← 英文（基准）
-  ├── bundle.l10n.zh-cn.json    ← 简体中文
-  ├── bundle.l10n.ja.json       ← 日文（社区贡献）
-  └── bundle.l10n.ko.json       ← 韩文（社区贡献）
+  ├── bundle.l10n.json          ← 英文（基准，153 keys）
+  ├── bundle.l10n.zh-cn.json    ← 简体中文（153 keys，全量同步）
+  ├── bundle.l10n.ja.json       ← 日文（占位，社区贡献）
+  └── bundle.l10n.ko.json       ← 韩文（占位，社区贡献）
   ```
-- [ ] `uiTranslate()` 支持多语言 fallback chain：指定语言 → VS Code 语言 → 英文
-- [ ] `agentMindmap.ui.locale` setting 扩展 enum：`auto | en | zh-cn | ja | ko`
-- [ ] 贡献者指南说明如何添加新语言包
+- [x] `uiTranslate()` 支持多语言 fallback chain：指定语言 → VS Code 语言 → 英文 — 见 [`uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts) 中的 `BUNDLES` map + `resolveUiLocale()`
+- [x] `agentMindmap.ui.locale` enum 扩展为：`auto | en | zh-cn | ja | ko`
+- [x] 新增 `agentMindmap.llm.promptLanguage` setting（`auto | en | zh`），独立于 UI locale 控制 prompt 语言
+- [x] 贡献者指南说明如何添加新语言包 — 见 [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-ui-language)
 
-### 4.2 LLM Prompt i18n（当前全部硬编码中文）
+### 4.2 LLM Prompt i18n（搭建框架 + 单文件示范）
 
-现状：12 个 prompt 文件中 16 处硬编码中文（"你是会话大纲分析助手"、"请把整段对话翻译成" 等）。
+> 策略：搭好 framework + 改造一个 prompt 作为 reference，其余 11 个 prompt 留作社区贡献项。直译 prompt 可能让 LLM 输出质量下降，必须配合 eval 流水线逐个验证。
 
-- [ ] 将每个 prompt 文件中的固定文字抽为 `promptTexts[language]` 结构：
-  ```typescript
-  // llm/prompts/texts/sessionOutline.ts
-  export const sessionOutlineTexts: Record<PromptLanguage, SessionOutlineTexts> = {
-    zh: {
-      systemRole: "你是会话大纲分析助手。下面是 {chatLabel} 聊天记录（已脱敏）…",
-      titleHint: "title: 5-15 字名词性短语，整段总主题",
-      // ...
-    },
-    en: {
-      systemRole: "You are a session outline analysis assistant. Below is a {chatLabel} chat transcript (sanitized)…",
-      titleHint: "title: 5-15 character noun phrase, overall theme",
-      // ...
-    },
-  };
-  ```
-- [ ] `PromptLanguage` 类型扩展为 `"zh" | "en" | "ja" | "ko"`（LLM 对中英日韩都有不错支持）
-- [ ] `promptLanguage` 自动推断逻辑：
-  1. 用户 setting `agentMindmap.llm.promptLanguage`（新增）
-  2. 若 `auto`：跟随 `ui.locale`
-  3. 默认 `"zh"`（保持向后兼容）
-- [ ] 优先改造 3 个最常用的 prompt：
-  1. `promptSessionAnalysis.ts`（S1 主 prompt）
-  2. `promptOrganizeByTree.ts`（S2 大纲组织）
-  3. `promptOutline.ts`（fallback 路径）
-- [ ] 其余 prompt 逐步迁移，旧 prompt 只留中文、新 prompt 双语
-- [ ] 增加 prompt i18n 的测试用例（确保英文 prompt 输出的 JSON schema 不变）
+- [x] `PromptLanguage` 类型保持 `"zh" | "en"`（不扩展为 ja/ko —— LLM 输出 JSON 是机器可读的，UI 语言扩展即可，prompt 输入语言无需逐一对应）
+- [x] [`promptLanguage.ts`](../extension/src/llm/promptLanguage.ts) 新增 `resolvePromptLanguage()`：
+  1. `agentMindmap.llm.promptLanguage` 显式设置优先
+  2. `auto` → 跟随 `ui.locale`：`zh-cn` → `zh`，其他 → `zh`（暂保持向后兼容；待英文 prompt 全部稳定后切到 `en`）
+- [x] 改造 [`promptOutline.ts`](../extension/src/llm/promptOutline.ts) 作为 reference：
+  - 抽取 `TEXTS: Record<PromptLanguage, OutlinePromptStrings>`
+  - `buildOutlinePrompt(events, options, hostId, promptLanguage)` 已支持新参数
+  - JSON schema 标记跨语言保持完全一致
+- [ ] 待迁移的其他 prompt（社区贡献项）：
+  - `promptSessionAnalysis.ts`（S1 主 prompt）
+  - `promptOrganizeByTree.ts`（S2 大纲组织）
+  - `promptMergeSessionAnalysis.ts`、`promptOntology.ts`、`promptOntologyRefine.ts`、`promptReattach.ts`、`promptReattachTabular.ts`、`promptSessionExtract.ts`、`promptSessionSynonyms.ts`、`promptTopicPaths.ts`、`promptMerge.ts`
+- [ ] 测试用例：用 fixture transcript 验证 `zh` 和 `en` prompt 输出 schema 一致（添加到 `test/promptOutline.test.ts`）— 等任意一个 prompt 完成英文化后再加
 
 ### 4.3 项目文档 i18n
 
-- [ ] README 多语言体系：
+- [x] README 多语言体系：
   ```
-  README.md              ← 英文（主）
-  README.zh-cn.md        ← 简体中文
+  README.md              ← 英文（Phase 0 完成）
+  README.zh-cn.md        ← 简体中文（Phase 0 完成）
+  CONTRIBUTING.md        ← 英文（Phase 0 完成 + Phase 4 扩展 i18n 段落）
+  CONTRIBUTING.zh-cn.md  ← 简体中文（Phase 4 新增）
   docs/
-  ├── CONTRIBUTING.md              ← 英文
-  ├── CONTRIBUTING.zh-cn.md        ← 简体中文
-  ├── IMPROVEMENT-PLAN.md          ← 英文
-  └── IMPROVEMENT-PLAN.zh-cn.md    ← 简体中文
+  └── IMPROVEMENT-PLAN.md ← 中文（暂不双语化，路线图本身随时变动）
   ```
-- [ ] 每份文档顶部加语言切换链接
-- [ ] 英文 README 内容：保持与中文版同步的核心信息，措辞本地化（不要直译）
-- [ ] 在 README 中明确说明 "LLM prompt 语言跟随 UI 设置" 以及如何切换
+- [x] 每份文档顶部加跨语言链接：README、CONTRIBUTING 互链
+- [x] 英文 README 在 Phase 0 已完成本地化措辞（非直译）
+- [x] CONTRIBUTING 中文版扩展了"添加新语言"+"翻译 LLM prompt"详细流程
 
 ### 4.4 i18n 贡献流程
 
-- [ ] `CONTRIBUTING.md` 增加 "Adding a new language" 段落
-- [ ] 提供模板文件：`docs/i18n-template.md`（翻译 checklist）
-- [ ] CI 中可选步骤：检查 `bundle.l10n.*.json` 的 key 集合是否与基准一致
+- [x] `CONTRIBUTING.md` 与 `CONTRIBUTING.zh-cn.md` 都包含完整的"Adding a new language" + "Translating LLM Prompts"段落
+- [x] [`scripts/check-l10n-keys.mjs`](../scripts/check-l10n-keys.mjs) — 检查 locale bundle key 集合与英文基准一致；空占位 bundle（仅含 `_comment`）豁免，运行时会 fallback 到英文
+- [x] CI strict step 加入 `npm run check:l10n`
+- [x] `package.json` 加 `check:l10n` script，并纳入综合 `check` 命令
 
 ---
 
@@ -287,15 +296,15 @@ extension/src/batch/
 
 ## 时间线总览
 
-| Day | Phase | 关键产出 |
-|:---:|-------|---------|
-| 1 | Phase 0 | 开源基础文件 + README 双语 + badge |
-| 2 | Phase 1 | errors.ts + log.ts + notify.ts + wrapCommand |
-| 3 | Phase 2 | commands/ + batch/ 拆分，extension.ts ≤150行 |
-| 4 | Phase 3 | ESLint + Prettier + GitHub Actions + pre-commit |
-| 5 | Phase 4.1-4.2 | UI i18n 扩展 + Prompt i18n 核心三件 |
-| 6 | Phase 4.3-4.4 | 文档 i18n + i18n 贡献流程 |
-| 7 | Phase 5 | Issue/PR 模板 + 架构文档 + v0.2.0 发布 |
+| Day | Phase         | 关键产出                                        |
+| :-: | ------------- | ----------------------------------------------- |
+|  1  | Phase 0       | 开源基础文件 + README 双语 + badge              |
+|  2  | Phase 1       | errors.ts + log.ts + notify.ts + wrapCommand    |
+|  3  | Phase 2       | commands/ + batch/ 拆分，extension.ts ≤150行    |
+|  4  | Phase 3       | ESLint + Prettier + GitHub Actions + pre-commit |
+|  5  | Phase 4.1-4.2 | UI i18n 扩展 + Prompt i18n 核心三件             |
+|  6  | Phase 4.3-4.4 | 文档 i18n + i18n 贡献流程                       |
+|  7  | Phase 5       | Issue/PR 模板 + 架构文档 + v0.2.0 发布          |
 
 ---
 

@@ -8,14 +8,43 @@
     "build:webview": "npm run build --prefix webview",
     "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
     "test": "npm run build --prefix extension && npm run test --prefix extension",
-    "check:concept-nodes": "node scripts/check-hardcoded-concept-nodes.mjs",
     "test:vitest": "vitest run",
+    "lint": "eslint \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
+    "lint:fix": "eslint --fix \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\" \"*.md\" \"docs/**/*.md\"",
+    "format:check": "prettier --check \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "npm run typecheck:extension && npm run typecheck:webview",
+    "typecheck:extension": "tsc --noEmit --project extension/tsconfig.json",
+    "typecheck:webview": "tsc --noEmit --project webview/tsconfig.json",
+    "check:concept-nodes": "node scripts/check-hardcoded-concept-nodes.mjs",
+    "check:l10n": "node scripts/check-l10n-keys.mjs",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run check:concept-nodes && npm run check:l10n",
     "eval": "npm run build --prefix extension && node extension/dist/eval-run.js",
     "eval:fixtures:export": "node test/eval/export-aosp14-fixtures.mjs",
     "package": "npm run build && npm run package --prefix extension",
-    "package:vsix": "bash scripts/package-vsix.sh"
+    "package:vsix": "bash scripts/package-vsix.sh",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "eslint": "9.39.4",
+    "eslint-config-prettier": "9.1.2",
+    "eslint-import-resolver-typescript": "3.10.1",
+    "eslint-plugin-import": "2.32.0",
+    "husky": "9.1.7",
+    "lint-staged": "15.5.2",
+    "prettier": "3.8.4",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "8.61.0",
     "vitest": "^2.1.9"
   }
 }

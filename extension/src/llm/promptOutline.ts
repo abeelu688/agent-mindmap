@@ -1,6 +1,7 @@
+import { __testing as promptTesting } from "./prompt";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
-import { __testing as promptTesting } from "./prompt";
+import type { PromptLanguage } from "./promptLanguage";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -8,7 +9,9 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /**
- * Bump whenever {@link buildOutlinePrompt} changes the LLM JSON schema.
+ * Bump whenever {@link buildOutlinePrompt} changes the LLM JSON schema
+ * (text-only language tweaks do NOT require a bump — they don't change
+ * the output shape, only the way the model arrives at it).
  *
  * @deprecated Primary session path uses {@link runSessionPipeline} +
  * {@link buildOrganizeByTreePrompt} (S4). Kept for tests and `groupTurns` helpers.
@@ -22,10 +25,81 @@ export type OutlinePromptOptions = {
 
 const { groupTurns, renderTurns } = promptTesting;
 
+// ─── Localized prompt text ──────────────────────────────────────────────────
+//
+// Each entry mirrors the original Chinese template line-for-line so the
+// LLM's JSON output schema stays identical across languages. When adding a
+// new language, run the eval pipeline (`npm run eval`) to verify the model
+// still produces well-formed JSON — see CONTRIBUTING.md.
+
+type OutlinePromptStrings = {
+  intro: (chatLabel: string) => string;
+  taskHeader: string;
+  bullets: (maxBranches: number, maxDetails: number) => string[];
+  outputHeader: string;
+  schemaExample: string;
+  separator: string;
+  emptyTranscript: string;
+};
+
+const TEXTS: Record<PromptLanguage, OutlinePromptStrings> = {
+  zh: {
+    intro: (chatLabel) =>
+      `你是会话大纲分析助手。下面是 ${chatLabel} 聊天记录（已脱敏），段标记 [Q#]/[T#]/[A#]。`,
+    taskHeader: "请把整段对话翻译成【分级大纲 + 叶子细节】：",
+    bullets: (maxBranches, maxDetails) => [
+      "- title: 5-15 字名词性短语，整段总主题（思维导图根，不含日期/ID）",
+      "- summary: ≤50 字一句话，可省",
+      `- outline: 2-4 层分级标题树，顶层 2-${maxBranches} 条分支`,
+      "  - 中间层节点只有 title / summary / children，不要放 details",
+      "  - 最细一层节点放 details[]（叶子细节），每条 ≤40 字",
+      `  - 每个有 details 的节点 1-${maxDetails} 条细节`,
+      "  - 有 details 的节点必须写 summary（≤50 字），作为跨会话 Concept Mind Map 该子话题的概括标题",
+      "- 有 details 的节点另附 conceptPath: 3-5 段，从最泛领域到最细概念（小写英文/通用术语），用于跨会话 Concept Mind Map 聚类；单会话图不显示",
+      '  - conceptPath 最后一段应对应本条 details 的子话题/子概念（例：useState vs useReducer → …,"use-state" / …,"use-reducer"），便于同父概念下按子概念分列',
+      '  例：「React Hooks 入门」→ ["frontend","react","hooks"]；「Vite 构建优化」→ ["frontend","tooling","vite","build"]；须据本对话实际领域归纳，禁止照抄与内容无关的示例路径',
+      "- details 若引用【本 transcript 内】某轮用户提问，附 sourceTurnIndices（0-based，[Q1]→0、[Q2]→1）",
+      "- 禁止把助理回复里提到的其他会话轮次写入 sourceTurnIndices",
+    ],
+    outputHeader:
+      "只输出严格 JSON，不要 markdown / 解释 / ```；禁止在 JSON 前或后输出任何说明文字（含中文）：",
+    schemaExample:
+      '{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","conceptPath":["frontend","react","hooks"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}',
+    separator: "===",
+    emptyTranscript: "(空会话)",
+  },
+  en: {
+    intro: (chatLabel) =>
+      `You are a session outline analysis assistant. Below is a ${chatLabel} chat transcript (sanitized). Segment markers: [Q#]/[T#]/[A#].`,
+    taskHeader: "Translate the conversation into a [hierarchical outline + leaf details]:",
+    bullets: (maxBranches, maxDetails) => [
+      "- title: 5-15 character noun phrase, the overall theme (mind map root; no dates/IDs)",
+      "- summary: ≤50 chars one-line summary (optional)",
+      `- outline: 2-4 level hierarchy, with 2-${maxBranches} top-level branches`,
+      "  - intermediate nodes have only title / summary / children — no details",
+      "  - leaf nodes carry details[] (leaf details), each ≤40 chars",
+      `  - each node with details has 1-${maxDetails} entries`,
+      "  - any node with details MUST have a summary (≤50 chars) — used as the cross-session Concept Mind Map sub-topic title",
+      "- nodes with details also carry conceptPath: 3-5 segments from broadest domain to finest concept (lowercase English / common terms), used for cross-session Concept Mind Map clustering; not rendered in single-session view",
+      '  - conceptPath\'s last segment should correspond to this details subtopic (e.g., useState vs useReducer → …,"use-state" / …,"use-reducer") so siblings under the same parent split by sub-concept',
+      '  Examples: "React Hooks intro" → ["frontend","react","hooks"]; "Vite build optimization" → ["frontend","tooling","vite","build"]. Derive from the actual conversation domain — do NOT copy unrelated example paths.',
+      "- when details references a user turn within THIS transcript, attach sourceTurnIndices (0-based: [Q1]→0, [Q2]→1)",
+      "- do NOT include turn indices from other sessions mentioned in assistant replies",
+    ],
+    outputHeader:
+      "Output STRICT JSON only — no markdown, no explanation, no ``` fences; no prose before or after the JSON:",
+    schemaExample:
+      '{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","conceptPath":["frontend","react","hooks"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}',
+    separator: "===",
+    emptyTranscript: "(empty session)",
+  },
+};
+
 export function buildOutlinePrompt(
   events: ChatEvent[],
   options: OutlinePromptOptions,
-  hostId: AgentHostId = "cursor"
+  hostId: AgentHostId = "cursor",
+  promptLanguage: PromptLanguage = "zh"
 ): string {
   const chatLabel = HOST_CHAT_LABELS[hostId];
   const turns = groupTurns(events);
@@ -33,27 +107,17 @@ export function buildOutlinePrompt(
   const maxBranches = Math.max(1, options.maxBranches);
   const maxDetails = Math.max(1, options.maxDetailsPerNode);
 
+  const text = TEXTS[promptLanguage];
   return [
-    `你是会话大纲分析助手。下面是 ${chatLabel} 聊天记录（已脱敏），段标记 [Q#]/[T#]/[A#]。`,
-    "请把整段对话翻译成【分级大纲 + 叶子细节】：",
-    "- title: 5-15 字名词性短语，整段总主题（思维导图根，不含日期/ID）",
-    "- summary: ≤50 字一句话，可省",
-    `- outline: 2-4 层分级标题树，顶层 2-${maxBranches} 条分支`,
-    "  - 中间层节点只有 title / summary / children，不要放 details",
-    "  - 最细一层节点放 details[]（叶子细节），每条 ≤40 字",
-    `  - 每个有 details 的节点 1-${maxDetails} 条细节`,
-    "  - 有 details 的节点必须写 summary（≤50 字），作为跨会话 Concept Mind Map 该子话题的概括标题",
-    "- 有 details 的节点另附 conceptPath: 3-5 段，从最泛领域到最细概念（小写英文/通用术语），用于跨会话 Concept Mind Map 聚类；单会话图不显示",
-    "  - conceptPath 最后一段应对应本条 details 的子话题/子概念（例：useState vs useReducer → …,\"use-state\" / …,\"use-reducer\"），便于同父概念下按子概念分列",
-    "  例：「React Hooks 入门」→ [\"frontend\",\"react\",\"hooks\"]；「Vite 构建优化」→ [\"frontend\",\"tooling\",\"vite\",\"build\"]；须据本对话实际领域归纳，禁止照抄与内容无关的示例路径",
-    "- details 若引用【本 transcript 内】某轮用户提问，附 sourceTurnIndices（0-based，[Q1]→0、[Q2]→1）",
-    "- 禁止把助理回复里提到的其他会话轮次写入 sourceTurnIndices",
+    text.intro(chatLabel),
+    text.taskHeader,
+    ...text.bullets(maxBranches, maxDetails),
     "",
-    "只输出严格 JSON，不要 markdown / 解释 / ```；禁止在 JSON 前或后输出任何说明文字（含中文）：",
-    '{"title":"...","summary":"...","outline":[{"title":"...","children":[{"title":"...","conceptPath":["frontend","react","hooks"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}',
+    text.outputHeader,
+    text.schemaExample,
     "",
-    "===",
-    body || "(空会话)",
+    text.separator,
+    body || text.emptyTranscript,
   ].join("\n");
 }
 
@@ -83,7 +147,7 @@ function renderBatchTurns(blocks: SessionTranscriptBlock[]): string {
       })
       .join("\n\n");
     const header = `--- [S${block.sessionIndex + 1}] ${block.sessionLabel} ---`;
-    const chunk = `${header}\n${inner || "(空)"}`;
+    const chunk = `${header}\n${inner || "(empty)"}`;
     if (total + chunk.length + 2 > MAX_TOTAL_CHARS) {
       parts.push("[...truncated due to length...]");
       break;
@@ -96,6 +160,7 @@ function renderBatchTurns(blocks: SessionTranscriptBlock[]): string {
 
 /**
  * Optional multi-session batch prompt (explicit command / selection only).
+ * Currently zh-only; refactor along the same `TEXTS` pattern when needed.
  */
 export function buildBatchOutlinePrompt(
   blocks: SessionTranscriptBlock[],
@@ -124,4 +189,4 @@ export function buildBatchOutlinePrompt(
   ].join("\n");
 }
 
-export const __testing = { groupTurns, renderTurns, renderBatchTurns };
+export const __testing = { groupTurns, renderTurns, renderBatchTurns, TEXTS };
