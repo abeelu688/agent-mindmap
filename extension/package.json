@@ -261,6 +261,7 @@
     }
   },
   "scripts": {
+    "postinstall": "node scripts/patch-sqlite3-binding.js",
     "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --external:@vscode/sqlite3 --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "test": "node dist/test-run.js",

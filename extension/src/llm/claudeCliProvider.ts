@@ -16,6 +16,8 @@ function buildArgs(opts: LlmProviderOptions, prompt: string): string[] {
     "json",
     "--max-turns",
     "1",
+    "--tools",
+    "",
   ];
   if (opts.model && opts.model.trim()) {
     args.push("--model", opts.model.trim());

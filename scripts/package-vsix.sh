@@ -49,6 +49,9 @@ echo "==> Workspace: $ROOT"
 echo "==> Building webview + extension..."
 npm run build
 
+echo "==> Downloading @vscode/sqlite3 prebuilds for all platforms..."
+bash "$ROOT/scripts/download-sqlite3-prebuilds.sh"
+
 echo "==> Packaging VSIX (vsce)..."
 ensure_node20_for_vsce
 (
