@@ -48,8 +48,13 @@ export function formatSessionAnalysisJsonContract(
     const codeRefStart = lines.indexOf(
       lines.find((l) => l.startsWith("**codeReferences[]**")) ?? "");
     if (codeRefStart >= 0) {
-      // Remove the codeReferences block (header + 3 detail lines)
-      lines.splice(codeRefStart, 4);
+      const nextBlock = lines.findIndex(
+        (l, idx) => idx > codeRefStart && l.startsWith("**")
+      );
+      lines.splice(
+        codeRefStart,
+        (nextBlock >= 0 ? nextBlock : lines.length) - codeRefStart
+      );
     }
   }
   if (!options?.includeOutline) {

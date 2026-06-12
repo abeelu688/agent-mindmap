@@ -12,7 +12,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 15;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 16;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;

@@ -81,6 +81,7 @@ export async function analyzeSession(
             model: opts.modelHint,
             cacheDir: opts.cacheDir,
             cache: opts.cache,
+            outline: analysis.outline,
           }
         ).catch(() => undefined)
       : Promise.resolve(undefined);
