@@ -55,4 +55,30 @@ describe("extractFilePathsFromEvents", () => {
     expect(entries[0]?.query).toBe("Fix router");
     expect(entries[1]?.query).toBe("Add middleware");
   });
+
+  it("attaches outline topic context by source turn", () => {
+    const events: ChatEvent[] = [
+      { kind: "user_query", text: "Optimize code refs", lineIndex: 0 },
+      { kind: "tool", name: "Edit", label: "edit", lineIndex: 1, filePaths: ["/proj/src/codeRefs.ts"] },
+      { kind: "assistant_summary", text: "Updated prompt wording", lineIndex: 2 },
+    ];
+    const entries = extractFilePathsFromEvents(events, "/proj", {
+      title: "Prompt optimization",
+      outline: [
+        {
+          title: "Code reference descriptions",
+          summary: "Generate file-specific change summaries",
+          details: [
+            {
+              text: "Prompt now asks for file change responsibilities",
+              sourceTurnIndices: [0],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(entries[0]?.topicContexts?.[0]).toContain("Code reference descriptions");
+    expect(entries[0]?.topicContexts?.[0]).toContain("file change responsibilities");
+  });
 });

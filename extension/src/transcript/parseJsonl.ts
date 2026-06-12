@@ -5,7 +5,11 @@ const REDACTED = "[REDACTED]";
 
 type ContentPart =
   | { type: "text"; text?: string }
-  | { type: "tool_use"; name?: string; input?: Record<string, unknown> };
+  | {
+      type: "tool_use";
+      name?: string;
+      input?: Record<string, unknown> | string;
+    };
 
 type JsonlLine = {
   role?: string;
@@ -21,8 +25,24 @@ export function extractUserQuery(text: string): string | undefined {
   return trimmed || undefined;
 }
 
-function toolLabel(name: string, input: Record<string, unknown>): string {
+function extractPatchFilePaths(text: string): string[] {
+  const out: string[] = [];
+  const re = /^\*\*\* (?:Update|Add) File:\s*(.+?)\s*$/gm;
+  for (const match of text.matchAll(re)) {
+    const p = match[1]?.trim();
+    if (p) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function toolLabel(name: string, input: Record<string, unknown> | string): string {
   const n = name || "Tool";
+  if (typeof input === "string") {
+    const fp = extractPatchFilePaths(input)[0];
+    return fp ? `${n}: ${basename(fp)}` : n;
+  }
   const fp = input.file_path ?? input.path;
   if (typeof fp === "string" && fp) {
     return `${n}: ${basename(fp)}`;
@@ -44,7 +64,10 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
   return n;
 }
 
-function extractFilePaths(input: Record<string, unknown>): string[] {
+function extractFilePaths(input: Record<string, unknown> | string): string[] {
+  if (typeof input === "string") {
+    return extractPatchFilePaths(input);
+  }
   const out: string[] = [];
   const push = (v: unknown) => {
     if (typeof v === "string" && v.trim()) {
@@ -69,6 +92,10 @@ function extractFilePaths(input: Record<string, unknown>): string[] {
   }
   const notebook = input.notebook_path;
   push(notebook);
+  const patch = input.patch ?? input.diff;
+  if (typeof patch === "string") {
+    out.push(...extractPatchFilePaths(patch));
+  }
   return out;
 }
 
