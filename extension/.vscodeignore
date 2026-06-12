@@ -1,4 +1,13 @@
 src/**
 tsconfig.json
 esbuild.config.mjs
+scripts/**
+dist/sql-wasm.wasm
+dist/test-run.js
+dist/eval-run.js
+dist/extension.js.map
 node_modules/**
+!node_modules/@vscode/sqlite3/package.json
+!node_modules/@vscode/sqlite3/lib/**
+node_modules/@vscode/sqlite3/lib/sqlite3.d.ts
+node_modules/@vscode/sqlite3/build/**
