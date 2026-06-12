@@ -228,10 +228,22 @@
           "enum": [
             "auto",
             "en",
-            "zh-cn"
+            "zh-cn",
+            "ja",
+            "ko"
           ],
           "default": "auto",
-          "description": "Language for extension notifications (e.g. CLI install guide). auto follows Configure Display Language; en or zh-cn override."
+          "description": "Language for extension notifications and prompts (when agentMindmap.llm.promptLanguage is auto). auto follows Configure Display Language. ja/ko require a community-contributed translation bundle — falls back to English when missing."
+        },
+        "agentMindmap.llm.promptLanguage": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "zh"
+          ],
+          "default": "auto",
+          "description": "Language used in LLM prompts. auto follows agentMindmap.ui.locale (zh-cn → zh; en/ja/ko → en). Override to force a specific prompt language regardless of UI locale. Note: changing this invalidates the SessionRecord cache."
         },
         "agentMindmap.ui.direction": {
           "type": "string",

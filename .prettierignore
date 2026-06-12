@@ -1,0 +1,14 @@
+node_modules/
+dist/
+extension/dist/
+extension/media/
+test/eval/.cache/
+test/eval/reports/
+test/fixtures/
+*.vsix
+package-lock.json
+extension/package-lock.json
+webview/package-lock.json
+agent-mindmap-llm-dumps/
+.agent-mindmap-llm-dumps/
+extension/l10n/*.json
