@@ -35,7 +35,13 @@ _ext-test-exit.txt
 ext-test
 git-status.txt
 
+# environment / secrets
+.env
+.env.*
+
 # editor / OS
 .DS_Store
 .idea/
 *.swp
+.vscode/settings.json
+.vscode/tasks.json
