@@ -262,7 +262,7 @@ Three independent dimensions:
 
 UI strings go through `t(key, englishMessage, ...args)` ([`l10n/uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts)). When adding a user-visible string, add the key to **both** `bundle.l10n.json` (English) and `bundle.l10n.zh-cn.json`. Other locales fall back to English when the bundle is empty.
 
-LLM prompts use a `TEXTS: Record<PromptLanguage, ...>` pattern — see [`llm/promptOutline.ts`](../extension/src/llm/promptOutline.ts) for the reference implementation.
+LLM prompts are being migrated to a `TEXTS: Record<PromptLanguage, ...>` pattern — see [`llm/promptOutline.ts`](../extension/src/llm/promptOutline.ts) for the reference implementation. Only active production prompt paths should be migrated; deprecated prompt files should not be wired back into the pipeline.
 
 ---
 
