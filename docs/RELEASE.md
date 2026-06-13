@@ -28,12 +28,14 @@ Before bumping the version:
 
 ## Cutting the Release
 
-1. **Bump the version** in `extension/package.json` (and root `package.json` if it's tracked there):
+1. **Bump the version in the root `package.json`** (the single source of truth):
 
    ```bash
-   # Edit extension/package.json → "version": "0.2.0"
-   # Edit root package.json → "version": "0.2.0"
+   # Edit package.json → "version": "0.2.0"
+   npm run version:sync   # writes the same value into extension/ and webview/
    ```
+
+   `npm run build` and `npm run package:vsix` also auto-run `version:sync` first, so you don't strictly need to call it by hand — but it's idempotent and useful when reviewing the diff.
 
 2. **Update `CHANGELOG.md`** — rename `## [Unreleased]` to `## [0.2.0] — YYYY-MM-DD`, then re-add an empty `## [Unreleased]` section above it. Update the link references at the bottom.
 
@@ -41,7 +43,7 @@ Before bumping the version:
 
    ```bash
    git checkout -b release/v0.2.0
-   git add extension/package.json package.json CHANGELOG.md
+   git add package.json extension/package.json webview/package.json CHANGELOG.md
    git commit -m "chore(release): v0.2.0"
    ```
 
