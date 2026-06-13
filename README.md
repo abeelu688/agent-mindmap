@@ -1,5 +1,6 @@
 # Agent Mind Map
 
+[![CI](https://github.com/your-org/agent-mindmap/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/agent-mindmap/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.85+-blue.svg)](https://code.visualstudio.com/)
 [![中文文档](https://img.shields.io/badge/README-中文-red.svg)](README.zh-cn.md)
@@ -170,7 +171,9 @@ Open for community contribution:
 
 ## Privacy
 
-Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The library only stores summarized `TopicGraph` and metadata — **not** the raw transcript.
+Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The library only stores summarized `TopicGraph` and metadata — **not** the raw transcript. There is **no telemetry** and no third-party server.
+
+See [`PRIVACY.md`](PRIVACY.md) for the full privacy policy.
 
 ## License
 

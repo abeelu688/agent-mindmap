@@ -1,6 +1,3 @@
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider } from "../llm/types";
-import type { MindMapProgress } from "../progress";
 import {
   buildMergeSnapshotFromVirtualSession,
   createEmptySnapshotManifest,
@@ -18,6 +15,16 @@ import {
   writeSnapshotByPath,
   writeSnapshotManifest,
 } from "../store/mergeSnapshot";
+import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
+import { mindMapLog } from "../webview/MindMapLog";
+import { conceptTrieMergePath, writeMergeRecord } from "../store/sessionStore";
+import { runMergePipeline } from "./mergePipeline";
+import { tryReuseBatchMerge } from "./batchMergeCache";
+import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
+import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
+import type { AgentHostId } from "../host/types";
+import type { LlmProvider } from "../llm/types";
+import type { MindMapProgress } from "../progress";
 import type {
   MergeRecord,
   MergeSnapshot,
@@ -25,17 +32,7 @@ import type {
   SnapshotManifest,
   SnapshotNode,
 } from "../store/storeTypes";
-import { runMergePipeline } from "./mergePipeline";
-import { tryReuseBatchMerge } from "./batchMergeCache";
-import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import type { FinalizedSessionAnalysis } from "./stages/finalizeSessionAnalysis";
-import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
-import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
-import { mindMapLog } from "../webview/MindMapLog";
-import {
-  conceptTrieMergePath,
-  writeMergeRecord,
-} from "../store/sessionStore";
 
 export type SnapshotHierarchyLlmOpts = {
   storeDir: string;
@@ -77,10 +74,7 @@ async function ensureManifest(
   if (existing) {
     return existing;
   }
-  return createEmptySnapshotManifest(
-    projectSlug,
-    groupSize ?? DEFAULT_SNAPSHOT_GROUP_SIZE
-  );
+  return createEmptySnapshotManifest(projectSlug, groupSize ?? DEFAULT_SNAPSHOT_GROUP_SIZE);
 }
 
 function leafSnapshotId(batchNo: number): string {
@@ -130,7 +124,7 @@ async function runBoundedMerge(
     snapshotSessionId?: string;
   }
 ): Promise<{
-  virtualSession?: FinalizedSessionAnalysis;
+  virtualSession: FinalizedSessionAnalysis;
   merge: MergeRecord;
   segmentEquivalences: import("../llm/types").SegmentEquivalence[];
 }> {
@@ -159,10 +153,7 @@ async function runBoundedMerge(
 
   const rawAnalysis = result.ontology.mergeSessionAnalysis;
   if (rawAnalysis && !rawAnalysis.outline) {
-    rawAnalysis.outline = buildOutlineFromConceptTrie(
-      rawAnalysis.domains,
-      rawAnalysis.nodes
-    );
+    rawAnalysis.outline = buildOutlineFromConceptTrie(rawAnalysis.domains, rawAnalysis.nodes);
   }
   const virtualSession =
     result.virtualSession ??
@@ -196,9 +187,7 @@ async function loadSnapshotsForNodes(
   for (const node of nodes) {
     const snap = await readSnapshotById(storeDir, projectSlug, node);
     if (!snap) {
-      throw new Error(
-        `[agent-mindmap] Missing snapshot file for node ${node.id} at ${node.path}`
-      );
+      throw new Error(`[agent-mindmap] Missing snapshot file for node ${node.id} at ${node.path}`);
     }
     out.push(snap);
   }
@@ -212,11 +201,7 @@ async function mergeSnapshotGroup(
   opts: SnapshotHierarchyLlmOpts,
   progress?: MindMapProgress
 ): Promise<{ snapshot: MergeSnapshot; node: SnapshotNode }> {
-  const childSnapshots = await loadSnapshotsForNodes(
-    opts.storeDir,
-    opts.projectSlug,
-    childNodes
-  );
+  const childSnapshots = await loadSnapshotsForNodes(opts.storeDir, opts.projectSlug, childNodes);
   const virtualRecords = childSnapshots.map((snap) =>
     snapshotToSessionRecord(
       snap,
@@ -226,9 +211,7 @@ async function mergeSnapshotGroup(
   const sessionIds = unionSessionIds(childNodes);
   const relativePath = `snapshots/${parentId}.json`;
 
-  progress?.report(
-    `M-merge (L${parentLevel}): merging ${childNodes.length} snapshot(s)…`
-  );
+  progress?.report(`M-merge (L${parentLevel}): merging ${childNodes.length} snapshot(s)…`);
 
   const { virtualSession, segmentEquivalences } = await runBoundedMerge(
     opts,
@@ -251,12 +234,7 @@ async function mergeSnapshotGroup(
     }
   );
 
-  await writeSnapshotByPath(
-    opts.storeDir,
-    opts.projectSlug,
-    relativePath,
-    snapshot
-  );
+  await writeSnapshotByPath(opts.storeDir, opts.projectSlug, relativePath, snapshot);
 
   const node: SnapshotNode = {
     id: parentId,
@@ -320,7 +298,7 @@ async function promoteLevel(
   while (true) {
     const atLevel = manifest.topLevelIds
       .map((id) => manifest.nodes.find((n) => n.id === id))
-      .filter((n): n is SnapshotNode => Boolean(n) && n.level === level)
+      .filter((n): n is SnapshotNode => n != null && n.level === level)
       .sort((a, b) => a.id.localeCompare(b.id));
 
     if (atLevel.length < size) {
@@ -331,13 +309,7 @@ async function promoteLevel(
     const parentLevel = level + 1;
     const parentId = nextGroupSnapshotId(manifest, parentLevel);
 
-    const { node } = await mergeSnapshotGroup(
-      group,
-      parentLevel,
-      parentId,
-      opts,
-      progress
-    );
+    const { node } = await mergeSnapshotGroup(group, parentLevel, parentId, opts, progress);
 
     removeFromTopLevel(
       manifest,
@@ -370,36 +342,26 @@ export async function runLeafSnapshotMerge(
     throw new Error("[agent-mindmap] runLeafSnapshotMerge: empty batch");
   }
 
-  const manifest = await ensureManifest(
-    opts.storeDir,
-    opts.projectSlug,
-    opts.groupSize
-  );
+  const manifest = await ensureManifest(opts.storeDir, opts.projectSlug, opts.groupSize);
   const leafId = opts.existingLeafId ?? leafSnapshotId(opts.batchNo);
   const relativePath = `snapshots/${leafId}.json`;
   const sessionIds = batchReal.map((r) => r.meta.sessionId).sort();
   const previousNode = manifest.nodes.find((n) => n.id === leafId);
   const previousSessionIds = previousNode?.sessionIds;
 
-  progress?.report(
-    `M-merge (L1 batch ${opts.batchNo}): ${batchReal.length} session(s)…`
-  );
+  progress?.report(`M-merge (L1 batch ${opts.batchNo}): ${batchReal.length} session(s)…`);
 
   let virtualSession: FinalizedSessionAnalysis;
   let segmentEquivalences: import("../llm/types").SegmentEquivalence[] = [];
 
   if (batchReal.length === 1) {
     virtualSession = virtualFromSingleRecord(batchReal[0]!);
-    segmentEquivalences =
-      virtualSession.sessionSynonyms.segmentEquivalences ?? [];
+    segmentEquivalences = virtualSession.sessionSynonyms.segmentEquivalences ?? [];
   } else {
-    const merged = await runBoundedMerge(
-      opts,
-      batchReal,
-      batchReal,
-      progress,
-      { skipM3: true, mergeMode: "full" }
-    );
+    const merged = await runBoundedMerge(opts, batchReal, batchReal, progress, {
+      skipM3: true,
+      mergeMode: "full",
+    });
     virtualSession = merged.virtualSession;
     segmentEquivalences = merged.segmentEquivalences;
   }
@@ -416,12 +378,7 @@ export async function runLeafSnapshotMerge(
     }
   );
 
-  await writeSnapshotByPath(
-    opts.storeDir,
-    opts.projectSlug,
-    relativePath,
-    snapshot
-  );
+  await writeSnapshotByPath(opts.storeDir, opts.projectSlug, relativePath, snapshot);
 
   const node: SnapshotNode = {
     id: leafId,
@@ -450,9 +407,7 @@ export async function rebuildProjectRoot(
   const manifest = await readSnapshotManifest(opts.storeDir, opts.projectSlug);
 
   if (!manifest || manifest.topLevelIds.length === 0) {
-    throw new Error(
-      "[agent-mindmap] rebuildProjectRoot: no snapshot hierarchy top-level nodes"
-    );
+    throw new Error("[agent-mindmap] rebuildProjectRoot: no snapshot hierarchy top-level nodes");
   }
 
   const topNodes = manifest.topLevelIds
@@ -461,23 +416,15 @@ export async function rebuildProjectRoot(
     .sort((a, b) => a.id.localeCompare(b.id));
 
   if (topNodes.length === 0) {
-    throw new Error(
-      "[agent-mindmap] rebuildProjectRoot: topLevelIds reference missing nodes"
-    );
+    throw new Error("[agent-mindmap] rebuildProjectRoot: topLevelIds reference missing nodes");
   }
 
   let rootSnapshot: MergeSnapshot;
 
   if (topNodes.length === 1) {
-    const only = await readSnapshotById(
-      opts.storeDir,
-      opts.projectSlug,
-      topNodes[0]!
-    );
+    const only = await readSnapshotById(opts.storeDir, opts.projectSlug, topNodes[0]!);
     if (!only) {
-      throw new Error(
-        `[agent-mindmap] rebuildProjectRoot: missing snapshot ${topNodes[0]!.id}`
-      );
+      throw new Error(`[agent-mindmap] rebuildProjectRoot: missing snapshot ${topNodes[0]!.id}`);
     }
     rootSnapshot = {
       ...only,
@@ -488,11 +435,7 @@ export async function rebuildProjectRoot(
       },
     };
   } else {
-    const topSnapshots = await loadSnapshotsForNodes(
-      opts.storeDir,
-      opts.projectSlug,
-      topNodes
-    );
+    const topSnapshots = await loadSnapshotsForNodes(opts.storeDir, opts.projectSlug, topNodes);
     const virtualRecords = topSnapshots.map((snap, i) =>
       snapshotToSessionRecord(
         snap,
@@ -501,9 +444,7 @@ export async function rebuildProjectRoot(
     );
     const sessionIds = unionSessionIds(topNodes);
 
-    progress?.report(
-      `M-merge (root): merging ${topNodes.length} top-level snapshot(s)…`
-    );
+    progress?.report(`M-merge (root): merging ${topNodes.length} top-level snapshot(s)…`);
 
     const { virtualSession, segmentEquivalences } = await runBoundedMerge(
       opts,
@@ -547,9 +488,7 @@ export async function rebuildProjectRoot(
     return merge;
   } catch (err) {
     mindMapLog(
-      `[agent-mindmap] M3 root trie failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+      `[agent-mindmap] M3 root trie failed: ${err instanceof Error ? err.message : String(err)}`
     );
     throw err;
   }
@@ -570,9 +509,7 @@ async function rebuildParentChain(
       .filter((n): n is SnapshotNode => Boolean(n));
 
     if (siblings.length !== parent.childIds.length) {
-      throw new Error(
-        `[agent-mindmap] Parent ${parent.id} references missing child snapshots`
-      );
+      throw new Error(`[agent-mindmap] Parent ${parent.id} references missing child snapshots`);
     }
 
     progress?.report(`M-merge (L${parent.level}): refreshing ${parent.id}…`);
@@ -586,12 +523,7 @@ async function rebuildParentChain(
 
     const idx = manifest.nodes.findIndex((n) => n.id === parent!.id);
     manifest.nodes[idx] = node;
-    await writeSnapshotByPath(
-      opts.storeDir,
-      opts.projectSlug,
-      node.path,
-      snapshot
-    );
+    await writeSnapshotByPath(opts.storeDir, opts.projectSlug, node.path, snapshot);
     await writeSnapshotManifest(opts.storeDir, manifest);
 
     childId = parent.id;
@@ -606,11 +538,7 @@ export async function refreshSnapshotForSession(
   opts: SnapshotHierarchyLlmOpts & { sessionId: string },
   progress?: MindMapProgress
 ): Promise<MergeRecord> {
-  const manifest = await ensureManifest(
-    opts.storeDir,
-    opts.projectSlug,
-    opts.groupSize
-  );
+  const manifest = await ensureManifest(opts.storeDir, opts.projectSlug, opts.groupSize);
   const leaf = findLeafNodeForSession(manifest, opts.sessionId);
   if (!leaf) {
     throw new Error(
@@ -623,9 +551,7 @@ export async function refreshSnapshotForSession(
     .filter((r): r is SessionRecord => Boolean(r));
 
   if (batchRecords.length !== leaf.sessionIds.length) {
-    throw new Error(
-      `[agent-mindmap] Missing library records for leaf ${leaf.id} sessions`
-    );
+    throw new Error(`[agent-mindmap] Missing library records for leaf ${leaf.id} sessions`);
   }
 
   await runLeafSnapshotMerge(
@@ -638,18 +564,14 @@ export async function refreshSnapshotForSession(
     progress
   );
 
-  const refreshedManifest = (await readSnapshotManifest(
-    opts.storeDir,
-    opts.projectSlug
-  ))!;
+  const refreshedManifest = (await readSnapshotManifest(opts.storeDir, opts.projectSlug))!;
 
   if (findParentNode(refreshedManifest, leaf.id)) {
     await rebuildParentChain(leaf.id, refreshedManifest, opts, progress);
   }
 
   const afterChain =
-    (await readSnapshotManifest(opts.storeDir, opts.projectSlug)) ??
-    refreshedManifest;
+    (await readSnapshotManifest(opts.storeDir, opts.projectSlug)) ?? refreshedManifest;
   await promoteAllLevels(afterChain, opts, progress);
 
   return rebuildProjectRoot(opts, progress);
@@ -693,9 +615,7 @@ export async function runBatchSnapshotPipeline(
 
   const manifest = await readSnapshotManifest(opts.storeDir, opts.projectSlug);
   if (!manifest) {
-    throw new Error(
-      "[agent-mindmap] runBatchSnapshotPipeline: manifest missing after L1 merge"
-    );
+    throw new Error("[agent-mindmap] runBatchSnapshotPipeline: manifest missing after L1 merge");
   }
 
   try {
@@ -734,11 +654,15 @@ export async function runFinalRootRefresh(
   }
 
   progress?.report("Final DET refresh of concept trie…");
-  mindMapLog(`[runFinalRootRefresh] allReal=${allReal.length} allRecords=${opts.allRecords.length} hasVirtualSession=${!!root.sessionAnalysis} nodes=${root.sessionAnalysis?.nodes?.length ?? 0} segEq=${root.segmentEquivalences?.length ?? 0}`);
+  mindMapLog(
+    `[runFinalRootRefresh] allReal=${allReal.length} allRecords=${opts.allRecords.length} hasVirtualSession=${!!root.sessionAnalysis} nodes=${root.sessionAnalysis?.nodes?.length ?? 0} segEq=${root.segmentEquivalences?.length ?? 0}`
+  );
   // Log sample conceptPaths from input records
   for (const r of allReal.slice(0, 2)) {
     const paths = r.graph?.topics?.map((t: any) => t.conceptPath) ?? [];
-    mindMapLog(`[runFinalRootRefresh] record=${r.meta?.sessionId?.slice(0,8)} topics=${r.graph?.topics?.length ?? 0} paths=${JSON.stringify(paths.slice(0, 3))}`);
+    mindMapLog(
+      `[runFinalRootRefresh] record=${r.meta?.sessionId?.slice(0, 8)} topics=${r.graph?.topics?.length ?? 0} paths=${JSON.stringify(paths.slice(0, 3))}`
+    );
   }
   const merge = await updateConceptTrieAsync({
     records: allReal,

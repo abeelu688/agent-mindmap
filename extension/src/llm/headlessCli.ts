@@ -1,9 +1,8 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "child_process";
+import { agentDebugLog } from "../debugLog";
+import { agentLog } from "../log";
 import { resolveCliSpawnTarget } from "./resolveWindowsCliSpawn";
-import {
-  validateMergedOutline,
-  validateSessionOutline,
-} from "./outlineValidate";
+import { validateMergedOutline, validateSessionOutline } from "./outlineValidate";
 import {
   validateConceptOntology,
   validateOntologyRefine,
@@ -19,14 +18,13 @@ import {
   LlmProviderError,
   type LlmProviderOptions,
   type LlmResponseSchema,
+  type LlmSummarizeResult,
   type MergedOutline,
   type SessionOutline,
   type SummarizeInput,
   type TopicGraph,
 } from "./types";
 import { dumpLlmCallResult } from "./llmIoDump";
-import { agentDebugLog } from "../debugLog";
-import { agentLog } from "../log";
 import { validateTopicGraph } from "./topicGraphValidate";
 
 export type HeadlessCliConfig = {
@@ -53,13 +51,15 @@ function uniq(arr: string[]): string[] {
   return out;
 }
 
-function spawnCliProcess(target: ReturnType<typeof resolveCliSpawnTarget>) {
-  const options = {
-    stdio: ["ignore", "pipe", "pipe"] as const,
+function spawnCliProcess(
+  target: ReturnType<typeof resolveCliSpawnTarget>
+): ChildProcessWithoutNullStreams {
+  const options: SpawnOptions = {
+    stdio: ["ignore", "pipe", "pipe"],
     env: process.env,
-    ...(target.shell ? { shell: true as const } : {}),
+    ...(target.shell ? { shell: true } : {}),
   };
-  return spawn(target.command, target.args, options);
+  return spawn(target.command, target.args, options) as ChildProcessWithoutNullStreams;
 }
 
 export function runCli(
@@ -154,21 +154,9 @@ export function runCli(
         clearTimeout(timer);
       }
       if (err.code === "ENOENT") {
-        reject(
-          new LlmProviderError(
-            "cli-missing",
-            `Binary not found: ${bin}`,
-            err
-          )
-        );
+        reject(new LlmProviderError("cli-missing", `Binary not found: ${bin}`, err));
       } else {
-        reject(
-          new LlmProviderError(
-            "cli-failed",
-            `Failed to spawn ${bin}: ${err.message}`,
-            err
-          )
-        );
+        reject(new LlmProviderError("cli-failed", `Failed to spawn ${bin}: ${err.message}`, err));
       }
     });
 
@@ -371,10 +359,7 @@ function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
   );
 }
 
-export function parseTopicGraphFromStdout(
-  stdout: string,
-  providerLabel: string
-): TopicGraph {
+export function parseTopicGraphFromStdout(stdout: string, providerLabel: string): TopicGraph {
   return validateTopicGraph(parseJsonFromStdout(stdout, providerLabel));
 }
 
@@ -385,17 +370,11 @@ export function parseSessionOutlineFromStdout(
   return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseMergedOutlineFromStdout(
-  stdout: string,
-  providerLabel: string
-): MergedOutline {
+export function parseMergedOutlineFromStdout(stdout: string, providerLabel: string): MergedOutline {
   return validateMergedOutline(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseConceptOntologyFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseConceptOntologyFromStdout(stdout: string, providerLabel: string) {
   return validateConceptOntology(parseJsonFromStdout(stdout, providerLabel));
 }
 
@@ -403,45 +382,27 @@ export function parseTopicPathsFromStdout(stdout: string, providerLabel: string)
   return validateTopicPaths(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseReattachMovesFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseReattachMovesFromStdout(stdout: string, providerLabel: string) {
   return validateReattachMoves(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseOntologyRefineFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseOntologyRefineFromStdout(stdout: string, providerLabel: string) {
   return validateOntologyRefine(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseSessionConceptExtractFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseSessionConceptExtractFromStdout(stdout: string, providerLabel: string) {
   return validateSessionConceptExtract(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseSessionSynonymRefineFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseSessionSynonymRefineFromStdout(stdout: string, providerLabel: string) {
   return validateSessionSynonymRefine(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseSessionOutlineByTreeFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseSessionOutlineByTreeFromStdout(stdout: string, providerLabel: string) {
   return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
 }
 
-export function parseSessionAnalysisFromStdout(
-  stdout: string,
-  providerLabel: string
-) {
+export function parseSessionAnalysisFromStdout(stdout: string, providerLabel: string) {
   return validateSessionAnalysis(parseJsonFromStdout(stdout, providerLabel));
 }
 
@@ -552,10 +513,7 @@ export class HeadlessCliProvider {
       );
     }
 
-    const candidates = uniq([
-      this.options.cliPath,
-      ...this.config.defaultBinaries,
-    ]);
+    const candidates = uniq([this.options.cliPath, ...this.config.defaultBinaries]);
     const args = this.config.buildArgs(this.options, input.prompt);
     const maxAttempts = Math.max(1, this.options.maxAttempts || 1);
     const backoffBase = Math.max(0, this.options.retryBackoffMs || 0);
@@ -573,27 +531,15 @@ export class HeadlessCliProvider {
         let stdout = "";
         let stderr = "";
         try {
-          const run = await runCli(
-            bin,
-            args,
-            signal,
-            timeoutMs,
-            this.config.providerLabel
-          );
+          const run = await runCli(bin, args, signal, timeoutMs, this.config.providerLabel);
           stdout = run.stdout;
           stderr = run.stderr;
           const durationMs = performance.now() - started;
           if (attempt > 1) {
-            agentLog.info(
-              `LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`
-            );
+            agentLog.info(`LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`);
           }
           try {
-            const parsed = parseBySchema(
-              stdout,
-              this.config.providerLabel,
-              responseSchema
-            );
+            const parsed = parseBySchema(stdout, this.config.providerLabel, responseSchema);
             await dumpLlmCallResult({
               input,
               providerId: this.id,
@@ -604,7 +550,7 @@ export class HeadlessCliProvider {
               maxAttempts,
               durationMs,
             });
-            return parsed;
+            return parsed as LlmSummarizeResult;
           } catch (parseErr) {
             const durationMs = performance.now() - started;
             await dumpLlmCallResult({
@@ -638,14 +584,11 @@ export class HeadlessCliProvider {
       }
 
       const attemptErr =
-        runErr ??
-        allMissing ??
-        new LlmProviderError("cli-missing", this.config.missingInstallHint);
+        runErr ?? allMissing ?? new LlmProviderError("cli-missing", this.config.missingInstallHint);
 
       const isLastAttempt = attempt >= maxAttempts;
       const shouldDumpFailure =
-        input.dumpMeta != null &&
-        (!isRetryableError(attemptErr) || isLastAttempt);
+        input.dumpMeta != null && (!isRetryableError(attemptErr) || isLastAttempt);
       if (shouldDumpFailure) {
         const cap = attemptErr.cliCapture;
         await dumpLlmCallResult({
@@ -670,9 +613,7 @@ export class HeadlessCliProvider {
       );
       await sleepWithCancel(delay, signal);
     }
-    throw (
-      lastErr ?? new LlmProviderError("cli-failed", "All attempts failed")
-    );
+    throw lastErr ?? new LlmProviderError("cli-failed", "All attempts failed");
   }
 }
 

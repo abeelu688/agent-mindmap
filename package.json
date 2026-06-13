@@ -2,6 +2,7 @@
   "name": "agent-mindmap-workspace",
   "private": true,
   "version": "0.1.1",
+  "license": "MIT",
   "scripts": {
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",

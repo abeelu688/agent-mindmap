@@ -1,14 +1,9 @@
-import type { vscode as Vscode } from "../../test/vscode-stub.cjs";
-import * as vscode from "vscode";
 import { loadLatestSession, type LoadDeps, type LoadedSession } from "../sessionLoader";
 import { ensureModelSelected } from "../llmOptions";
 import { t } from "../l10n/uiTranslate";
 import { MindMapPanel } from "../webview/MindMapPanel";
-import {
-  withCancellableProgress,
-  progressTitle,
-  attachTranscriptWatch,
-} from "../progressHelpers";
+import { withCancellableProgress, progressTitle, attachTranscriptWatch } from "../progressHelpers";
+import type * as vscode from "vscode";
 
 let activeSession: LoadedSession | undefined;
 
@@ -20,9 +15,7 @@ export function setActiveSession(session: LoadedSession | undefined): void {
   activeSession = session;
 }
 
-export async function commandOpenLatest(
-  context: vscode.ExtensionContext
-): Promise<void> {
+export async function commandOpenLatest(context: vscode.ExtensionContext): Promise<void> {
   if (!(await ensureModelSelected(context))) {
     return;
   }
@@ -30,8 +23,7 @@ export async function commandOpenLatest(
   panel.setLoading(true, t("ui.loading.preparing", "Understanding conversation…"));
   try {
     const loaded = await withCancellableProgress(
-      ({ signal, progress }) =>
-        loadLatestSession({ context, signal, progress }),
+      ({ signal, progress }) => loadLatestSession({ context, signal, progress }),
       progressTitle(),
       panel
     );

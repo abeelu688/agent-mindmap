@@ -1,3 +1,4 @@
+import { escapeTabularCell, formatRow, formatTable } from "./promptReattachTabular";
 import type {
   MergeOutlineNode,
   MergeSessionAnalysisInput,
@@ -5,11 +6,6 @@ import type {
   MergeSessionInputSession,
 } from "./mergeSessionAnalysisInput";
 import type { SegmentEquivalence } from "./types";
-import {
-  escapeTabularCell,
-  formatRow,
-  formatTable,
-} from "./promptReattachTabular";
 
 export type MergeTabularSchema = {
   name: string;
@@ -50,15 +46,7 @@ export const MERGE_INPUT_SCHEMAS: MergeTabularSchema[] = [
   },
   {
     name: "outlineRows",
-    columns: [
-      "sessionId",
-      "row",
-      "parentRow",
-      "depth",
-      "title",
-      "summary",
-      "conceptPath",
-    ],
+    columns: ["sessionId", "row", "parentRow", "depth", "title", "summary", "conceptPath"],
   },
   {
     name: "segmentEquivalences",
@@ -130,12 +118,7 @@ export function formatMergeInputSchema(): string {
 }
 
 function mergeMetaRow(input: MergeSessionAnalysisInput): string[][] {
-  return [
-    [
-      input.mergeMode,
-      input.snapshotSessionId ?? "",
-    ],
-  ];
+  return [[input.mergeMode, input.snapshotSessionId ?? ""]];
 }
 
 function sessionRows(sessions: MergeSessionInputSession[]): string[][] {
@@ -151,9 +134,7 @@ function sessionRows(sessions: MergeSessionInputSession[]): string[][] {
   ]);
 }
 
-function nodeRows(
-  sessions: MergeSessionInputSession[]
-): string[][] {
+function nodeRows(sessions: MergeSessionInputSession[]): string[][] {
   const rows: string[][] = [];
   for (const session of sessions) {
     for (const node of session.nodes) {
@@ -197,14 +178,7 @@ function flattenOutlineNodes(
       node.conceptPath?.length ? joinPath(node.conceptPath) : "",
     ]);
     if (node.children?.length) {
-      flattenOutlineNodes(
-        sessionId,
-        node.children,
-        depth + 1,
-        String(rowId),
-        rows,
-        rowCounter
-      );
+      flattenOutlineNodes(sessionId, node.children, depth + 1, String(rowId), rows, rowCounter);
     }
   }
 }
@@ -213,21 +187,12 @@ function outlineRows(sessions: MergeSessionInputSession[]): string[][] {
   const rows: string[][] = [];
   for (const session of sessions) {
     const counter = { n: 0 };
-    flattenOutlineNodes(
-      session.sessionId,
-      session.outline.tree,
-      0,
-      "",
-      rows,
-      counter
-    );
+    flattenOutlineNodes(session.sessionId, session.outline.tree, 0, "", rows, counter);
   }
   return rows;
 }
 
-function segmentEquivalenceRows(
-  sessions: MergeSessionInputSession[]
-): string[][] {
+function segmentEquivalenceRows(sessions: MergeSessionInputSession[]): string[][] {
   const rows: string[][] = [];
   for (const session of sessions) {
     for (const eq of (session.segmentEquivalences ?? []) as SegmentEquivalence[]) {
@@ -236,7 +201,7 @@ function segmentEquivalenceRows(
         eq.canonical,
         joinMulti(eq.aliases),
         joinMulti(eq.scope?.pathPrefix ?? []),
-        eq.confidence ?? "",
+        eq.confidence != null ? String(eq.confidence) : "",
       ]);
     }
   }
@@ -244,9 +209,7 @@ function segmentEquivalenceRows(
 }
 
 /** TAB tables + schema header for M-merge LLM input. */
-export function buildMergeSessionAnalysisTabularInput(
-  input: MergeSessionAnalysisInput
-): string {
+export function buildMergeSessionAnalysisTabularInput(input: MergeSessionAnalysisInput): string {
   const parts = [
     formatMergeInputSchema(),
     "",
@@ -254,18 +217,13 @@ export function buildMergeSessionAnalysisTabularInput(
     requiredTable("sessions", sessionRows(input.sessions)),
     requiredTable("nodes", nodeRows(input.sessions)),
     requiredTable("outlineRows", outlineRows(input.sessions)),
-    optionalTable(
-      "segmentEquivalences",
-      segmentEquivalenceRows(input.sessions)
-    ),
+    optionalTable("segmentEquivalences", segmentEquivalenceRows(input.sessions)),
   ].filter(Boolean);
   return parts.join("\n\n");
 }
 
 /** Legacy JSON body size (for regression: tabular should be smaller at scale). */
-export function estimateMergeJsonInputBytes(
-  input: MergeSessionAnalysisInput
-): number {
+export function estimateMergeJsonInputBytes(input: MergeSessionAnalysisInput): number {
   return Buffer.byteLength(JSON.stringify(input), "utf8");
 }
 

@@ -12,23 +12,20 @@ import {
   type PendingJump,
   PENDING_JUMP_KEY,
 } from "./jumpToOriginCore";
-import type { SessionRecord } from "./store/storeTypes";
 import { getActiveHost } from "./host";
 import { getHostById } from "./host/registry";
-import type { AgentHostId } from "./host/types";
 import { slugToWorkspacePath } from "./paths";
-import {
-  anchorForTurnIndex,
-  renderTranscriptMarkdown,
-} from "./export/renderTranscriptMarkdown";
+import { anchorForTurnIndex, renderTranscriptMarkdown } from "./export/renderTranscriptMarkdown";
 import {
   buildTranscriptPageHtml,
   markdownToTranscriptHtmlBody,
 } from "./export/renderTranscriptHtml";
-import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { format, t } from "./l10n/uiTranslate";
+import type { ChatEvent, NodeOrigin } from "./transcript/types";
+import type { AgentHostId } from "./host/types";
+import type { SessionRecord } from "./store/storeTypes";
 
 // Untitled markdown docs created via `vscode.workspace.openTextDocument({ content })`.
 // When the user closes one, reveal the mind map editor tab again.
@@ -51,9 +48,12 @@ async function openMarkdownPreviewEditor(
     selection: opts.selection,
   };
 
-  if (typeof vscode.openWith === "function") {
+  const vscodeApi = vscode as typeof vscode & {
+    openWith?: (uri: vscode.Uri, viewType: string, options?: unknown) => Thenable<unknown>;
+  };
+  if (typeof vscodeApi.openWith === "function") {
     try {
-      await vscode.openWith(uri, MARKDOWN_PREVIEW_EDITOR, openOpts);
+      await vscodeApi.openWith(uri, MARKDOWN_PREVIEW_EDITOR, openOpts);
       return { ok: true, method: "api.openWith" };
     } catch (err) {
       return {
@@ -65,12 +65,7 @@ async function openMarkdownPreviewEditor(
   }
 
   try {
-    await vscode.commands.executeCommand(
-      "vscode.openWith",
-      uri,
-      MARKDOWN_PREVIEW_EDITOR,
-      openOpts
-    );
+    await vscode.commands.executeCommand("vscode.openWith", uri, MARKDOWN_PREVIEW_EDITOR, openOpts);
     return { ok: true, method: "command.vscode.openWith" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -95,9 +90,7 @@ export {
   PENDING_JUMP_KEY,
 };
 
-export function consumeTranscriptDocUriIfAutoReveal(
-  doc: vscode.TextDocument
-): boolean {
+export function consumeTranscriptDocUriIfAutoReveal(doc: vscode.TextDocument): boolean {
   return transcriptDocUrisToAutoReveal.delete(doc.uri.toString());
 }
 
@@ -119,17 +112,12 @@ async function resolveTurnEvents(
   }
   try {
     const content = await fs.readFile(transcriptPath, "utf8");
-    const host = context
-      ? await getActiveHost(context)
-      : hostForTranscriptPath(transcriptPath);
+    const host = context ? await getActiveHost(context) : hostForTranscriptPath(transcriptPath);
     const events = host.parseTranscript(content);
     cache.set(transcriptPath, events);
     return events;
   } catch (err) {
-    console.warn(
-      `[agent-mindmap] failed to read transcript for jump: ${transcriptPath}`,
-      err
-    );
+    console.warn(`[agent-mindmap] failed to read transcript for jump: ${transcriptPath}`, err);
     cache.set(transcriptPath, []);
     return [];
   }
@@ -142,9 +130,7 @@ async function enrichWithTurnData(
   const cache = new Map<string, ChatEvent[]>();
   // Pre-resolve transcripts once per file.
   const transcriptPaths = new Set(
-    candidates
-      .filter((c) => c.turnIndex !== undefined)
-      .map((c) => c.transcriptPath)
+    candidates.filter((c) => c.turnIndex !== undefined).map((c) => c.transcriptPath)
   );
   for (const p of transcriptPaths) {
     await resolveTurnEvents(p, cache, context);
@@ -167,9 +153,7 @@ async function enrichWithTurnData(
 
 type CandidateRow = vscode.QuickPickItem & { candidate: JumpCandidate };
 
-async function pickCandidate(
-  candidates: JumpCandidate[]
-): Promise<JumpCandidate | undefined> {
+async function pickCandidate(candidates: JumpCandidate[]): Promise<JumpCandidate | undefined> {
   if (candidates.length === 1) {
     return candidates[0];
   }
@@ -208,10 +192,7 @@ async function pickCandidate(
   }
 
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: t(
-      "ui.jump.openPicker.placeholder",
-      "Select a session / question to open"
-    ),
+    placeHolder: t("ui.jump.openPicker.placeholder", "Select a session / question to open"),
     matchOnDescription: true,
     matchOnDetail: true,
   });
@@ -222,23 +203,12 @@ async function pickCandidate(
  * Keywords used to filter vscode.commands.getCommands() when diagnosing
  * which agent-open commands are available in the current Cursor build.
  */
-const AGENT_CMD_KEYWORDS = [
-  "glass",
-  "composer",
-  "agent",
-  "chat",
-  "claude",
-  "anthropic",
-];
+const AGENT_CMD_KEYWORDS = ["glass", "composer", "agent", "chat", "claude", "anthropic"];
 
 /** Cached result of probing which open-by-id command actually works. */
-let _openByIdCmd:
-  | { hostId: AgentHostId; cmd: string | null }
-  | undefined = undefined;
+let _openByIdCmd: { hostId: AgentHostId; cmd: string | null } | undefined = undefined;
 
-async function probeOpenByIdCommand(
-  context?: vscode.ExtensionContext
-): Promise<string | null> {
+async function probeOpenByIdCommand(context?: vscode.ExtensionContext): Promise<string | null> {
   const host = await getActiveHost(context);
   if (_openByIdCmd?.hostId === host.id) {
     return _openByIdCmd.cmd;
@@ -255,9 +225,7 @@ async function probeOpenByIdCommand(
   }
   mindMapLog(
     `[openAgentById] none of ${candidates.join(", ")} found. Available agent-related: ` +
-      all
-        .filter((c) => AGENT_CMD_KEYWORDS.some((k) => c.toLowerCase().includes(k)))
-        .join(", ")
+      all.filter((c) => AGENT_CMD_KEYWORDS.some((k) => c.toLowerCase().includes(k))).join(", ")
   );
   _openByIdCmd = { hostId: host.id, cmd: null };
   return null;
@@ -273,16 +241,10 @@ async function probeOpenByIdCommand(
  * We don't actually rely on the return value to stop — we just log it
  * so we can debug from the user's log.
  */
-async function tryOpenById(
-  cmd: string,
-  arg: unknown,
-  shapeLabel: string
-): Promise<unknown> {
+async function tryOpenById(cmd: string, arg: unknown, shapeLabel: string): Promise<unknown> {
   try {
     const ret = await vscode.commands.executeCommand(cmd, arg);
-    mindMapLog(
-      `[openAgentById] ${cmd} ${shapeLabel} → ${JSON.stringify(ret) ?? "undefined"}`
-    );
+    mindMapLog(`[openAgentById] ${cmd} ${shapeLabel} → ${JSON.stringify(ret) ?? "undefined"}`);
     return ret;
   } catch (err) {
     mindMapLog(`[openAgentById] ${cmd} ${shapeLabel} threw: ${err}`);
@@ -291,10 +253,7 @@ async function tryOpenById(
 }
 
 async function ensureAgentsViewVisible(): Promise<void> {
-  const candidates = [
-    "workbench.action.openAgentsView",
-    "workbench.action.toggleAgents",
-  ];
+  const candidates = ["workbench.action.openAgentsView", "workbench.action.toggleAgents"];
   const all = new Set(await vscode.commands.getCommands(true));
   for (const cmd of candidates) {
     if (all.has(cmd)) {
@@ -325,19 +284,13 @@ async function openTranscriptWebview(opts: {
       opts.viewColumn,
       { enableScripts: true, retainContextWhenHidden: true }
     );
-    panel.webview.html = buildTranscriptPageHtml(
-      opts.title,
-      opts.bodyHtml,
-      opts.anchorId
-    );
+    panel.webview.html = buildTranscriptPageHtml(opts.title, opts.bodyHtml, opts.anchorId);
     panel.onDidDispose(() => {
       MindMapPanel.getCurrent()?.reveal();
     });
     return true;
   } catch (err) {
-    mindMapLog(
-      `openTranscriptWebview failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    mindMapLog(`openTranscriptWebview failed: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -350,9 +303,7 @@ function transcriptViewColumn(): vscode.ViewColumn {
   return col;
 }
 
-async function withTranscriptJumpLoading<T>(
-  work: () => Promise<T>
-): Promise<T> {
+async function withTranscriptJumpLoading<T>(work: () => Promise<T>): Promise<T> {
   const panel = MindMapPanel.getCurrent();
   panel?.setLoading(true, t("ui.jump.loading", "Loading transcript…"));
   try {
@@ -376,17 +327,10 @@ async function openChosenTranscript(
     return;
   }
   const cache = new Map<string, ChatEvent[]>();
-  const events = await resolveTurnEvents(
-    candidate.transcriptPath,
-    cache,
-    context
-  );
+  const events = await resolveTurnEvents(candidate.transcriptPath, cache, context);
   const userQueryCount = events.filter((e) => e.kind === "user_query").length;
   let focusTurnIndex = candidate.turnIndex;
-  if (
-    focusTurnIndex !== undefined &&
-    focusTurnIndex >= userQueryCount
-  ) {
+  if (focusTurnIndex !== undefined && focusTurnIndex >= userQueryCount) {
     vscode.window.showWarningMessage(
       t(
         "ui.jump.qTagMissing",
@@ -437,10 +381,7 @@ async function openTranscriptAsMarkdown(
   const title = opts.label ?? path.basename(transcriptPath);
   const rendered = renderTranscriptMarkdown(events, title);
   const bodyHtml = markdownToTranscriptHtmlBody(rendered.markdown);
-  const anchorId = anchorForTurnIndex(
-    opts.focusTurnIndex,
-    rendered.turnIndexToDisplayQ
-  );
+  const anchorId = anchorForTurnIndex(opts.focusTurnIndex, rendered.turnIndexToDisplayQ);
   const editorColumn = transcriptViewColumn();
 
   const webviewOpened = await openTranscriptWebview({
@@ -468,10 +409,7 @@ async function openTranscriptAsMarkdown(
 
   const selection =
     focusLine >= 0
-      ? new vscode.Range(
-          new vscode.Position(focusLine, 0),
-          new vscode.Position(focusLine, 0)
-        )
+      ? new vscode.Range(new vscode.Position(focusLine, 0), new vscode.Position(focusLine, 0))
       : undefined;
 
   const previewResult = await openMarkdownPreviewEditor(doc.uri, {
@@ -569,9 +507,7 @@ export async function tryOpenAgentShapes(
 export async function diagnoseJumpCommands(): Promise<void> {
   _openByIdCmd = undefined; // force re-probe next time
   const all = await vscode.commands.getCommands(true);
-  const relevant = all.filter((c) =>
-    AGENT_CMD_KEYWORDS.some((k) => c.toLowerCase().includes(k))
-  );
+  const relevant = all.filter((c) => AGENT_CMD_KEYWORDS.some((k) => c.toLowerCase().includes(k)));
   relevant.sort();
   mindMapLog("[diagnose] agent-related commands:\n" + relevant.join("\n"));
   const items = relevant.map((c) => ({ label: c }));
@@ -596,19 +532,14 @@ export type NodeClickPayload = {
   nodeLabel?: string;
 };
 
-function normalizeClick(
-  payload: NodeOrigin | NodeClickPayload
-): NodeClickPayload {
+function normalizeClick(payload: NodeOrigin | NodeClickPayload): NodeClickPayload {
   if ("origin" in payload) {
     return payload;
   }
   return { origin: payload };
 }
 
-function recordToJumpCandidate(
-  meta: SessionRecord["meta"],
-  turnIndex?: number
-): JumpCandidate {
+function recordToJumpCandidate(meta: SessionRecord["meta"], turnIndex?: number): JumpCandidate {
   return {
     sessionId: meta.sessionId,
     projectSlug: meta.projectSlug,
@@ -632,11 +563,7 @@ async function resolveJumpCandidate(
   const hintText = opts.nodeLabel ?? "";
   const desiredTurn = candidate.turnIndex ?? qTags[0];
 
-  const events = await resolveTurnEvents(
-    candidate.transcriptPath,
-    opts.eventCache,
-    opts.context
-  );
+  const events = await resolveTurnEvents(candidate.transcriptPath, opts.eventCache, opts.context);
   const userQueries = events.filter(
     (e): e is Extract<ChatEvent, { kind: "user_query" }> => e.kind === "user_query"
   );
@@ -651,15 +578,13 @@ async function resolveJumpCandidate(
   }
 
   const onlyMetaSearch =
-    userQueries.length > 0 &&
-    userQueries.every((q) => isMetaSearchUserQuery(q.text));
+    userQueries.length > 0 && userQueries.every((q) => isMetaSearchUserQuery(q.text));
 
   const needsCrossSession =
     Boolean(opts.listSessionRecords) &&
     Boolean(hintText) &&
     !hintText.startsWith("概述") &&
-    (onlyMetaSearch ||
-      (desiredTurn !== undefined && desiredTurn >= userQueries.length));
+    (onlyMetaSearch || (desiredTurn !== undefined && desiredTurn >= userQueries.length));
 
   if (!needsCrossSession) {
     if (desiredTurn !== undefined && desiredTurn >= userQueries.length) {
@@ -670,12 +595,7 @@ async function resolveJumpCandidate(
 
   const citedIds = new Set<string>();
   for (const ev of events) {
-    const blob =
-      ev.kind === "assistant_summary"
-        ? ev.text
-        : ev.kind === "tool"
-          ? ev.label
-          : "";
+    const blob = ev.kind === "assistant_summary" ? ev.text : ev.kind === "tool" ? ev.label : "";
     for (const id of extractCitedSessionIds(blob)) {
       if (id !== candidate.sessionId.toLowerCase()) {
         citedIds.add(id);
@@ -699,9 +619,7 @@ async function resolveJumpCandidate(
       opts.eventCache,
       opts.context
     );
-    const queries = citedEvents
-      .filter((e) => e.kind === "user_query")
-      .map((e) => e.text);
+    const queries = citedEvents.filter((e) => e.kind === "user_query").map((e) => e.text);
     let turn = findBestTurnIndex(queries, hintText);
     if (
       turn === undefined &&
@@ -737,20 +655,13 @@ export async function handleNodeClicked(
     return;
   }
   await withTranscriptJumpLoading(async () => {
-    mindMapLog(
-      `handleNodeClicked: ${origin.refs.length} ref(s) → flattening + enriching`
-    );
-    const candidates = await enrichWithTurnData(
-      flattenCandidates(origin.refs),
-      _deps?.context
-    );
+    mindMapLog(`handleNodeClicked: ${origin.refs.length} ref(s) → flattening + enriching`);
+    const candidates = await enrichWithTurnData(flattenCandidates(origin.refs), _deps?.context);
     if (!candidates.length) {
       mindMapLog("handleNodeClicked: no candidates after flatten");
       return;
     }
-    mindMapLog(
-      `handleNodeClicked: ${candidates.length} candidate row(s) ready for picker`
-    );
+    mindMapLog(`handleNodeClicked: ${candidates.length} candidate row(s) ready for picker`);
     const chosen = await pickCandidate(candidates);
     if (!chosen) {
       mindMapLog("handleNodeClicked: user dismissed picker");
@@ -775,9 +686,7 @@ export async function handleNodeClicked(
  * used workspace switching. Clears the record and opens markdown when a
  * transcript path is still available.
  */
-export async function drainPendingJump(
-  deps: JumpDeps
-): Promise<void> {
+export async function drainPendingJump(deps: JumpDeps): Promise<void> {
   const pending = deps.context.globalState.get<PendingJump>(PENDING_JUMP_KEY);
   if (!pending) {
     return;

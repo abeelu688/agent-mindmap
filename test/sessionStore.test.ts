@@ -15,10 +15,7 @@ import {
   sha256Hex,
   writeRecord,
 } from "../extension/src/store/sessionStore";
-import type {
-  SessionRecord,
-  SessionRecordMeta,
-} from "../extension/src/store/storeTypes";
+import type { SessionRecord, SessionRecordMeta } from "../extension/src/store/storeTypes";
 import type { SessionOutline } from "../extension/src/llm/types";
 
 const sampleOutline: SessionOutline = {
@@ -38,7 +35,7 @@ function makeMeta(overrides: Partial<SessionRecordMeta> = {}): SessionRecordMeta
     projectPath: "/home/example/cursor/airecorder",
     transcriptPath: "/tmp/fake/transcript.jsonl",
     transcriptMtimeMs: 1_700_000_000_000,
-    transcriptSha256: sha256Hex("hello"),
+    transcriptFreshnessToken: sha256Hex("hello"),
     llm: { provider: "fake", model: "" },
     promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
     sessionLabel: "1111111… · whenever",
@@ -77,9 +74,7 @@ describe("sessionStore", () => {
     expect(loaded).toBeDefined();
     expect(loaded!.meta.sessionId).toBe(meta.sessionId);
     expect(loaded!.outline.outline[0].title).toBe("Transaction code");
-    expect(recordPath(dir, meta.projectSlug, meta.sessionId)).toContain(
-      meta.projectSlug
-    );
+    expect(recordPath(dir, meta.projectSlug, meta.sessionId)).toContain(meta.projectSlug);
   });
 
   it("listRecords returns every saved record across projects", async () => {
@@ -132,7 +127,7 @@ describe("sessionStore", () => {
 
     expect(
       isRecordFresh(record, {
-        transcriptSha256: meta.transcriptSha256,
+        transcriptFreshnessToken: meta.transcriptFreshnessToken,
         promptParams: meta.promptParams,
         promptVersion: 2,
         llm: meta.llm,
@@ -141,7 +136,7 @@ describe("sessionStore", () => {
 
     expect(
       isRecordFresh(record, {
-        transcriptSha256: "different",
+        transcriptFreshnessToken: "different",
         promptParams: meta.promptParams,
         promptVersion: 2,
         llm: meta.llm,
@@ -150,7 +145,7 @@ describe("sessionStore", () => {
 
     expect(
       isRecordFresh(record, {
-        transcriptSha256: meta.transcriptSha256,
+        transcriptFreshnessToken: meta.transcriptFreshnessToken,
         promptParams: { maxTopics: 5, maxItemsPerTopic: 6 },
         promptVersion: 2,
         llm: meta.llm,
@@ -159,7 +154,7 @@ describe("sessionStore", () => {
 
     expect(
       isRecordFresh(record, {
-        transcriptSha256: meta.transcriptSha256,
+        transcriptFreshnessToken: meta.transcriptFreshnessToken,
         promptParams: meta.promptParams,
         promptVersion: 2,
         llm: { provider: "fake", model: "claude" },
@@ -168,7 +163,7 @@ describe("sessionStore", () => {
 
     expect(
       isRecordFresh(record, {
-        transcriptSha256: meta.transcriptSha256,
+        transcriptFreshnessToken: meta.transcriptFreshnessToken,
         promptParams: meta.promptParams,
         promptVersion: 2,
         llm: { provider: "fake", model: "  " },
@@ -178,7 +173,7 @@ describe("sessionStore", () => {
     // Bumped promptVersion → stale
     expect(
       isRecordFresh(record, {
-        transcriptSha256: meta.transcriptSha256,
+        transcriptFreshnessToken: meta.transcriptFreshnessToken,
         promptParams: meta.promptParams,
         promptVersion: 3,
         llm: meta.llm,
@@ -187,13 +182,10 @@ describe("sessionStore", () => {
 
     // Records written before versioning (no promptVersion field) are treated
     // as v1 and become stale once the current prompt is bumped to v2+.
-    const legacy = buildSessionRecord(
-      makeMeta({ promptVersion: undefined }),
-      sampleOutline
-    );
+    const legacy = buildSessionRecord(makeMeta({ promptVersion: undefined }), sampleOutline);
     expect(
       isRecordFresh(legacy, {
-        transcriptSha256: legacy.meta.transcriptSha256,
+        transcriptFreshnessToken: legacy.meta.transcriptFreshnessToken,
         promptParams: legacy.meta.promptParams,
         promptVersion: 2,
         llm: legacy.meta.llm,
@@ -207,11 +199,7 @@ describe("sessionStore", () => {
     await writeRecord(dir, record);
     const file = recordPath(dir, meta.projectSlug, meta.sessionId);
     const { writeFile } = await import("fs/promises");
-    await writeFile(
-      file,
-      JSON.stringify({ ...record, schemaVersion: 999 }),
-      "utf8"
-    );
+    await writeFile(file, JSON.stringify({ ...record, schemaVersion: 999 }), "utf8");
     const loaded = await readRecord(dir, meta.projectSlug, meta.sessionId);
     expect(loaded).toBeUndefined();
   });

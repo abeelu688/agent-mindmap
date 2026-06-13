@@ -59,6 +59,11 @@ export type MindMapNodeData = {
     origin?: NodeOrigin;
   };
   children?: MindMapNodeData[];
+  /**
+   * Legacy / mind-elixir `NodeObj` wrapper shape. Some merge roots are stored
+   * as `{ nodeData: { ... } }`; readers fall back to `children` when absent.
+   */
+  nodeData?: MindMapNodeData;
 };
 
 export type MindMapRoot = MindMapNodeData;

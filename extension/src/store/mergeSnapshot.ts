@@ -1,10 +1,20 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { agentLog } from "../log";
-import { writeJsonAtomic } from "./atomicWrite";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import { outlineToTopicGraph, topicGraphToOutline } from "../llm/outlineToTopicGraph";
+import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import { writeJsonAtomic } from "./atomicWrite";
+import { buildConceptTrieStructure, type ConceptTrieNode } from "./mergeConceptTrie";
+import {
+  prepareRecordsForFinalTrie,
+  type ConceptMergePrepOntology,
+  collectDistinctTopSegmentKeys,
+} from "./prepareConceptMergeRecords";
+import { buildRecordMeta, buildSessionRecord, STORE_LAYOUT } from "./sessionStore";
+import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type {
   ReattachStep,
   SegmentEquivalence,
@@ -13,27 +23,7 @@ import type {
   SessionTreeSnapshot,
   Topic,
 } from "../llm/types";
-import {
-  outlineToTopicGraph,
-  topicGraphToOutline,
-} from "../llm/outlineToTopicGraph";
-import { segmentKeyForMerge } from "../llm/topicGraphValidate";
-import type { ConceptOntologyRecord } from "./ontologyTypes";
-import {
-  buildConceptTrieStructure,
-  type ConceptTrieNode,
-} from "./mergeConceptTrie";
 import type { TopicConceptPathDecision } from "./ontologyTypes";
-import {
-  prepareRecordsForFinalTrie,
-  type ConceptMergePrepOntology,
-  collectDistinctTopSegmentKeys,
-} from "./prepareConceptMergeRecords";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  STORE_LAYOUT,
-} from "./sessionStore";
 import type {
   ConceptContextForMerge,
   MergeRecord,
@@ -63,40 +53,19 @@ export function isMergeSnapshotSessionId(sessionId: string): boolean {
 }
 
 /** Exclude virtual snapshot records from batch maps and session lists. */
-export function filterRealSessionRecords(
-  records: SessionRecord[]
-): SessionRecord[] {
+export function filterRealSessionRecords(records: SessionRecord[]): SessionRecord[] {
   return records.filter((r) => !isMergeSnapshotSessionId(r.meta.sessionId));
 }
 
-export function mergeSnapshotPath(
-  storeDir: string,
-  projectSlug: string
-): string {
-  return path.join(
-    storeDir,
-    STORE_LAYOUT.mergesDir,
-    projectSlug,
-    "merge-snapshot.json"
-  );
+export function mergeSnapshotPath(storeDir: string, projectSlug: string): string {
+  return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, "merge-snapshot.json");
 }
 
-export function snapshotManifestPath(
-  storeDir: string,
-  projectSlug: string
-): string {
-  return path.join(
-    storeDir,
-    STORE_LAYOUT.mergesDir,
-    projectSlug,
-    "snapshot-manifest.json"
-  );
+export function snapshotManifestPath(storeDir: string, projectSlug: string): string {
+  return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, "snapshot-manifest.json");
 }
 
-export function projectSnapshotsDir(
-  storeDir: string,
-  projectSlug: string
-): string {
+export function projectSnapshotsDir(storeDir: string, projectSlug: string): string {
   return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, "snapshots");
 }
 
@@ -138,26 +107,15 @@ export async function readMergeSnapshot(
   storeDir: string,
   projectSlug: string
 ): Promise<MergeSnapshot | undefined> {
-  const parsed = await readJson<unknown>(
-    mergeSnapshotPath(storeDir, projectSlug)
-  );
+  const parsed = await readJson<unknown>(mergeSnapshotPath(storeDir, projectSlug));
   return isMergeSnapshot(parsed) ? parsed : undefined;
 }
 
-export async function writeMergeSnapshot(
-  storeDir: string,
-  snapshot: MergeSnapshot
-): Promise<void> {
-  await writeJsonAtomic(
-    mergeSnapshotPath(storeDir, snapshot.meta.projectSlug),
-    snapshot
-  );
+export async function writeMergeSnapshot(storeDir: string, snapshot: MergeSnapshot): Promise<void> {
+  await writeJsonAtomic(mergeSnapshotPath(storeDir, snapshot.meta.projectSlug), snapshot);
 }
 
-export async function deleteMergeSnapshot(
-  storeDir: string,
-  projectSlug: string
-): Promise<void> {
+export async function deleteMergeSnapshot(storeDir: string, projectSlug: string): Promise<void> {
   try {
     await fs.unlink(mergeSnapshotPath(storeDir, projectSlug));
   } catch {
@@ -196,9 +154,7 @@ export async function readSnapshotManifest(
   storeDir: string,
   projectSlug: string
 ): Promise<SnapshotManifest | undefined> {
-  const parsed = await readJson<unknown>(
-    snapshotManifestPath(storeDir, projectSlug)
-  );
+  const parsed = await readJson<unknown>(snapshotManifestPath(storeDir, projectSlug));
   return isSnapshotManifest(parsed) ? parsed : undefined;
 }
 
@@ -206,10 +162,7 @@ export async function writeSnapshotManifest(
   storeDir: string,
   manifest: SnapshotManifest
 ): Promise<void> {
-  await writeJsonAtomic(
-    snapshotManifestPath(storeDir, manifest.projectSlug),
-    manifest
-  );
+  await writeJsonAtomic(snapshotManifestPath(storeDir, manifest.projectSlug), manifest);
 }
 
 export async function readSnapshotById(
@@ -217,9 +170,7 @@ export async function readSnapshotById(
   projectSlug: string,
   node: SnapshotNode
 ): Promise<MergeSnapshot | undefined> {
-  const parsed = await readJson<unknown>(
-    snapshotFilePath(storeDir, projectSlug, node.path)
-  );
+  const parsed = await readJson<unknown>(snapshotFilePath(storeDir, projectSlug, node.path));
   return isMergeSnapshot(parsed) ? parsed : undefined;
 }
 
@@ -229,10 +180,7 @@ export async function writeSnapshotByPath(
   relativePath: string,
   snapshot: MergeSnapshot
 ): Promise<void> {
-  await writeJsonAtomic(
-    snapshotFilePath(storeDir, projectSlug, relativePath),
-    snapshot
-  );
+  await writeJsonAtomic(snapshotFilePath(storeDir, projectSlug, relativePath), snapshot);
 }
 
 export function findLeafNodeForSession(
@@ -315,10 +263,7 @@ function collectHubContextsFromTrie(
       return;
     }
     const childKeys = [...node.children.keys()].slice(0, HUB_CHILDREN_PER_CHAIN);
-    const parentKey =
-      depth === 0
-        ? ""
-        : segmentKeyForMerge(node.key);
+    const parentKey = depth === 0 ? "" : segmentKeyForMerge(node.key);
     out.push({
       key: node.key,
       label: node.label,
@@ -333,8 +278,7 @@ function collectHubContextsFromTrie(
     });
     if (depth === 0) {
       const sortedChildren = [...node.children.values()].sort(
-        (a, b) =>
-          b.occurrences - a.occurrences || a.label.localeCompare(b.label)
+        (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
       );
       for (const child of sortedChildren.slice(0, HUB_CHILDREN_PER_CHAIN)) {
         pushNode(child, depth + 1);
@@ -376,10 +320,7 @@ function topicPathDecisionsFromPrepared(
   return out;
 }
 
-function aggregateTopicsForSnapshot(
-  prepared: SessionRecord[],
-  projectSlug: string
-): Topic[] {
+function aggregateTopicsForSnapshot(prepared: SessionRecord[], projectSlug: string): Topic[] {
   const topics: Topic[] = [];
   for (const record of prepared) {
     if (record.meta.projectSlug !== projectSlug) {
@@ -427,7 +368,12 @@ export function buildMergeSnapshotFromVirtualSession(
   const realRecords = filterRealSessionRecords(allRecords);
   const prep = prepareRecordsForFinalTrie(
     realRecords,
-    { segmentEquivalences, nodes: virtual.sessionAnalysis.nodes },
+    {
+      segmentEquivalences,
+      nodes: virtual.sessionAnalysis.nodes,
+      mappings: virtual.sessionAnalysis.mappings ?? [],
+      topicPaths: [],
+    },
     undefined,
     undefined,
     virtual.sessionAnalysis
@@ -516,11 +462,7 @@ export function buildMergeSnapshotFromOntology(
     })),
   };
   const segmentEquivalences = ontology.segmentEquivalences ?? [];
-  const hubContexts = collectHubContextsFromTrie(
-    trie.root,
-    projectSlug,
-    SNAPSHOT_CONTEXT_CAP
-  );
+  const hubContexts = collectHubContextsFromTrie(trie.root, projectSlug, SNAPSHOT_CONTEXT_CAP);
   const sessionIds = realRecords.map((r) => r.meta.sessionId).sort();
 
   const meta: MergeSnapshotMeta = {
@@ -539,11 +481,7 @@ export function buildMergeSnapshotFromOntology(
     schemaVersion: 1,
     meta,
     treeSnapshot,
-    sessionAnalysis: buildSnapshotAnalysis(
-      treeSnapshot,
-      outline,
-      segmentEquivalences
-    ),
+    sessionAnalysis: buildSnapshotAnalysis(treeSnapshot, outline, segmentEquivalences),
     conceptContexts: hubContexts,
     segmentEquivalences,
     reattachSteps: ontology.reattachSteps,
@@ -587,9 +525,13 @@ export function snapshotToSessionRecord(
 }
 
 function aggregateTopicsFromSnapshot(snapshot: MergeSnapshot): Topic[] {
-  const fromOutline = outlineToTopicGraph(
-    snapshot.sessionAnalysis.outline
-  ).topics.filter((t) => t.conceptPath?.length);
+  const sessionOutline = snapshot.sessionAnalysis.outline;
+  if (!sessionOutline) {
+    throw new Error("aggregateTopicsFromSnapshot: snapshot.sessionAnalysis.outline is missing");
+  }
+  const fromOutline = outlineToTopicGraph(sessionOutline).topics.filter(
+    (t) => t.conceptPath?.length
+  );
   if (fromOutline.length > 0) {
     return fromOutline;
   }
@@ -603,6 +545,7 @@ function aggregateTopicsFromSnapshot(snapshot: MergeSnapshot): Topic[] {
       byPath.set(pk, {
         title: tp.conceptPath[tp.conceptPath.length - 1] ?? "topic",
         conceptPath: [...tp.conceptPath],
+        items: [],
       });
     }
   }
@@ -622,9 +565,7 @@ export function batchIntroducesNewTopRoots(
   snapshot: MergeSnapshot,
   batchRecords: SessionRecord[]
 ): boolean {
-  const snapRoots = new Set(
-    topRootsFromRecords([snapshotToSessionRecord(snapshot)])
-  );
+  const snapRoots = new Set(topRootsFromRecords([snapshotToSessionRecord(snapshot)]));
   const batchRoots = topRootsFromRecords(batchRecords);
   if (!snapRoots.size) {
     return batchRoots.length > 0;

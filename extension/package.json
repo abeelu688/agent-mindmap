@@ -5,6 +5,7 @@
   "version": "0.1.1",
   "icon": "icon.png",
   "publisher": "airecorder",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -12,6 +13,20 @@
     "Visualization",
     "Other"
   ],
+  "keywords": [
+    "mind map",
+    "ai",
+    "agent",
+    "transcript",
+    "cursor",
+    "claude code",
+    "visualization",
+    "knowledge graph"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onStartupFinished",
     "onCommand:agent-mindmap.openLatest",

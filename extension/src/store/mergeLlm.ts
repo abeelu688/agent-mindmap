@@ -1,17 +1,10 @@
-import type { AgentHostId } from "../host/types";
 import * as vscode from "vscode";
-import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
 import { PROMPT_VERSION } from "../llm/promptOutline";
-import {
-  LlmProviderError,
-  type LlmProvider,
-  type MergedOutline,
-} from "../llm/types";
-import type { PromptLanguage } from "../llm/promptLanguage";
+import { LlmProviderError, type LlmProvider, type MergedOutline } from "../llm/types";
 import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
-import type { MindMapRoot } from "../transcript/types";
+import { format, t as safeT } from "../l10n/uiTranslate";
 import {
   llmMergeCachePath,
   llmRefinedMergePath,
@@ -19,8 +12,11 @@ import {
   sha256Hex,
   writeMergeRecord,
 } from "./sessionStore";
+import type { PromptLanguage } from "../llm/promptLanguage";
+import type { MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
-import { format, t as safeT } from "../l10n/uiTranslate";
+import type { MindMapProgress } from "../progress";
+import type { AgentHostId } from "../host/types";
 
 export type MergeLlmOptions = {
   maxTopics: number;
@@ -92,23 +88,19 @@ export async function mergeWithLlm(
   const cacheFile = llmMergeCachePath(storeDir, cacheKey);
   const cached = await readMergeRecord(cacheFile);
   if (cached) {
-    progress?.report(
-      safeT("ui.merge.cache.hitRender", "Merge cache hit, generating mind map…")
-    );
+    progress?.report(safeT("ui.merge.cache.hitRender", "Merge cache hit, generating mind map…"));
     await writeMergeRecord(llmRefinedMergePath(storeDir), cached);
     return cached;
   }
 
-  const hostId =
-    opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
+  const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
   const prompt = buildMergePrompt(
     records,
     {
       maxTopics: opts.maxTopics,
       maxItemsPerTopic: opts.maxItemsPerTopic,
     },
-    hostId,
-    opts.promptLanguage ?? "zh"
+    hostId
   );
 
   const heartbeat = createHeartbeat(
@@ -127,9 +119,7 @@ export async function mergeWithLlm(
         responseSchema: "merged-outline",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(
-              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-            );
+            progress?.report(safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts));
           }
         },
       },
@@ -145,11 +135,7 @@ export async function mergeWithLlm(
   const merged = result as MergedOutline;
 
   progress?.report(safeT("ui.progress.renderMindMap", "Rendering mind map…"));
-  const mindMap = buildRefinedMindMap(
-    merged,
-    records,
-    opts.title ?? merged.title
-  );
+  const mindMap = buildRefinedMindMap(merged, records, opts.title ?? merged.title);
   const record: MergeRecord = {
     schemaVersion: 1,
     meta: {
@@ -161,8 +147,7 @@ export async function mergeWithLlm(
         provider: provider.id,
         model: opts.model?.trim() || undefined,
       },
-      title:
-        typeof mindMap.data.text === "string" ? mindMap.data.text : undefined,
+      title: typeof mindMap.data.text === "string" ? mindMap.data.text : undefined,
     },
     mindMap,
   };

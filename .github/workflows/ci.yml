@@ -43,6 +43,12 @@ jobs:
       - name: Verify l10n bundle key consistency
         run: npm run check:l10n
 
+      - name: Type check extension
+        run: npm run typecheck:extension
+
+      - name: Type check webview
+        run: npm run typecheck:webview
+
       - name: Build
         run: npm run build
 
@@ -53,20 +59,12 @@ jobs:
         run: npm test
 
       # ── Soft checks (warnings only, do not block) ────────────────────────
-      # These are scheduled to become strict in Phase 4 — see
-      # docs/IMPROVEMENT-PLAN.md.
+      # Lint/format still carry pre-existing warnings — see
+      # docs/IMPROVEMENT-PLAN.md for the cleanup plan.
       - name: Lint (non-blocking)
         run: npm run lint
         continue-on-error: true
 
       - name: Format check (non-blocking)
         run: npm run format:check
-        continue-on-error: true
-
-      - name: Type check extension (non-blocking)
-        run: npm run typecheck:extension
-        continue-on-error: true
-
-      - name: Type check webview (non-blocking)
-        run: npm run typecheck:webview
         continue-on-error: true
