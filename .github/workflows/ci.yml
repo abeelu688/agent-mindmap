@@ -59,8 +59,7 @@ jobs:
         run: npm test
 
       # ── Soft checks (warnings only, do not block) ────────────────────────
-      # Lint/format still carry pre-existing warnings — see
-      # docs/IMPROVEMENT-PLAN.md for the cleanup plan.
+      # Lint/format still carry pre-existing warnings — tracked incrementally.
       - name: Lint (non-blocking)
         run: npm run lint
         continue-on-error: true
