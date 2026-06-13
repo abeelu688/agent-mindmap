@@ -49,6 +49,7 @@ type BatchStatus = {
   batchNo: number;
   running: boolean;
   pendingUpdateBatchNo?: number;
+  pendingUpdateLabel?: string;
 };
 
 type VsCodeApi = {
@@ -128,14 +129,17 @@ function setBatchStatus(status: BatchStatus): void {
   }
   if (status.pendingUpdateBatchNo !== undefined) {
     parts.push(`update:batch${status.pendingUpdateBatchNo}`);
+  } else if (status.pendingUpdateLabel) {
+    parts.push(`update:${status.pendingUpdateLabel}`);
   }
   batchDetailEl.textContent = parts.join(" · ");
 
   if (batchRefreshBtn) {
-    const canRefresh = status.pendingUpdateBatchNo !== undefined;
+    const canRefresh =
+      status.pendingUpdateBatchNo !== undefined || Boolean(status.pendingUpdateLabel);
     batchRefreshBtn.disabled = !canRefresh;
     batchRefreshBtn.classList.toggle("batch-status__button--attention", canRefresh);
-    batchRefreshBtn.title = canRefresh ? "Merge ready — click to update mind map" : "";
+    batchRefreshBtn.title = canRefresh ? "Update ready — click to refresh mind map" : "";
   }
 }
 
@@ -457,7 +461,7 @@ if (!offlineMode) {
   applyStrings(uiStrings);
   if (batchRefreshBtn) {
     batchRefreshBtn.addEventListener("click", () => {
-      if (!lastBatchStatus?.pendingUpdateBatchNo) {
+      if (!lastBatchStatus?.pendingUpdateBatchNo && !lastBatchStatus?.pendingUpdateLabel) {
         return;
       }
       postToExtension({ type: "requestApplyPendingUpdate" });

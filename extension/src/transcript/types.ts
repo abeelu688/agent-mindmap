@@ -7,6 +7,21 @@ export type ChatEvent =
       lineIndex: number;
       /** Source file paths this tool_use touched (Read/Edit/Write/Grep/ReadLints...). */
       filePaths?: string[];
+      /**
+       * Set for write-type tool calls only. Used to filter code-ref entries to
+       * files that were actually changed (not just read) in this session.
+       * - "create": Write tool (new file or full overwrite)
+       * - "modify": StrReplace / EditNotebook (partial edit)
+       * - "delete": Delete tool
+       * Read / Glob / Grep / Shell → undefined (omitted).
+       */
+      writeKind?: "create" | "modify" | "delete";
+      /**
+       * First ~400 chars of written content for "create", or ~200 chars of
+       * new_string for "modify". Used as grounding context in the code-ref
+       * description prompt without an extra LLM call.
+       */
+      contentSnippet?: string;
     }
   | { kind: "assistant_summary"; text: string; preview: string; lineIndex: number };
 

@@ -51,6 +51,7 @@
   "ui.batch.summary.withFailures": "Agent Mind Map: 共 {0} 条会话，新分析 {1}，缓存 {2}，失败 {3}（{4}{5}）。",
   "ui.batch.failedSuffix": "{0} 条会话分析失败。",
   "ui.batch.progress.title": "Agent Mind Map: 批量分析并合并…",
+  "ui.codeRefs.pendingRefresh": "Agent Mind Map: 代码描述已更新。点击思维导图里的 Refresh 后更新画面。",
   "ui.batch.noOntologyEquivalences": "Agent Mind Map: 未生成概念同义段规则。请再次运行「Analyze All Sessions (Current Project)」以完成同义项合并。",
   "ui.batch.noOntologyEquivalencesDisabled": "Agent Mind Map: 批量合并仅使用机械 path 规则。可启用 agentMindmap.library.batchRefineOntology，并再次运行「Analyze All Sessions (Current Project)」进行同义段精炼。",
   "ui.merge.scope.current.label": "当前项目 ({0})",
