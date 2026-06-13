@@ -8,13 +8,6 @@ import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { validateTopicGraph } from "../extension/src/llm/cursorCliProvider";
 import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import { LlmProviderError } from "../extension/src/llm/types";
-import type {
-  LlmProvider,
-  LlmSummarizeResult,
-  SessionOutline,
-  SummarizeInput,
-  TopicGraph,
-} from "../extension/src/llm/types";
 import { extractUserQuery, parseJsonl } from "../extension/src/transcript/parseJsonl";
 import {
   buildRecordMeta,
@@ -41,11 +34,7 @@ import {
   buildMergeSessionAnalysisPrompt,
 } from "../extension/src/llm/promptMergeSessionAnalysis";
 import { resolveConceptPathWithEquivalences } from "../extension/src/llm/resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence } from "../extension/src/llm/types";
-import {
-  filterSessionIds,
-  loadEvalConfig,
-} from "../extension/src/eval/loadEvalConfig";
+import { filterSessionIds, loadEvalConfig } from "../extension/src/eval/loadEvalConfig";
 import {
   countMindMapNodes,
   countTrieNodes,
@@ -58,28 +47,30 @@ import {
   buildConceptTrieStructure,
 } from "../extension/src/store/mergeConceptTrie";
 import { computeMergeCacheKey } from "../extension/src/store/mergeLlm";
-import type { SessionRecord } from "../extension/src/store/storeTypes";
-import {
-  flattenCandidates,
-  formatPickerLabel,
-} from "../extension/src/jumpToOriginCore";
-import type { NodeOriginRef } from "../extension/src/transcript/types";
-import type { SessionMeta } from "../extension/src/mindmap/origin";
+import { flattenCandidates, formatPickerLabel } from "../extension/src/jumpToOriginCore";
 import { runProjectSessionBatch } from "../extension/src/sessionLoader";
-import type { TranscriptSession } from "../extension/src/transcript/types";
-import type { AgentHost } from "../extension/src/host/types";
 import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
-import {
-  buildReattachPrompt,
-  REATTACH_PROMPT_VERSION,
-} from "../extension/src/llm/promptReattach";
-import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
+import { buildReattachPrompt, REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
 import {
   DeltaReattachValidationError,
   validateDeltaReattachSteps,
 } from "../extension/src/llm/validateDeltaReattachSteps";
 import { reattachChangesToSteps } from "../extension/src/llm/reattachChanges";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../extension/src/store/mergeSnapshot";
+import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
+import type { AgentHost } from "../extension/src/host/types";
+import type { TranscriptSession } from "../extension/src/transcript/types";
+import type { SessionMeta } from "../extension/src/mindmap/origin";
+import type { NodeOriginRef } from "../extension/src/transcript/types";
+import type { SessionRecord } from "../extension/src/store/storeTypes";
+import type { SegmentEquivalence } from "../extension/src/llm/types";
+import type {
+  LlmProvider,
+  LlmSummarizeResult,
+  SessionOutline,
+  SummarizeInput,
+  TopicGraph,
+} from "../extension/src/llm/types";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -88,21 +79,24 @@ function assert(cond: boolean, msg: string): void {
 }
 
 async function main(): Promise<void> {
-  const fixture = readFileSync(
-    join(__dirname, "../../test/fixtures/sample.jsonl"),
-    "utf8"
-  );
+  const fixture = readFileSync(join(__dirname, "../../test/fixtures/sample.jsonl"), "utf8");
 
   // parseJsonl
-  assert(
-    extractUserQuery("<user_query>\nHello\n</user_query>") === "Hello",
-    "extractUserQuery"
-  );
+  assert(extractUserQuery("<user_query>\nHello\n</user_query>") === "Hello", "extractUserQuery");
 
   const events = parseJsonl(fixture);
-  assert(events.some((e) => e.kind === "user_query"), "has user_query");
-  assert(events.some((e) => e.kind === "tool"), "has tool");
-  assert(events.some((e) => e.kind === "assistant_summary"), "has summary");
+  assert(
+    events.some((e) => e.kind === "user_query"),
+    "has user_query"
+  );
+  assert(
+    events.some((e) => e.kind === "tool"),
+    "has tool"
+  );
+  assert(
+    events.some((e) => e.kind === "assistant_summary"),
+    "has summary"
+  );
 
   // turn fallback
   const turnRoot = buildTurnMindMap(events, {
@@ -120,8 +114,7 @@ async function main(): Promise<void> {
     includeToolCalls: false,
     maxConclusionItems: 8,
   });
-  const turnSubs2 =
-    turnNoTools.children?.[0]?.children?.map((c) => c.data.text) ?? [];
+  const turnSubs2 = turnNoTools.children?.[0]?.children?.map((c) => c.data.text) ?? [];
   assert(!turnSubs2.includes("调研"), "turn: no research when disabled");
 
   // topic graph validation
@@ -181,17 +174,12 @@ async function main(): Promise<void> {
     transcriptPath: "/tmp/sess-X.jsonl",
   };
   const originOutline = topicGraphToOutline(originGraph);
-  const originRoot = buildOutlineMindMap(
-    originOutline,
-    "label",
-    originSessionMeta
-  );
+  const originRoot = buildOutlineMindMap(originOutline, "label", originSessionMeta);
   const topic0Leaf = originRoot.children?.[0]?.children?.find((c) =>
     c.data.text.includes("tr.code 不在 Parcel")
   );
   assert(
-    topic0Leaf?.data.origin?.refs.length === 1 &&
-      topic0Leaf!.data.origin!.refs[0].turnIndex === 0,
+    topic0Leaf?.data.origin?.refs.length === 1 && topic0Leaf!.data.origin!.refs[0].turnIndex === 0,
     "origin: leaf refs single turnIndex"
   );
   const rootTurns = (originRoot.data.origin?.refs ?? [])
@@ -224,10 +212,7 @@ async function main(): Promise<void> {
     { ...sessBRef },
   ]);
   assert(flat.length === 4, "flatten: dedups identical pairs");
-  assert(
-    flat[0].sessionId === "A" && flat[0].turnIndex === 0,
-    "flatten: order preserved"
-  );
+  assert(flat[0].sessionId === "A" && flat[0].turnIndex === 0, "flatten: order preserved");
   assert(
     flat[3].sessionId === "B" && flat[3].turnIndex === undefined,
     "flatten: branch row distinct from leaf"
@@ -284,7 +269,7 @@ async function main(): Promise<void> {
         projectPath: "/work/proj-a",
         transcriptPath: "/tmp/sess-1.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("payload"),
+        transcriptFreshnessToken: sha256Hex("payload"),
         llm: { provider: "fake", model: "" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
         sessionLabel: "sess-1 · now",
@@ -313,14 +298,11 @@ async function main(): Promise<void> {
 
     const idx = await rebuildIndex(storeDir, all);
     assert(idx.entries.length === 2, "store: index has two entries");
-    assert(
-      idx.entries[0].analyzedAt >= idx.entries[1].analyzedAt,
-      "store: index sorted desc"
-    );
+    assert(idx.entries[0].analyzedAt >= idx.entries[1].analyzedAt, "store: index sorted desc");
 
     assert(
       isRecordFresh(recordA, {
-        transcriptSha256: recordA.meta.transcriptSha256,
+        transcriptFreshnessToken: recordA.meta.transcriptFreshnessToken,
         promptParams: recordA.meta.promptParams,
         promptVersion: recordA.meta.promptVersion ?? 1,
         llm: recordA.meta.llm,
@@ -329,7 +311,7 @@ async function main(): Promise<void> {
     );
     assert(
       !isRecordFresh(recordA, {
-        transcriptSha256: "different",
+        transcriptFreshnessToken: "different",
         promptParams: recordA.meta.promptParams,
         promptVersion: recordA.meta.promptVersion ?? 1,
         llm: recordA.meta.llm,
@@ -338,7 +320,7 @@ async function main(): Promise<void> {
     );
     assert(
       !isRecordFresh(recordA, {
-        transcriptSha256: recordA.meta.transcriptSha256,
+        transcriptFreshnessToken: recordA.meta.transcriptFreshnessToken,
         promptParams: recordA.meta.promptParams,
         promptVersion: (recordA.meta.promptVersion ?? 1) + 1,
         llm: recordA.meta.llm,
@@ -347,10 +329,7 @@ async function main(): Promise<void> {
     );
 
     const detRoot = buildDeterministicMergeMindMap(all);
-    assert(
-      (detRoot.children?.length ?? 0) === 2,
-      "merge: two project nodes"
-    );
+    assert((detRoot.children?.length ?? 0) === 2, "merge: two project nodes");
     const detRec = buildDeterministicMergeRecord(all);
     assert(detRec.meta.kind === "deterministic", "merge: kind tag");
     assert(detRec.meta.projectSlugs.length === 2, "merge: project slugs");
@@ -367,7 +346,7 @@ async function main(): Promise<void> {
         projectSlug: "proj-concept",
         transcriptPath: "/tmp/concept.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("concept"),
+        transcriptFreshnessToken: sha256Hex("concept"),
         llm: { provider: "fake" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
         promptVersion: 2,
@@ -401,11 +380,9 @@ async function main(): Promise<void> {
     ];
     assert(
       JSON.stringify(
-        resolveConceptPathWithEquivalences(
-          ["android", "runtime", "art", "jit"],
-          artRuntimeEq,
-          { items: ["libart"] }
-        )
+        resolveConceptPathWithEquivalences(["android", "runtime", "art", "jit"], artRuntimeEq, {
+          items: ["libart"],
+        })
       ) === JSON.stringify(["android", "art", "jit"]),
       "equivalence: fold runtime under android to art"
     );
@@ -416,7 +393,7 @@ async function main(): Promise<void> {
         projectSlug: "aosp",
         transcriptPath: "/tmp/jit.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("jit"),
+        transcriptFreshnessToken: sha256Hex("jit"),
         llm: { provider: "fake" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
         promptVersion: 2,
@@ -438,7 +415,7 @@ async function main(): Promise<void> {
         projectSlug: "aosp",
         transcriptPath: "/tmp/hook.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("hook"),
+        transcriptFreshnessToken: sha256Hex("hook"),
         llm: { provider: "fake" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
         promptVersion: 2,
@@ -462,33 +439,21 @@ async function main(): Promise<void> {
       (c.data.text ?? "").startsWith("android (")
     );
     assert(!!artAndroid, "trie: art merge has android root");
-    const artAndroidKids =
-      artAndroid?.children?.map((c) => c.data.text ?? "") ?? [];
+    const artAndroidKids = artAndroid?.children?.map((c) => c.data.text ?? "") ?? [];
     assert(
       artAndroidKids.filter((l) => l.startsWith("art (")).length === 1,
       "trie: single art under android"
     );
-    assert(
-      !artAndroidKids.some((l) => l.startsWith("runtime (")),
-      "trie: no runtime sibling"
-    );
+    assert(!artAndroidKids.some((l) => l.startsWith("runtime (")), "trie: no runtime sibling");
 
-    const key1 = computeMergeCacheKey(
-      all,
-      { maxTopics: 8, maxItemsPerTopic: 6 },
-      "fake"
-    );
+    const key1 = computeMergeCacheKey(all, { maxTopics: 8, maxItemsPerTopic: 6 }, "fake");
     const key2 = computeMergeCacheKey(
       [all[1], all[0]],
       { maxTopics: 8, maxItemsPerTopic: 6 },
       "fake"
     );
     assert(key1 === key2, "merge: cache key is order-independent");
-    const key3 = computeMergeCacheKey(
-      all,
-      { maxTopics: 9, maxItemsPerTopic: 6 },
-      "fake"
-    );
+    const key3 = computeMergeCacheKey(all, { maxTopics: 9, maxItemsPerTopic: 6 }, "fake");
     assert(key1 !== key3, "merge: cache key includes params");
   } finally {
     try {
@@ -540,10 +505,7 @@ async function main(): Promise<void> {
         assert(opts?.skipAutoMerge === true, "batch: skipAutoMerge");
         deps.progress?.report("子步骤");
         const prefixed = batchMessages.find((m) => m.includes("子步骤"));
-        assert(
-          !!prefixed && /\b\d+\/3\b/.test(prefixed),
-          "batch: prefixed progress with position"
-        );
+        assert(!!prefixed && /\b\d+\/3\b/.test(prefixed), "batch: prefixed progress with position");
         if (session.id === "batch-fail") {
           throw new Error("batch failure");
         }
@@ -561,10 +523,7 @@ async function main(): Promise<void> {
   assert(batchResult.analyzed === 2, "batch: analyzed");
   assert(batchResult.skippedFresh === 1, "batch: skippedFresh");
   assert(batchResult.failed === 1, "batch: failed");
-  assert(
-    batchResult.failures[0]?.sessionId === "batch-fail",
-    "batch: failure id"
-  );
+  assert(batchResult.failures[0]?.sessionId === "batch-fail", "batch: failure id");
 
   // eval config
   {
@@ -574,10 +533,7 @@ async function main(): Promise<void> {
     assert(paths.manifestPath.endsWith("manifest.json"), "eval config: manifest path");
     const filtered = filterSessionIds(config, ["a", "b", "c"]);
     assert(filtered.length === 3, "eval config: filter all ids");
-    const subset = filterSessionIds(
-      { ...config, sessionFilter: ["a"] },
-      ["a", "b"]
-    );
+    const subset = filterSessionIds({ ...config, sessionFilter: ["a"] }, ["a", "b"]);
     assert(subset.length === 1 && subset[0] === "a", "eval config: filter subset");
   }
 
@@ -585,9 +541,7 @@ async function main(): Promise<void> {
   {
     const mmNode = {
       data: { text: "root" },
-      children: [
-        { data: { text: "a" }, children: [{ data: { text: "leaf" } }] },
-      ],
+      children: [{ data: { text: "a" }, children: [{ data: { text: "leaf" } }] }],
     };
     assert(countMindMapNodes(mmNode) === 3, "eval: mind map node count");
 
@@ -608,7 +562,7 @@ async function main(): Promise<void> {
           projectSlug: "home-welde-cursor-aosp14",
           transcriptPath: "/tmp/ev-s1.jsonl",
           transcriptMtimeMs: 1,
-          transcriptSha256: sha256Hex("ev-s1"),
+          transcriptFreshnessToken: sha256Hex("ev-s1"),
           llm: { provider: "test" },
           promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
           sessionLabel: "ev-s1",
@@ -623,7 +577,7 @@ async function main(): Promise<void> {
           projectSlug: "home-welde-cursor-aosp14",
           transcriptPath: "/tmp/ev-s2.jsonl",
           transcriptMtimeMs: 1,
-          transcriptSha256: sha256Hex("ev-s2"),
+          transcriptFreshnessToken: sha256Hex("ev-s2"),
           llm: { provider: "test" },
           promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
           sessionLabel: "ev-s2",
@@ -638,7 +592,7 @@ async function main(): Promise<void> {
           projectSlug: "home-welde-cursor-aosp14",
           transcriptPath: "/tmp/ev-s3.jsonl",
           transcriptMtimeMs: 1,
-          transcriptSha256: sha256Hex("ev-s3"),
+          transcriptFreshnessToken: sha256Hex("ev-s3"),
           llm: { provider: "test" },
           promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
           sessionLabel: "ev-s3",
@@ -658,22 +612,18 @@ async function main(): Promise<void> {
     const cov = measureSessionCoverage(evalStructure, ["ev-s1", "ev-s2", "ev-s3"]);
     assert(cov.sessionsAtTerminalTopics === 2, "eval: terminal coverage count");
     assert(cov.sessionsInAnyTopic === 3, "eval: any topic coverage");
-    const report = measureConceptMerge(
-      evalRecords,
-      { projectSlug: "home-welde-cursor-aosp14" },
-      ["ev-s1", "ev-s2", "ev-s3"]
-    );
+    const report = measureConceptMerge(evalRecords, { projectSlug: "home-welde-cursor-aosp14" }, [
+      "ev-s1",
+      "ev-s2",
+      "ev-s3",
+    ]);
     assert(report.conceptMerge.totalTopics === 3, "eval: total topics");
     assert(report.conceptMerge.mindMapNodeCount > 0, "eval: mind map nodes");
   }
 
   // delta batch-2: prompt v22 frozen hubs + parallel-hub validation (aosp14 regression)
   {
-    function deltaChain(
-      from: string,
-      sessionIds: string[],
-      chainIndex: number
-    ): ReparentChain {
+    function deltaChain(from: string, sessionIds: string[], chainIndex: number): ReparentChain {
       return {
         chainIndex,
         from,
@@ -700,17 +650,9 @@ async function main(): Promise<void> {
       "cplusplus",
       "column-truncation",
     ];
-    const newSegments = [
-      "android",
-      "androidcomponents",
-      "androidlogging",
-      "intent",
-      "aosp",
-    ];
+    const newSegments = ["android", "androidcomponents", "androidlogging", "intent", "aosp"];
     const chains: ReparentChain[] = [
-      ...frozenSegments.map((from, i) =>
-        deltaChain(from, [MERGE_SNAPSHOT_SESSION_ID], i + 1)
-      ),
+      ...frozenSegments.map((from, i) => deltaChain(from, [MERGE_SNAPSHOT_SESSION_ID], i + 1)),
       ...newSegments.map((from, i) =>
         deltaChain(from, [`batch2-${i}`], frozenSegments.length + i + 1)
       ),
@@ -739,13 +681,14 @@ async function main(): Promise<void> {
     };
 
     assert(REATTACH_PROMPT_VERSION === 23, "delta: reattach prompt v23");
-    const platformChain = nodeCatalog.numberedChains.find(
-      (c) => c.from === "androidplatform"
-    );
+    const platformChain = nodeCatalog.numberedChains.find((c) => c.from === "androidplatform");
     assert(platformChain, "delta: androidplatform chain");
     const prompt = buildReattachPrompt(deltaInput, "cursor", "zh", "delta");
     assert(prompt.includes("仅 changes"), "delta: changes output");
-    assert(prompt.includes(`${platformChain!.rootNodeId} (androidplatform)`), "delta: frozen id listed");
+    assert(
+      prompt.includes(`${platformChain!.rootNodeId} (androidplatform)`),
+      "delta: frozen id listed"
+    );
 
     const androidChain = nodeCatalog.numberedChains.find((c) => c.from === "android");
     const intentChain = nodeCatalog.numberedChains.find((c) => c.from === "intent");
@@ -756,9 +699,7 @@ async function main(): Promise<void> {
     try {
       validateDeltaReattachSteps(
         deltaInput,
-        reattachChangesToSteps([
-          { kind: "attach", hub: "android", node: "intent" },
-        ])
+        reattachChangesToSteps([{ kind: "attach", hub: "android", node: "intent" }])
       );
     } catch (err) {
       parallelRejected = err instanceof DeltaReattachValidationError;
@@ -770,9 +711,7 @@ async function main(): Promise<void> {
 
     validateDeltaReattachSteps(
       deltaInput,
-      reattachChangesToSteps([
-        { kind: "attach", hub: "androidplatform", node: "aosp" },
-      ])
+      reattachChangesToSteps([{ kind: "attach", hub: "androidplatform", node: "aosp" }])
     );
   }
 
@@ -783,7 +722,7 @@ async function main(): Promise<void> {
         projectSlug: "proj-a",
         transcriptPath: "/tmp/ctx.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("ctx"),
+        transcriptFreshnessToken: sha256Hex("ctx"),
         analyzedAt: 1,
         llm: { provider: "fake" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
@@ -834,7 +773,7 @@ async function main(): Promise<void> {
         projectSlug: "proj-a",
         transcriptPath: "/tmp/snap.jsonl",
         transcriptMtimeMs: 1,
-        transcriptSha256: sha256Hex("snap"),
+        transcriptFreshnessToken: sha256Hex("snap"),
         analyzedAt: 1,
         llm: { provider: "fake" },
         promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
@@ -859,35 +798,44 @@ async function main(): Promise<void> {
       }
     );
     const input = buildMergeSessionAnalysisInput(
-      [snap, buildSessionRecord(
-        buildRecordMeta({
-          sessionId: "batch1",
-          projectSlug: "proj-a",
-          transcriptPath: "/tmp/b1.jsonl",
-          transcriptMtimeMs: 1,
-          transcriptSha256: sha256Hex("b1"),
-          analyzedAt: 1,
-          llm: { provider: "fake" },
-          promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
-          promptVersion: 5,
-          sessionLabel: "b1",
-        }),
-        topicGraphToOutline({
-          topics: [{ title: "t", conceptPath: ["a", "b"], items: [{ text: "x" }] }],
-        })
-      )],
+      [
+        snap,
+        buildSessionRecord(
+          buildRecordMeta({
+            sessionId: "batch1",
+            projectSlug: "proj-a",
+            transcriptPath: "/tmp/b1.jsonl",
+            transcriptMtimeMs: 1,
+            transcriptFreshnessToken: sha256Hex("b1"),
+            analyzedAt: 1,
+            llm: { provider: "fake" },
+            promptParams: { maxTopics: 6, maxItemsPerTopic: 6 },
+            promptVersion: 5,
+            sessionLabel: "b1",
+          }),
+          topicGraphToOutline({
+            topics: [{ title: "t", conceptPath: ["a", "b"], items: [{ text: "x" }] }],
+          })
+        ),
+      ],
       "delta",
       MERGE_SNAPSHOT_SESSION_ID
     );
-    assert(input.sessions[0]?.frozenTopRootKeys?.includes("hub") ?? false, "merge input: frozen tops");
-    assert(input.sessions[0]?.frozenDomains?.includes("d1") ?? false, "merge input: frozen domains");
+    assert(
+      input.sessions[0]?.frozenTopRootKeys?.includes("hub") ?? false,
+      "merge input: frozen tops"
+    );
+    assert(
+      input.sessions[0]?.frozenDomains?.includes("d1") ?? false,
+      "merge input: frozen domains"
+    );
     const prompt = buildMergeSessionAnalysisPrompt(input, {
       maxDomains: 8,
       maxNodes: 64,
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 8, "merge prompt v8");
+    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 10, "merge prompt v10");
     assert(prompt.includes("frozenTopRootKeys"), "merge prompt: frozen tops");
   }
 
@@ -903,7 +851,10 @@ async function main(): Promise<void> {
         ],
       },
     ]);
-    assert(tree[0]?.children?.[0]?.children?.[0]?.conceptPath?.[0] === "a", "merge outline tree depth");
+    assert(
+      tree[0]?.children?.[0]?.children?.[0]?.conceptPath?.[0] === "a",
+      "merge outline tree depth"
+    );
     const nodes = Array.from({ length: 50 }, (_, i) => ({
       key: `n${i}`,
       label: `N${i}`,

@@ -1,5 +1,6 @@
 # Agent Mind Map
 
+[![CI](https://github.com/your-org/agent-mindmap/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/agent-mindmap/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.85+-blue.svg)](https://code.visualstudio.com/)
 [![English README](https://img.shields.io/badge/README-English-blue.svg)](README.md)
@@ -170,7 +171,9 @@ npm test
 
 ## 隐私
 
-对话记录可能包含本地文件路径和代码片段。扩展仅将对话内容发送到已配置的 CLI（`cursor-agent` 或 `claude`），由其在现有订阅条款下转发。库中仅存储摘要化的 `TopicGraph` 和元数据——**不包含**原始对话。
+对话记录可能包含本地文件路径和代码片段。扩展仅将对话内容发送到已配置的 CLI（`cursor-agent` 或 `claude`），由其在现有订阅条款下转发。库中仅存储摘要化的 `TopicGraph` 和元数据——**不包含**原始对话。扩展**不含任何遥测**，也不连接任何第三方服务器。
+
+完整隐私政策见 [`PRIVACY.md`](PRIVACY.md)。
 
 ## 许可证
 

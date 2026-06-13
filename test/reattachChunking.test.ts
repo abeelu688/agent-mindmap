@@ -1,21 +1,14 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import {
   estimateReattachPromptBytes,
   planReattachChunks,
   REATTACH_PROMPT_TARGET_BYTES,
 } from "../extension/src/llm/reattachChunking";
-import type {
-  ReparentChain,
-  TrieReparentInput,
-} from "../extension/src/llm/trieReparentInput";
 import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
+import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
 
-function makeChain(
-  chainIndex: number,
-  from: string,
-  sessionIds: string[]
-): ReparentChain {
+function makeChain(chainIndex: number, from: string, sessionIds: string[]): ReparentChain {
   return {
     chainIndex,
     from,
@@ -42,9 +35,7 @@ function makeInput(
   const frozenChainIndices =
     opts.mergeMode === "delta" && opts.snapshotSessionId
       ? chains
-          .map((c, i) =>
-            c.sessionIds.every((id) => id === opts.snapshotSessionId) ? i : -1
-          )
+          .map((c, i) => (c.sessionIds.every((id) => id === opts.snapshotSessionId) ? i : -1))
           .filter((i) => i >= 0)
       : [];
   const nodeCatalog = buildReattachNodeCatalog(chains);
@@ -72,10 +63,7 @@ function makeInput(
 
 describe("reattachChunking", () => {
   it("returns single chunk when prompt fits budget", () => {
-    const chains = [
-      makeChain(1, "a", ["s1"]),
-      makeChain(2, "b", ["s2"]),
-    ];
+    const chains = [makeChain(1, "a", ["s1"]), makeChain(2, "b", ["s2"])];
     const input = makeInput(chains);
     const plans = planReattachChunks(input);
     assert.equal(plans.length, 1);

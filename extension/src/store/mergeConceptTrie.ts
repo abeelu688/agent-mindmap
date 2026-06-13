@@ -3,23 +3,28 @@ import { mindMapLog } from "../webview/MindMapLog";
 import { segmentKeyForMerge } from "../llm/cursorCliProvider";
 import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { CodeReference, ConceptOntologyNode, OutlineNode, ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis, SessionOutline } from "../llm/types";
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology,
 } from "./prepareConceptMergeRecords";
 import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
-import {
-  leafRefs,
-  type SessionMeta,
-  unionChildRefs,
-  withOrigin,
-} from "../mindmap/origin";
+import { sanitizeSessionRecord } from "./sanitizeRecords";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
-import { sanitizeSessionRecord } from "./sanitizeRecords";
+import type {
+  CodeReference,
+  ConceptOntologyNode,
+  OutlineNode,
+  ReattachMove,
+  ReattachStep,
+  SegmentEquivalence,
+  SessionAnalysis,
+  SessionOutline,
+  Topic,
+} from "../llm/types";
 
 const MAX_LABEL = 120;
 
@@ -35,11 +40,7 @@ function leaf(text: string): MindMapNodeData {
   return { data: { text: truncate(text) } };
 }
 
-function branch(
-  text: string,
-  children: MindMapNodeData[],
-  expand = true
-): MindMapNodeData {
+function branch(text: string, children: MindMapNodeData[], expand = true): MindMapNodeData {
   return {
     data: { text: truncate(text), expand },
     children: children.length ? children : undefined,
@@ -245,10 +246,7 @@ export function buildOutlineFromConceptTrie(
   return { outline };
 }
 
-function buildCodeReferencesNode(
-  refs: CodeReference[],
-  sessionMeta: SessionMeta
-): MindMapNodeData {
+function buildCodeReferencesNode(refs: CodeReference[], sessionMeta: SessionMeta): MindMapNodeData {
   const groups = new Map<string, CodeReference[]>();
   for (const ref of refs) {
     let arr = groups.get(ref.path);
@@ -261,9 +259,9 @@ function buildCodeReferencesNode(
   const sortedPaths = [...groups.keys()].sort();
   const children: MindMapNodeData[] = [];
   for (const p of sortedPaths) {
-    const descs = groups.get(p)!.map((ref) =>
-      withOrigin(leaf(ref.description), [{ ...sessionMeta }])
-    );
+    const descs = groups
+      .get(p)!
+      .map((ref) => withOrigin(leaf(ref.description), [{ ...sessionMeta }]));
     children.push(branch(p, descs, true));
   }
   const node = branch("相关代码", children, false);
@@ -281,23 +279,14 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
         ? ` (Q${item.sourceTurnIndices.map((n) => n + 1).join("/Q")})`
         : "";
       children.push(
-        withOrigin(
-          leaf(`${item.text}${refs}`),
-          leafRefs(sessionMeta, item.sourceTurnIndices)
-        )
+        withOrigin(leaf(`${item.text}${refs}`), leafRefs(sessionMeta, item.sourceTurnIndices))
       );
     }
   } else {
     children.push(
-      withOrigin(
-        leaf(
-          uiTranslate(
-            "mindmap.concept.noDetails",
-            "(No details)"
-          )
-        ),
-        [{ ...sessionMeta }]
-      )
+      withOrigin(leaf(uiTranslate("mindmap.concept.noDetails", "(No details)")), [
+        { ...sessionMeta },
+      ])
     );
   }
   const rawCodeRefs = loc.record.sessionAnalysis?.codeReferences;
@@ -306,13 +295,9 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
     : undefined;
   if (codeRefs?.length) {
     // Filter to code refs relevant to this topic's turns
-    const topicTurns = new Set(
-      (loc.topic.items ?? []).flatMap((it) => it.sourceTurnIndices ?? [])
-    );
+    const topicTurns = new Set((loc.topic.items ?? []).flatMap((it) => it.sourceTurnIndices ?? []));
     const filtered = topicTurns.size
-      ? codeRefs.filter((ref) =>
-          ref.sourceTurnIndices?.some((t) => topicTurns.has(t))
-        )
+      ? codeRefs.filter((ref) => ref.sourceTurnIndices?.some((t) => topicTurns.has(t)))
       : codeRefs;
     if (filtered.length) {
       children.push(buildCodeReferencesNode(filtered, sessionMeta));
@@ -409,8 +394,7 @@ export function buildConceptTrieStructure(
   records: SessionRecord[],
   options: ConceptMergeOptions = {}
 ): ConceptTrieStructure {
-  const applyEquivalences =
-    options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES;
+  const applyEquivalences = options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES;
   const filtered = options.projectSlug
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
@@ -437,7 +421,9 @@ export function buildConceptTrieStructure(
     }
   }
 
-  mindMapLog(`[buildConceptTrieStructure] filtered=${filtered.length} totalTopics=${total} orphans=${orphans.length} rootChildren=${root.children.size}`);
+  mindMapLog(
+    `[buildConceptTrieStructure] filtered=${filtered.length} totalTopics=${total} orphans=${orphans.length} rootChildren=${root.children.size}`
+  );
 
   if (applyEquivalences) {
     mergeTrieSiblingsByEquivalences(root, [], options.segmentEquivalences);
@@ -478,11 +464,7 @@ export function buildConceptTrieMindMap(
   if (orphans.length) {
     const orphanNodes = orphans.map(topicBranch);
     const orphanBranch = branch(
-      uiTranslate(
-        "mindmap.concept.uncategorized",
-        "Uncategorized ({0})",
-        orphans.length
-      ),
+      uiTranslate("mindmap.concept.uncategorized", "Uncategorized ({0})", orphans.length),
       orphanNodes,
       false
     );
@@ -546,16 +528,18 @@ export function buildConceptMergeRecord(
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
   const sessionIds = filtered.map((r) => r.meta.sessionId);
-  const projectSlugs = Array.from(
-    new Set(filtered.map((r) => r.meta.projectSlug))
-  ).sort();
+  const projectSlugs = Array.from(new Set(filtered.map((r) => r.meta.projectSlug))).sort();
   const trieRecords = recordsForTrieBuild(records, options);
-  mindMapLog(`[buildConceptMergeRecord] input: ${records.length} records, ${filtered.length} filtered, ${trieRecords.length} trieRecords, ontologyForPrep=${!!options.ontologyForPrep}, virtualSession=${!!options.virtualSessionAnalysis}`);
+  mindMapLog(
+    `[buildConceptMergeRecord] input: ${records.length} records, ${filtered.length} filtered, ${trieRecords.length} trieRecords, ontologyForPrep=${!!options.ontologyForPrep}, virtualSession=${!!options.virtualSessionAnalysis}`
+  );
   // Log trieRecords topics detail
   for (const r of trieRecords.slice(0, 2)) {
     const topics = r.graph?.topics ?? [];
     const paths = topics.map((t: any) => t.conceptPath);
-    mindMapLog(`[buildConceptMergeRecord] trieRecord=${r.meta?.sessionId?.slice(0,8)} topics=${topics.length} paths=${JSON.stringify(paths)}`);
+    mindMapLog(
+      `[buildConceptMergeRecord] trieRecord=${r.meta?.sessionId?.slice(0, 8)} topics=${topics.length} paths=${JSON.stringify(paths)}`
+    );
   }
   const { mindMap } = buildConceptTrieMindMap(trieRecords, options);
   return {

@@ -7,7 +7,9 @@ function readVsCodeVar(name: string, fallback: string): string {
   return trimmed || fallback;
 }
 
-function cloneTheme(base: Theme): Theme {
+type ThemeWithCssVar = Theme & { cssVar: NonNullable<Theme["cssVar"]> };
+
+function cloneTheme(base: Theme): ThemeWithCssVar {
   return {
     ...base,
     palette: [...base.palette],
@@ -15,10 +17,7 @@ function cloneTheme(base: Theme): Theme {
   };
 }
 
-function mergeThemeOverrides(
-  theme: Theme,
-  overrides: MindMapUiOptions["themeOverrides"]
-): Theme {
+function mergeThemeOverrides(theme: Theme, overrides: MindMapUiOptions["themeOverrides"]): Theme {
   if (!overrides) {
     return theme;
   }
