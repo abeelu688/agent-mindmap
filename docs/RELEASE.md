@@ -67,7 +67,7 @@ Before bumping the version:
    # Output: agent-mindmap-0.2.0.vsix in repo root
    ```
 
-8. **Create a GitHub Release** at https://github.com/your-org/agent-mindmap/releases/new
+8. **Create a GitHub Release** at https://github.com/abeelu688/agent-mindmap/releases/new
    - Tag: `v0.2.0`
    - Title: `v0.2.0`
    - Description: paste the relevant section of `CHANGELOG.md`
