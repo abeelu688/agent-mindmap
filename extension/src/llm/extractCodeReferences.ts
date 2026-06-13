@@ -2,6 +2,7 @@ import { runLlmStage } from "../pipeline/llmStage";
 import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { LlmProviderError } from "./types";
+import type { PromptLanguage } from "./promptLanguage";
 import type { ChatEvent } from "../transcript/types";
 import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
@@ -215,22 +216,55 @@ const MAX_ENTRIES_PER_PATH = 3;
 /** Strategy D: max entries per LLM batch call. */
 const BATCH_SIZE = 30;
 
-function buildCodeRefDescriptionPrompt(entries: FileEntry[]): string {
-  const headerLines = [
-    "Below are code file paths and the context in which they were modified. Generate a short description (<=60 chars) for each file under each distinct topic.",
-    "",
-    "Goal: describe what code change this file carries or what implementation role it plays under the given topic. Do NOT narrate the conversation.",
-    "",
-    "Rules:",
-    "- Description must be <=60 chars",
-    "- Prioritize the topic and code snippet; fall back to user query / assistant summary only when no snippet is available",
-    '- Focus on the file\'s code responsibility or change, e.g. "add hierarchical rebuild entry for snapshot merge"',
-    "- Do NOT reproduce user requests, assistant promises, or debugging steps",
-    "- When the same file has multiple distinct topics, generate one description per topic",
-    '- Output ONLY a JSON array: [{"path":"...","description":"..."}]',
-    "- No markdown / explanations / ```",
-    "",
-  ];
+type CodeRefPromptStrings = {
+  intro: string;
+  goal: string;
+  rulesHeader: string;
+  rules: (exampleDesc: string) => string[];
+};
+
+const CODE_REF_TEXTS: Record<PromptLanguage, CodeRefPromptStrings> = {
+  zh: {
+    intro: "以下是代码文件路径及其修改上下文。为每个文件在各主题下生成一条简短描述（≤60字符）。",
+    goal: "目标：描述该文件在当前主题下承担的代码变更或实现角色，禁止复述对话过程。",
+    rulesHeader: "规则：",
+    rules: (ex) => [
+      "- 描述不超过60字符",
+      "- 优先使用主题和代码片段；无片段时回退到用户查询/助手摘要",
+      `- 聚焦文件的代码职责或变更，例如「${ex}」`,
+      "- 禁止复现用户请求、助手承诺或调试步骤",
+      "- 同一文件有多个不同主题时，每个主题生成一条描述",
+      '- 只输出 JSON 数组：[{"path":"...","description":"..."}]',
+      "- 无 markdown / 解释 / ```",
+    ],
+  },
+  en: {
+    intro:
+      "Below are code file paths and the context in which they were modified. Generate a short description (<=60 chars) for each file under each distinct topic.",
+    goal: "Goal: describe what code change this file carries or what implementation role it plays under the given topic. Do NOT narrate the conversation.",
+    rulesHeader: "Rules:",
+    rules: (ex) => [
+      "- Description must be <=60 chars",
+      "- Prioritize the topic and code snippet; fall back to user query / assistant summary only when no snippet is available",
+      `- Focus on the file's code responsibility or change, e.g. "${ex}"`,
+      "- Do NOT reproduce user requests, assistant promises, or debugging steps",
+      "- When the same file has multiple distinct topics, generate one description per topic",
+      '- Output ONLY a JSON array: [{"path":"...","description":"..."}]',
+      "- No markdown / explanations / ```",
+    ],
+  },
+};
+
+function buildCodeRefDescriptionPrompt(
+  entries: FileEntry[],
+  promptLanguage: PromptLanguage = "zh"
+): string {
+  const t = CODE_REF_TEXTS[promptLanguage];
+  const exampleDesc =
+    promptLanguage === "zh"
+      ? "为快照合并添加层级重建入口"
+      : "add hierarchical rebuild entry for snapshot merge";
+  const headerLines = [t.intro, "", t.goal, "", t.rulesHeader, ...t.rules(exampleDesc), ""];
   const header = headerLines.join("\n");
 
   // Group entries by path so the LLM sees all contexts for each file together
@@ -361,10 +395,16 @@ async function runDescBatch(
   entries: FileEntry[],
   provider: LlmProvider,
   signal: AbortSignal,
-  opts?: { model?: string; timeoutMs?: number; cacheDir?: string; cache?: boolean },
+  opts?: {
+    model?: string;
+    timeoutMs?: number;
+    cacheDir?: string;
+    cache?: boolean;
+    promptLanguage?: PromptLanguage;
+  },
   progress?: MindMapProgress
 ): Promise<DescEntry[]> {
-  const prompt = buildCodeRefDescriptionPrompt(entries);
+  const prompt = buildCodeRefDescriptionPrompt(entries, opts?.promptLanguage);
   return runLlmStage(
     {
       stageId: "code-ref-descriptions",
@@ -392,7 +432,13 @@ export async function generateCodeReferenceDescriptions(
   entries: FileEntry[],
   provider: LlmProvider,
   signal: AbortSignal,
-  opts?: { model?: string; timeoutMs?: number; cacheDir?: string; cache?: boolean },
+  opts?: {
+    model?: string;
+    timeoutMs?: number;
+    cacheDir?: string;
+    cache?: boolean;
+    promptLanguage?: PromptLanguage;
+  },
   progress?: MindMapProgress
 ): Promise<CodeReference[]> {
   if (!entries.length) {
@@ -403,7 +449,13 @@ export async function generateCodeReferenceDescriptions(
   const allDescs: DescEntry[] = [];
   for (let start = 0; start < entries.length; start += BATCH_SIZE) {
     const batch = entries.slice(start, start + BATCH_SIZE);
-    const batchDescs = await runDescBatch(batch, provider, signal, opts, progress);
+    const batchDescs = await runDescBatch(
+      batch,
+      provider,
+      signal,
+      { ...opts, promptLanguage: opts?.promptLanguage },
+      progress
+    );
     allDescs.push(...batchDescs);
   }
 
@@ -465,6 +517,7 @@ export async function extractCodeReferencesFromEvents(
     cacheDir?: string;
     cache?: boolean;
     outline?: SessionOutline;
+    promptLanguage?: PromptLanguage;
   },
   progress?: MindMapProgress
 ): Promise<CodeReference[]> {
@@ -481,6 +534,7 @@ export async function extractCodeReferencesFromEvents(
       timeoutMs: opts?.timeoutMs,
       cacheDir: opts?.cacheDir,
       cache: opts?.cache,
+      promptLanguage: opts?.promptLanguage,
     },
     progress
   );

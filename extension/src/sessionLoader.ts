@@ -15,6 +15,7 @@ import { notify, notifyWarning, notifyError } from "./notify";
 import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import { currentPipelineVersions, PIPELINE_VERSION } from "./pipeline/pipelineVersions";
+import { resolvePromptLanguage } from "./llm/promptLanguage";
 import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
@@ -414,8 +415,9 @@ export async function loadSession(
             model: settings.llm.model || undefined,
             cacheDir: getCacheDir(deps.context),
             cache: settings.cache,
-            timeoutMs: Math.min(settings.llm.timeoutMs, 60_000),
+            timeoutMs: settings.llm.timeoutMs,
             storeDir: getStoreDir(),
+            promptLanguage: resolvePromptLanguage(),
           });
         } else {
           // Code refs are up-to-date. Evict any stale single-session pending
@@ -569,8 +571,9 @@ export async function loadSession(
           model: settings.llm.model || undefined,
           cacheDir: getCacheDir(deps.context),
           cache: settings.cache,
-          timeoutMs: Math.min(settings.llm.timeoutMs, 60_000),
+          timeoutMs: settings.llm.timeoutMs,
           storeDir,
+          promptLanguage: resolvePromptLanguage(),
         });
       }
 
