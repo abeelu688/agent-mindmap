@@ -155,15 +155,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide and [CLAU
 
 ## Roadmap
 
-See [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md) for the full roadmap. Recent milestones:
-
-- [x] Unified error handling system (`AgentMindmapError` + `agentLog` + `notify()`)
-- [x] Entry file refactoring (`commands/` + `batch/` split — `extension.ts` from 1,229 → 232 lines)
-- [x] CI with GitHub Actions (lint, type-check, test, l10n key check)
-- [x] Pre-existing TypeScript errors cleaned up; extension/webview type checks now block CI
-- [x] i18n infrastructure (multi-locale UI bundles and prompt language separation)
-- [x] Community templates (issue/PR templates, [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md))
-
 Open for community contribution:
 
 - [ ] Full UI translations for additional languages

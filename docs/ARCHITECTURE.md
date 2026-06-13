@@ -72,7 +72,7 @@ agent-mindmap/
 │   └── offlineJump.ts          (jump-to-transcript in offline mode)
 │
 ├── test/                 ← Vitest + node test runner. Files mirror sources.
-├── docs/                 ← This file, IMPROVEMENT-PLAN, PIPELINES_AND_REVIEW
+├── docs/                 ← This file, PIPELINES_AND_REVIEW, RELEASE, MAINTAINING
 └── scripts/              ← Build helpers, lint scripts, eval pipeline
 ```
 
