@@ -8,7 +8,7 @@ Thank you for your interest in contributing! This guide covers everything you ne
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/agent-mindmap.git
+git clone https://github.com/abeelu688/agent-mindmap.git
 cd agent-mindmap
 npm install
 npm install --prefix extension

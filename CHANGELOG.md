@@ -38,5 +38,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Internal pre-release. Refer to git history for details.
 
-[Unreleased]: https://github.com/your-org/agent-mindmap/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/your-org/agent-mindmap/releases/tag/v0.1.1
+[Unreleased]: https://github.com/abeelu688/agent-mindmap/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/abeelu688/agent-mindmap/releases/tag/v0.1.1

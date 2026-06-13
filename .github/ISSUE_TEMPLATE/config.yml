@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/your-org/agent-mindmap/security/advisories/new
+    url: https://github.com/abeelu688/agent-mindmap/security/advisories/new
     about: Please report security issues privately, not as public issues. See SECURITY.md for details.
   - name: Discussion / brainstorming
-    url: https://github.com/your-org/agent-mindmap/discussions
+    url: https://github.com/abeelu688/agent-mindmap/discussions
     about: For open-ended ideas or "how would you approach X" questions.
