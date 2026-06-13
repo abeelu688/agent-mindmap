@@ -2,7 +2,7 @@
   "name": "agent-mindmap",
   "displayName": "Agent Mind Map",
   "description": "Read Cursor or Claude Code agent chat transcripts and visualize them as an interactive mind map.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "icon": "icon.png",
   "publisher": "airecorder",
   "license": "MIT",
@@ -256,7 +256,7 @@
             "ko"
           ],
           "default": "auto",
-          "description": "Language for extension notifications and prompts (when agentMindmap.llm.promptLanguage is auto). auto follows Configure Display Language. ja/ko require a community-contributed translation bundle — falls back to English when missing."
+          "description": "Language for extension notifications and prompts (when agentMindmap.llm.promptLanguage is auto). auto follows Configure Display Language. Locale bundles beyond English/Chinese are community-contributed and fall back to English when missing."
         },
         "agentMindmap.llm.promptLanguage": {
           "type": "string",
@@ -266,7 +266,7 @@
             "zh"
           ],
           "default": "auto",
-          "description": "Language used in LLM prompts. auto follows agentMindmap.ui.locale (zh-cn → zh; en/ja/ko → en). Override to force a specific prompt language regardless of UI locale. Note: changing this invalidates the SessionRecord cache."
+          "description": "Language used in LLM prompts. auto currently preserves the zh fallback until production English prompts are fully validated; after that, zh-cn maps to zh and other locales map to en. Override to force a specific prompt language regardless of UI locale. Note: changing this invalidates the SessionRecord cache."
         },
         "agentMindmap.ui.direction": {
           "type": "string",

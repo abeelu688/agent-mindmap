@@ -160,6 +160,7 @@ npm test
 - [x] 统一错误处理系统（`AgentMindmapError` + `agentLog` + `notify()`）
 - [x] 入口文件重构（`commands/` + `batch/` 拆分，`extension.ts` 从 1,229 行缩到 232 行）
 - [x] GitHub Actions CI（lint、类型检查、测试、l10n key 检查）
+- [x] 已清理预存 TypeScript 错误，extension/webview 类型检查现在会阻断 CI
 - [x] i18n 基础设施（多 locale UI bundle、prompt 语言独立设置）
 - [x] 社区模板（issue/PR 模板、[`CONTRIBUTING.md`](CONTRIBUTING.md)、[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)）
 
