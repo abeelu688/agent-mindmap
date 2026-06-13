@@ -28,9 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Known issues
 
-- 3 pre-existing test failures unrelated to this release: `sessionStore.test.ts > isRecordFresh`, `workspaceToSlug.test.ts > windows drive letter slug`, `reattachTimeout.test.ts > scaleMergeSessionAnalysisTimeoutMs`
-- 49 pre-existing TypeScript errors in `extension/src/` and 17 in `webview/src/` — `tsc --noEmit` runs as a non-blocking soft check in CI; tracked for future cleanup
-- LLM prompts other than `promptOutline.ts` are still Chinese-only; a community migration is open in CONTRIBUTING
+- Production LLM prompts are still Chinese-only; language-aware prompt migration is open for `session-analysis`, `code-ref-descriptions`, and `merge-session-analysis`
 
 ---
 
