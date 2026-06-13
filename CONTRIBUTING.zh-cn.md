@@ -90,7 +90,7 @@ chore: 升级依赖
 
 ## 架构概览
 
-详细架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（即将推出），或参阅 [CLAUDE.md](CLAUDE.md)。
+详细架构说明请参阅 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，代码级 pipeline review 见 [docs/PIPELINES_AND_REVIEW.md](docs/PIPELINES_AND_REVIEW.md)，面向 AI 助手的简明版见 [CLAUDE.md](CLAUDE.md)。
 
 要点：
 

@@ -1,0 +1,35 @@
+name: Question / usage help
+description: Ask how to do something, or clarify behavior
+title: "[question]: "
+labels: ["question"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got a question? Please first check:
+        - The [README](../../README.md) — installation, settings, commands
+        - The [CONTRIBUTING guide](../../CONTRIBUTING.md) — for development setup
+        - [Existing issues](https://github.com/your-org/agent-mindmap/issues) — your question may already be answered
+
+        If none of those help, fill in the form below.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?
+      description: |
+        Settings you've toggled, commands you've run, output you've seen. The more specific, the better.
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Agent Mind Map version
+      placeholder: "0.1.1"
