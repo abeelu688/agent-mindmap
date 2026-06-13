@@ -1,36 +1,34 @@
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider, SessionAnalysis } from "../llm/types";
-import type { MindMapProgress } from "../progress";
 import {
   computeOntologyCacheKey,
   findReusableOntologyBase,
   readOntologyRecord,
   writeOntologyRecord,
 } from "../store/ontologyStore";
-import type { ConceptOntologyRecord } from "../store/ontologyTypes";
-import type { MergeRecord, SessionRecord } from "../store/storeTypes";
-import { collectMergeTerms } from "./stages/collectMergeTerms";
-import {
-  mergeSessionAnalysis,
-  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
-} from "./stages/mergeSessionAnalysis";
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
-import {
-  prepareRecordsBeforeReattach,
-  updateConceptTrieAsync,
-} from "./stages/updateConceptTrie";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
 import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "../llm/segmentContext";
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
+import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
+import { collectMergeTerms } from "./stages/collectMergeTerms";
+import {
+  mergeSessionAnalysis,
+  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+} from "./stages/mergeSessionAnalysis";
+import { prepareRecordsBeforeReattach, updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import { createPipelineTimingCollector } from "./pipelineTiming";
+import type { AgentHostId } from "../host/types";
+import type { LlmProvider, SessionAnalysis } from "../llm/types";
+import type { MindMapProgress } from "../progress";
+import type { ConceptOntologyRecord } from "../store/ontologyTypes";
+import type { MergeRecord, SessionRecord } from "../store/storeTypes";
+import type { MindMapRoot } from "../transcript/types";
 import {
   finalizeSessionAnalysis,
   type FinalizedSessionAnalysis,
 } from "./stages/finalizeSessionAnalysis";
-import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
 
@@ -74,8 +72,7 @@ export type MergePipelineResult = {
 };
 
 export function mindMapTopLevelCount(merge: MergeRecord): number {
-  const children =
-    merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
+  const children = merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
   return children.length;
 }
 
@@ -197,8 +194,7 @@ export async function runMergePipeline(
   const hasCachedVirtual = Boolean(cached?.mergeSessionAnalysis);
   const mergeAnalysisVersionStale =
     cached != null &&
-    cached.meta.promptVersions.mergeSessionAnalysis !==
-      MERGE_SESSION_ANALYSIS_PROMPT_VERSION;
+    cached.meta.promptVersions.mergeSessionAnalysis !== MERGE_SESSION_ANALYSIS_PROMPT_VERSION;
   const llmInputCount = recordsForMergeInput.length;
   const needsConceptMerge =
     llmInputCount >= 2 &&
@@ -209,9 +205,7 @@ export async function runMergePipeline(
       !hasCachedVirtual);
 
   if (needsConceptMerge) {
-    progress?.report(
-      "M-merge: LLM virtual combined session (session-analysis schema)…"
-    );
+    progress?.report("M-merge: LLM virtual combined session (session-analysis schema)…");
     const finalized = await runStage(
       "M-merge conceptMerge",
       () =>
@@ -259,18 +253,19 @@ export async function runMergePipeline(
       projectSlug: opts.projectSlug ?? opts.records[0]?.meta.projectSlug ?? "",
       userQueryCount: 0,
     });
-    await runStage("M-merge conceptMerge", async () => virtualSession, () => ({
-      kind: "llm",
-      cacheHit: true,
-      skipped: true,
-    }));
+    await runStage(
+      "M-merge conceptMerge",
+      async () => virtualSession,
+      () => ({
+        kind: "llm",
+        cacheHit: true,
+        skipped: true,
+      })
+    );
   }
 
-  const virtualAnalysis: SessionAnalysis | undefined =
-    virtualSession?.sessionAnalysis;
-  const ontologyNodes = virtualAnalysis?.nodes?.length
-    ? virtualAnalysis.nodes
-    : collected.nodes;
+  const virtualAnalysis: SessionAnalysis | undefined = virtualSession?.sessionAnalysis;
+  const ontologyNodes = virtualAnalysis?.nodes?.length ? virtualAnalysis.nodes : collected.nodes;
 
   const ontologyPayload = {
     nodes: ontologyNodes,
@@ -308,7 +303,7 @@ export async function runMergePipeline(
           ? [opts.projectSlug]
           : [...new Set(opts.records.map((r) => r.meta.projectSlug))],
       },
-      mindMap: { nodeData: { data: { text: "root" } } },
+      mindMap: { nodeData: { data: { text: "root" } } } as unknown as MindMapRoot,
     };
   } else {
     progress?.report("M3: Updating concept trie…");
@@ -326,38 +321,7 @@ export async function runMergePipeline(
     );
   }
 
-  // #region agent log
-  const mindMapChildren =
-    merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
-  fetch("http://127.0.0.1:7901/ingest/4949e060-0582-4e25-a1f5-3c9b36f3b66d", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "0cd37d",
-    },
-    body: JSON.stringify({
-      sessionId: "0cd37d",
-      runId: "post-fix-v10",
-      hypothesisId: "H4-H5",
-      location: "mergePipeline.ts:m3Done",
-      message: "M3 trie top-level count",
-      data: {
-        sessionCount: opts.records.length,
-        mergeMode: opts.mergeMode ?? "full",
-        hasVirtualSession: Boolean(ontology.mergeSessionAnalysis),
-        draftTopChainCount: allReparentInput.chains.length,
-        uiTopLevelCount: mindMapChildren.length,
-        uiTopLabels: mindMapChildren
-          .slice(0, 12)
-          .map(
-            (c: { nodeData?: { data?: { text?: string } }; data?: { text?: string } }) =>
-              c.nodeData?.data?.text ?? c.data?.text ?? "?"
-          ),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+  const mindMapChildren = merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
 
   await timing?.finish();
 

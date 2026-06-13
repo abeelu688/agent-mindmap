@@ -1,4 +1,8 @@
-import type { NumberedReparentChain, NumberedSubtreeNode, ReattachCatalogNode } from "./reattachNodeCatalog";
+import type {
+  NumberedReparentChain,
+  NumberedSubtreeNode,
+  ReattachCatalogNode,
+} from "./reattachNodeCatalog";
 import type { ConceptContextForMerge } from "../store/storeTypes";
 import type {
   RootChildSynonymHint,
@@ -37,12 +41,7 @@ export const REATTACH_INPUT_SCHEMAS: TabularSchema[] = [
   },
   {
     name: "duplicateTopRoots",
-    columns: [
-      "parentChainFrom",
-      "duplicateTopFrom",
-      "parentNodeId",
-      "duplicateTopNodeId",
-    ],
+    columns: ["parentChainFrom", "duplicateTopFrom", "parentNodeId", "duplicateTopNodeId"],
   },
   {
     name: "listedChildCollapses",
@@ -83,15 +82,7 @@ export const REATTACH_INPUT_SCHEMAS: TabularSchema[] = [
   },
   {
     name: "conceptContexts",
-    columns: [
-      "key",
-      "label",
-      "domainKeys",
-      "parentKeys",
-      "childKeys",
-      "evidence",
-      "sessionId",
-    ],
+    columns: ["key", "label", "domainKeys", "parentKeys", "childKeys", "evidence", "sessionId"],
   },
   {
     name: "ontologyNodes",
@@ -149,33 +140,25 @@ export function formatInputSchema(): string {
   return lines.join("\n");
 }
 
-export function formatTable(
-  name: string,
-  columns: string[],
-  rows: string[][]
-): string {
+export function formatTable(name: string, columns: string[], rows: string[][]): string {
   if (!rows.length) {
     return "";
   }
-  return [
-    `### ${name}`,
-    formatRow(columns),
-    ...rows.map((row) => formatRow(row)),
-  ].join("\n");
+  return [`### ${name}`, formatRow(columns), ...rows.map((row) => formatRow(row))].join("\n");
 }
 
-function formatConceptContextsForTabular(
-  contexts: ConceptContextForMerge[]
-): string[][] {
-  return contexts.slice(0, 120).map((c) => [
-    c.key,
-    c.label,
-    joinMulti(c.domainKeys),
-    joinMulti(c.parentKeys),
-    joinMulti(c.childKeys),
-    joinEvidence(c.evidence.slice(0, 4)),
-    c.sessionId,
-  ]);
+function formatConceptContextsForTabular(contexts: ConceptContextForMerge[]): string[][] {
+  return contexts
+    .slice(0, 120)
+    .map((c) => [
+      c.key,
+      c.label,
+      joinMulti(c.domainKeys),
+      joinMulti(c.parentKeys),
+      joinMulti(c.childKeys),
+      joinEvidence(c.evidence.slice(0, 4)),
+      c.sessionId,
+    ]);
 }
 
 function catalogNodeRows(nodes: ReattachCatalogNode[]): string[][] {
@@ -184,9 +167,9 @@ function catalogNodeRows(nodes: ReattachCatalogNode[]): string[][] {
     joinPath(n.path),
     n.segment,
     n.label,
-    n.depth,
-    n.chainIndex ?? "",
-    n.isTopRoot ? 1 : 0,
+    String(n.depth),
+    n.chainIndex != null ? String(n.chainIndex) : "",
+    n.isTopRoot ? "1" : "0",
   ]);
 }
 
@@ -199,11 +182,11 @@ function encodePathSamples(samples: string[][]): string {
 
 function chainMetaRows(chains: NumberedReparentChain[]): string[][] {
   return chains.map((c) => [
-    c.chainIndex,
+    String(c.chainIndex),
     c.rootNodeId,
     c.from,
     c.label,
-    c.topicCount,
+    String(c.topicCount),
     joinMulti(c.childSegmentIds),
     encodePathSamples(c.pathSamples),
     joinMulti(c.keywords),
@@ -225,19 +208,9 @@ export function countNumberedTreeEdges(chains: NumberedReparentChain[]): number 
   return total;
 }
 
-function treeEdgesFromNode(
-  node: NumberedSubtreeNode,
-  parentId: string,
-  out: string[][]
-): void {
+function treeEdgesFromNode(node: NumberedSubtreeNode, parentId: string, out: string[][]): void {
   for (const child of node.children) {
-    out.push([
-      parentId,
-      child.id,
-      child.segment,
-      child.label,
-      child.topicCount,
-    ]);
+    out.push([parentId, child.id, child.segment, child.label, String(child.topicCount)]);
     treeEdgesFromNode(child, child.id, out);
   }
 }
@@ -251,12 +224,14 @@ function treeEdgeRows(chains: NumberedReparentChain[]): string[][] {
 }
 
 function segmentEquivalenceRows(equivalences: SegmentEquivalence[]): string[][] {
-  return equivalences.slice(0, 24).map((eq) => [
-    eq.canonical,
-    joinMulti(eq.aliases),
-    joinMulti(eq.scope.pathPrefix),
-    eq.confidence ?? "",
-  ]);
+  return equivalences
+    .slice(0, 24)
+    .map((eq) => [
+      eq.canonical,
+      joinMulti(eq.aliases),
+      joinMulti(eq.scope.pathPrefix),
+      eq.confidence != null ? String(eq.confidence) : "",
+    ]);
 }
 
 function topBranchSynonymRows(hints: TopBranchSynonymHint[]): string[][] {
@@ -264,7 +239,7 @@ function topBranchSynonymRows(hints: TopBranchSynonymHint[]): string[][] {
     h.canonical,
     joinMulti(h.aliases),
     joinMulti(h.branches),
-    h.confidence ?? "",
+    h.confidence != null ? String(h.confidence) : "",
   ]);
 }
 
@@ -275,7 +250,7 @@ function rootChildSynonymRows(hints: RootChildSynonymHint[]): string[][] {
     h.canonical,
     joinMulti(h.aliases),
     joinMulti(h.scopePathPrefix),
-    h.confidence ?? "",
+    h.confidence != null ? String(h.confidence) : "",
   ]);
 }
 
@@ -289,12 +264,7 @@ function duplicateTopRootRows(hints: DuplicateTopRootHint[]): string[][] {
 }
 
 function listedChildCollapseRows(hints: ListedChildCollapseHint[]): string[][] {
-  return hints.map((h) => [
-    h.chainFrom,
-    h.childSegment,
-    h.canonical,
-    joinMulti(h.aliases),
-  ]);
+  return hints.map((h) => [h.chainFrom, h.childSegment, h.canonical, joinMulti(h.aliases)]);
 }
 
 function ontologySubordinateRows(hints: OntologySubordinateHint[]): string[][] {
@@ -315,17 +285,17 @@ function prefixSubordinateRows(hints: PrefixSubordinateHint[]): string[][] {
   ]);
 }
 
-function ontologyNodeRows(
-  nodes: TrieReparentInput["nodes"]
-): string[][] {
-  return nodes.slice(0, 48).map((n) => [
-    n.key,
-    n.label,
-    joinMulti(n.aliases),
-    joinMulti(n.parentKeys),
-    joinMulti(n.childKeys),
-    joinEvidence(n.evidence?.slice(0, 4)),
-  ]);
+function ontologyNodeRows(nodes: TrieReparentInput["nodes"]): string[][] {
+  return nodes
+    .slice(0, 48)
+    .map((n) => [
+      n.key,
+      n.label,
+      joinMulti(n.aliases),
+      joinMulti(n.parentKeys),
+      joinMulti(n.childKeys),
+      joinEvidence(n.evidence?.slice(0, 4)),
+    ]);
 }
 
 function schemaByName(name: string): TabularSchema {
@@ -361,19 +331,13 @@ export function buildReattachHintTables(input: TrieReparentInput): string {
   if (input.topBranchSynonymHints.length) {
     parts.push(
       "### 并列顶级链同义线索（segmentEquivalences，须结合语境验证）",
-      optionalTable(
-        "topBranchSynonymHints",
-        topBranchSynonymRows(input.topBranchSynonymHints)
-      )
+      optionalTable("topBranchSynonymHints", topBranchSynonymRows(input.topBranchSynonymHints))
     );
   }
   if (input.rootChildSynonymHints.length) {
     parts.push(
       "### 链根与其直接子段同义线索（须结合语境验证）",
-      optionalTable(
-        "rootChildSynonymHints",
-        rootChildSynonymRows(input.rootChildSynonymHints)
-      )
+      optionalTable("rootChildSynonymHints", rootChildSynonymRows(input.rootChildSynonymHints))
     );
   }
   if (sh.duplicateTopRoots.length) {
@@ -387,20 +351,14 @@ export function buildReattachHintTables(input: TrieReparentInput): string {
     parts.push(
       "### 链内根/子段同义（segmentEquivalences 已支持折叠）",
       "→ 勿保留「链根 → 同义子段」连续两层；并列顶根用 merge_synonym（按节点 id）。",
-      optionalTable(
-        "listedChildCollapses",
-        listedChildCollapseRows(sh.listedChildCollapses)
-      )
+      optionalTable("listedChildCollapses", listedChildCollapseRows(sh.listedChildCollapses))
     );
   }
   if (sh.ontologySubordinates.length) {
     parts.push(
       "### ontology 下位关系（parentKeys）",
       "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
-      optionalTable(
-        "ontologySubordinates",
-        ontologySubordinateRows(sh.ontologySubordinates)
-      )
+      optionalTable("ontologySubordinates", ontologySubordinateRows(sh.ontologySubordinates))
     );
   }
   if (sh.prefixSubordinates.length) {
@@ -408,10 +366,7 @@ export function buildReattachHintTables(input: TrieReparentInput): string {
       "### segment key 前缀下位（专精顶根 extends hub key）",
       "→ `attach_under`：`sourceNodeId` = specialistNodeId，`targetNodeIds` = [hubNodeId, specialistNodeId]。",
       "例：android-app、android-framework 与 android 并列时，须挂到 android 下，禁止保留为并列顶根。",
-      optionalTable(
-        "prefixSubordinates",
-        prefixSubordinateRows(sh.prefixSubordinates)
-      )
+      optionalTable("prefixSubordinates", prefixSubordinateRows(sh.prefixSubordinates))
     );
   }
 
@@ -425,14 +380,8 @@ export function buildReattachDataTables(input: TrieReparentInput): string {
     requiredTable("nodeCatalog", catalogNodeRows(catalog.nodes)),
     requiredTable("chainMeta", chainMetaRows(catalog.numberedChains)),
     requiredTable("treeEdges", treeEdgeRows(catalog.numberedChains)),
-    optionalTable(
-      "segmentEquivalences",
-      segmentEquivalenceRows(input.segmentEquivalences)
-    ),
-    optionalTable(
-      "conceptContexts",
-      formatConceptContextsForTabular(input.conceptContexts)
-    ),
+    optionalTable("segmentEquivalences", segmentEquivalenceRows(input.segmentEquivalences)),
+    optionalTable("conceptContexts", formatConceptContextsForTabular(input.conceptContexts)),
     optionalTable("ontologyNodes", ontologyNodeRows(input.nodes)),
   ].filter(Boolean);
 

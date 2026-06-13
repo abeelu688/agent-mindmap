@@ -2,7 +2,6 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
-import type { AgentHost } from "./host/types";
 import { getProvider } from "./llm";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
@@ -13,10 +12,7 @@ import { agentLog } from "./log";
 import { notify, notifyWarning, notifyError } from "./notify";
 import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
-import {
-  currentPipelineVersions,
-  PIPELINE_VERSION,
-} from "./pipeline/pipelineVersions";
+import { currentPipelineVersions, PIPELINE_VERSION } from "./pipeline/pipelineVersions";
 import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
@@ -27,14 +23,10 @@ import {
 } from "./llm/types";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
-import type { SessionMeta } from "./mindmap/origin";
 import { getStoreDir } from "./paths";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
-import {
-  runBatchSnapshotPipeline,
-  refreshSnapshotForSession,
-} from "./pipeline/snapshotHierarchy";
+import { runBatchSnapshotPipeline, refreshSnapshotForSession } from "./pipeline/snapshotHierarchy";
 import { readSnapshotManifest } from "./store/mergeSnapshot";
 import {
   buildRecordMeta,
@@ -52,7 +44,9 @@ import {
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { format, t } from "./l10n/uiTranslate";
 import { readSessionFile } from "./transcript/listSessions";
-import type { MindMapRoot, TranscriptSession } from "./transcript/types";
+import type { SessionMeta } from "./mindmap/origin";
+import type { AgentHost } from "./host/types";
+import type { BuildOptions, MindMapRoot, TranscriptSession } from "./transcript/types";
 
 export type LoadedSession = {
   session: TranscriptSession;
@@ -78,16 +72,13 @@ type Settings = {
     enabled: boolean;
     autoRebuildDeterministic: boolean;
   };
-  turnOptions: { includeToolCalls: boolean; maxConclusionItems: number };
+  turnOptions: BuildOptions;
 };
 
 /** Guard against concurrent background merge rebuilds. */
 let pendingMergeRebuild: Promise<void> | undefined;
 
-function resolveLlmProviderId(
-  setting: string,
-  hostDefault: LlmProviderId
-): LlmProviderId {
+function resolveLlmProviderId(setting: string, hostDefault: LlmProviderId): LlmProviderId {
   if (setting === "auto") {
     return hostDefault;
   }
@@ -100,45 +91,31 @@ function resolveLlmProviderId(
 async function readSettings(host: AgentHost): Promise<Settings> {
   const config = vscode.workspace.getConfiguration("agentMindmap");
   const providerSetting = config.get<string>("llm.provider", "auto");
-  const provider = resolveLlmProviderId(
-    providerSetting,
-    host.defaultLlmProvider
-  );
+  const provider = resolveLlmProviderId(providerSetting, host.defaultLlmProvider);
 
   return {
     llm: {
       provider,
       cliPath: config.get<string>("llm.cliPath", "").trim(),
       model: config.get<string>("llm.model", "").trim(),
-      timeoutMs: Math.max(
-        1000,
-        config.get<number>("llm.timeoutMs", 300000) ?? 300000
-      ),
-      maxAttempts: Math.max(
-        1,
-        Math.min(10, config.get<number>("llm.maxAttempts", 1) ?? 1)
-      ),
+      timeoutMs: Math.max(1000, config.get<number>("llm.timeoutMs", 300000) ?? 300000),
+      maxAttempts: Math.max(1, Math.min(10, config.get<number>("llm.maxAttempts", 1) ?? 1)),
       retryBackoffMs: Math.max(
         0,
         Math.min(30000, config.get<number>("llm.retryBackoffMs", 1000) ?? 1000)
       ),
       maxTopics: Math.max(1, config.get<number>("maxTopics", 6) ?? 6),
-      maxItemsPerTopic: Math.max(
-        1,
-        config.get<number>("maxItemsPerTopic", 6) ?? 6
-      ),
+      maxItemsPerTopic: Math.max(1, config.get<number>("maxItemsPerTopic", 6) ?? 6),
       hostId: host.id,
     },
     cache: config.get<boolean>("cacheLlmResult", true) ?? true,
     library: {
       enabled: config.get<boolean>("library.enabled", true) ?? true,
-      autoRebuildDeterministic:
-        config.get<boolean>("merge.autoRebuildDeterministic", true) ?? true,
+      autoRebuildDeterministic: config.get<boolean>("merge.autoRebuildDeterministic", true) ?? true,
     },
     turnOptions: {
       includeToolCalls: config.get<boolean>("includeToolCalls", true) ?? true,
-      maxConclusionItems:
-        config.get<number>("maxConclusionItems", 8) ?? 8,
+      maxConclusionItems: config.get<number>("maxConclusionItems", 8) ?? 8,
       labels: {
         research: t("mindmap.turn.research", "Research"),
         conclusion: t("mindmap.turn.conclusion", "Conclusion"),
@@ -177,17 +154,13 @@ async function listWorkspaceSessions(
 ): Promise<{ scanDir: string; sessions: TranscriptSession[] } | undefined> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    notifyWarning(
-      "Agent Mind Map: Open a workspace folder first."
-    );
+    notifyWarning("Agent Mind Map: Open a workspace folder first.");
     return undefined;
   }
 
   const scanDir = host.getSessionsScanDir(workspacePath);
   if (!scanDir) {
-    notifyWarning(
-      "Agent Mind Map: Open a workspace folder first."
-    );
+    notifyWarning("Agent Mind Map: Open a workspace folder first.");
     return undefined;
   }
 
@@ -199,9 +172,7 @@ async function listWorkspaceSessions(
   return { scanDir, sessions };
 }
 
-export async function loadLatestSession(
-  deps: LoadDeps
-): Promise<LoadedSession | undefined> {
+export async function loadLatestSession(deps: LoadDeps): Promise<LoadedSession | undefined> {
   const host = await getActiveHost(deps.context);
   const listed = await listWorkspaceSessions(host);
   if (!listed) {
@@ -216,9 +187,7 @@ export async function loadLatestSession(
   return loadSession(sessions[0], deps, {}, host);
 }
 
-export async function pickSession(
-  deps: LoadDeps
-): Promise<LoadedSession | undefined> {
+export async function pickSession(deps: LoadDeps): Promise<LoadedSession | undefined> {
   const host = await getActiveHost(deps.context);
   const listed = await listWorkspaceSessions(host);
   if (!listed) {
@@ -238,11 +207,7 @@ export async function pickSession(
       session: s,
     })),
     {
-      placeHolder: t(
-        "ui.pickSession.placeholder",
-        "Select a {0} chat session",
-        host.displayName
-      ),
+      placeHolder: t("ui.pickSession.placeholder", "Select a {0} chat session", host.displayName),
       matchOnDescription: true,
       matchOnDetail: true,
     }
@@ -331,7 +296,9 @@ export async function loadSession(
   progress?.report(t("ui.progress.readTranscript", "Reading transcript…"));
   const content = await readSessionFile(session.filePath);
   const events = host.parseTranscript(content);
-  mindMapLog(`[loadSession] session=${session.id} filePath=${session.filePath} contentLen=${content.length} events=${events.length}`);
+  mindMapLog(
+    `[loadSession] session=${session.id} filePath=${session.filePath} contentLen=${content.length} events=${events.length}`
+  );
   const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
   // Freshness token: count of parsed user/assistant/tool events. Stable
@@ -341,8 +308,7 @@ export async function loadSession(
   const transcriptFreshnessToken = String(events.length);
   const transcriptMtimeMs = await tryStatMtime(session.filePath, session.mtimeMs);
   const ctx = resolveSessionContext(session, host);
-  const projectPath =
-    ctx.projectPath ?? host.slugToWorkspacePath(ctx.projectSlug);
+  const projectPath = ctx.projectPath ?? host.slugToWorkspacePath(ctx.projectSlug);
   const sessionMeta: SessionMeta = {
     sessionId: session.id,
     projectSlug: ctx.projectSlug,
@@ -352,15 +318,9 @@ export async function loadSession(
   };
 
   if (settings.library.enabled && !options.forceRefresh) {
-    progress?.report(
-      t("ui.progress.checkLibraryCache", "Checking library cache…")
-    );
+    progress?.report(t("ui.progress.checkLibraryCache", "Checking library cache…"));
     try {
-      const existing = await readRecord(
-        getStoreDir(),
-        ctx.projectSlug,
-        session.id
-      );
+      const existing = await readRecord(getStoreDir(), ctx.projectSlug, session.id);
       // Debug: surface freshness inputs so we can diagnose "why did this
       // session re-analyze even though I didn't change anything?"
       if (existing) {
@@ -368,13 +328,13 @@ export async function loadSession(
         const tokenMatch = recToken === transcriptFreshnessToken;
         mindMapLog(
           `[loadSession] freshness check session=${session.id.slice(0, 8)} ` +
-          `recordToken=${recToken.slice(0, 16)} currentToken=${transcriptFreshnessToken} ` +
-          `tokenMatch=${tokenMatch} ` +
-          `recordModel=${existing.meta.llm.model || "(default)"} currentModel=${settings.llm.model || "(default)"} ` +
-          `recordProvider=${existing.meta.llm.provider} currentProvider=${settings.llm.provider} ` +
-          `recordHost=${existing.meta.hostId || "(none)"} currentHost=${host.id} ` +
-          `recordPipeline=${JSON.stringify(existing.meta.pipelineVersions || existing.meta.promptVersion)} ` +
-          `currentPipeline=${JSON.stringify(currentPipelineVersions())}`
+            `recordToken=${recToken.slice(0, 16)} currentToken=${transcriptFreshnessToken} ` +
+            `tokenMatch=${tokenMatch} ` +
+            `recordModel=${existing.meta.llm.model || "(default)"} currentModel=${settings.llm.model || "(default)"} ` +
+            `recordProvider=${existing.meta.llm.provider} currentProvider=${settings.llm.provider} ` +
+            `recordHost=${existing.meta.hostId || "(none)"} currentHost=${host.id} ` +
+            `recordPipeline=${JSON.stringify(existing.meta.pipelineVersions || existing.meta.promptVersion)} ` +
+            `currentPipeline=${JSON.stringify(currentPipelineVersions())}`
         );
       } else {
         mindMapLog(
@@ -399,13 +359,8 @@ export async function loadSession(
         })
       ) {
         const userQueryCount = countUserQueries(events);
-        progress?.report(
-          t("ui.progress.cacheHitRender", "Cache hit, generating mind map…")
-        );
-        const outline = sanitizeSessionOutline(
-          existing.outline,
-          userQueryCount
-        );
+        progress?.report(t("ui.progress.cacheHitRender", "Cache hit, generating mind map…"));
+        const outline = sanitizeSessionOutline(existing.outline, userQueryCount);
         const analysisPrompt = buildSessionAnalysisPrompt(
           events,
           {
@@ -435,9 +390,7 @@ export async function loadSession(
           providerId: settings.llm.provider,
           model: settings.llm.model || undefined,
           prompt: analysisPrompt,
-          parsed:
-            existing.sessionAnalysis ??
-            ({ outline: existing.outline } as const),
+          parsed: existing.sessionAnalysis ?? ({ outline: existing.outline } as const),
           source: "library-cache",
           sessionId: session.id,
           projectSlug: ctx.projectSlug,
@@ -473,7 +426,9 @@ export async function loadSession(
   let pipelineResult;
   try {
     const provider = getProvider(settings.llm);
-    mindMapLog(`[loadSession] Calling LLM for session ${session.id}: provider=${provider.id}, model=${settings.llm.model || "(default)"}, hostId=${host.id}`);
+    mindMapLog(
+      `[loadSession] Calling LLM for session ${session.id}: provider=${provider.id}, model=${settings.llm.model || "(default)"}, hostId=${host.id}`
+    );
     pipelineResult = await runSessionPipeline(
       {
         events,
@@ -502,10 +457,8 @@ export async function loadSession(
       throw err;
     }
     const detail = describeError(err);
-    const cliMissing =
-      err instanceof LlmProviderError && err.code === "cli-missing";
-    const llmErrorCode =
-      err instanceof LlmProviderError ? err.code : undefined;
+    const cliMissing = err instanceof LlmProviderError && err.code === "cli-missing";
+    const llmErrorCode = err instanceof LlmProviderError ? err.code : undefined;
     if (!options.quietLlmErrors) {
       if (cliMissing) {
         void showCliInstallGuide(host.id, { modal: false });
@@ -521,22 +474,19 @@ export async function loadSession(
       }
     }
     agentLog.warn("LLM failure, using turn fallback", { error: String(err) });
-    mindMapLog(`[loadSession] LLM failed for session ${session.id}, falling back to turn view. Error: ${err instanceof Error ? err.message : String(err)}`);
+    mindMapLog(
+      `[loadSession] LLM failed for session ${session.id}, falling back to turn view. Error: ${err instanceof Error ? err.message : String(err)}`
+    );
     return {
       session: { ...session, hostId: host.id },
-      mindMap: buildTurnMindMap(
-        events,
-        settings.turnOptions,
-        session.label,
-        sessionMeta
-      ),
+      mindMap: buildTurnMindMap(events, settings.turnOptions, session.label, sessionMeta),
       source: "turn",
       llmErrorCode,
     };
   }
 
   const userQueryCount = countUserQueries(events);
-  let outline = sanitizeSessionOutline(pipelineResult.outline, userQueryCount);
+  const outline = sanitizeSessionOutline(pipelineResult.outline, userQueryCount);
 
   // Await background codeReferences extraction before rendering and persisting
   const codeRefs = await pipelineResult.codeRefsPromise;
@@ -580,10 +530,7 @@ export async function loadSession(
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
 
-      if (
-        settings.library.autoRebuildDeterministic &&
-        !options.skipAutoMerge
-      ) {
+      if (settings.library.autoRebuildDeterministic && !options.skipAutoMerge) {
         const runMerge = async () => {
           try {
             const all = await listRecords(storeDir);
@@ -593,21 +540,15 @@ export async function loadSession(
             const provider = getProvider(settings.llm);
             const config = vscode.workspace.getConfiguration("agentMindmap");
             const incrementalOntology =
-              (config.get<boolean>("library.batchRefineOntology", true) ??
-                true) &&
-              (config.get<boolean>(
-                "library.incrementalOntologyOnSessionAdd",
-                true
-              ) ?? true);
+              (config.get<boolean>("library.batchRefineOntology", true) ?? true) &&
+              (config.get<boolean>("library.incrementalOntologyOnSessionAdd", true) ?? true);
             const conceptLlm = {
               providerId: provider.id,
               model: settings.llm.model,
               hostId: host.id,
             };
             const projectSlug = ctx.projectSlug;
-            const projectRecords = all.filter(
-              (r) => r.meta.projectSlug === projectSlug
-            );
+            const projectRecords = all.filter((r) => r.meta.projectSlug === projectSlug);
             const records = projectRecords.length ? projectRecords : all;
             const hierarchyBase = {
               storeDir,
@@ -621,49 +562,30 @@ export async function loadSession(
             };
             const concept = incrementalOntology
               ? await (async () => {
-                  const manifest = await readSnapshotManifest(
-                    storeDir,
-                    projectSlug
-                  );
+                  const manifest = await readSnapshotManifest(storeDir, projectSlug);
                   if (manifest?.sessionToLeafId[record.meta.sessionId]) {
-                    return (
-                      await refreshSnapshotForSession({
-                        ...hierarchyBase,
-                        sessionId: record.meta.sessionId,
-                      })
-                    ).merge;
-                  }
-                  const batchNo =
-                    (manifest?.nodes.filter((n) => n.level === 1).length ??
-                      0) + 1;
-                  return (
-                    await runBatchSnapshotPipeline({
+                    return await refreshSnapshotForSession({
                       ...hierarchyBase,
-                      batchRecords: [record],
-                      batchNo,
-                    })
-                  ).merge;
+                      sessionId: record.meta.sessionId,
+                    });
+                  }
+                  const batchNo = (manifest?.nodes.filter((n) => n.level === 1).length ?? 0) + 1;
+                  return await runBatchSnapshotPipeline({
+                    ...hierarchyBase,
+                    batchRecords: [record],
+                    batchNo,
+                  });
                 })()
-              : await resolveAndBuildConceptMergeAsync(
-                  storeDir,
-                  all,
-                  {},
-                  conceptLlm
-                );
+              : await resolveAndBuildConceptMergeAsync(storeDir, all, {}, conceptLlm);
             await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
           } catch (err) {
             const detail = err instanceof Error ? err.message : String(err);
             agentLog.error("Background merge rebuild failed", err);
-            notifyError(
-              `Agent Mind Map: Background concept merge failed: ${detail}`,
-              err
-            );
+            notifyError(`Agent Mind Map: Background concept merge failed: ${detail}`, err);
           }
         };
         // Deduplicate: if a previous merge is still running, chain after it
-        pendingMergeRebuild = pendingMergeRebuild
-          ? pendingMergeRebuild.then(runMerge)
-          : runMerge();
+        pendingMergeRebuild = pendingMergeRebuild ? pendingMergeRebuild.then(runMerge) : runMerge();
       }
     } catch (err) {
       agentLog.error("Library write failed", err);
@@ -718,11 +640,7 @@ export async function runProjectSessionBatch(
   const failures: AnalyzeProjectResult["failures"] = [];
 
   progress?.report(
-    t(
-      "ui.batch.progress.start",
-      "{0} session(s) total, starting batch analysis…",
-      total
-    )
+    t("ui.batch.progress.start", "{0} session(s) total, starting batch analysis…", total)
   );
 
   for (let i = 0; i < sessions.length; i++) {
@@ -752,9 +670,7 @@ export async function runProjectSessionBatch(
         } else if (loaded.llmErrorCode === "bad-json") {
           jsonParseFailures += 1;
         }
-        reportComplete(
-          t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
-        );
+        reportComplete(t("ui.batch.item.fallbackTurnView", "Fell back to chronological view"));
       } else {
         reportComplete(t("ui.batch.item.done", "Analysis completed"));
       }
@@ -826,11 +742,7 @@ export async function runProjectSessionBatches(
   const failures: AnalyzeProjectResult["failures"] = [];
 
   progress?.report(
-    t(
-      "ui.batch.progress.start",
-      "{0} session(s) total, starting batch analysis…",
-      total
-    )
+    t("ui.batch.progress.start", "{0} session(s) total, starting batch analysis…", total)
   );
 
   let batchNo = 0;
@@ -864,9 +776,7 @@ export async function runProjectSessionBatches(
         } else if (loaded.llmErrorCode === "bad-json") {
           jsonParseFailures += 1;
         }
-        reportComplete(
-          t("ui.batch.item.fallbackTurnView", "Fell back to chronological view")
-        );
+        reportComplete(t("ui.batch.item.fallbackTurnView", "Fell back to chronological view"));
       } else {
         // source === "topic" and not from library → real LLM analysis ran
         freshlyAnalyzedSessionIds.push(session.id);
@@ -950,10 +860,7 @@ export async function analyzeProjectSessions(
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     vscode.window.showWarningMessage(
-      t(
-        "ui.warning.openWorkspaceFolderFirst",
-        "Agent Mind Map: Open a workspace folder first."
-      )
+      t("ui.warning.openWorkspaceFolderFirst", "Agent Mind Map: Open a workspace folder first.")
     );
     return undefined;
   }

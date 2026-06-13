@@ -1,13 +1,15 @@
 import { runLlmStage } from "../llmStage";
-import {
-  buildMergeSessionAnalysisInput,
-} from "../../llm/mergeSessionAnalysisInput";
+import { buildMergeSessionAnalysisInput } from "../../llm/mergeSessionAnalysisInput";
 import {
   buildMergeSessionAnalysisPrompt,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../../llm/promptMergeSessionAnalysis";
 import { validateSessionAnalysis } from "../../llm/pipelineValidate";
 import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
+import { scaleMergeSessionAnalysisTimeoutMs } from "../../llm/reattachTimeout";
+import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "./finalizeSessionAnalysis";
+import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 import type { AgentHostId } from "../../host/types";
 import type {
   ConceptOntologyMapping,
@@ -17,15 +19,8 @@ import type {
   TopicPathDecision,
 } from "../../llm/types";
 import type { MindMapProgress } from "../../progress";
-import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
 import type { SessionRecord } from "../../store/storeTypes";
-import {
-  finalizeSessionAnalysis,
-  type FinalizedSessionAnalysis,
-} from "./finalizeSessionAnalysis";
 import type { MergeInputMode } from "../../llm/trieReparentInput";
-import { scaleMergeSessionAnalysisTimeoutMs } from "../../llm/reattachTimeout";
-import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 
 export type MergeSessionAnalysisOpts = {
   records: SessionRecord[];
@@ -44,6 +39,8 @@ export type MergeSessionAnalysisOpts = {
   maxDetailsPerNode?: number;
   cacheDir?: string;
   cache?: boolean;
+  /** Base LLM timeout (ms); scaled by session count / prompt size when set. */
+  llmTimeoutMs?: number;
 };
 
 const DEFAULT_PROMPT_OPTS = {
@@ -80,27 +77,21 @@ export async function mergeSessionAnalysis(
     return undefined;
   }
 
-  const input = buildMergeSessionAnalysisInput(
-    recordsForInput,
-    mergeMode,
-    opts.snapshotSessionId
-  );
+  const input = buildMergeSessionAnalysisInput(recordsForInput, mergeMode, opts.snapshotSessionId);
   const promptOpts = {
     maxDomains: opts.maxDomains ?? DEFAULT_PROMPT_OPTS.maxDomains,
     maxNodes: opts.maxNodes ?? DEFAULT_PROMPT_OPTS.maxNodes,
     maxBranches: opts.maxBranches ?? DEFAULT_PROMPT_OPTS.maxBranches,
-    maxDetailsPerNode:
-      opts.maxDetailsPerNode ?? DEFAULT_PROMPT_OPTS.maxDetailsPerNode,
+    maxDetailsPerNode: opts.maxDetailsPerNode ?? DEFAULT_PROMPT_OPTS.maxDetailsPerNode,
   };
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
   const prompt = buildMergeSessionAnalysisPrompt(input, promptOpts, hostId);
   const timeoutMs =
     opts.llmTimeoutMs != null
-      ? scaleMergeSessionAnalysisTimeoutMs(
-          opts.llmTimeoutMs,
-          input.sessions.length,
-          { promptBytes: prompt.length, mergeMode }
-        )
+      ? scaleMergeSessionAnalysisTimeoutMs(opts.llmTimeoutMs, input.sessions.length, {
+          promptBytes: prompt.length,
+          mergeMode,
+        })
       : undefined;
 
   const analysis = await runLlmStage(
@@ -128,10 +119,7 @@ export async function mergeSessionAnalysis(
 
   // Build outline deterministically from concept trie (Route 1: no outline from LLM)
   if (!analysis.outline) {
-    analysis.outline = buildOutlineFromConceptTrie(
-      analysis.domains,
-      analysis.nodes
-    );
+    analysis.outline = buildOutlineFromConceptTrie(analysis.domains, analysis.nodes);
   }
 
   return finalizeSessionAnalysis(analysis, {

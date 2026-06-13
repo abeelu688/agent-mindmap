@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 import { buildConceptContextsFromAnalysis } from "../extension/src/llm/buildConceptContexts";
 import {
   collectChildEdgesFromOutline,
@@ -133,14 +133,17 @@ test("finalizeSessionAnalysis aligns conceptContexts childKeys with enriched nod
     { sessionId: "s1", projectSlug: "proj", userQueryCount: 1 }
   );
 
-  const androidNode = finalized.sessionAnalysis.nodes.find(
-    (n) => n.key === "android"
-  );
+  const androidNode = finalized.sessionAnalysis.nodes.find((n) => n.key === "android");
+  const artNode = finalized.sessionAnalysis.nodes.find((n) => n.key === "art");
   const androidCtx = finalized.conceptContexts.find((c) => c.key === "android");
+  const artCtx = finalized.conceptContexts.find((c) => c.key === "art");
 
+  // childKeys hold direct children only: android → art, art → extra-child.
   assert.ok(androidNode?.childKeys?.includes("art"));
-  assert.ok(androidNode?.childKeys?.includes("extra-child"));
+  assert.ok(artNode?.childKeys?.includes("extra-child"));
+  // conceptContexts childKeys must stay aligned with the enriched nodes.
   assert.deepEqual(androidCtx?.childKeys, androidNode?.childKeys);
+  assert.deepEqual(artCtx?.childKeys, artNode?.childKeys);
 });
 
 test("buildConceptContextsFromAnalysis unions node.childKeys with parentKeys inverse", () => {

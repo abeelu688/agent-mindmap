@@ -243,6 +243,9 @@ export type LlmDumpMeta = {
   stageId: string;
   sessionId?: string;
   projectSlug?: string;
+  /** Chunk position when a stage splits its LLM input across multiple calls. */
+  chunkIndex?: number;
+  chunkCount?: number;
 };
 
 export type SummarizeInput = {
@@ -292,10 +295,7 @@ export type LlmSummarizeResult =
 
 export type LlmProvider = {
   readonly id: string;
-  summarize(
-    input: SummarizeInput,
-    signal: AbortSignal
-  ): Promise<LlmSummarizeResult>;
+  summarize(input: SummarizeInput, signal: AbortSignal): Promise<LlmSummarizeResult>;
 };
 
 export type LlmErrorCode =

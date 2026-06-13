@@ -1,17 +1,14 @@
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider } from "../llm/types";
-import type { MindMapProgress } from "../progress";
-import {
-  filterRealSessionRecords,
-  readSnapshotManifest,
-} from "../store/mergeSnapshot";
-import type { MergeRecord, MergeSnapshot, SessionRecord } from "../store/storeTypes";
-import type { MergePipelineResult } from "./mergePipeline";
+import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
 import {
   runBatchSnapshotPipeline,
   runFinalRootRefresh,
   type SnapshotHierarchyLlmOpts,
 } from "./snapshotHierarchy";
+import type { AgentHostId } from "../host/types";
+import type { LlmProvider } from "../llm/types";
+import type { MindMapProgress } from "../progress";
+import type { MergeRecord, MergeSnapshot, SessionRecord } from "../store/storeTypes";
+import type { MergePipelineResult } from "./mergePipeline";
 
 export type ProjectMergeMode = "full" | "delta";
 
@@ -115,6 +112,7 @@ export async function runDeltaMergePipeline(
       },
       nodes: [],
       mappings: [],
+      topicPaths: [],
     },
     records: allReal,
     mergeModeUsed: "full",

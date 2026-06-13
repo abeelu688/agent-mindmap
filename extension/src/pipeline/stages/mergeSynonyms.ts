@@ -1,4 +1,3 @@
-import type { AgentHostId } from "../../host/types";
 import {
   buildOntologyRefinePrompt,
   buildRefineInputFromRecords,
@@ -11,10 +10,11 @@ import {
   enhanceSegmentEquivalencesForMerge,
   mergeSegmentEquivalencesLists,
 } from "../../llm/segmentContext";
-import type { LlmProvider, SegmentEquivalence } from "../../llm/types";
-import type { MindMapProgress } from "../../progress";
 import { createHeartbeat } from "../../progress";
 import { MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "../mergeSynonymPolicy";
+import type { LlmProvider, SegmentEquivalence } from "../../llm/types";
+import type { MindMapProgress } from "../../progress";
+import type { AgentHostId } from "../../host/types";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { CollectedMergeTerms } from "./collectMergeTerms";
 
@@ -55,25 +55,14 @@ export async function mergeSynonyms(
     {
       nodes: opts.collected.nodes,
       mappings: opts.collected.mappings,
-      topicPaths,
     },
     topicPaths
   );
-  input.contextSamples = buildRefineContextSamples(
-    topicPaths,
-    opts.collected.contextIndex
-  );
+  input.contextSamples = buildRefineContextSamples(topicPaths, opts.collected.contextIndex);
 
-  const prompt = buildOntologyRefinePrompt(
-    input,
-    hostId,
-    opts.promptLanguage ?? "zh"
-  );
+  const prompt = buildOntologyRefinePrompt(input, hostId, opts.promptLanguage ?? "zh");
 
-  const heartbeat = createHeartbeat(
-    progress,
-    "Merging cross-session synonyms…"
-  );
+  const heartbeat = createHeartbeat(progress, "Merging cross-session synonyms…");
   try {
     const res = await provider.summarize(
       {
@@ -94,11 +83,7 @@ export async function mergeSynonyms(
       refined.segmentEquivalences
     );
   } catch {
-    return finalizeSegmentEquivalences(
-      topicPaths,
-      opts.collected.nodes,
-      sessionEquivalences
-    );
+    return finalizeSegmentEquivalences(topicPaths, opts.collected.nodes, sessionEquivalences);
   } finally {
     heartbeat.stop();
   }

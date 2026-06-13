@@ -3,10 +3,7 @@ import "mind-elixir/style.css";
 import "./styles.css";
 import { readExportBootstrap } from "./exportBootstrap";
 import { resolveOfflineJumpHref } from "./offlineJump";
-import {
-  assignSideDirectionsPreferLeft,
-  assignSideDirectionsPreferRight,
-} from "./sideLayout";
+import { assignSideDirectionsPreferLeft, assignSideDirectionsPreferRight } from "./sideLayout";
 import { directionFromUi, resolveTheme } from "./theme";
 import {
   readOriginFromNodeObj,
@@ -64,24 +61,20 @@ const exportBootstrap = readExportBootstrap();
 const offlineMode = exportBootstrap !== undefined;
 
 const vscode: VsCodeApi | undefined =
-  !offlineMode && typeof acquireVsCodeApi === "function"
-    ? acquireVsCodeApi()
-    : undefined;
+  !offlineMode && typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
 
-const container = document.getElementById("mindMapContainer");
+const container: HTMLElement =
+  document.getElementById("mindMapContainer") ??
+  (() => {
+    throw new Error("mindMapContainer not found");
+  })();
 const loadingEl = document.getElementById("mindmapLoading");
 const loadingTitleEl = loadingEl?.querySelector(".mindmap-loading__title");
 const loadingMessageEl = loadingEl?.querySelector(".mindmap-loading__message");
 const batchStatusEl = document.getElementById("batchStatusBar");
 const batchProgressEl = batchStatusEl?.querySelector(".batch-status__progress");
 const batchDetailEl = batchStatusEl?.querySelector(".batch-status__detail");
-const batchRefreshBtn = document.getElementById(
-  "batchStatusRefresh"
-) as HTMLButtonElement | null;
-
-if (!container) {
-  throw new Error("mindMapContainer not found");
-}
+const batchRefreshBtn = document.getElementById("batchStatusRefresh") as HTMLButtonElement | null;
 
 function setLoadingOverlay(active: boolean, message?: string): void {
   if (!loadingEl) {
@@ -119,8 +112,7 @@ function setBatchStatus(status: BatchStatus): void {
   batchStatusEl.classList.remove("batch-status--hidden");
   batchStatusEl.hidden = false;
 
-  const pct =
-    status.total > 0 ? Math.floor((status.processed / status.total) * 100) : 0;
+  const pct = status.total > 0 ? Math.floor((status.processed / status.total) * 100) : 0;
   batchProgressEl.textContent = `${status.processed}/${status.total} (${pct}%)`;
 
   const parts: string[] = [];
@@ -142,19 +134,14 @@ function setBatchStatus(status: BatchStatus): void {
   if (batchRefreshBtn) {
     const canRefresh = status.pendingUpdateBatchNo !== undefined;
     batchRefreshBtn.disabled = !canRefresh;
-    batchRefreshBtn.classList.toggle(
-      "batch-status__button--attention",
-      canRefresh
-    );
-    batchRefreshBtn.title = canRefresh
-      ? "Merge ready — click to update mind map"
-      : "";
+    batchRefreshBtn.classList.toggle("batch-status__button--attention", canRefresh);
+    batchRefreshBtn.title = canRefresh ? "Merge ready — click to update mind map" : "";
   }
 }
 
 let mind: MindElixirInstance | undefined;
 let resizeRaf: number | undefined;
-let onSelectNodes: ((nodes: NodeObj<NodeMetadata>[]) => void) | undefined;
+let onSelectNodes: ((nodes: NodeObj<unknown>[]) => void) | undefined;
 let currentUi: MindMapUiOptions | undefined;
 let pendingData: MindMapNodeData | undefined;
 let lastRenderedData: MindMapNodeData | undefined;
@@ -202,10 +189,7 @@ function handleNodeSelection(
   picked: NodeObj<NodeMetadata> | undefined
 ): void {
   const withOrigin = nodes.filter((n) => readOriginFromNodeObj(n));
-  const node =
-    picked ??
-    withOrigin[withOrigin.length - 1] ??
-    nodes[nodes.length - 1];
+  const node = picked ?? withOrigin[withOrigin.length - 1] ?? nodes[nodes.length - 1];
   const origin = readOriginFromNodeObj(node);
   if (!origin) {
     const topic = node?.topic ?? "<unknown>";
@@ -251,10 +235,10 @@ function createMind(ui: MindMapUiOptions): MindElixirInstance {
   });
 
   onSelectNodes = (nodes) => {
-    const withOrigin = nodes.filter((n) => readOriginFromNodeObj(n));
-    const picked =
-      withOrigin[withOrigin.length - 1] ?? nodes[nodes.length - 1];
-    handleNodeSelection(nodes, picked);
+    const typed = nodes as NodeObj<NodeMetadata>[];
+    const withOrigin = typed.filter((n) => readOriginFromNodeObj(n));
+    const picked = withOrigin[withOrigin.length - 1] ?? typed[typed.length - 1];
+    handleNodeSelection(typed, picked);
   };
   instance.bus.addListener("selectNodes", onSelectNodes);
   postToExtension({ type: "log", message: "selectNodes listener bound" });
