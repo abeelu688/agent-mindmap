@@ -5,7 +5,7 @@ import { resolveUiLocale } from "../l10n/uiTranslate";
  * Language used inside LLM prompt templates.
  *
  * Currently only `zh` is fully implemented; `en` prompt text is being
- * filled in incrementally — see `docs/IMPROVEMENT-PLAN.md` Phase 4.2.
+ * filled in incrementally — see CONTRIBUTING.md → "Translating LLM prompts".
  * Adding more languages (ja, ko, …) should be a separate effort that
  * verifies the LLM still produces well-formed JSON — see CONTRIBUTING.md
  * → "Translating LLM prompts".

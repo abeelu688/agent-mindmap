@@ -46,7 +46,7 @@ agent-mindmap/
 │       ├── offlineJump.ts   ← Offline transcript jump
 │       └── uiContextMenu.ts ← Canvas context menu
 ├── test/                    ← Test files (vitest + node test runner)
-├── docs/                    ← Architecture docs, improvement plan
+├── docs/                    ← Architecture docs, release & maintenance guides
 └── scripts/                 ← Build/packaging scripts
 ```
 
@@ -65,17 +65,17 @@ Press **F5** in VS Code to launch the Extension Development Host.
 
 ## Build Commands
 
-| Command | What it does |
-|---------|-------------|
-| `npm run build` | Build webview (Vite) then extension (esbuild) |
-| `npm run build:extension` | Build extension only |
-| `npm run build:webview` | Build webview only |
-| `npm run watch` | Watch mode for both |
-| `npm test` | Build + run extension node tests |
-| `npm run test:vitest` | Run vitest (no build needed) |
-| `npm run check:concept-nodes` | Verify no hardcoded concept segment literals |
-| `npm run package` | Build + package as VSIX |
-| `npm run package:vsix` | Shell script wrapper for VSIX packaging |
+| Command                       | What it does                                  |
+| ----------------------------- | --------------------------------------------- |
+| `npm run build`               | Build webview (Vite) then extension (esbuild) |
+| `npm run build:extension`     | Build extension only                          |
+| `npm run build:webview`       | Build webview only                            |
+| `npm run watch`               | Watch mode for both                           |
+| `npm test`                    | Build + run extension node tests              |
+| `npm run test:vitest`         | Run vitest (no build needed)                  |
+| `npm run check:concept-nodes` | Verify no hardcoded concept segment literals  |
+| `npm run package`             | Build + package as VSIX                       |
+| `npm run package:vsix`        | Shell script wrapper for VSIX packaging       |
 
 ## Architecture & Data Flow
 
@@ -103,10 +103,10 @@ All project SessionRecords
 
 ### Two Rendering Modes
 
-| Mode | When | Root → Children |
-|------|------|----------------|
-| **Topic** (default) | LLM succeeds | LLM-induced title → 核心 N → knowledge points / code refs |
-| **Turn** (fallback) | LLM unavailable | Session label → Q1, Q2, … → 调研 / 结论 |
+| Mode                | When            | Root → Children                                           |
+| ------------------- | --------------- | --------------------------------------------------------- |
+| **Topic** (default) | LLM succeeds    | LLM-induced title → 核心 N → knowledge points / code refs |
+| **Turn** (fallback) | LLM unavailable | Session label → Q1, Q2, … → 调研 / 结论                   |
 
 ## Key Design Constraints
 
@@ -121,6 +121,7 @@ Production code must not branch on specific concept segment values (`android`, `
 ### 3. LLM calls go through HeadlessCliProvider
 
 Never call the LLM directly. All LLM interaction goes through `HeadlessCliProvider.summarize()`, which handles:
+
 - Binary auto-detection (cursor-agent / claude)
 - Retry with exponential backoff + jitter
 - AbortSignal cancellation
@@ -163,7 +164,7 @@ Batch 1 gets a full M-merge on milestone sessions. Batch 2+ uses snapshot delta 
 ### LLM prompt files
 
 - Each pipeline stage has its own `prompt*.ts` file.
-- Prompt text is currently hardcoded in Chinese. A migration to i18n-aware prompts is in progress (see `docs/IMPROVEMENT-PLAN.md` Phase 4.2).
+- Prompt text is currently hardcoded in Chinese. A migration to i18n-aware prompts is in progress — see `CONTRIBUTING.md` → "Translating LLM Prompts".
 - When changing a prompt's JSON output schema, bump `PIPELINE_VERSION` so caches invalidate.
 
 ### Tests
@@ -209,13 +210,7 @@ Batch 1 gets a full M-merge on milestone sessions. Batch 2+ uses snapshot delta 
 
 ## Project Status & Roadmap
 
-See `docs/IMPROVEMENT-PLAN.md` for the full improvement roadmap, covering:
-- Phase 0: Open-source preparation (CONTRIBUTING.md, multi-language README, badges)
-- Phase 1: Unified error handling (AgentMindmapError, agentLog, notify)
-- Phase 2: Refactor entry file (commands/ + batch/ split)
-- Phase 3: CI & code quality (ESLint, Prettier, GitHub Actions, pre-commit)
-- Phase 4: Internationalization (UI i18n, prompt i18n, docs i18n)
-- Phase 5: Community infrastructure (Issue/PR templates, architecture docs, v0.2.0 release)
+See the **Roadmap** section in `README.md` for open community contribution items (UI translations, LLM prompt i18n, eval coverage).
 
 ## Git Conventions
 
