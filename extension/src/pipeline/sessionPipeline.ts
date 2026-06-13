@@ -1,8 +1,11 @@
+import { countUserQueries } from "../llm/sanitizeTopicGraph";
+import { analyzeSession } from "./stages/analyzeSession";
+import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
+import { currentPipelineVersions } from "./pipelineVersions";
+import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { AgentHostId } from "../host/types";
 import type { CodeReference, LlmProvider, SessionAnalysis } from "../llm/types";
 import type { MindMapProgress } from "../progress";
-import { analyzeSession } from "./stages/analyzeSession";
-import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import type { ChatEvent } from "../transcript/types";
 import type {
   SessionConceptExtract,
@@ -11,10 +14,7 @@ import type {
   SessionTreeSnapshot,
 } from "../llm/types";
 import type { ConceptContextForMerge } from "../store/storeTypes";
-import { currentPipelineVersions } from "./pipelineVersions";
-import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { LlmStageTimingOut } from "./llmStage";
-import { countUserQueries } from "../llm/sanitizeTopicGraph";
 
 export type SessionPipelinePromptOpts = {
   maxDomains: number;
@@ -48,8 +48,8 @@ export type SessionPipelineResult = {
   conceptContexts: ConceptContextForMerge[];
   outline: SessionOutline;
   pipelineVersions: ReturnType<typeof currentPipelineVersions>;
-  /** Background promise for codeReferences — await before rendering mindmap. */
-  codeRefsPromise: Promise<CodeReference[] | undefined>;
+  /** Pending placeholder references written immediately; queue fills in real descriptions. */
+  initialCodeReferences?: CodeReference[];
 };
 
 export async function runSessionPipeline(
@@ -78,7 +78,7 @@ export async function runSessionPipeline(
   };
 
   let analysis = opts.preloaded;
-  let codeRefsPromise: Promise<CodeReference[] | undefined> = Promise.resolve(undefined);
+  let initialCodeReferences: CodeReference[] | undefined;
   if (!analysis) {
     progress?.report("S1: Analyzing session (one-shot LLM)…");
     const s1Timing: LlmStageTimingOut = {};
@@ -111,12 +111,16 @@ export async function runSessionPipeline(
       () => ({ kind: "llm", ...s1Timing })
     );
     analysis = s1Result.analysis;
-    codeRefsPromise = s1Result.codeRefsPromise;
+    initialCodeReferences = s1Result.initialCodeReferences;
   } else {
-    await runStage("S1 analyze", async () => analysis!, () => ({
-      kind: "llm",
-      skipped: true,
-    }));
+    await runStage(
+      "S1 analyze",
+      async () => analysis!,
+      () => ({
+        kind: "llm",
+        skipped: true,
+      })
+    );
   }
 
   progress?.report("S2: Finalizing tree and outline…");
@@ -142,6 +146,6 @@ export async function runSessionPipeline(
     conceptContexts: finalized.conceptContexts,
     outline: finalized.outline,
     pipelineVersions: currentPipelineVersions(),
-    codeRefsPromise,
+    initialCodeReferences,
   };
 }

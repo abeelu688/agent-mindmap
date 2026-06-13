@@ -571,7 +571,7 @@ async function resolveJumpCandidate(
   const turnValid =
     desiredTurn !== undefined &&
     desiredTurn < userQueries.length &&
-    !isMetaSearchUserQuery(userQueries[desiredTurn].text);
+    !isMetaSearchUserQuery(userQueries[desiredTurn]?.text ?? "");
 
   if (turnValid) {
     return { ...candidate, turnIndex: desiredTurn };

@@ -4,6 +4,8 @@ import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import { getProvider } from "./llm";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
+import { enqueueCodeRefUpdate } from "./codeRefQueue";
+import { clearPendingMindMapIfForSession } from "./batch/batchStatus";
 import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
 import { dumpLlmReplay } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
@@ -19,7 +21,6 @@ import {
   type LlmErrorCode,
   type LlmProviderId,
   type LlmProviderOptions,
-  type SessionOutline,
 } from "./llm/types";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
@@ -42,10 +43,11 @@ import {
   writeRecord,
 } from "./store/sessionStore";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
-import { format, t } from "./l10n/uiTranslate";
+import { t } from "./l10n/uiTranslate";
 import { readSessionFile } from "./transcript/listSessions";
 import type { SessionMeta } from "./mindmap/origin";
 import type { AgentHost } from "./host/types";
+import type { SessionRecord } from "./store/storeTypes";
 import type { BuildOptions, MindMapRoot, TranscriptSession } from "./transcript/types";
 
 export type LoadedSession = {
@@ -147,6 +149,10 @@ function describeError(err: unknown): string {
 
 function isCancellation(err: unknown): boolean {
   return err instanceof LlmProviderError && err.code === "cancelled";
+}
+
+function needsCodeRefRetry(refs: { llmStatus?: string }[] | undefined): boolean {
+  return Boolean(refs?.some((ref) => ref.llmStatus === "pending" || ref.llmStatus === "failed"));
 }
 
 async function listWorkspaceSessions(
@@ -395,6 +401,29 @@ export async function loadSession(
           sessionId: session.id,
           projectSlug: ctx.projectSlug,
         });
+        if (needsCodeRefRetry(existing.sessionAnalysis?.codeReferences)) {
+          enqueueCodeRefUpdate({
+            sessionId: existing.meta.sessionId,
+            projectSlug: existing.meta.projectSlug,
+            projectPath: existing.meta.projectPath,
+            sessionLabel: existing.meta.sessionLabel,
+            transcriptPath: existing.meta.transcriptPath,
+            events,
+            outline: existing.outline,
+            provider: getProvider(settings.llm),
+            model: settings.llm.model || undefined,
+            cacheDir: getCacheDir(deps.context),
+            cache: settings.cache,
+            timeoutMs: Math.min(settings.llm.timeoutMs, 60_000),
+            storeDir: getStoreDir(),
+          });
+        } else {
+          // Code refs are up-to-date. Evict any stale single-session pending
+          // map that was left over from a prior extension-host process so a
+          // "pending-refresh" badge doesn't invite the user to apply an
+          // outdated map (which would lose turnIndex on code-ref nodes).
+          clearPendingMindMapIfForSession(existing.meta.projectSlug, existing.meta.sessionId);
+        }
         return {
           session: {
             ...session,
@@ -488,10 +517,8 @@ export async function loadSession(
   const userQueryCount = countUserQueries(events);
   const outline = sanitizeSessionOutline(pipelineResult.outline, userQueryCount);
 
-  // Await background codeReferences extraction before rendering and persisting
-  const codeRefs = await pipelineResult.codeRefsPromise;
-  if (codeRefs?.length) {
-    pipelineResult.sessionAnalysis.codeReferences = codeRefs;
+  if (pipelineResult.initialCodeReferences?.length) {
+    pipelineResult.sessionAnalysis.codeReferences = pipelineResult.initialCodeReferences;
   }
 
   progress?.report(t("ui.progress.renderMindMap", "Rendering mind map…"));
@@ -529,6 +556,23 @@ export async function loadSession(
       });
       const storeDir = getStoreDir();
       await writeRecord(storeDir, record);
+      if (pipelineResult.initialCodeReferences?.length) {
+        enqueueCodeRefUpdate({
+          sessionId: session.id,
+          projectSlug: ctx.projectSlug,
+          projectPath,
+          sessionLabel: session.label,
+          transcriptPath: session.filePath,
+          events,
+          outline,
+          provider: getProvider(settings.llm),
+          model: settings.llm.model || undefined,
+          cacheDir: getCacheDir(deps.context),
+          cache: settings.cache,
+          timeoutMs: Math.min(settings.llm.timeoutMs, 60_000),
+          storeDir,
+        });
+      }
 
       if (settings.library.autoRebuildDeterministic && !options.skipAutoMerge) {
         const runMerge = async () => {
