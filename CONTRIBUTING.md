@@ -143,7 +143,7 @@ The extension's UI strings (notifications, command labels, install guides) live 
    };
    ```
 
-3. **Update the locale enum.** [`extension/package.json`](extension/package.json) → `agentMindmap.ui.locale.enum` already lists `ja` and `ko`. If you're adding a brand-new language, add it there too.
+3. **Update the locale enum.** [`extension/package.json`](extension/package.json) → `agentMindmap.ui.locale.enum` currently includes the shipped locales plus `ja`/`ko` placeholders. Contributions for any language are welcome; add the locale code there when introducing a new one.
 
 4. **Verify key consistency.** Run `npm run check:l10n` — it ensures every locale bundle has the same keys as the English baseline.
 
@@ -151,11 +151,11 @@ The extension's UI strings (notifications, command labels, install guides) live 
 
 ### Translating LLM Prompts
 
-LLM prompts are currently in Chinese only. The English template scaffold is in place ([`promptOutline.ts`](extension/src/llm/promptOutline.ts) is the reference implementation), and the `agentMindmap.llm.promptLanguage` setting toggles between languages.
+Production LLM prompts are still mostly Chinese-only. The English template scaffold is in place ([`promptOutline.ts`](extension/src/llm/promptOutline.ts) is the reference implementation), and the `agentMindmap.llm.promptLanguage` setting toggles between `zh` and `en`.
 
 To add full English (or other language) prompts:
 
-1. **Pick one prompt at a time.** Each `prompt*.ts` under `extension/src/llm/` has its own JSON output schema. Don't mass-translate — verify each one against the eval pipeline.
+1. **Pick one production prompt path at a time.** The active LLM paths are session analysis, code-reference descriptions, and merge analysis. Don't mass-translate deprecated prompt files — verify each active prompt against the eval pipeline.
 
 2. **Follow the `TEXTS` pattern in [`promptOutline.ts`](extension/src/llm/promptOutline.ts)**: extract every Chinese line into a `TEXTS: Record<PromptLanguage, ...>` object, then assemble the prompt from the localized strings. The JSON schema markers (`{"title":...}`) stay identical across languages.
 

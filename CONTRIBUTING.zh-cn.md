@@ -143,7 +143,7 @@ chore: 升级依赖
    };
    ```
 
-3. **更新 locale 枚举**。[`extension/package.json`](extension/package.json) 中的 `agentMindmap.ui.locale.enum` 已经预留了 `ja` 和 `ko`。如果你添加全新语言，需要同步在这里加上。
+3. **更新 locale 枚举**。[`extension/package.json`](extension/package.json) 中的 `agentMindmap.ui.locale.enum` 目前包含已发布语言以及 `ja`/`ko` 占位。任何语言的翻译贡献都欢迎；新增语言时把对应 locale code 加到这里。
 
 4. **校验 key 一致性**。运行 `npm run check:l10n` —— 确保每个 locale bundle 的 key 集合与英文基准一致。
 
@@ -151,11 +151,11 @@ chore: 升级依赖
 
 ### 翻译 LLM Prompt
 
-LLM prompt 当前仅有中文。英文模板的脚手架已就绪（[`promptOutline.ts`](extension/src/llm/promptOutline.ts) 是参考实现），`agentMindmap.llm.promptLanguage` 设置可在语言间切换。
+生产路径 LLM prompt 目前仍基本只有中文。英文模板的脚手架已就绪（[`promptOutline.ts`](extension/src/llm/promptOutline.ts) 是参考实现），`agentMindmap.llm.promptLanguage` 设置在 `zh` / `en` 之间切换。
 
 添加完整英文（或其他语言）prompt 的流程：
 
-1. **一次只迁移一个 prompt**。`extension/src/llm/` 下每个 `prompt*.ts` 都有自己的 JSON 输出 schema，**不要批量翻译** —— 每个都要在 eval 流水线上验证。
+1. **一次只迁移一条生产 prompt 路径**。当前活跃 LLM 路径是会话分析、代码引用描述、合并分析。不要批量翻译已废弃 prompt 文件；每条活跃 prompt 都要在 eval 流水线上验证。
 
 2. **遵循 [`promptOutline.ts`](extension/src/llm/promptOutline.ts) 的 `TEXTS` 模式**：把每行中文抽进一个 `TEXTS: Record<PromptLanguage, ...>` 对象，再用本地化字符串拼接成 prompt。JSON schema 标记（如 `{"title":...}`）在所有语言下保持一致。
 

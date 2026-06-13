@@ -160,14 +160,15 @@ See [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md) for the full roadmap. R
 - [x] Unified error handling system (`AgentMindmapError` + `agentLog` + `notify()`)
 - [x] Entry file refactoring (`commands/` + `batch/` split — `extension.ts` from 1,229 → 232 lines)
 - [x] CI with GitHub Actions (lint, type-check, test, l10n key check)
-- [x] i18n infrastructure (multi-locale UI bundles, prompt language separation, ja/ko placeholders)
+- [x] i18n infrastructure (multi-locale UI bundles and prompt language separation)
 - [x] Community templates (issue/PR templates, [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md))
 
 Open for community contribution:
 
-- [ ] Full Japanese / Korean UI translations
-- [ ] Migrate remaining 11 LLM prompts to language-aware `TEXTS` pattern (see [`promptOutline.ts`](extension/src/llm/promptOutline.ts) as reference)
-- [ ] Clean up the 49 + 17 pre-existing TypeScript errors (currently soft-warning in CI)
+- [ ] Full UI translations for additional languages
+- [ ] Migrate production LLM prompts to language-aware `TEXTS` patterns:
+      `session-analysis`, `code-ref-descriptions`, and `merge-session-analysis`
+- [ ] Add eval coverage for non-Chinese prompt variants before switching `auto` prompt language to English
 
 ## Privacy
 
