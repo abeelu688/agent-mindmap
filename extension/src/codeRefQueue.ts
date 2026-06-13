@@ -7,8 +7,10 @@ import { extractCodeReferencesFromEvents } from "./llm/extractCodeReferences";
 import { getLastBatchStatus, setLastBatchStatus, setPendingMindMap } from "./batch/batchStatus";
 import { notifyInfo } from "./notify";
 import { t } from "./l10n/uiTranslate";
+import { LlmProviderError } from "./llm/types";
 import type { ChatEvent } from "./transcript/types";
 import type { CodeReference, LlmProvider, SessionOutline } from "./llm/types";
+import type { PromptLanguage } from "./llm/promptLanguage";
 import type { SessionMeta } from "./mindmap/origin";
 import type { MindMapRoot } from "./transcript/types";
 
@@ -26,6 +28,7 @@ export type CodeRefQueueItem = {
   cache: boolean;
   timeoutMs: number;
   storeDir: string;
+  promptLanguage?: PromptLanguage;
 };
 
 const queue: CodeRefQueueItem[] = [];
@@ -108,6 +111,7 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
       cache: item.cache,
       outline: item.outline,
       timeoutMs: item.timeoutMs,
+      promptLanguage: item.promptLanguage,
     });
 
     if (!refs?.length) {
@@ -121,6 +125,16 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
     agentLog.warn(`[codeRefQueue] LLM failed session=${item.sessionId.slice(0, 8)}`, {
       error: String(err),
     });
+    // On cancellation (extension reload / user cancel), do NOT overwrite stored refs —
+    // they will be retried on the next load as long as they stay "pending" or "failed".
+    // Overwriting on cancel could corrupt "done" refs from a prior successful run.
+    const isCancelled = err instanceof LlmProviderError && err.code === "cancelled";
+    if (isCancelled) {
+      mindMapLog(
+        `[codeRefQueue] cancelled session=${item.sessionId.slice(0, 8)}, skipping status write`
+      );
+      return;
+    }
     // Persist failed status so next load can retry
     try {
       const latest = await readRecord(item.storeDir, item.projectSlug, item.sessionId);
