@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a new capability or enhancement
+title: "[feat]: "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Before filing, please check [existing issues](https://github.com/your-org/agent-mindmap/issues) and the [roadmap](../docs/IMPROVEMENT-PLAN.md) to see if it's already tracked.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: |
+        Describe the use case. What do you want to do that's currently awkward or impossible?
+      placeholder: "When I have 50+ sessions in a project, the concept mind map becomes hard to navigate because…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you imagine this working? UI mockups / config keys / commands welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds you've tried, or other approaches you considered.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which area does this affect?
+      options:
+        - LLM / pipeline
+        - UI / mind map rendering
+        - Library / merge / store
+        - Host adapter (Cursor / Claude Code / new host)
+        - i18n
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Are you willing to help?
+      options:
+        - label: I'd be willing to send a PR for this
+        - label: I'd be willing to help test a PR for this

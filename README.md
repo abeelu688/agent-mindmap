@@ -16,10 +16,10 @@ A VS Code extension that reads AI agent chat transcripts and renders them as **i
 
 ## Supported Products
 
-| Product | Transcript Location | Headless CLI |
-|---------|---------------------|--------------|
-| **Cursor** | `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` | `agent` / `cursor-agent` |
-| **Claude Code** | `~/.claude/projects/<encoded-path>/*.jsonl` | `claude -p` |
+| Product         | Transcript Location                                           | Headless CLI             |
+| --------------- | ------------------------------------------------------------- | ------------------------ |
+| **Cursor**      | `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` | `agent` / `cursor-agent` |
+| **Claude Code** | `~/.claude/projects/<encoded-path>/*.jsonl`                   | `claude -p`              |
 
 Set `agentMindmap.host` to `auto` (default), `cursor`, or `claude-code`. In `auto` mode, the extension detects your editor and falls back to scanning both directories.
 
@@ -27,10 +27,10 @@ The mind map is **read-only** — it does not write back to chat storage or affe
 
 ## Two Rendering Modes
 
-| Mode | When | Structure |
-|------|------|-----------|
-| **Topic** (default) | LLM summarization succeeds | Root (LLM-induced theme) → `Core N: <title>` → knowledge points / references |
-| **Turn** (fallback) | LLM unavailable / cancelled / bad JSON | Root (session label) → `Q1`, `Q2`, … → `Research` / `Conclusion` |
+| Mode                | When                                   | Structure                                                                    |
+| ------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| **Topic** (default) | LLM summarization succeeds             | Root (LLM-induced theme) → `Core N: <title>` → knowledge points / references |
+| **Turn** (fallback) | LLM unavailable / cancelled / bad JSON | Root (session label) → `Q1`, `Q2`, … → `Research` / `Conclusion`             |
 
 The topic view answers the "what was this chat about?" question. The root node is also LLM-induced (a 5–15 character noun phrase), so neither the agent UUID nor the timestamp appears as the central node.
 
@@ -38,9 +38,9 @@ The topic view answers the "what was this chat about?" question. The root node i
 
 The extension spawns the matching **headless CLI** as a subprocess — **no separate API key is required**. It reuses your existing product subscription.
 
-| Host | Command |
-|------|---------|
-| Cursor | `agent -p --force --trust --output-format json <prompt>` |
+| Host        | Command                                                        |
+| ----------- | -------------------------------------------------------------- |
+| Cursor      | `agent -p --force --trust --output-format json <prompt>`       |
 | Claude Code | `claude -p --bare --output-format json --max-turns 1 <prompt>` |
 
 If the binary is missing, the extension falls back to the chronological "turn" view and shows a modal with full install steps. Override the binary path with `agentMindmap.llm.cliPath` if auto-detect fails.
@@ -75,10 +75,10 @@ This is fully deterministic (no LLM call for trie layout). Paths are normalized 
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| **Agent Mind Map: Open Latest Session** | Load the most recent transcript and show a single-session mind map |
-| **Agent Mind Map: Choose Session…** | Pick a transcript by title + time |
+| Command                                                    | Description                                                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Agent Mind Map: Open Latest Session**                    | Load the most recent transcript and show a single-session mind map                                |
+| **Agent Mind Map: Choose Session…**                        | Pick a transcript by title + time                                                                 |
 | **Agent Mind Map: Analyze All Sessions (Current Project)** | Scan every transcript, run per-session LLM analysis, then build and open the **Concept Mind Map** |
 
 Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text.
@@ -100,42 +100,42 @@ No local HTTP server required — just open `index.html` in a browser. Clicking 
 
 ### Host / Transcripts
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `agentMindmap.host` | `auto` | `auto` \| `cursor` \| `claude-code` |
-| `agentMindmap.projectsDir` | `""` | [Cursor] Override `~/.cursor/projects` |
-| `agentMindmap.claudeProjectsDir` | `""` | [Claude] Override `~/.claude/projects` |
+| Setting                          | Default | Description                            |
+| -------------------------------- | ------- | -------------------------------------- |
+| `agentMindmap.host`              | `auto`  | `auto` \| `cursor` \| `claude-code`    |
+| `agentMindmap.projectsDir`       | `""`    | [Cursor] Override `~/.cursor/projects` |
+| `agentMindmap.claudeProjectsDir` | `""`    | [Claude] Override `~/.claude/projects` |
 
 ### LLM / Topic View
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `agentMindmap.llm.provider` | `auto` | `auto` \| `cursor-cli` \| `claude-cli` |
-| `agentMindmap.llm.cliPath` | `""` | Override CLI binary path |
-| `agentMindmap.llm.model` | `""` | Optional `--model` argument |
-| `agentMindmap.llm.timeoutMs` | `480000` | Hard timeout per CLI attempt (ms) |
-| `agentMindmap.llm.maxAttempts` | `1` | Max retries per summarization |
-| `agentMindmap.maxTopics` | `6` | Target topic count |
-| `agentMindmap.maxItemsPerTopic` | `6` | Sub-items per topic |
-| `agentMindmap.cacheLlmResult` | `true` | Secondary content-addressed cache |
+| Setting                         | Default  | Description                            |
+| ------------------------------- | -------- | -------------------------------------- |
+| `agentMindmap.llm.provider`     | `auto`   | `auto` \| `cursor-cli` \| `claude-cli` |
+| `agentMindmap.llm.cliPath`      | `""`     | Override CLI binary path               |
+| `agentMindmap.llm.model`        | `""`     | Optional `--model` argument            |
+| `agentMindmap.llm.timeoutMs`    | `480000` | Hard timeout per CLI attempt (ms)      |
+| `agentMindmap.llm.maxAttempts`  | `1`      | Max retries per summarization          |
+| `agentMindmap.maxTopics`        | `6`      | Target topic count                     |
+| `agentMindmap.maxItemsPerTopic` | `6`      | Sub-items per topic                    |
+| `agentMindmap.cacheLlmResult`   | `true`   | Secondary content-addressed cache      |
 
 ### Library / Merge
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `agentMindmap.storeDir` | `""` | Library path (`~/.agent-mindmap` if empty) |
-| `agentMindmap.library.enabled` | `true` | Persist analysis and skip LLM on reopen |
-| `agentMindmap.library.batchRefineOntology` | `true` | Incremental ontology + synonym refine |
-| `agentMindmap.library.mergeMode` | `delta` | `delta` \| `full` |
+| Setting                                    | Default | Description                                |
+| ------------------------------------------ | ------- | ------------------------------------------ |
+| `agentMindmap.storeDir`                    | `""`    | Library path (`~/.agent-mindmap` if empty) |
+| `agentMindmap.library.enabled`             | `true`  | Persist analysis and skip LLM on reopen    |
+| `agentMindmap.library.batchRefineOntology` | `true`  | Incremental ontology + synonym refine      |
+| `agentMindmap.library.mergeMode`           | `delta` | `delta` \| `full`                          |
 
 ### UI / Theme
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `agentMindmap.ui.preset` | `auto` | `auto` \| `dark` \| `light` |
-| `agentMindmap.ui.direction` | `side` | `side` \| `side-lr` \| `left` \| `right` |
-| `agentMindmap.ui.locale` | `auto` | `auto` \| `en` \| `zh-cn` |
-| `agentMindmap.ui.themeFile` | `""` | Custom theme JSON override |
+| Setting                     | Default | Description                              |
+| --------------------------- | ------- | ---------------------------------------- |
+| `agentMindmap.ui.preset`    | `auto`  | `auto` \| `dark` \| `light`              |
+| `agentMindmap.ui.direction` | `side`  | `side` \| `side-lr` \| `left` \| `right` |
+| `agentMindmap.ui.locale`    | `auto`  | `auto` \| `en` \| `zh-cn`                |
+| `agentMindmap.ui.themeFile` | `""`    | Custom theme JSON override               |
 
 ## Development
 
@@ -154,14 +154,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide and [CLAU
 
 ## Roadmap
 
-See [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md) for the full roadmap. Highlights:
+See [docs/IMPROVEMENT-PLAN.md](docs/IMPROVEMENT-PLAN.md) for the full roadmap. Recent milestones:
 
-- [ ] Unified error handling system
-- [ ] Entry file refactoring (commands/ + batch/ split)
-- [ ] CI with GitHub Actions (lint, type-check, test)
-- [ ] LLM prompt internationalization (currently Chinese only)
-- [ ] More UI language support (ja, ko, …)
-- [ ] Architecture documentation
+- [x] Unified error handling system (`AgentMindmapError` + `agentLog` + `notify()`)
+- [x] Entry file refactoring (`commands/` + `batch/` split — `extension.ts` from 1,229 → 232 lines)
+- [x] CI with GitHub Actions (lint, type-check, test, l10n key check)
+- [x] i18n infrastructure (multi-locale UI bundles, prompt language separation, ja/ko placeholders)
+- [x] Community templates (issue/PR templates, [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md))
+
+Open for community contribution:
+
+- [ ] Full Japanese / Korean UI translations
+- [ ] Migrate remaining 11 LLM prompts to language-aware `TEXTS` pattern (see [`promptOutline.ts`](extension/src/llm/promptOutline.ts) as reference)
+- [ ] Clean up the 49 + 17 pre-existing TypeScript errors (currently soft-warning in CI)
 
 ## Privacy
 

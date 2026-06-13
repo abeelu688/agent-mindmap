@@ -90,7 +90,7 @@ chore: update dependencies
 
 ## Architecture Overview
 
-For a detailed architecture description, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (coming soon) or read [CLAUDE.md](CLAUDE.md).
+For a detailed architecture description, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). For a code-level pipeline review, see [docs/PIPELINES_AND_REVIEW.md](docs/PIPELINES_AND_REVIEW.md). For an AI-assistant-friendly summary, see [CLAUDE.md](CLAUDE.md).
 
 Key points:
 
