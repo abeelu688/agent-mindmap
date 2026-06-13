@@ -1,17 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import type { MindMapRoot, NodeOrigin } from "../transcript/types";
 import { applyUiSettingToWorkspace } from "../ui/applyUiSettingWorkspace";
-import {
-  readMindMapUiConfig,
-  resolveThemeFilePath,
-} from "../ui/mindMapUiConfig";
-import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import { buildMindMapHtml } from "./mindMapHtml";
-import { mindMapLog } from "./MindMapLog";
+import { readMindMapUiConfig, resolveThemeFilePath } from "../ui/mindMapUiConfig";
 import { format, t } from "../l10n/uiTranslate";
 import { getCuratedModels } from "../llm/modelList";
+import { buildMindMapHtml } from "./mindMapHtml";
+import { mindMapLog } from "./MindMapLog";
+import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
+import type { MindMapRoot, NodeOrigin } from "../transcript/types";
 import type { LlmProviderId } from "../llm/types";
 
 export type WebviewToExtensionMessage =
@@ -39,6 +36,7 @@ export type BatchStatus = {
   batchNo: number;
   running: boolean;
   pendingUpdateBatchNo?: number;
+  pendingUpdateLabel?: string;
 };
 
 export type WebviewStrings = {
@@ -62,10 +60,7 @@ export type WebviewStrings = {
   currentModel?: string;
 };
 
-export type NodeClickedListener = (payload: {
-  origin: NodeOrigin;
-  nodeLabel?: string;
-}) => void;
+export type NodeClickedListener = (payload: { origin: NodeOrigin; nodeLabel?: string }) => void;
 
 export type DownloadRequestedListener = () => void;
 export type ApplyPendingUpdateRequestedListener = () => void;
@@ -151,13 +146,9 @@ export class MindMapHost {
           mindMapLog(`webview: ${msg.message}`);
         }
         if (msg.type === "nodeClicked") {
-          mindMapLog(
-            `nodeClicked received (${msg.origin.refs.length} ref(s))`
-          );
+          mindMapLog(`nodeClicked received (${msg.origin.refs.length} ref(s))`);
           if (!MindMapHost.nodeClickedListener) {
-            mindMapLog(
-              "WARN: no nodeClicked listener registered on the mind map view"
-            );
+            mindMapLog("WARN: no nodeClicked listener registered on the mind map view");
           }
           if (MindMapHost.nodeClickedListener) {
             try {
@@ -195,9 +186,7 @@ export class MindMapHost {
           if (MindMapHost.applyPendingUpdateRequestedListener) {
             MindMapHost.applyPendingUpdateRequestedListener();
           } else {
-            mindMapLog(
-              "WARN: requestApplyPendingUpdate with no listener registered"
-            );
+            mindMapLog("WARN: requestApplyPendingUpdate with no listener registered");
           }
         }
       }),
@@ -217,9 +206,7 @@ export class MindMapHost {
     MindMapHost.nodeClickedListener = listener;
   }
 
-  public static onDownloadRequested(
-    listener: DownloadRequestedListener | undefined
-  ): void {
+  public static onDownloadRequested(listener: DownloadRequestedListener | undefined): void {
     MindMapHost.downloadRequestedListener = listener;
   }
 
@@ -229,9 +216,7 @@ export class MindMapHost {
     MindMapHost.applyPendingUpdateRequestedListener = listener;
   }
 
-  public static onSelectModelRequested(
-    listener: SelectModelRequestedListener | undefined
-  ): void {
+  public static onSelectModelRequested(listener: SelectModelRequestedListener | undefined): void {
     MindMapHost.selectModelRequestedListener = listener;
   }
 
@@ -334,14 +319,8 @@ export class MindMapHost {
         presetAuto: t("webview.menu.preset.auto", "Follow editor"),
         presetDark: t("webview.menu.preset.dark", "Dark"),
         presetLight: t("webview.menu.preset.light", "Light"),
-        directionSide: t(
-          "webview.menu.direction.side",
-          "Both sides (right then left)"
-        ),
-        directionSideLr: t(
-          "webview.menu.direction.sideLr",
-          "Both sides (left then right)"
-        ),
+        directionSide: t("webview.menu.direction.side", "Both sides (right then left)"),
+        directionSideLr: t("webview.menu.direction.sideLr", "Both sides (left then right)"),
         directionRight: t("webview.menu.direction.right", "Right"),
         directionLeft: t("webview.menu.direction.left", "Left"),
         download: t("webview.menu.download", "Download mind map & transcripts…"),
@@ -407,10 +386,7 @@ export class MindMapHost {
     this.watchPath = undefined;
   }
 
-  private async handleUpdateUiSetting(
-    key: string,
-    value: string
-  ): Promise<void> {
+  private async handleUpdateUiSetting(key: string, value: string): Promise<void> {
     const result = await applyUiSettingToWorkspace(key, value);
     if (result.ok) {
       mindMapLog(`ui: updated ${key}=${value} (workspace)`);
@@ -498,8 +474,7 @@ export class MindMapHost {
       }, 200);
     };
 
-    const inWorkspace =
-      workspaceRoot && MindMapHost.isPathInside(resolved, workspaceRoot);
+    const inWorkspace = workspaceRoot && MindMapHost.isPathInside(resolved, workspaceRoot);
 
     if (inWorkspace && folder) {
       const rel = path.relative(workspaceRoot!, resolved);

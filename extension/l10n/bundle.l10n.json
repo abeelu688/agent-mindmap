@@ -51,6 +51,7 @@
   "ui.batch.summary.withFailures": "Agent Mind Map: {0} session(s) total, {1} newly analyzed, {2} cached, {3} failed ({4}{5}).",
   "ui.batch.failedSuffix": "{0} session(s) failed.",
   "ui.batch.progress.title": "Agent Mind Map: Batch analyze & merge…",
+  "ui.codeRefs.pendingRefresh": "Agent Mind Map: Code descriptions are ready. Click Refresh in the mind map to update.",
   "ui.batch.noOntologyEquivalences": "Agent Mind Map: Concept synonym rules were not generated. Run Analyze All Sessions (Current Project) again for full merge.",
   "ui.batch.noOntologyEquivalencesDisabled": "Agent Mind Map: Batch merge used mechanical path rules only. Enable agentMindmap.library.batchRefineOntology and run Analyze All Sessions again to refine synonyms.",
   "ui.merge.scope.current.label": "Current project ({0})",

@@ -207,6 +207,12 @@ export type CodeReference = {
   description: string;
   /** 0-based turn indices where this file was referenced, for filtering by topic. */
   sourceTurnIndices?: number[];
+  /** Background LLM enrichment state. Missing means legacy/done. */
+  llmStatus?: "pending" | "done" | "failed";
+  /** Last background LLM attempt timestamp. */
+  llmUpdatedAt?: number;
+  /** Short diagnostic for failed background enrichment. */
+  llmError?: string;
 };
 
 /** Single LLM response: domain + terms + hierarchy + content outline + session synonyms. */

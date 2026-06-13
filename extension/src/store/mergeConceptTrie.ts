@@ -259,10 +259,13 @@ function buildCodeReferencesNode(refs: CodeReference[], sessionMeta: SessionMeta
   const sortedPaths = [...groups.keys()].sort();
   const children: MindMapNodeData[] = [];
   for (const p of sortedPaths) {
-    const descs = groups
-      .get(p)!
-      .map((ref) => withOrigin(leaf(ref.description), [{ ...sessionMeta }]));
-    children.push(branch(p, descs, true));
+    const descs = groups.get(p)!.map((ref) => {
+      const turnIndices = ref.sourceTurnIndices?.length ? ref.sourceTurnIndices : undefined;
+      return withOrigin(leaf(ref.description), leafRefs(sessionMeta, turnIndices));
+    });
+    const fileBranch = branch(p, descs, true);
+    const fileRefs = unionChildRefs(descs);
+    children.push(fileRefs.length ? withOrigin(fileBranch, fileRefs) : fileBranch);
   }
   const node = branch("相关代码", children, false);
   return withOrigin(node, unionChildRefs(children));

@@ -5,12 +5,12 @@ import {
   type SessionAnalysisPromptOptions,
 } from "../../llm/promptSessionAnalysis";
 import { validateSessionAnalysis } from "../../llm/pipelineValidate";
+import { buildPendingCodeReferencesFromEvents } from "../../llm/extractCodeReferences";
 import type { CodeReference, LlmProvider, SessionAnalysis } from "../../llm/types";
 import type { AgentHostId } from "../../host/types";
 import type { ChatEvent } from "../../transcript/types";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
-import { extractCodeReferencesFromEvents } from "../../llm/extractCodeReferences";
 
 export type AnalyzeSessionOpts = StageTimingOpts & {
   events: ChatEvent[];
@@ -26,8 +26,8 @@ export type AnalyzeSessionOpts = StageTimingOpts & {
 
 export type AnalyzeSessionResult = {
   analysis: SessionAnalysis;
-  /** Background promise for codeReferences extraction (resolves when done). */
-  codeRefsPromise: Promise<CodeReference[] | undefined>;
+  /** Pending placeholder references written immediately; queue fills in real descriptions. */
+  initialCodeReferences?: CodeReference[];
 };
 
 export async function analyzeSession(
@@ -58,8 +58,7 @@ export async function analyzeSession(
       maxTopics: opts.prompt.maxNodes,
       maxItemsPerTopic: opts.prompt.maxDetailsPerNode,
       heartbeatMessage: "Analyzing session (domain, terms, outline)…",
-      validate: (v: unknown) =>
-        validateSessionAnalysis(v, { requireCodeReferences: false }),
+      validate: (v: unknown) => validateSessionAnalysis(v, { requireCodeReferences: false }),
       timingRunId: opts.timingRunId,
       timingOut: opts.timingOut,
     },
@@ -68,23 +67,13 @@ export async function analyzeSession(
     progress
   );
 
-  // Fire codeReferences extraction in the background — caller awaits when needed
-  const codeRefsPromise = analysis.codeReferences?.length
-    ? Promise.resolve(analysis.codeReferences)
-    : opts.events.length
-      ? extractCodeReferencesFromEvents(
-          opts.events,
-          provider,
-          signal,
-          {
-            projectPath: opts.projectPath,
-            model: opts.modelHint,
-            cacheDir: opts.cacheDir,
-            cache: opts.cache,
-            outline: analysis.outline,
-          }
-        ).catch(() => undefined)
-      : Promise.resolve(undefined);
+  const initialCodeReferences = analysis.codeReferences?.length
+    ? analysis.codeReferences.map((ref) => ({
+        ...ref,
+        llmStatus: ref.llmStatus ?? ("done" as const),
+        llmUpdatedAt: ref.llmUpdatedAt ?? Date.now(),
+      }))
+    : buildPendingCodeReferencesFromEvents(opts.events, opts.projectPath, analysis.outline);
 
-  return { analysis, codeRefsPromise };
+  return { analysis, initialCodeReferences };
 }
