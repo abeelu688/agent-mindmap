@@ -4,7 +4,7 @@
   "description": "Read Cursor or Claude Code agent chat transcripts and visualize them as an interactive mind map.",
   "version": "0.2.0",
   "icon": "icon.png",
-  "publisher": "airecorder",
+  "publisher": "Abeelu",
   "license": "MIT",
   "repository": {
     "type": "git",
