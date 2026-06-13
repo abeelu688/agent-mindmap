@@ -262,35 +262,30 @@ extension/src/batch/
 
 ### 5.1 Issue 模板
 
-- [ ] `.github/ISSUE_TEMPLATE/bug_report.md`
-- [ ] `.github/ISSUE_TEMPLATE/feature_request.md`
-- [ ] `.github/ISSUE_TEMPLATE/question.md`
-- [ ] Issue 模板包含：OS、VS Code 版本、扩展版本、Host（Cursor/Claude）、复现步骤
+- [x] [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml) — 含扩展版本、编辑器、host、OS、复现步骤、Output channel 日志区
+- [x] [`.github/ISSUE_TEMPLATE/feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml) — 问题、提案、备选方案、scope、是否愿贡献 PR
+- [x] [`.github/ISSUE_TEMPLATE/question.yml`](../.github/ISSUE_TEMPLATE/question.yml) — 引导先看 README/CONTRIBUTING/已有 issue
+- [x] [`.github/ISSUE_TEMPLATE/config.yml`](../.github/ISSUE_TEMPLATE/config.yml) — 禁用空白 issue，引导安全漏洞走 SECURITY.md，开放讨论走 GitHub Discussions
 
 ### 5.2 PR 模板
 
-- [ ] `.github/PULL_REQUEST_TEMPLATE.md`
-  - 变更描述、关联 Issue、测试方法、截图（UI 变更时）
+- [x] [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md) — 变更摘要、关联 issue、变更类型、测试 checklist（build/test/lint/l10n）、PIPELINE_VERSION 提醒、l10n bundle 双语提醒
 
 ### 5.3 Labels
 
-- [ ] 创建 label set：`bug`, `enhancement`, `good first issue`, `help wanted`, `i18n`, `area:llm`, `area:ui`, `area:store`, `area:merge`
+- [x] [`docs/MAINTAINING.md`](MAINTAINING.md) — label 一览表 + 颜色规范 + 一键 `gh label create` 脚本（`area:llm`/`ui`/`store`/`merge`/`host`/`ci`、`i18n`、`breaking-change`、`needs-repro` 等）
 
 ### 5.4 GitHub Release
 
-- [ ] 首次发布 v0.2.0 标注为 "First public release"
-- [ ] CHANGELOG.md 开始记录
-- [ ] 发布流程文档化（`scripts/package-vsix.sh` → GitHub Release → Marketplace）
+- [x] [`CHANGELOG.md`](../CHANGELOG.md) — Keep a Changelog 格式，`[Unreleased]` 段落已记录本路线图全部产出
+- [x] [`docs/RELEASE.md`](RELEASE.md) — 完整发布 runbook：版本号语义、pre-release checklist、cut release 步骤、hotfix、yank、stored data 兼容性
+- [ ] 实际打包并发布 v0.2.0 至 GitHub Release / VS Code Marketplace（开源时由维护者执行）
 
 ### 5.5 文档完善
 
-- [ ] `docs/ARCHITECTURE.md` — 项目架构说明（数据流、pipeline 阶段、目录结构）
-- [ ] `docs/CONTRIBUTING.md` 补充：
-  - 开发环境搭建（F5 调试步骤）
-  - 代码风格约定
-  - 提交消息格式（Conventional Commits）
-  - 新增 Host 适配指南
-  - 新增 LLM Provider 适配指南
+- [x] [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — 面向新贡献者的高层架构文档：repo 布局、两种渲染模式、单/多 session 数据流、library 持久化、host 抽象、LLM 层、i18n 三层设计、webview 边界
+- [x] CONTRIBUTING（EN + zh-cn）已链入 ARCHITECTURE.md + PIPELINES_AND_REVIEW.md + CLAUDE.md
+- [x] README（EN + zh-cn）roadmap 段落更新为已完成里程碑 + 社区可参与项
 
 ---
 
