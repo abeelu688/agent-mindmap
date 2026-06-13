@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the suggestion! Before filing, please check [existing issues](https://github.com/your-org/agent-mindmap/issues) and the [roadmap](../docs/IMPROVEMENT-PLAN.md) to see if it's already tracked.
+        Thanks for the suggestion! Before filing, please check [existing issues](https://github.com/abeelu688/agent-mindmap/issues) and the [roadmap](../docs/IMPROVEMENT-PLAN.md) to see if it's already tracked.
 
   - type: textarea
     id: problem

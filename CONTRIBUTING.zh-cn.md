@@ -8,7 +8,7 @@
 
 ```bash
 # 克隆并安装
-git clone https://github.com/your-org/agent-mindmap.git
+git clone https://github.com/abeelu688/agent-mindmap.git
 cd agent-mindmap
 npm install
 npm install --prefix extension
