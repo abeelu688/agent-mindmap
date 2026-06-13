@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (and any AI coding assistant) working
 
 **Agent Mind Map** is a VS Code extension that reads AI agent chat transcripts (Cursor / Claude Code) and renders them as interactive mind maps. It uses a headless CLI subprocess to call the LLM for session analysis — no separate API key is needed.
 
-- **Publisher ID**: `airecorder.agent-mindmap`
+- **Publisher ID**: `Abeelu.agent-mindmap`
 - **License**: MIT
 - **Languages**: TypeScript (extension + webview), CSS
 - **Build**: esbuild (extension) + Vite (webview)
