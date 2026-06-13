@@ -49,8 +49,7 @@ function toolLabel(name: string, input: Record<string, unknown> | string): strin
   }
   const pattern = input.pattern;
   if (typeof pattern === "string" && pattern) {
-    const short =
-      pattern.length > 40 ? pattern.slice(0, 37) + "..." : pattern;
+    const short = pattern.length > 40 ? pattern.slice(0, 37) + "..." : pattern;
     return `${n}: ${short}`;
   }
   const term = input.search_term;
@@ -119,6 +118,37 @@ function getTextParts(parts: ContentPart[]): string[] {
     .map((p) => (p as { type: "text"; text: string }).text);
 }
 
+const WRITE_TOOL_NAMES = new Set(["Write"]);
+const MODIFY_TOOL_NAMES = new Set(["StrReplace", "EditNotebook"]);
+const DELETE_TOOL_NAMES = new Set(["Delete"]);
+const SNIPPET_WRITE_MAX = 400;
+const SNIPPET_MODIFY_MAX = 200;
+
+function classifyWriteOp(
+  name: string,
+  input: Record<string, unknown> | string
+): { writeKind?: "create" | "modify" | "delete"; contentSnippet?: string } {
+  if (WRITE_TOOL_NAMES.has(name)) {
+    const raw = typeof input !== "string" ? (input.contents as string | undefined) : undefined;
+    const snippet =
+      typeof raw === "string" && raw.trim() ? raw.slice(0, SNIPPET_WRITE_MAX) : undefined;
+    return { writeKind: "create", contentSnippet: snippet };
+  }
+  if (MODIFY_TOOL_NAMES.has(name)) {
+    const raw =
+      typeof input !== "string"
+        ? ((input.new_string ?? input.new_contents) as string | undefined)
+        : undefined;
+    const snippet =
+      typeof raw === "string" && raw.trim() ? raw.slice(0, SNIPPET_MODIFY_MAX) : undefined;
+    return { writeKind: "modify", contentSnippet: snippet };
+  }
+  if (DELETE_TOOL_NAMES.has(name)) {
+    return { writeKind: "delete" };
+  }
+  return {};
+}
+
 export function parseJsonl(content: string): ChatEvent[] {
   const lines = content.split("\n").filter((l) => l.trim());
   const events: ChatEvent[] = [];
@@ -167,6 +197,7 @@ export function parseJsonl(content: string): ChatEvent[] {
               label: toolLabel(name, input),
               lineIndex: i,
               filePaths: extractFilePaths(input),
+              ...classifyWriteOp(name, input),
             });
           }
         }
@@ -185,8 +216,7 @@ export function parseJsonl(content: string): ChatEvent[] {
 
       flushTools();
 
-      const preview =
-        combined.length > 200 ? combined.slice(0, 197) + "..." : combined;
+      const preview = combined.length > 200 ? combined.slice(0, 197) + "..." : combined;
 
       events.push({
         kind: "assistant_summary",

@@ -92,38 +92,38 @@ body,
   100% {
     border-color: color-mix(
       in srgb,
-      var(--vscode-progressBar-background, #0e70c0) 70%,
+      var(--vscode-button-background, #0e70c0) 70%,
       transparent
     );
     background: color-mix(
       in srgb,
-      var(--vscode-progressBar-background, #0e70c0) 22%,
+      var(--vscode-button-background, #0e70c0) 22%,
       var(--vscode-editor-background, #1e1e1e)
     );
     color: color-mix(
       in srgb,
-      var(--vscode-progressBar-background, #0e70c0) 55%,
+      var(--vscode-button-background, #0e70c0) 55%,
       var(--vscode-foreground, #cccccc)
     );
     box-shadow:
       0 0 0 2px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 40%, transparent),
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 40%, transparent),
       0 0 14px 3px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 35%, transparent);
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 35%, transparent);
   }
   50% {
-    border-color: var(--vscode-progressBar-background, #0e70c0);
+    border-color: var(--vscode-button-background, #0e70c0);
     background: color-mix(
       in srgb,
-      var(--vscode-progressBar-background, #0e70c0) 58%,
+      var(--vscode-button-background, #0e70c0) 58%,
       var(--vscode-editor-background, #1e1e1e)
     );
     color: var(--vscode-button-foreground, #ffffff);
     box-shadow:
       0 0 0 5px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 85%, transparent),
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 85%, transparent),
       0 0 28px 10px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 90%, transparent);
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 90%, transparent);
   }
 }
 
@@ -139,18 +139,18 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .batch-status__button--attention {
     animation: none;
-    border-color: var(--vscode-progressBar-background, #0e70c0);
+    border-color: var(--vscode-button-background, #0e70c0);
     background: color-mix(
       in srgb,
-      var(--vscode-progressBar-background, #0e70c0) 42%,
+      var(--vscode-button-background, #0e70c0) 42%,
       var(--vscode-editor-background, #1e1e1e)
     );
     color: var(--vscode-button-foreground, #ffffff);
     box-shadow:
       0 0 0 3px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 55%, transparent),
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 55%, transparent),
       0 0 16px 4px
-        color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 50%, transparent);
+        color-mix(in srgb, var(--vscode-button-background, #0e70c0) 50%, transparent);
   }
 }
 

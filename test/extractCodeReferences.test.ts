@@ -8,10 +8,18 @@ vi.mock("fs", () => ({
 }));
 
 describe("extractFilePathsFromEvents", () => {
-  it("extracts file paths from tool events", () => {
+  it("extracts file paths from write tool events", () => {
     const events: ChatEvent[] = [
       { kind: "user_query", text: "Fix the router", lineIndex: 0 },
-      { kind: "tool", name: "Read", label: "read", lineIndex: 1, filePaths: ["/project/src/router.ts"] },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: router.ts",
+        lineIndex: 1,
+        filePaths: ["/project/src/router.ts"],
+        writeKind: "modify",
+        contentSnippet: "export function routeTo(path: string) {",
+      },
       { kind: "assistant_summary", text: "Fixed router bug", lineIndex: 2 },
     ];
     const entries = extractFilePathsFromEvents(events, "/project");
@@ -19,6 +27,24 @@ describe("extractFilePathsFromEvents", () => {
     expect(entries[0]?.path).toBe("src/router.ts");
     expect(entries[0]?.query).toBe("Fix the router");
     expect(entries[0]?.summary).toBe("Fixed router bug");
+    expect(entries[0]?.writeKind).toBe("modify");
+    expect(entries[0]?.contentSnippet).toBe("export function routeTo(path: string) {");
+  });
+
+  it("returns empty for read-only tool events (strategy A)", () => {
+    const events: ChatEvent[] = [
+      { kind: "user_query", text: "Fix the router", lineIndex: 0 },
+      {
+        kind: "tool",
+        name: "Read",
+        label: "Read: router.ts",
+        lineIndex: 1,
+        filePaths: ["/project/src/router.ts"],
+      },
+      { kind: "assistant_summary", text: "Fixed router bug", lineIndex: 2 },
+    ];
+    const entries = extractFilePathsFromEvents(events, "/project");
+    expect(entries).toEqual([]);
   });
 
   it("returns empty for no file paths", () => {
@@ -33,8 +59,22 @@ describe("extractFilePathsFromEvents", () => {
   it("deduplicates same file in same turn", () => {
     const events: ChatEvent[] = [
       { kind: "user_query", text: "Q", lineIndex: 0 },
-      { kind: "tool", name: "Read", label: "read", lineIndex: 1, filePaths: ["/proj/src/a.ts"] },
-      { kind: "tool", name: "Edit", label: "edit", lineIndex: 2, filePaths: ["/proj/src/a.ts"] },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: a.ts",
+        lineIndex: 1,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "modify",
+      },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: a.ts",
+        lineIndex: 2,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "modify",
+      },
       { kind: "assistant_summary", text: "Done", lineIndex: 3 },
     ];
     const entries = extractFilePathsFromEvents(events, "/proj");
@@ -44,10 +84,24 @@ describe("extractFilePathsFromEvents", () => {
   it("keeps separate entries for same file across different turns", () => {
     const events: ChatEvent[] = [
       { kind: "user_query", text: "Fix router", lineIndex: 0 },
-      { kind: "tool", name: "Read", label: "read", lineIndex: 1, filePaths: ["/proj/src/a.ts"] },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: a.ts",
+        lineIndex: 1,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "modify",
+      },
       { kind: "assistant_summary", text: "Fixed routing", lineIndex: 2 },
       { kind: "user_query", text: "Add middleware", lineIndex: 3 },
-      { kind: "tool", name: "Edit", label: "edit", lineIndex: 4, filePaths: ["/proj/src/a.ts"] },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: a.ts",
+        lineIndex: 4,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "modify",
+      },
       { kind: "assistant_summary", text: "Added middleware", lineIndex: 5 },
     ];
     const entries = extractFilePathsFromEvents(events, "/proj");
@@ -59,7 +113,14 @@ describe("extractFilePathsFromEvents", () => {
   it("attaches outline topic context by source turn", () => {
     const events: ChatEvent[] = [
       { kind: "user_query", text: "Optimize code refs", lineIndex: 0 },
-      { kind: "tool", name: "Edit", label: "edit", lineIndex: 1, filePaths: ["/proj/src/codeRefs.ts"] },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: codeRefs.ts",
+        lineIndex: 1,
+        filePaths: ["/proj/src/codeRefs.ts"],
+        writeKind: "modify",
+      },
       { kind: "assistant_summary", text: "Updated prompt wording", lineIndex: 2 },
     ];
     const entries = extractFilePathsFromEvents(events, "/proj", {
@@ -80,5 +141,33 @@ describe("extractFilePathsFromEvents", () => {
 
     expect(entries[0]?.topicContexts?.[0]).toContain("Code reference descriptions");
     expect(entries[0]?.topicContexts?.[0]).toContain("file change responsibilities");
+  });
+
+  it("prefers 'create' writeKind snippet over 'modify' for same path", () => {
+    const events: ChatEvent[] = [
+      { kind: "user_query", text: "Create new file", lineIndex: 0 },
+      {
+        kind: "tool",
+        name: "StrReplace",
+        label: "StrReplace: a.ts",
+        lineIndex: 1,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "modify",
+        contentSnippet: "modify snippet",
+      },
+      {
+        kind: "tool",
+        name: "Write",
+        label: "Write: a.ts",
+        lineIndex: 2,
+        filePaths: ["/proj/src/a.ts"],
+        writeKind: "create",
+        contentSnippet: "create snippet",
+      },
+      { kind: "assistant_summary", text: "Done", lineIndex: 3 },
+    ];
+    const entries = extractFilePathsFromEvents(events, "/proj");
+    expect(entries[0]?.writeKind).toBe("create");
+    expect(entries[0]?.contentSnippet).toBe("create snippet");
   });
 });
