@@ -160,14 +160,15 @@ npm test
 - [x] 统一错误处理系统（`AgentMindmapError` + `agentLog` + `notify()`）
 - [x] 入口文件重构（`commands/` + `batch/` 拆分，`extension.ts` 从 1,229 行缩到 232 行）
 - [x] GitHub Actions CI（lint、类型检查、测试、l10n key 检查）
-- [x] i18n 基础设施（多 locale UI bundle、prompt 语言独立设置、ja/ko 占位）
+- [x] i18n 基础设施（多 locale UI bundle、prompt 语言独立设置）
 - [x] 社区模板（issue/PR 模板、[`CONTRIBUTING.md`](CONTRIBUTING.md)、[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)）
 
 欢迎社区贡献：
 
-- [ ] 完整的日文 / 韩文 UI 翻译
-- [ ] 把剩余 11 个 LLM prompt 按 language-aware `TEXTS` 模式迁移（参考 [`promptOutline.ts`](extension/src/llm/promptOutline.ts)）
-- [ ] 清理 49 + 17 个预存的 TypeScript 错误（目前 CI 中为软警告）
+- [ ] 为更多语言补全 UI 翻译
+- [ ] 将生产路径仍在使用的 LLM prompt 迁移到 language-aware `TEXTS` 模式：
+      `session-analysis`、`code-ref-descriptions`、`merge-session-analysis`
+- [ ] 为非中文 prompt 变体补充 eval 覆盖，再将 `auto` prompt language 切到英文
 
 ## 隐私
 
