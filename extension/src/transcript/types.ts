@@ -10,8 +10,8 @@ export type ChatEvent =
       /**
        * Set for write-type tool calls only. Used to filter code-ref entries to
        * files that were actually changed (not just read) in this session.
-       * - "create": Write tool (new file or full overwrite)
-       * - "modify": StrReplace / EditNotebook (partial edit)
+       * - "create": Write tool or ApplyPatch add-file
+       * - "modify": StrReplace / EditNotebook / ApplyPatch update
        * - "delete": Delete tool
        * Read / Glob / Grep / Shell → undefined (omitted).
        */
