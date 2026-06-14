@@ -1,5 +1,6 @@
-import type { BuildOptions, ChatEvent, MindMapNodeData, MindMapRoot } from "../transcript/types";
 import { type SessionMeta, unionChildRefs, withOrigin } from "./origin";
+import { mindMapLabelsForOutputLanguage } from "./outputLanguageLabels";
+import type { BuildOptions, ChatEvent, MindMapNodeData, MindMapRoot } from "../transcript/types";
 
 const MAX_LABEL = 120;
 
@@ -30,7 +31,10 @@ function extractParagraphBullets(text: string, max: number): string[] {
     if (!line) {
       continue;
     }
-    const cleaned = line.replace(/^[-*]\s+/, "").replace(/^#+\s+/, "").trim();
+    const cleaned = line
+      .replace(/^[-*]\s+/, "")
+      .replace(/^#+\s+/, "")
+      .trim();
     if (cleaned.length > 15 && !cleaned.startsWith("```")) {
       items.push(truncate(cleaned, 100));
     }
@@ -96,12 +100,20 @@ export function buildTurnMindMap(
   events: ChatEvent[],
   options: BuildOptions,
   sessionLabel?: string,
-  sessionMeta?: SessionMeta
+  sessionMeta?: SessionMeta,
+  outputLanguage?: string
 ): MindMapRoot {
-  const labels = options.labels ?? {
-    research: "调研",
-    conclusion: "结论",
-    sessionDefault: "Agent Session",
+  const outputLabels = mindMapLabelsForOutputLanguage(outputLanguage);
+  const labels = {
+    research: outputLanguage
+      ? outputLabels.research
+      : (options.labels?.research ?? outputLabels.research),
+    conclusion: outputLanguage
+      ? outputLabels.conclusion
+      : (options.labels?.conclusion ?? outputLabels.conclusion),
+    sessionDefault: outputLanguage
+      ? outputLabels.sessionDefault
+      : (options.labels?.sessionDefault ?? outputLabels.sessionDefault),
   };
   const turns = groupIntoTurns(events);
   const firstQuery = turns[0]?.query;
@@ -114,9 +126,7 @@ export function buildTurnMindMap(
   const children: MindMapNodeData[] = turns.map((turn, idx) => {
     const qLabel = `Q${idx + 1}: ${truncate(turn.query, 80)}`;
     const sub: MindMapNodeData[] = [];
-    const turnRef = sessionMeta
-      ? [{ ...sessionMeta, turnIndex: idx }]
-      : undefined;
+    const turnRef = sessionMeta ? [{ ...sessionMeta, turnIndex: idx }] : undefined;
 
     if (options.includeToolCalls && turn.tools.length > 0) {
       const toolLeaves = turn.tools.map((t) => {
@@ -132,10 +142,7 @@ export function buildTurnMindMap(
       let conclusionItems =
         headings.length > 0
           ? headings
-          : extractParagraphBullets(
-              turn.summary.text,
-              options.maxConclusionItems
-            );
+          : extractParagraphBullets(turn.summary.text, options.maxConclusionItems);
 
       if (!conclusionItems.length) {
         conclusionItems = [truncate(turn.summary.preview, 100)];
@@ -147,9 +154,7 @@ export function buildTurnMindMap(
         return turnRef ? withOrigin(node, turnRef) : node;
       });
       const conclusionBranch = branch(labels.conclusion, conclusionLeaves);
-      sub.push(
-        turnRef ? withOrigin(conclusionBranch, turnRef) : conclusionBranch
-      );
+      sub.push(turnRef ? withOrigin(conclusionBranch, turnRef) : conclusionBranch);
     }
 
     if (!sub.length) {

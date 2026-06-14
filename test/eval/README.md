@@ -4,22 +4,22 @@
 
 ## 目录
 
-| 路径 | 说明 |
-|------|------|
-| `eval.config.example.json` | 配置模板（提交到仓库） |
-| `eval.config.local.json` | 本机覆盖（gitignore，从 example 复制） |
-| `export-aosp14-fixtures.mjs` | 从 `~/.cursor/projects/home-example-cursor-aosp14/agent-transcripts` 导出 jsonl |
-| `run-eval.ts` | Headless eval CLI（构建为 `extension/dist/eval-run.js`） |
-| `baselines/concept-trie.json` | 可选 baseline，用于 `--compareBaseline` |
-| `reports/` | 运行报告输出（gitignore） |
+| 路径                          | 说明                                                           |
+| ----------------------------- | -------------------------------------------------------------- |
+| `eval.config.example.json`    | 配置模板（提交到仓库）                                         |
+| `eval.config.local.json`      | 本机覆盖（gitignore，从 example 复制）                         |
+| `export-aosp14-fixtures.mjs`  | 从本机 Cursor `agent-transcripts` 导出 jsonl（需 `--source=`） |
+| `run-eval.ts`                 | Headless eval CLI（构建为 `extension/dist/eval-run.js`）       |
+| `baselines/concept-trie.json` | 可选 baseline，用于 `--compareBaseline`                        |
+| `reports/`                    | 运行报告输出（gitignore）                                      |
 
-Fixture 数据：`../fixtures/aosp14/`（24 个 session jsonl + `manifest.json`）。
+Fixture 数据：`../fixtures/aosp14/manifest.json`（transcript jsonl 不提交仓库，需本地导出）。
 
 ## 快速开始
 
 ```bash
-# 1. 首次或 transcript 更新后，重新导出 fixture（可选）
-npm run eval:fixtures:export
+# 1. 首次或 transcript 更新后，本地导出 fixture（可选；transcripts 已在 .gitignore）
+npm run eval:fixtures:export -- --source="$HOME/.cursor/projects/<project-slug>/agent-transcripts"
 
 # 2. 本机配置
 cp test/eval/eval.config.example.json test/eval/eval.config.local.json
@@ -35,17 +35,17 @@ npm run eval -- --write-baseline
 
 `eval.config.local.json` 合并 `eval.config.example.json` 后生效。
 
-| 字段 | 说明 |
-|------|------|
-| `useFixtureTranscripts` | `true` → `test/fixtures/aosp14/transcripts`；`false` → 实机 `~/.cursor/projects/<projectSlug>/agent-transcripts` |
-| `fixtureSet` | fixture 子目录名，默认 `aosp14` |
-| `projectSlug` / `projectPath` | 写入 `SessionRecord.meta` |
-| `sessionFilter` | `"all"` 或 session uuid 数组（冒烟子集） |
-| `llmProvider` | `cursor-cli` 或 `claude-cli` |
-| `promptParams` | `maxTopics` / `maxItemsPerTopic` |
-| `useStoreRecords` | `true` 时跳过 LLM，从 `~/.agent-mindmap` 读已有 `SessionRecord`（仅测合并逻辑） |
-| `compareBaseline` | 与 `baselines/concept-trie.json` 做 diff 并打印 |
-| `writeReport` | 写入 `reports/<timestamp>.json` |
+| 字段                          | 说明                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `useFixtureTranscripts`       | `true` → `test/fixtures/aosp14/transcripts`；`false` → 实机 `~/.cursor/projects/<projectSlug>/agent-transcripts` |
+| `fixtureSet`                  | fixture 子目录名，默认 `aosp14`                                                                                  |
+| `projectSlug` / `projectPath` | 写入 `SessionRecord.meta`                                                                                        |
+| `sessionFilter`               | `"all"` 或 session uuid 数组（冒烟子集）                                                                         |
+| `llmProvider`                 | `cursor-cli` 或 `claude-cli`                                                                                     |
+| `promptParams`                | `maxTopics` / `maxItemsPerTopic`                                                                                 |
+| `useStoreRecords`             | `true` 时跳过 LLM，从 `~/.agent-mindmap` 读已有 `SessionRecord`（仅测合并逻辑）                                  |
+| `compareBaseline`             | 与 `baselines/concept-trie.json` 做 diff 并打印                                                                  |
+| `writeReport`                 | 写入 `reports/<timestamp>.json`                                                                                  |
 
 ## 指标含义
 
@@ -83,4 +83,4 @@ npm run test:vitest -- test/evalMetrics.test.ts
 
 ## 隐私
 
-Fixture jsonl 可能含本地路径与代码片段，默认仅供团队内回归；对外发布前请评估脱敏。
+Fixture jsonl 可能含本地路径与代码片段，默认不提交仓库；导出前请评估脱敏。

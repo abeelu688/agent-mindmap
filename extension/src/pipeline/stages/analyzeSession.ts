@@ -11,6 +11,7 @@ import type { AgentHostId } from "../../host/types";
 import type { ChatEvent } from "../../transcript/types";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
+import type { OutputLanguage } from "../../llm/promptLanguage";
 
 export type AnalyzeSessionOpts = StageTimingOpts & {
   events: ChatEvent[];
@@ -22,6 +23,7 @@ export type AnalyzeSessionOpts = StageTimingOpts & {
   sessionId?: string;
   projectSlug?: string;
   projectPath?: string;
+  outputLanguage?: OutputLanguage;
 };
 
 export type AnalyzeSessionResult = {
@@ -40,7 +42,8 @@ export async function analyzeSession(
     opts.events,
     opts.prompt,
     opts.hostId ?? "cursor",
-    opts.projectPath
+    opts.projectPath,
+    opts.outputLanguage
   );
   const analysis = await runLlmStage(
     {

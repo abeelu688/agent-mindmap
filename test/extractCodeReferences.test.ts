@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { extractFilePathsFromEvents } from "../extension/src/llm/extractCodeReferences";
+import {
+  __testing,
+  CODE_REF_DESC_PROMPT_VERSION,
+  extractFilePathsFromEvents,
+} from "../extension/src/llm/extractCodeReferences";
 import type { ChatEvent } from "../extension/src/transcript/types";
 
 // Mock fs.accessSync so isProjectRelativePath doesn't fail on nonexistent paths
@@ -169,5 +173,26 @@ describe("extractFilePathsFromEvents", () => {
     const entries = extractFilePathsFromEvents(events, "/proj");
     expect(entries[0]?.writeKind).toBe("create");
     expect(entries[0]?.contentSnippet).toBe("create snippet");
+  });
+});
+
+describe("code reference description prompt", () => {
+  it("uses English instructions and the requested output language for descriptions", () => {
+    const prompt = __testing.buildCodeRefDescriptionPrompt(
+      [
+        {
+          path: "src/router.ts",
+          turnIndex: 0,
+          query: "这个文件为什么要改？",
+          summary: "Updated routing",
+        },
+      ],
+      "Chinese"
+    );
+
+    expect(CODE_REF_DESC_PROMPT_VERSION).toBe(5);
+    expect(prompt).toContain("Below are code file paths");
+    expect(prompt).toContain("Write every natural-language `description` value in Chinese");
+    expect(prompt).toContain('Output ONLY a JSON array: [{"path":"...","description":"..."}]');
   });
 });

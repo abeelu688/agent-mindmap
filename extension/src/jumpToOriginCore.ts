@@ -77,8 +77,7 @@ function trimPreview(text: string, max = 60): string {
  * "整段会话"; turn candidates render as "Q{n+1}: <preview>". Exported so
  * tests can assert the user-visible label shape.
  */
-const UUID_RE =
-  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 
 /** Cursor meta-prompt that searches prior transcripts — not a real topic Q. */
 export function isMetaSearchUserQuery(text: string): boolean {
@@ -109,9 +108,9 @@ export function parseQTagsFromNodeLabel(label: string): number[] {
 
 export function stripNodeLabelForMatch(label: string): string {
   return label
-    .replace(/概述：/g, "")
+    .replace(/^(概述|Summary|概要|요약)\s*[:：]\s*/i, "")
     .replace(/\s*\(Q[\d/Q]+\)\s*/gi, " ")
-    .replace(/核心\d+:\s*/gi, " ")
+    .replace(/^(核心|Core|핵심)\d+\s*[:：]\s*/i, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -154,10 +153,7 @@ function tokenizeForMatch(text: string): Set<string> {
 /**
  * Pick the user-query turn in `queries` that best matches a mind-map leaf label.
  */
-export function findBestTurnIndex(
-  queries: string[],
-  hintText: string
-): number | undefined {
+export function findBestTurnIndex(queries: string[], hintText: string): number | undefined {
   const hint = stripNodeLabelForMatch(hintText);
   if (!hint) {
     return undefined;

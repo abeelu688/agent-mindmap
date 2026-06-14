@@ -2,15 +2,14 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { agentLog } from "../log";
+import { validateSessionOutline, validateTopicGraph } from "../llm/cursorCliProvider";
+import { outlineToTopicGraph, topicGraphToOutline } from "../llm/outlineToTopicGraph";
+import {
+  currentPipelineVersions,
+  pipelineVersionsMatch,
+  PIPELINE_VERSION,
+} from "../pipeline/pipelineVersions";
 import { writeJsonAtomic } from "./atomicWrite";
-import {
-  validateSessionOutline,
-  validateTopicGraph,
-} from "../llm/cursorCliProvider";
-import {
-  outlineToTopicGraph,
-  topicGraphToOutline,
-} from "../llm/outlineToTopicGraph";
 import type {
   PipelineVersions,
   SessionAnalysis,
@@ -20,11 +19,6 @@ import type {
   SessionTreeSnapshot,
   TopicGraph,
 } from "../llm/types";
-import {
-  currentPipelineVersions,
-  pipelineVersionsMatch,
-  PIPELINE_VERSION,
-} from "../pipeline/pipelineVersions";
 import type {
   ConceptContextForMerge,
   MergeRecord,
@@ -56,17 +50,8 @@ export function sha256Hex(data: string | Buffer): string {
   return h.digest("hex");
 }
 
-export function recordPath(
-  storeDir: string,
-  projectSlug: string,
-  sessionId: string
-): string {
-  return path.join(
-    storeDir,
-    STORE_LAYOUT.sessionsDir,
-    projectSlug,
-    `${sessionId}.json`
-  );
+export function recordPath(storeDir: string, projectSlug: string, sessionId: string): string {
+  return path.join(storeDir, STORE_LAYOUT.sessionsDir, projectSlug, `${sessionId}.json`);
 }
 
 export function indexPath(storeDir: string): string {
@@ -206,9 +191,7 @@ export async function readRecord(
     const raw = parsed as SessionRecord;
     if (raw.outline) {
       raw.outline = validateSessionOutline(raw.outline);
-      raw.graph = raw.graph
-        ? validateTopicGraph(raw.graph)
-        : outlineToTopicGraph(raw.outline);
+      raw.graph = raw.graph ? validateTopicGraph(raw.graph) : outlineToTopicGraph(raw.outline);
     } else if (raw.graph) {
       raw.graph = validateTopicGraph(raw.graph);
       raw.outline = topicGraphToOutline(raw.graph);
@@ -217,24 +200,14 @@ export async function readRecord(
     }
     return ensureRecordGraph(raw);
   } catch (err) {
-    agentLog.warn(
-      `Corrupt session record ${projectSlug}/${sessionId}`,
-      { error: String(err) }
-    );
+    agentLog.warn(`Corrupt session record ${projectSlug}/${sessionId}`, { error: String(err) });
     return undefined;
   }
 }
 
-export async function writeRecord(
-  storeDir: string,
-  record: SessionRecord
-): Promise<void> {
+export async function writeRecord(storeDir: string, record: SessionRecord): Promise<void> {
   await ensureStore(storeDir);
-  const file = recordPath(
-    storeDir,
-    record.meta.projectSlug,
-    record.meta.sessionId
-  );
+  const file = recordPath(storeDir, record.meta.projectSlug, record.meta.sessionId);
   await writeJsonAtomic(file, record);
 }
 
@@ -276,9 +249,7 @@ export function buildSessionRecord(
  * Walk `<storeDir>/sessions/*` and yield every parseable SessionRecord.
  * Bad files are skipped silently — they'll be overwritten on next analysis.
  */
-export async function listRecords(
-  storeDir: string
-): Promise<SessionRecord[]> {
+export async function listRecords(storeDir: string): Promise<SessionRecord[]> {
   const sessionsRoot = path.join(storeDir, STORE_LAYOUT.sessionsDir);
   if (!(await pathExists(sessionsRoot))) {
     return [];
@@ -309,9 +280,7 @@ export async function listRecords(
         const raw = parsed as SessionRecord;
         if (raw.outline) {
           raw.outline = validateSessionOutline(raw.outline);
-          raw.graph = raw.graph
-            ? validateTopicGraph(raw.graph)
-            : outlineToTopicGraph(raw.outline);
+          raw.graph = raw.graph ? validateTopicGraph(raw.graph) : outlineToTopicGraph(raw.outline);
         } else if (raw.graph) {
           raw.graph = validateTopicGraph(raw.graph);
           raw.outline = topicGraphToOutline(raw.graph);
@@ -340,9 +309,7 @@ function toIndexEntry(record: SessionRecord): SessionIndexEntry {
   };
 }
 
-export async function readIndex(
-  storeDir: string
-): Promise<SessionIndex | undefined> {
+export async function readIndex(storeDir: string): Promise<SessionIndex | undefined> {
   const file = indexPath(storeDir);
   const parsed = await readJson<SessionIndex>(file);
   if (!parsed || parsed.schemaVersion !== SCHEMA_VERSION) {
@@ -386,6 +353,7 @@ export function isRecordFresh(
     pipelineVersions?: PipelineVersions;
     llm: { provider: string; model?: string };
     hostId?: string;
+    outputLanguage?: string;
   }
 ): boolean {
   if (recordFreshnessToken(record) !== current.transcriptFreshnessToken) {
@@ -393,13 +361,11 @@ export function isRecordFresh(
   }
   if (
     record.meta.promptParams.maxTopics !== current.promptParams.maxTopics ||
-    record.meta.promptParams.maxItemsPerTopic !==
-      current.promptParams.maxItemsPerTopic
+    record.meta.promptParams.maxItemsPerTopic !== current.promptParams.maxItemsPerTopic
   ) {
     return false;
   }
-  const expectedPipeline =
-    current.pipelineVersions ?? currentPipelineVersions();
+  const expectedPipeline = current.pipelineVersions ?? currentPipelineVersions();
   if (record.meta.pipelineVersions) {
     if (!pipelineVersionsMatch(record.meta.pipelineVersions, expectedPipeline)) {
       return false;
@@ -421,6 +387,11 @@ export function isRecordFresh(
   if (recHost !== curHost) {
     return false;
   }
+  const recOutputLanguage = record.meta.outputLanguage ?? "Chinese";
+  const curOutputLanguage = current.outputLanguage ?? "Chinese";
+  if (recOutputLanguage !== curOutputLanguage) {
+    return false;
+  }
   // Empty / undefined model are treated as equivalent (CLI default).
   const recModel = record.meta.llm.model?.trim() || "";
   const curModel = current.llm.model?.trim() || "";
@@ -430,16 +401,11 @@ export function isRecordFresh(
   return true;
 }
 
-export async function writeMergeRecord(
-  filePath: string,
-  record: MergeRecord
-): Promise<void> {
+export async function writeMergeRecord(filePath: string, record: MergeRecord): Promise<void> {
   await writeJsonAtomic(filePath, record);
 }
 
-export async function readMergeRecord(
-  filePath: string
-): Promise<MergeRecord | undefined> {
+export async function readMergeRecord(filePath: string): Promise<MergeRecord | undefined> {
   const parsed = await readJson<MergeRecord>(filePath);
   if (!parsed || parsed.schemaVersion !== SCHEMA_VERSION) {
     return undefined;

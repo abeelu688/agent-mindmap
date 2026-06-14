@@ -8,9 +8,10 @@ import { getLastBatchStatus, setLastBatchStatus, setPendingMindMap } from "./bat
 import { notifyInfo } from "./notify";
 import { t } from "./l10n/uiTranslate";
 import { LlmProviderError } from "./llm/types";
+import { mindMapLabelsForOutputLanguage } from "./mindmap/outputLanguageLabels";
 import type { ChatEvent } from "./transcript/types";
 import type { CodeReference, LlmProvider, SessionOutline } from "./llm/types";
-import type { PromptLanguage } from "./llm/promptLanguage";
+import type { OutputLanguage } from "./llm/promptLanguage";
 import type { SessionMeta } from "./mindmap/origin";
 import type { MindMapRoot } from "./transcript/types";
 
@@ -28,11 +29,25 @@ export type CodeRefQueueItem = {
   cache: boolean;
   timeoutMs: number;
   storeDir: string;
-  promptLanguage?: PromptLanguage;
+  outputLanguage?: OutputLanguage;
 };
 
 const queue: CodeRefQueueItem[] = [];
 let running = false;
+
+/** Wait until the background code-reference queue is idle (for headless scripts). */
+export function drainCodeRefQueue(): Promise<void> {
+  return new Promise((resolve) => {
+    const tick = (): void => {
+      if (!running && queue.length === 0) {
+        resolve();
+        return;
+      }
+      setTimeout(tick, 25);
+    };
+    tick();
+  });
+}
 
 export function enqueueCodeRefUpdate(item: CodeRefQueueItem): void {
   // Replace any existing pending item for the same session (deduplicate)
@@ -111,7 +126,7 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
       cache: item.cache,
       outline: item.outline,
       timeoutMs: item.timeoutMs,
-      promptLanguage: item.promptLanguage,
+      outputLanguage: item.outputLanguage,
     });
 
     if (!refs?.length) {
@@ -173,20 +188,22 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
         sessionLabel: item.sessionLabel,
         transcriptPath: item.transcriptPath,
       };
+      const labels = mindMapLabelsForOutputLanguage(item.outputLanguage);
       setPendingMindMap(
         buildOutlineMindMap(
           latest.outline,
           item.sessionLabel,
           sessionMeta,
           doneRefs,
-          item.projectPath
+          item.projectPath,
+          item.outputLanguage
         ),
         undefined,
-        "代码描述"
+        labels.relatedCode
       );
       const currentStatus = getLastBatchStatus();
       const nextStatus = currentStatus
-        ? { ...currentStatus, pendingUpdateLabel: "代码描述" }
+        ? { ...currentStatus, pendingUpdateLabel: labels.relatedCode }
         : {
             total: 1,
             processed: 1,
@@ -195,7 +212,7 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
             failed: 0,
             batchNo: 0,
             running: false,
-            pendingUpdateLabel: "代码描述",
+            pendingUpdateLabel: labels.relatedCode,
           };
       setLastBatchStatus(nextStatus);
       panel.setBatchStatus(nextStatus);

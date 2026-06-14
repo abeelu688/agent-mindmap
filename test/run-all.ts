@@ -107,15 +107,15 @@ async function main(): Promise<void> {
   const q1 = turnRoot.children?.[0];
   assert(q1?.data.text.startsWith("Q1:") ?? false, "turn: Q1 label");
   const turnSubs = q1?.children?.map((c) => c.data.text) ?? [];
-  assert(turnSubs.includes("调研"), "turn: has research branch");
-  assert(turnSubs.includes("结论"), "turn: has conclusion branch");
+  assert(turnSubs.includes("Research"), "turn: has research branch");
+  assert(turnSubs.includes("Conclusion"), "turn: has conclusion branch");
 
   const turnNoTools = buildTurnMindMap(events, {
     includeToolCalls: false,
     maxConclusionItems: 8,
   });
   const turnSubs2 = turnNoTools.children?.[0]?.children?.map((c) => c.data.text) ?? [];
-  assert(!turnSubs2.includes("调研"), "turn: no research when disabled");
+  assert(!turnSubs2.includes("Research"), "turn: no research when disabled");
 
   // topic graph validation
   const validGraph = validateTopicGraph({
@@ -835,7 +835,7 @@ async function main(): Promise<void> {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 10, "merge prompt v10");
+    assert(MERGE_SESSION_ANALYSIS_PROMPT_VERSION === 11, "merge prompt v11");
     assert(prompt.includes("frozenTopRootKeys"), "merge prompt: frozen tops");
   }
 

@@ -119,10 +119,7 @@ describe("mergeSessionAnalysis input enrichment", () => {
     ]);
     expect(tree[0]?.title).toBe("Top");
     expect(tree[0]?.children?.[0]?.title).toBe("Mid");
-    expect(tree[0]?.children?.[0]?.children?.[0]?.conceptPath).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(tree[0]?.children?.[0]?.children?.[0]?.conceptPath).toEqual(["a", "b"]);
   });
 
   it("adds frozenTopRootKeys and frozenDomains on snapshot in delta mode", () => {
@@ -151,9 +148,7 @@ describe("mergeSessionAnalysis input enrichment", () => {
     expect(input.sessions[0]?.frozenTopRootKeys).toEqual(["hub"]);
     expect(input.sessions[0]?.frozenDomains).toEqual(["hub-domain", "extra"]);
     expect(input.sessions[0]?.outline.tree).toBeDefined();
-    expect(
-      (input.sessions[0]?.outline as { leaves?: unknown }).leaves
-    ).toBeUndefined();
+    expect((input.sessions[0]?.outline as { leaves?: unknown }).leaves).toBeUndefined();
   });
 
   it("prioritizeNodesForMergeInput keeps all root nodes when over cap", () => {
@@ -211,7 +206,7 @@ describe("mergeSessionAnalysis input enrichment", () => {
     expect(tabularBytes).toBeLessThan(jsonBytes * 0.85);
   });
 
-  it("prompt v2 documents domainKeys, frozenTopRootKeys, and merge constraints", () => {
+  it("prompt documents domainKeys, frozenTopRootKeys, output language, and merge constraints", () => {
     const snap = sessionRecord(MERGE_SNAPSHOT_SESSION_ID, ["hub"]);
     const input = buildMergeSessionAnalysisInput(
       [snap, sessionRecord("new", ["x"])],
@@ -224,24 +219,23 @@ describe("mergeSessionAnalysis input enrichment", () => {
       maxBranches: 8,
       maxDetailsPerNode: 4,
     });
-    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(10);
-    expect(prompt).toContain("JSON 契约");
+    expect(MERGE_SESSION_ANALYSIS_PROMPT_VERSION).toBe(11);
+    expect(prompt).toContain("JSON contract");
     expect(prompt).toContain("pathPrefix");
-    expect(prompt).toContain("禁止只写这一项");
+    expect(prompt).toContain("never write only pathPrefix:[]");
     expect(prompt).toContain("domainKeys");
     expect(prompt).toContain("frozenTopRootKeys");
     expect(prompt).toContain("outlineRows");
-    expect(prompt).toContain("输入 schema");
-    expect(prompt).toContain("如何读输入");
+    expect(prompt).toContain("input schema");
+    expect(prompt).toContain("How to read the input");
     expect(prompt).not.toContain("旧版");
-    expect(prompt).toContain("parentKeys=[] 的根节点最多 2 个");
-    expect(prompt).toContain("增量合并");
+    expect(prompt).toContain("At most 2 root nodes may have parentKeys=[]");
+    expect(prompt).toContain("Delta merge");
+    expect(prompt).toContain("Write all user-visible natural-language output fields in English");
   });
 
   it("snapshot node cap is higher than batch", () => {
-    expect(__testing.MAX_SNAPSHOT_NODES).toBeGreaterThan(
-      __testing.MAX_CONTEXTS_PER_SESSION
-    );
+    expect(__testing.MAX_SNAPSHOT_NODES).toBeGreaterThan(__testing.MAX_CONTEXTS_PER_SESSION);
   });
 });
 
@@ -272,10 +266,7 @@ describe("snapConceptPathToVirtualSession", () => {
       ],
       outline: { title: "t", outline: [] },
     };
-    const snapped = snapConceptPathToVirtualSession(
-      ["android", "art"],
-      virtual
-    );
+    const snapped = snapConceptPathToVirtualSession(["android", "art"], virtual);
     expect(snapped[0]).toBe("androidplatform");
     expect(snapped[1]).toBe("art");
   });
@@ -284,10 +275,7 @@ describe("snapConceptPathToVirtualSession", () => {
 describe("mergeSessionAnalysis prompt", () => {
   it("formats multi-session input with self-contained output contract", () => {
     const input = buildMergeSessionAnalysisInput(
-      [
-        sessionRecord("s1", ["android", "art"]),
-        sessionRecord("s2", ["android", "binder"]),
-      ],
+      [sessionRecord("s1", ["android", "art"]), sessionRecord("s2", ["android", "binder"])],
       "full"
     );
     expect(input.sessions).toHaveLength(2);
@@ -306,7 +294,7 @@ describe("mergeSessionAnalysis prompt", () => {
     expect(prompt).toContain("segmentEquivalences");
     expect(prompt).toContain("domainKeys");
     expect(prompt).toContain("childKeys");
-    expect(prompt).toContain("子孙");
+    expect(prompt).toContain("descendant");
     expect(prompt).not.toContain("changes[]");
   });
 });

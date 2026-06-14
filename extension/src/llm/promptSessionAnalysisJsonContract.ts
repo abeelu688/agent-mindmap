@@ -1,67 +1,65 @@
-/** Step 4 / scope 说明：与 {@link parseScope} 一致。 */
+/** Step 4 / scope guidance: must stay aligned with parseScope validators. */
 export const SCOPE_PATH_PREFIX_GUIDANCE_LINES: string[] = [
-  "**scope.pathPrefix（与校验器一致，写错会 bad-shape）：**",
-  "- **有上级 path**：`pathPrefix` 为该段之前的各段 key（≥1 段）；可再加 `downstreamFirst` / `evidenceKeywords` 收窄语境",
-  "- **根级 / conceptPath 第 0 段**（并列顶根、兄弟段）：语义上前缀为空 → 写 `\"pathPrefix\":[]`，但**禁止只写这一项**；必须**同时**提供非空的 `evidenceKeywords` 和/或 `downstreamFirst`（或 `projectSlugs`）",
-  "- 例（根级顶段同义）：`\"scope\":{\"pathPrefix\":[],\"evidenceKeywords\":[\"platform\",\"platform-alpha\"]}`",
-  "- 例（链内段同义）：`\"scope\":{\"pathPrefix\":[\"platform-alpha\"]}` 或再加 `evidenceKeywords`",
+  "**scope.pathPrefix (validator-aligned; invalid scope causes bad-shape):**",
+  "- **With an upstream path**: `pathPrefix` is the list of segment keys before the segment being equated (>=1 segment); add `downstreamFirst` / `evidenceKeywords` when the context needs narrowing",
+  '- **Root level / conceptPath segment 0** (parallel top roots or sibling roots): semantic prefix is empty, so write `"pathPrefix":[]`, but **never write only that field**; also provide non-empty `evidenceKeywords` and/or `downstreamFirst` (or `projectSlugs`)',
+  '- Example (root-level top segment equivalence): `"scope":{"pathPrefix":[],"evidenceKeywords":["platform","platform-alpha"]}`',
+  '- Example (inside a chain): `"scope":{"pathPrefix":["platform-alpha"]}` or add `evidenceKeywords`',
 ];
 
 /** Lines appended to session-analysis / M-merge prompts — mirrors pipeline validators (bad-shape). */
 export const SESSION_ANALYSIS_JSON_CONTRACT_LINES: string[] = [
-  "## JSON 契约（校验失败 = bad-shape，缺一项整段输出作废）",
+  "## JSON contract (validator failure = bad-shape; one missing required field invalidates the whole output)",
   "",
-  "**nodes[]** 每条必填：",
-  "- `key`、`label`：非空字符串（key 小写 canonical）",
-  "- `parentKeys`：必须是数组（根概念用 `[]`，禁止省略该字段）",
-  "- `evidence`：非空数组，至少 1 条 ≤80 字、去空白后非空的上下文片段",
+  "**nodes[]** required on every item:",
+  "- `key`, `label`: non-empty strings (`key` is lowercase canonical)",
+  "- `parentKeys`: must be an array (root concepts use `[]`; do not omit this field)",
+  "- `evidence`: non-empty array, at least 1 context snippet <=80 chars after trimming",
   "",
-  "**segmentEquivalences[]**（无同义可 `[]`；写出条目则每条须完整有效，不可缺少scope/aliases条目）：",
-  "- `canonical`：非空小写段名",
-  "- `aliases`：非空数组，至少 1 个与 canonical 不同的非空字符串",
-  "- `scope`：必填对象；其中 **至少一项** 含非空内容：`pathPrefix`（≥1 段）、`downstreamPrefix`、`downstreamFirst`、`projectSlugs`、`evidenceKeywords`",
-  "- 根级 `\"pathPrefix\":[]` 时：**必须**同条 scope 里另有非空 `evidenceKeywords` / `downstreamFirst` / `projectSlugs`（仅空 pathPrefix 整条作废）",
+  "**segmentEquivalences[]** (`[]` when none; each written item must be complete and valid, including scope/aliases):",
+  "- `canonical`: non-empty lowercase segment name",
+  "- `aliases`: non-empty array, at least 1 non-empty string different from canonical",
+  "- `scope`: required object; **at least one** field must have non-empty content: `pathPrefix` (>=1 segment), `downstreamPrefix`, `downstreamFirst`, `projectSlugs`, `evidenceKeywords`",
+  '- For root-level `"pathPrefix":[]`: the same scope **must** also include non-empty `evidenceKeywords` / `downstreamFirst` / `projectSlugs` (empty pathPrefix alone invalidates the item)',
   "",
-  "**outline**：",
-  "- `outline[]`：非空数组",
-  "- 最深层叶子：`summary` 必填；`details` 至少 1 条 `{ \"text\": \"非空\" }`",
-  "- 中间层：须有非空 `children[]`；有 children 的节点不要挂 `details`",
+  "**outline**:",
+  "- `outline[]`: non-empty array",
+  '- Deepest leaf nodes: `summary` is required; `details` has at least 1 item `{ "text": "non-empty" }`',
+  "- Intermediate nodes: must have non-empty `children[]`; nodes with children must not carry `details`",
   "",
-  "**codeReferences[]**（机械触发：上文存在 `[F#]` 行则必填；无 `[F#]` 写 `[]`）：",
-  "- `path`：**必须原样**取自某 `[F#]` 行的某个路径（相对项目根，不含前导 `/`）；禁止编造、改写、拼接",
-  "- `lines`：本方案统一写 `\"-\"`",
-  "- `description`：≤60 字，结合 `[Q#]`/`[A#]` 上下文说明该文件被改动/阅读的功能或目的",
-  "- 同一文件涉及多个不同功能/目的 → 每条功能各写一条（path 相同，description 不同），不要合并",
+  "**codeReferences[]** (mechanical trigger: if the prompt contains `[F#]` lines, this field is required; if no `[F#]`, write `[]`):",
+  "- `path`: **must exactly match** a path from a `[F#]` line (relative to project root, no leading `/`); do not invent, rewrite, or concatenate paths",
+  '- `lines`: always write `"-"` in this design',
+  "- `description`: <=60 chars, use `[Q#]`/`[A#]` context to describe the file's function or purpose in the change/read",
+  "- If one file has several distinct purposes, write one item per purpose (same path, different description); do not merge them",
 ];
 
-export function formatSessionAnalysisJsonContract(
-  options?: { includeSourceTurnIndices?: boolean; includeCodeReferences?: boolean; includeOutline?: boolean }
-): string {
+export function formatSessionAnalysisJsonContract(options?: {
+  includeSourceTurnIndices?: boolean;
+  includeCodeReferences?: boolean;
+  includeOutline?: boolean;
+}): string {
   const lines = [...SESSION_ANALYSIS_JSON_CONTRACT_LINES];
   if (options?.includeSourceTurnIndices) {
-    lines.push("- 叶子 `details[]` 可含 `sourceTurnIndices`（0-based，引用本 transcript）");
+    lines.push(
+      "- Leaf `details[]` may include `sourceTurnIndices` (0-based, within this transcript)"
+    );
   } else {
-    lines.push("- 跨会话合并：**不要** 在 `details` 里写 `sourceTurnIndices`");
+    lines.push("- Cross-session merge: **do not** write `sourceTurnIndices` inside `details`");
   }
   if (!options?.includeCodeReferences) {
     // Remove codeReferences contract lines for merge prompts (no [F#] lines)
     const codeRefStart = lines.indexOf(
-      lines.find((l) => l.startsWith("**codeReferences[]**")) ?? "");
+      lines.find((l) => l.startsWith("**codeReferences[]**")) ?? ""
+    );
     if (codeRefStart >= 0) {
-      const nextBlock = lines.findIndex(
-        (l, idx) => idx > codeRefStart && l.startsWith("**")
-      );
-      lines.splice(
-        codeRefStart,
-        (nextBlock >= 0 ? nextBlock : lines.length) - codeRefStart
-      );
+      const nextBlock = lines.findIndex((l, idx) => idx > codeRefStart && l.startsWith("**"));
+      lines.splice(codeRefStart, (nextBlock >= 0 ? nextBlock : lines.length) - codeRefStart);
     }
   }
   if (!options?.includeOutline) {
     // Remove outline contract lines for merge prompts (outline generated deterministically)
-    const outlineStart = lines.indexOf(
-      lines.find((l) => l.startsWith("**outline**：")) ?? ""
-    );
+    const outlineStart = lines.indexOf(lines.find((l) => l.startsWith("**outline**：")) ?? "");
     if (outlineStart >= 0) {
       // Remove outline block (header + 3 detail lines)
       lines.splice(outlineStart, 4);

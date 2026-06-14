@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { describe, expect, it } from "vitest";
 import { buildTurnMindMap } from "../extension/src/mindmap/buildMindMapData";
 import { parseJsonl } from "../extension/src/transcript/parseJsonl";
 
@@ -9,10 +9,7 @@ import { parseJsonl } from "../extension/src/transcript/parseJsonl";
 
 describe("buildTurnMindMap (fallback)", () => {
   it("builds tree with question branches", () => {
-    const content = readFileSync(
-      join(__dirname, "fixtures/sample.jsonl"),
-      "utf8"
-    );
+    const content = readFileSync(join(__dirname, "fixtures/sample.jsonl"), "utf8");
     const events = parseJsonl(content);
     const root = buildTurnMindMap(events, {
       includeToolCalls: true,
@@ -26,15 +23,12 @@ describe("buildTurnMindMap (fallback)", () => {
     expect(q1?.data.text).toMatch(/^Q1:/);
 
     const subNames = q1?.children?.map((c) => c.data.text) ?? [];
-    expect(subNames).toContain("调研");
-    expect(subNames).toContain("结论");
+    expect(subNames).toContain("Research");
+    expect(subNames).toContain("Conclusion");
   });
 
   it("omits tool branch when disabled", () => {
-    const content = readFileSync(
-      join(__dirname, "fixtures/sample.jsonl"),
-      "utf8"
-    );
+    const content = readFileSync(join(__dirname, "fixtures/sample.jsonl"), "utf8");
     const events = parseJsonl(content);
     const root = buildTurnMindMap(events, {
       includeToolCalls: false,
@@ -42,7 +36,25 @@ describe("buildTurnMindMap (fallback)", () => {
     });
     const q1 = root.children?.[0];
     const subNames = q1?.children?.map((c) => c.data.text) ?? [];
-    expect(subNames).not.toContain("调研");
+    expect(subNames).not.toContain("Research");
+    expect(subNames).toContain("Conclusion");
+  });
+
+  it("uses Chinese fixed labels when requested", () => {
+    const content = readFileSync(join(__dirname, "fixtures/sample.jsonl"), "utf8");
+    const events = parseJsonl(content);
+    const root = buildTurnMindMap(
+      events,
+      {
+        includeToolCalls: true,
+        maxConclusionItems: 8,
+      },
+      undefined,
+      undefined,
+      "Chinese"
+    );
+    const subNames = root.children?.[0]?.children?.map((c) => c.data.text) ?? [];
+    expect(subNames).toContain("调研");
     expect(subNames).toContain("结论");
   });
 });

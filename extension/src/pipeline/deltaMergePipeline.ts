@@ -5,6 +5,7 @@ import {
   type SnapshotHierarchyLlmOpts,
 } from "./snapshotHierarchy";
 import type { AgentHostId } from "../host/types";
+import type { OutputLanguage } from "../llm/promptLanguage";
 import type { LlmProvider } from "../llm/types";
 import type { MindMapProgress } from "../progress";
 import type { MergeRecord, MergeSnapshot, SessionRecord } from "../store/storeTypes";
@@ -24,7 +25,7 @@ export type RunDeltaMergePipelineOpts = {
   model?: string;
   hostId?: AgentHostId;
   providerId: string;
-  promptLanguage?: "zh" | "en";
+  outputLanguage?: OutputLanguage;
   signal: AbortSignal;
   forceReattach?: boolean;
   /** Base CLI timeout (ms); passed to M-merge. */

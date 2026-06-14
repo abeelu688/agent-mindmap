@@ -94,6 +94,8 @@ export type SessionRecordMeta = {
   hostId?: AgentHostId;
   /** User-query turn count in transcriptPath when analyzed (for jump validation). */
   userQueryCount?: number;
+  /** Natural language requested for user-visible LLM output fields. */
+  outputLanguage?: string;
 };
 
 /**

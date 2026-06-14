@@ -1,21 +1,15 @@
+import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
+import { refreshSnapshotForSession, runBatchSnapshotPipeline } from "../pipeline/snapshotHierarchy";
+import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
+import { sanitizeSessionRecord } from "../store/sanitizeRecords";
+import { mindMapLog } from "../webview/MindMapLog";
+import { t } from "../l10n/uiTranslate";
 import type { LlmProviderOptions, LlmProvider } from "../llm/types";
 import type { ConceptMergeLlmOpts } from "../store/conceptMergeContext";
 import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
 import type { MindMapProgress } from "../progress";
-import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
-import {
-  refreshSnapshotForSession,
-  runBatchSnapshotPipeline,
-} from "../pipeline/snapshotHierarchy";
-import {
-  filterRealSessionRecords,
-  readSnapshotManifest,
-} from "../store/mergeSnapshot";
-import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import type { SessionRecord } from "../store/storeTypes";
 import type { MergeRecord } from "../store/storeTypes";
-import { mindMapLog } from "../webview/MindMapLog";
-import { t } from "../l10n/uiTranslate";
 
 export function toConceptMergeLlmOpts(
   llmOpts: LlmProviderOptions,
@@ -39,9 +33,7 @@ export async function buildProjectConceptMergeFromCache(
   progress?: MindMapProgress,
   forceReattach = false
 ): Promise<MergeRecord> {
-  const sanitized = await Promise.all(
-    records.map((r) => sanitizeSessionRecord(r))
-  );
+  const sanitized = await Promise.all(records.map((r) => sanitizeSessionRecord(r)));
   const { merge } = await buildConceptMergeForRecords(sanitized, {
     storeDir,
     projectSlug,
@@ -105,10 +97,7 @@ export async function buildProjectConceptMergeForBatch(
     );
   } else {
     opts.progress?.report(
-      t(
-        "ui.ontology.refine.heartbeat",
-        "Refining concept segment equivalences…"
-      )
+      t("ui.ontology.refine.heartbeat", "Refining concept segment equivalences…")
     );
   }
   return runBatchSnapshotPipeline(
@@ -122,7 +111,7 @@ export async function buildProjectConceptMergeForBatch(
       providerId: opts.conceptLlm.providerId,
       model: opts.conceptLlm.model,
       hostId: opts.conceptLlm.hostId,
-      promptLanguage: opts.conceptLlm.promptLanguage,
+      outputLanguage: opts.conceptLlm.outputLanguage,
       llmTimeoutMs: opts.conceptLlm.timeoutMs,
       signal: opts.signal,
       forceReattach: opts.forceReattach ?? true,
@@ -182,7 +171,7 @@ export async function refreshSnapshotsForFreshSessions(
         providerId: opts.conceptLlm.providerId,
         model: opts.conceptLlm.model,
         hostId: opts.conceptLlm.hostId,
-        promptLanguage: opts.conceptLlm.promptLanguage,
+        outputLanguage: opts.conceptLlm.outputLanguage,
         llmTimeoutMs: opts.llmTimeoutMs,
         signal: opts.signal,
         forceReattach: true,
@@ -224,10 +213,7 @@ export async function refreshSnapshotsForFreshSessions(
     );
   }
 
-  if (
-    leafToRepresentativeSession.size === 0 &&
-    sessionsNeedingNewLeaf.length === 0
-  ) {
+  if (leafToRepresentativeSession.size === 0 && sessionsNeedingNewLeaf.length === 0) {
     mindMapLog(
       `[refreshSnapshotsForFreshSessions] nothing to refresh (freshSessionIds=${freshSessionIds.length})`
     );
@@ -243,7 +229,7 @@ export async function refreshSnapshotsForFreshSessions(
     providerId: opts.conceptLlm.providerId,
     model: opts.conceptLlm.model,
     hostId: opts.conceptLlm.hostId,
-    promptLanguage: opts.conceptLlm.promptLanguage,
+    outputLanguage: opts.conceptLlm.outputLanguage,
     llmTimeoutMs: opts.llmTimeoutMs,
     signal: opts.signal,
     forceReattach: true as const,
@@ -257,10 +243,7 @@ export async function refreshSnapshotsForFreshSessions(
       return lastMerge;
     }
     opts.progress?.report(
-      t(
-        "ui.batch.progress.refreshLeaf",
-        "Refreshing snapshot leaf for changed session…"
-      )
+      t("ui.batch.progress.refreshLeaf", "Refreshing snapshot leaf for changed session…")
     );
     mindMapLog(
       `[refreshSnapshotsForFreshSessions] refreshSnapshotForSession leaf=${leafId} representativeSession=${representativeSid.slice(0, 8)}`
@@ -278,10 +261,8 @@ export async function refreshSnapshotsForFreshSessions(
       .map((sid) => recordById.get(sid))
       .filter((r): r is SessionRecord => Boolean(r));
     // Pick the next batch number: max existing L1 number + 1.
-    const refreshedManifest =
-      (await readSnapshotManifest(storeDir, opts.projectSlug)) ?? manifest;
-    const batchNo =
-      refreshedManifest.nodes.filter((n) => n.level === 1).length + 1;
+    const refreshedManifest = (await readSnapshotManifest(storeDir, opts.projectSlug)) ?? manifest;
+    const batchNo = refreshedManifest.nodes.filter((n) => n.level === 1).length + 1;
     mindMapLog(
       `[refreshSnapshotsForFreshSessions] new-leaf batch ${batchNo} with ${batchRecords.length} session(s)`
     );

@@ -256,7 +256,7 @@
             "ko"
           ],
           "default": "auto",
-          "description": "Language for extension notifications and prompts (when agentMindmap.llm.promptLanguage is auto). auto follows Configure Display Language. Locale bundles beyond English/Chinese are community-contributed and fall back to English when missing."
+          "description": "Language for extension notifications. auto follows Configure Display Language. Locale bundles beyond English/Chinese are community-contributed and fall back to English when missing."
         },
         "agentMindmap.llm.promptLanguage": {
           "type": "string",
@@ -266,7 +266,7 @@
             "zh"
           ],
           "default": "auto",
-          "description": "Language used in LLM prompts. auto currently preserves the zh fallback until production English prompts are fully validated; after that, zh-cn maps to zh and other locales map to en. Override to force a specific prompt language regardless of UI locale. Note: changing this invalidates the SessionRecord cache."
+          "description": "Legacy override for LLM natural-language output. Production analysis prompts are English; auto detects the primary language of user_query questions, zh forces Chinese output, and en forces English output. Changing this invalidates the SessionRecord cache."
         },
         "agentMindmap.ui.direction": {
           "type": "string",
@@ -297,7 +297,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/patch-sqlite3-binding.js",
-    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --external:@vscode/sqlite3 --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs",
+    "build": "node esbuild.config.mjs && esbuild ../test/run-all.ts --bundle --platform=node --alias:vscode=../test/vscode-stub.cjs --external:@vscode/sqlite3 --outfile=dist/test-run.js && node ../scripts/build-eval-run.mjs && node ../scripts/build-multilingual-html-run.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "test": "node dist/test-run.js",
     "package": "vsce package"

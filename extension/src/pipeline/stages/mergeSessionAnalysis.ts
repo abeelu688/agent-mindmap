@@ -21,6 +21,7 @@ import type {
 import type { MindMapProgress } from "../../progress";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MergeInputMode } from "../../llm/trieReparentInput";
+import type { OutputLanguage } from "../../llm/promptLanguage";
 
 export type MergeSessionAnalysisOpts = {
   records: SessionRecord[];
@@ -39,6 +40,7 @@ export type MergeSessionAnalysisOpts = {
   maxDetailsPerNode?: number;
   cacheDir?: string;
   cache?: boolean;
+  outputLanguage?: OutputLanguage;
   /** Base LLM timeout (ms); scaled by session count / prompt size when set. */
   llmTimeoutMs?: number;
 };
@@ -49,6 +51,22 @@ const DEFAULT_PROMPT_OPTS = {
   maxBranches: 8,
   maxDetailsPerNode: 4,
 };
+
+function outputLanguageFromRecords(records: SessionRecord[]): OutputLanguage {
+  const votes = new Map<string, { count: number; latestIndex: number }>();
+  records.forEach((record, index) => {
+    const language = record.meta.outputLanguage;
+    if (!language) {
+      return;
+    }
+    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
+    votes.set(language, { count: current.count + 1, latestIndex: index });
+  });
+  const ranked = [...votes.entries()].sort(
+    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
+  );
+  return (ranked[0]?.[0] as OutputLanguage | undefined) ?? "English";
+}
 
 /**
  * M-merge LLM: produce one virtual combined session (same schema as Part I).
@@ -85,7 +103,8 @@ export async function mergeSessionAnalysis(
     maxDetailsPerNode: opts.maxDetailsPerNode ?? DEFAULT_PROMPT_OPTS.maxDetailsPerNode,
   };
   const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
-  const prompt = buildMergeSessionAnalysisPrompt(input, promptOpts, hostId);
+  const outputLanguage = opts.outputLanguage ?? outputLanguageFromRecords(recordsForInput);
+  const prompt = buildMergeSessionAnalysisPrompt(input, promptOpts, hostId, outputLanguage);
   const timeoutMs =
     opts.llmTimeoutMs != null
       ? scaleMergeSessionAnalysisTimeoutMs(opts.llmTimeoutMs, input.sessions.length, {

@@ -68,9 +68,13 @@ describe("eval metrics", () => {
     });
     expect(countTrieNodes(structure.root)).toBeGreaterThan(1);
 
-    const report = measureConceptMerge(records, {
-      projectSlug: "home-example-cursor-aosp14",
-    }, ["s1", "s2"]);
+    const report = measureConceptMerge(
+      records,
+      {
+        projectSlug: "home-example-cursor-aosp14",
+      },
+      ["s1", "s2"]
+    );
     expect(report.conceptMerge.totalTopics).toBe(2);
     expect(report.conceptMerge.mindMapNodeCount).toBeGreaterThan(0);
     expect(report.conceptMerge.trieNodeCount).toBeGreaterThan(0);
