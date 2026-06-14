@@ -76,7 +76,7 @@ type WriteInfo = {
 
 /**
  * Scan events to build a per-file write-info map.
- * Only files touched by Write / StrReplace / EditNotebook / Delete are included.
+ * Only files touched by Write / StrReplace / EditNotebook / ApplyPatch / Delete are included.
  * "create" (Write) beats "modify" (StrReplace) when choosing the representative snippet.
  */
 function buildWriteInfoMap(events: ChatEvent[], projectPath?: string): Map<string, WriteInfo> {
