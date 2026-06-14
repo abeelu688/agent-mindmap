@@ -121,13 +121,42 @@ function getTextParts(parts: ContentPart[]): string[] {
 const WRITE_TOOL_NAMES = new Set(["Write"]);
 const MODIFY_TOOL_NAMES = new Set(["StrReplace", "EditNotebook"]);
 const DELETE_TOOL_NAMES = new Set(["Delete"]);
+const PATCH_TOOL_NAMES = new Set(["ApplyPatch"]);
 const SNIPPET_WRITE_MAX = 400;
 const SNIPPET_MODIFY_MAX = 200;
+
+function patchTextFromInput(input: Record<string, unknown> | string): string | undefined {
+  if (typeof input === "string") {
+    return input;
+  }
+  const patch = input.patch ?? input.diff;
+  return typeof patch === "string" ? patch : undefined;
+}
+
+function extractAddedPatchSnippet(text: string, max: number): string | undefined {
+  const added = text
+    .split("\n")
+    .filter((line) => line.startsWith("+"))
+    .map((line) => line.slice(1))
+    .join("\n")
+    .trim();
+  return added ? added.slice(0, max) : undefined;
+}
 
 function classifyWriteOp(
   name: string,
   input: Record<string, unknown> | string
 ): { writeKind?: "create" | "modify" | "delete"; contentSnippet?: string } {
+  if (PATCH_TOOL_NAMES.has(name)) {
+    const patch = patchTextFromInput(input);
+    const isCreate = typeof patch === "string" && /^\*\*\* Add File:/m.test(patch);
+    const writeKind = isCreate ? "create" : "modify";
+    const snippet =
+      typeof patch === "string"
+        ? extractAddedPatchSnippet(patch, isCreate ? SNIPPET_WRITE_MAX : SNIPPET_MODIFY_MAX)
+        : undefined;
+    return { writeKind, contentSnippet: snippet };
+  }
   if (WRITE_TOOL_NAMES.has(name)) {
     const raw = typeof input !== "string" ? (input.contents as string | undefined) : undefined;
     const snippet =
@@ -191,13 +220,15 @@ export function parseJsonl(content: string): ChatEvent[] {
           if (part.type === "tool_use") {
             const name = part.name ?? "tool";
             const input = part.input ?? {};
+            const filePaths = extractFilePaths(input);
+            const writeInfo = classifyWriteOp(name, input);
             pendingTools.push({
               kind: "tool",
               name,
               label: toolLabel(name, input),
               lineIndex: i,
-              filePaths: extractFilePaths(input),
-              ...classifyWriteOp(name, input),
+              filePaths,
+              ...writeInfo,
             });
           }
         }
