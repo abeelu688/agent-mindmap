@@ -13,7 +13,7 @@
 | `baselines/concept-trie.json` | 可选 baseline，用于 `--compareBaseline`                        |
 | `reports/`                    | 运行报告输出（gitignore）                                      |
 
-Fixture 数据：`../fixtures/aosp14/manifest.json`（transcript jsonl 不提交仓库，需本地导出）。
+Fixture 数据：`../fixtures/aosp14/` 不在 git 仓库中；需本机导出后 eval（见下方）。
 
 ## 快速开始
 

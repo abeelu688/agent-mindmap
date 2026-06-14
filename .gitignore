@@ -18,8 +18,8 @@ out.txt
 # multilingual fixture HTML export output
 test/fixtures/multilingual-jsonl/html-out/
 
-# aosp14 transcript fixtures (export locally; not committed)
-test/fixtures/aosp14/transcripts/
+# aosp14 eval fixtures (export locally; not committed)
+test/fixtures/aosp14/
 
 test/eval/eval.config.local.json
 test/eval/reports/

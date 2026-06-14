@@ -167,19 +167,23 @@ export async function loadEvalConfig(repoRoot: string): Promise<{
   const local = (await readJsonFile(paths.localConfigPath)) ?? {};
   const config = mergeConfig(mergeConfig(DEFAULT_CONFIG, example), local);
   const resolved = resolveEvalPaths(repoRoot, config);
-
-  if (config.useFixtureTranscripts) {
-    if (!(await pathExists(resolved.transcriptsDir))) {
-      throw new Error(
-        `Fixture transcripts dir missing: ${resolved.transcriptsDir} (run npm run eval:fixtures:export)`
-      );
-    }
-    if (!(await pathExists(resolved.manifestPath))) {
-      throw new Error(`Fixture manifest missing: ${resolved.manifestPath}`);
-    }
-  }
-
   return { config, paths: resolved };
+}
+
+/** Validates on-disk fixture layout; used by eval CLI, not unit tests. */
+export async function validateEvalFixtures(config: EvalConfig, paths: EvalPaths): Promise<void> {
+  if (!config.useFixtureTranscripts) {
+    return;
+  }
+  if (!(await pathExists(paths.transcriptsDir))) {
+    throw new Error(
+      `Fixture transcripts dir missing: ${paths.transcriptsDir} ` +
+        `(export locally: npm run eval:fixtures:export -- --source=<agent-transcripts-dir>)`
+    );
+  }
+  if (!(await pathExists(paths.manifestPath))) {
+    throw new Error(`Fixture manifest missing: ${paths.manifestPath}`);
+  }
 }
 
 export function filterSessionIds(config: EvalConfig, manifestSessionIds: string[]): string[] {
