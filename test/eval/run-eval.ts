@@ -9,6 +9,7 @@ import {
 import {
   filterSessionIds,
   loadEvalConfig,
+  validateEvalFixtures,
   resolveLiveTranscriptsDir,
   resolveStoreDir,
   type EvalConfig,
@@ -18,17 +19,14 @@ import { getProvider } from "../../extension/src/llm";
 import { PROMPT_VERSION } from "../../extension/src/llm/promptOutline";
 import { summarizeSession } from "../../extension/src/llm/summarizeSession";
 import { parseJsonl } from "../../extension/src/transcript/parseJsonl";
-import {
-  listCursorSessions,
-  readSessionFile,
-} from "../../extension/src/transcript/listSessions";
-import type { TranscriptSession } from "../../extension/src/transcript/types";
+import { listCursorSessions, readSessionFile } from "../../extension/src/transcript/listSessions";
 import {
   buildRecordMeta,
   buildSessionRecord,
   listRecords,
   sha256Hex,
 } from "../../extension/src/store/sessionStore";
+import type { TranscriptSession } from "../../extension/src/transcript/types";
 import type { SessionRecord } from "../../extension/src/store/storeTypes";
 
 /** Repo root when bundled to `extension/dist/eval-run.js`. */
@@ -44,10 +42,7 @@ async function readManifest(manifestPath: string): Promise<FixtureManifest> {
   return JSON.parse(raw) as FixtureManifest;
 }
 
-async function resolveTranscriptsDir(
-  config: EvalConfig,
-  paths: EvalPaths
-): Promise<string> {
+async function resolveTranscriptsDir(config: EvalConfig, paths: EvalPaths): Promise<string> {
   if (config.useFixtureTranscripts) {
     return paths.transcriptsDir;
   }
@@ -62,8 +57,7 @@ async function loadRecordsFromStore(
   const all = await listRecords(storeDir);
   const allowed = new Set(sessionIds);
   return all.filter(
-    (r) =>
-      r.meta.projectSlug === config.projectSlug && allowed.has(r.meta.sessionId)
+    (r) => r.meta.projectSlug === config.projectSlug && allowed.has(r.meta.sessionId)
   );
 }
 
@@ -158,6 +152,7 @@ export async function runEval(repoRoot = REPO_ROOT): Promise<number> {
   let paths;
   try {
     ({ config, paths } = await loadEvalConfig(repoRoot));
+    await validateEvalFixtures(config, paths);
   } catch (err) {
     console.error(err instanceof Error ? err.message : err);
     return 1;
@@ -201,11 +196,7 @@ export async function runEval(repoRoot = REPO_ROOT): Promise<number> {
     return 1;
   }
 
-  const report = measureConceptMerge(
-    records,
-    { projectSlug: config.projectSlug },
-    targetIds
-  );
+  const report = measureConceptMerge(records, { projectSlug: config.projectSlug }, targetIds);
 
   const fullReport = {
     evaluatedAt: report.evaluatedAt,
