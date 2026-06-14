@@ -1,32 +1,28 @@
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider } from "../llm/types";
 import * as vscode from "vscode";
-import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
-import { writeJsonAtomic } from "./atomicWrite";
 import { format, t as safeT } from "../l10n/uiTranslate";
+import { ONTOLOGY_PROMPT_VERSION } from "../llm/promptOntology";
 import {
-  ONTOLOGY_PROMPT_VERSION,
-} from "../llm/promptOntology";
-import {
-  buildOntologyRefinePrompt,  buildRefineInputFromRecords,
+  buildOntologyRefinePrompt,
+  buildRefineInputFromRecords,
   ONTOLOGY_REFINE_PROMPT_VERSION,
 } from "../llm/promptOntologyRefine";
-import {
-  TOPIC_PATHS_PROMPT_VERSION,
-  type OntologyLite,
-} from "../llm/promptTopicPaths";
+import { TOPIC_PATHS_PROMPT_VERSION, type OntologyLite } from "../llm/promptTopicPaths";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
-import {
-  REATTACH_PROMPT_VERSION,
-  buildReattachPrompt,
-} from "../llm/promptReattach";
+import { REATTACH_PROMPT_VERSION, buildReattachPrompt } from "../llm/promptReattach";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
-import type {
-  ConceptOntologyRecord,
-  TopicConceptPathDecision,
-} from "./ontologyTypes";
-import type { SessionRecord } from "./storeTypes";
+import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
+import {
+  tryParseReattachResponse,
+  validateConceptOntology,
+  validateOntologyRefine,
+} from "../llm/ontologyValidate";
+import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import {
+  collectSessionSegmentEquivalences,
+  mergeSegmentEquivalencesLists,
+} from "../llm/segmentContext";
 import {
   ensureStore,
   ontologyCachePath,
@@ -34,19 +30,13 @@ import {
   sha256Hex,
   ontologyIndexPath,
 } from "./sessionStore";
-import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
-import {
-  tryParseReattachResponse,
-  validateConceptOntology,
-  validateOntologyRefine,
-} from "../llm/ontologyValidate";
-import type { PromptLanguage } from "../llm/promptLanguage";
-import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
-import {
-  collectSessionSegmentEquivalences,
-  mergeSegmentEquivalencesLists,
-} from "../llm/segmentContext";
+import { writeJsonAtomic } from "./atomicWrite";
+import type { OutputLanguage, PromptLanguage } from "../llm/promptLanguage";
+import type { SessionRecord } from "./storeTypes";
+import type { ConceptOntologyRecord, TopicConceptPathDecision } from "./ontologyTypes";
+import type { MindMapProgress } from "../progress";
+import type { LlmProvider } from "../llm/types";
+import type { AgentHostId } from "../host/types";
 
 export type OntologyIndex = {
   schemaVersion: 1;
@@ -73,9 +63,7 @@ function sessionIdsSubsetOf(subset: string[], superset: string[]): boolean {
   return subset.every((id) => set.has(id));
 }
 
-export async function readOntologyIndex(
-  storeDir: string
-): Promise<OntologyIndex | undefined> {
+export async function readOntologyIndex(storeDir: string): Promise<OntologyIndex | undefined> {
   const parsed = await readJson<OntologyIndex>(ontologyIndexPath(storeDir));
   if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.entries)) {
     return undefined;
@@ -124,9 +112,7 @@ function filterTopicPathsForSessions(
   return topicPaths.filter((p) => sessionIds.has(p.sessionId));
 }
 
-function sessionIdsWithTopicPaths(
-  topicPaths: TopicConceptPathDecision[]
-): Set<string> {
+function sessionIdsWithTopicPaths(topicPaths: TopicConceptPathDecision[]): Set<string> {
   return new Set(topicPaths.map((p) => p.sessionId));
 }
 
@@ -136,19 +122,22 @@ function projectSlugsFor(records: SessionRecord[]): string[] {
 
 export function computeOntologyCacheKey(
   records: SessionRecord[],
-  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
+  opts: {
+    model?: string;
+    hostId?: AgentHostId;
+    promptLanguage?: PromptLanguage;
+    outputLanguage?: OutputLanguage;
+  },
   providerId: string
 ): string {
-  const sorted = [...records].sort((a, b) =>
-    a.meta.sessionId.localeCompare(b.meta.sessionId)
-  );
+  const sorted = [...records].sort((a, b) => a.meta.sessionId.localeCompare(b.meta.sessionId));
   const payload = JSON.stringify({
     sessionIds: sorted.map((r) => r.meta.sessionId),
     transcriptTokens: sorted.map((r) => recordFreshnessToken(r)),
     provider: providerId,
     model: opts.model?.trim() || "",
     hostId: opts.hostId ?? sorted[0]?.meta.hostId ?? "cursor",
-    promptLanguage: opts.promptLanguage ?? "zh",
+    outputLanguage: opts.outputLanguage ?? sorted[0]?.meta.outputLanguage ?? "Chinese",
     promptVersions: {
       ontology: ONTOLOGY_PROMPT_VERSION,
       topicPaths: TOPIC_PATHS_PROMPT_VERSION,
@@ -211,10 +200,7 @@ async function writeOntologyIndex(
   const next: OntologyIndex = {
     schemaVersion: 1,
     updatedAt: Date.now(),
-    entries: [
-      entry,
-      ...parsed.entries.filter((e) => e.cacheKey !== entry.cacheKey),
-    ].slice(0, 200),
+    entries: [entry, ...parsed.entries.filter((e) => e.cacheKey !== entry.cacheKey)].slice(0, 200),
   };
   await writeJsonAtomic(indexFile, next);
 }
@@ -248,10 +234,7 @@ export async function clearOntologyCache(storeDir: string): Promise<number> {
 
 async function runOntologyRefine(
   records: SessionRecord[],
-  base: Pick<
-    ConceptOntologyRecord,
-    "nodes" | "mappings" | "topicPaths" | "reattachMoves"
-  >,
+  base: Pick<ConceptOntologyRecord, "nodes" | "mappings" | "topicPaths" | "reattachMoves">,
   opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
   provider: LlmProvider,
   signal: AbortSignal,
@@ -259,17 +242,10 @@ async function runOntologyRefine(
 ): Promise<ConceptOntologyRecord["segmentEquivalences"]> {
   const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
   const input = buildRefineInputFromRecords(records, base, base.topicPaths);
-  const prompt = buildOntologyRefinePrompt(
-    input,
-    hostId,
-    opts.promptLanguage ?? "zh"
-  );
+  const prompt = buildOntologyRefinePrompt(input, hostId, opts.promptLanguage ?? "zh");
   const heartbeat = createHeartbeat(
     progress,
-    safeT(
-      "ui.ontology.refine.heartbeat",
-      "Refining concept segment equivalences…"
-    )
+    safeT("ui.ontology.refine.heartbeat", "Refining concept segment equivalences…")
   );
   try {
     const res = await provider.summarize(
@@ -282,9 +258,7 @@ async function runOntologyRefine(
         responseSchema: "ontology-refine",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(
-              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-            );
+            progress?.report(safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts));
           }
         },
       },
@@ -301,8 +275,7 @@ export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean
   return (
     record.nodes.length > 0 &&
     record.topicPaths.length > 0 &&
-    record.meta.promptVersions.sessionAnalysis ===
-      SESSION_ANALYSIS_PROMPT_VERSION &&
+    record.meta.promptVersions.sessionAnalysis === SESSION_ANALYSIS_PROMPT_VERSION &&
     record.meta.promptVersions.reattach === REATTACH_PROMPT_VERSION &&
     record.segmentEquivalences !== undefined
   );
@@ -384,17 +357,10 @@ export async function ensureOntologyMemory(
   flags: EnsureOntologyMemoryFlags = {}
 ): Promise<ConceptOntologyRecord> {
   await ensureStore(storeDir);
-  progress?.report(
-    safeT("ui.ontology.cache.check", "Checking concept ontology cache…")
-  );
+  progress?.report(safeT("ui.ontology.cache.check", "Checking concept ontology cache…"));
   const cacheKey = computeOntologyCacheKey(records, opts, provider.id);
   const cached = await readOntologyRecord(storeDir, cacheKey);
-  if (
-    cached &&
-    isCompleteOntologyRecord(cached) &&
-    !flags.forceRefine &&
-    !flags.refineOnly
-  ) {
+  if (cached && isCompleteOntologyRecord(cached) && !flags.forceRefine && !flags.refineOnly) {
     progress?.report(safeT("ui.ontology.cache.hit", "Concept ontology cache hit…"));
     return cached;
   }
@@ -408,7 +374,7 @@ export async function ensureOntologyMemory(
 
   let nodes = cached?.nodes ?? reusableBase?.nodes;
   let mappings = cached?.mappings ?? reusableBase?.mappings;
-  let reattachMoves = cached?.reattachMoves ?? reusableBase?.reattachMoves;
+  const reattachMoves = cached?.reattachMoves ?? reusableBase?.reattachMoves;
   let topicPaths = filterTopicPathsForSessions(
     cached?.topicPaths ?? reusableBase?.topicPaths ?? [],
     currentSessionIds
@@ -422,28 +388,18 @@ export async function ensureOntologyMemory(
       topicPaths = collected.topicPaths;
     }
     if (!nodes?.length || !mappings) {
-      throw new Error(
-        "ontology refine-only requires existing nodes/mappings in cache"
-      );
+      throw new Error("ontology refine-only requires existing nodes/mappings in cache");
     }
     const segmentEquivalences = mergeSegmentEquivalencesLists(
       collectSessionSegmentEquivalences(records)
     );
-    return writeOntologyRecord(
-      storeDir,
-      cacheKey,
-      records,
-      hostId,
-      opts,
-      provider,
-      {
-        nodes,
-        mappings,
-        topicPaths,
-        reattachMoves,
-        segmentEquivalences,
-      }
-    );
+    return writeOntologyRecord(storeDir, cacheKey, records, hostId, opts, provider, {
+      nodes,
+      mappings,
+      topicPaths,
+      reattachMoves,
+      segmentEquivalences,
+    });
   }
 
   progress?.report(safeT("ui.ontology.extract", "Collecting concept terms…"));
@@ -462,21 +418,13 @@ export async function ensureOntologyMemory(
     segmentEquivalences = cached!.segmentEquivalences;
   }
 
-  return writeOntologyRecord(
-    storeDir,
-    cacheKey,
-    records,
-    hostId,
-    opts,
-    provider,
-    {
-      nodes: nodes!,
-      mappings: mappings!,
-      topicPaths,
-      reattachMoves,
-      segmentEquivalences,
-    }
-  );
+  return writeOntologyRecord(storeDir, cacheKey, records, hostId, opts, provider, {
+    nodes: nodes!,
+    mappings: mappings!,
+    topicPaths,
+    reattachMoves,
+    segmentEquivalences,
+  });
 }
 
 /**
@@ -494,11 +442,7 @@ export async function suggestReattachMoves(
     segmentEquivalences: ontology.segmentEquivalences,
     ontologyNodes: ontology.nodes,
   });
-  const prompt = buildReattachPrompt(
-    input,
-    hostId,
-    opts.promptLanguage ?? "zh"
-  );
+  const prompt = buildReattachPrompt(input, hostId, opts.promptLanguage ?? "zh");
   const res = await provider.summarize(
     {
       events: [],

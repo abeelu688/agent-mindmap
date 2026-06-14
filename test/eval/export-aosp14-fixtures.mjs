@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
- * Copy aosp14 Cursor agent-transcripts into test/fixtures/aosp14/.
- * Usage: node test/eval/export-aosp14-fixtures.mjs [--dry-run] [--force]
+ * Copy Cursor agent-transcripts into test/fixtures/aosp14/.
+ * Usage:
+ *   node test/eval/export-aosp14-fixtures.mjs --source=<agent-transcripts-dir> \
+ *     [--project-slug=home-example-cursor-aosp14] \
+ *     [--project-path=/home/example/cursor/aosp14] \
+ *     [--dry-run] [--force]
  */
 import { createHash } from "crypto";
 import {
@@ -12,26 +16,39 @@ import {
   stat,
   writeFile,
 } from "fs/promises";
-import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../..");
-const DEFAULT_SOURCE = path.join(
-  os.homedir(),
-  ".cursor",
-  "projects",
-  "home-example-cursor-aosp14",
-  "agent-transcripts"
-);
 const DEST_ROOT = path.join(REPO_ROOT, "test/fixtures/aosp14");
 const DEST_TRANSCRIPTS = path.join(DEST_ROOT, "transcripts");
 const MANIFEST_PATH = path.join(DEST_ROOT, "manifest.json");
 
-const args = new Set(process.argv.slice(2));
+const DEFAULT_PROJECT_SLUG = "home-example-cursor-aosp14";
+const DEFAULT_PROJECT_PATH = "/home/example/cursor/aosp14";
+
+const rawArgs = process.argv.slice(2);
+const args = new Set(rawArgs);
 const dryRun = args.has("--dry-run");
 const force = args.has("--force");
+
+function readArg(prefix) {
+  for (const arg of rawArgs) {
+    if (arg.startsWith(prefix)) {
+      return arg.slice(prefix.length);
+    }
+  }
+  return undefined;
+}
+
+function usageAndExit(code = 1) {
+  console.error(
+    "Usage: node test/eval/export-aosp14-fixtures.mjs --source=<agent-transcripts-dir> " +
+      "[--project-slug=<slug>] [--project-path=<path>] [--dry-run] [--force]"
+  );
+  process.exit(code);
+}
 
 function sha256Hex(buf) {
   return createHash("sha256").update(buf).digest("hex");
@@ -61,12 +78,14 @@ async function listSessionJsonl(sourceDir) {
 }
 
 async function main() {
-  let sourceDir = DEFAULT_SOURCE;
-  for (const arg of args) {
-    if (arg.startsWith("--source=")) {
-      sourceDir = arg.slice("--source=".length);
-    }
+  const sourceDir = readArg("--source=");
+  if (!sourceDir) {
+    console.error("Missing required --source=<agent-transcripts-dir>");
+    usageAndExit(1);
   }
+
+  const projectSlug = readArg("--project-slug=") ?? DEFAULT_PROJECT_SLUG;
+  const projectPath = readArg("--project-path=") ?? DEFAULT_PROJECT_PATH;
 
   let sourceStat;
   try {
@@ -133,8 +152,8 @@ async function main() {
   if (!dryRun) {
     const manifest = {
       fixtureSet: "aosp14",
-      projectSlug: "home-example-cursor-aosp14",
-      projectPath: "/home/example/cursor/aosp14",
+      projectSlug,
+      projectPath,
       exportedAt: new Date().toISOString(),
       sourceDir,
       sessionCount: manifestSessions.length,

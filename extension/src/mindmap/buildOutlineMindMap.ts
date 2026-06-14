@@ -1,5 +1,6 @@
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
+import { mindMapLabelsForOutputLanguage, type MindMapLanguageLabels } from "./outputLanguageLabels";
 import type { CodeReference, OutlineNode, SessionOutline } from "../llm/types";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 
@@ -26,7 +27,8 @@ function branch(text: string, children: MindMapNodeData[], expand = true): MindM
 
 function buildCodeReferencesNode(
   refs: CodeReference[],
-  sessionMeta?: SessionMeta
+  sessionMeta: SessionMeta | undefined,
+  labels: MindMapLanguageLabels
 ): MindMapNodeData {
   const groups = new Map<string, CodeReference[]>();
   for (const ref of refs) {
@@ -55,21 +57,25 @@ function buildCodeReferencesNode(
     const fileRefs = unionChildRefs(descNodes);
     children.push(fileRefs.length ? withOrigin(fileBranch, fileRefs) : fileBranch);
   }
-  const codeRefsRoot = branch("相关代码", children, false);
+  const codeRefsRoot = branch(labels.relatedCode, children, false);
   const rootRefs = unionChildRefs(children);
   return rootRefs.length ? withOrigin(codeRefsRoot, rootRefs) : codeRefsRoot;
 }
 
-function renderOutlineNode(node: OutlineNode, sessionMeta?: SessionMeta): MindMapNodeData {
+function renderOutlineNode(
+  node: OutlineNode,
+  sessionMeta: SessionMeta | undefined,
+  labels: MindMapLanguageLabels
+): MindMapNodeData {
   const children: MindMapNodeData[] = [];
 
   if (node.summary?.trim()) {
-    const summaryNode = leaf(`概述：${node.summary}`);
+    const summaryNode = leaf(`${labels.summaryPrefix}${node.summary}`);
     children.push(sessionMeta ? withOrigin(summaryNode, [{ ...sessionMeta }]) : summaryNode);
   }
 
   for (const child of node.children ?? []) {
-    children.push(renderOutlineNode(child, sessionMeta));
+    children.push(renderOutlineNode(child, sessionMeta, labels));
   }
 
   for (const detail of node.details ?? []) {
@@ -98,22 +104,24 @@ export function buildOutlineMindMap(
   sessionLabel?: string,
   sessionMeta?: SessionMeta,
   codeReferences?: CodeReference[],
-  projectPath?: string
+  projectPath?: string,
+  outputLanguage?: string
 ): MindMapRoot {
+  const labels = mindMapLabelsForOutputLanguage(outputLanguage);
   const llmTitle = outline.title?.trim();
   const rootText = llmTitle
     ? truncate(llmTitle, 60)
     : sessionLabel
       ? truncate(sessionLabel, 80)
-      : "Agent Session";
+      : labels.sessionDefault;
 
-  const topicNodes = outline.outline.map((node) => renderOutlineNode(node, sessionMeta));
+  const topicNodes = outline.outline.map((node) => renderOutlineNode(node, sessionMeta, labels));
 
   const filteredRefs = codeReferences?.length
     ? filterProjectCodeReferences(codeReferences, projectPath ?? sessionMeta?.projectPath)
     : undefined;
   if (filteredRefs?.length) {
-    topicNodes.push(buildCodeReferencesNode(filteredRefs, sessionMeta));
+    topicNodes.push(buildCodeReferencesNode(filteredRefs, sessionMeta, labels));
   }
 
   const root: MindMapNodeData = {

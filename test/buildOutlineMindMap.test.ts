@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
-import type { SessionOutline } from "../extension/src/llm/types";
+import type { CodeReference, SessionOutline } from "../extension/src/llm/types";
 
 const sampleOutline: SessionOutline = {
   title: "Binder IPC",
@@ -42,9 +42,7 @@ describe("buildOutlineMindMap", () => {
     const binder = ipc.children?.find((c) => c.data.text === "Binder");
     expect(binder).toBeDefined();
     const leaves = binder!.children?.map((c) => c.data.text) ?? [];
-    expect(leaves.some((t) => t.includes("tr.code") && t.includes("(Q1)"))).toBe(
-      true
-    );
+    expect(leaves.some((t) => t.includes("tr.code") && t.includes("(Q1)"))).toBe(true);
   });
 
   it("attaches origin refs on detail leaves", () => {
@@ -53,5 +51,30 @@ describe("buildOutlineMindMap", () => {
     const binder = ipc.children?.find((c) => c.data.text === "Binder");
     const leaf = binder!.children?.find((c) => c.data.text.includes("tr.code"));
     expect(leaf?.data.origin?.refs?.[0].turnIndex).toBe(0);
+  });
+
+  it("localizes deterministic summary and code reference labels by output language", () => {
+    const refs: CodeReference[] = [
+      {
+        path: "src/a.ts",
+        lines: "-",
+        description: "修复路由逻辑",
+        sourceTurnIndices: [0],
+      },
+    ];
+    const english = buildOutlineMindMap(sampleOutline, "label", sessionMeta, refs);
+    expect(english.children?.[0].children?.[0].data.text).toMatch(/^Summary: /);
+    expect(english.children?.at(-1)?.data.text).toBe("Related code");
+
+    const chinese = buildOutlineMindMap(
+      sampleOutline,
+      "label",
+      sessionMeta,
+      refs,
+      undefined,
+      "Chinese"
+    );
+    expect(chinese.children?.[0].children?.[0].data.text).toMatch(/^概述：/);
+    expect(chinese.children?.at(-1)?.data.text).toBe("相关代码");
   });
 });

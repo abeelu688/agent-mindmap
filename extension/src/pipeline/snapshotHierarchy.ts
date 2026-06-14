@@ -24,6 +24,7 @@ import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider } from "../llm/types";
+import type { OutputLanguage } from "../llm/promptLanguage";
 import type { MindMapProgress } from "../progress";
 import type {
   MergeRecord,
@@ -42,7 +43,7 @@ export type SnapshotHierarchyLlmOpts = {
   providerId: string;
   model?: string;
   hostId?: AgentHostId;
-  promptLanguage?: "zh" | "en";
+  outputLanguage?: OutputLanguage;
   llmTimeoutMs?: number;
   signal: AbortSignal;
   groupSize?: number;
@@ -96,6 +97,22 @@ function unionSessionIds(nodes: SnapshotNode[]): string[] {
   return [...ids].sort();
 }
 
+function outputLanguageFromRecords(records: SessionRecord[]): OutputLanguage {
+  const votes = new Map<string, { count: number; latestIndex: number }>();
+  records.forEach((record, index) => {
+    const language = record.meta.outputLanguage;
+    if (!language) {
+      return;
+    }
+    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
+    votes.set(language, { count: current.count + 1, latestIndex: index });
+  });
+  const ranked = [...votes.entries()].sort(
+    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
+  );
+  return ranked[0]?.[0] ?? "English";
+}
+
 function virtualFromSingleRecord(record: SessionRecord): FinalizedSessionAnalysis {
   if (!record.sessionAnalysis) {
     throw new Error(
@@ -137,7 +154,7 @@ async function runBoundedMerge(
       model: opts.model,
       hostId: opts.hostId,
       providerId: opts.providerId,
-      promptLanguage: opts.promptLanguage,
+      outputLanguage: opts.outputLanguage,
       refineMode: "batch",
       incrementalFromIndex: true,
       forceReattach: opts.forceReattach ?? true,
@@ -584,6 +601,8 @@ export async function runBatchSnapshotPipeline(
   opts: RunBatchSnapshotPipelineOpts,
   progress?: MindMapProgress
 ): Promise<MergeRecord> {
+  const outputLanguage =
+    opts.outputLanguage ?? outputLanguageFromRecords(filterRealSessionRecords(opts.allRecords));
   // Cache short-circuit: when nothing about the session set has changed since
   // the last successful merge (same sessionIds + transcriptShas + provider/
   // model + prompt versions), reuse the existing concept-trie merge instead
@@ -596,6 +615,7 @@ export async function runBatchSnapshotPipeline(
       providerId: opts.providerId,
       model: opts.model,
       hostId: opts.hostId,
+      outputLanguage,
     },
   });
   if (cached.hit) {

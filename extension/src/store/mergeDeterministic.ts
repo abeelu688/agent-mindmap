@@ -1,9 +1,9 @@
 import { uiTranslate } from "../l10n/uiTranslate";
 import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
 import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
+import { sanitizeSessionRecord } from "./sanitizeRecords";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
-import { sanitizeSessionRecord } from "./sanitizeRecords";
 
 const MAX_LABEL = 120;
 
@@ -44,7 +44,8 @@ function sessionBranch(record: SessionRecord): MindMapNodeData {
   const subtree = buildTopicMindMap(
     record.graph,
     record.meta.sessionLabel,
-    sessionMeta
+    sessionMeta,
+    record.meta.outputLanguage
   );
   return {
     data: {
@@ -95,8 +96,7 @@ export function buildDeterministicMergeMindMap(
     // Prefer any record with a recorded projectPath over the slug fallback,
     // since older records may have been written before the slug-to-path
     // round-trip was added.
-    const display =
-      sessions.find((s) => s.meta.projectPath)?.meta.projectPath ?? slug;
+    const display = sessions.find((s) => s.meta.projectPath)?.meta.projectPath ?? slug;
     const sessionNodes = sessions.map(sessionBranch);
     const node = branch(
       uiTranslate("mindmap.merge.projectPrefix", "Project: {0}", display),
@@ -116,10 +116,7 @@ export function buildDeterministicMergeMindMap(
       data: { text: title, expand: true },
       children: [
         leaf(
-          uiTranslate(
-            "mindmap.merge.empty.noSessions",
-            "(No analyzed sessions in the library)"
-          )
+          uiTranslate("mindmap.merge.empty.noSessions", "(No analyzed sessions in the library)")
         ),
       ],
     };
@@ -147,9 +144,7 @@ export function buildDeterministicMergeRecord(
   const filtered = options.projectSlug
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
-  const projectSlugs = Array.from(
-    new Set(filtered.map((r) => r.meta.projectSlug))
-  ).sort();
+  const projectSlugs = Array.from(new Set(filtered.map((r) => r.meta.projectSlug))).sort();
   const sessionIds = filtered.map((r) => r.meta.sessionId);
   const mindMap = buildDeterministicMergeMindMap(records, options);
   return {

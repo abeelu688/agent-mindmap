@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  decodeClaudeProjectPath,
-  encodeClaudeProjectPath,
-} from "../extension/src/host/claudePath";
+import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "../extension/src/host/claudePath";
 
 describe("encodeClaudeProjectPath", () => {
   it("encodes unix absolute paths with a leading dash", () => {
@@ -18,9 +15,7 @@ describe("encodeClaudeProjectPath", () => {
   });
 
   it("encodes windows paths with drive letter", () => {
-    expect(encodeClaudeProjectPath("C:\\Users\\me\\repo")).toBe(
-      "C--Users-me-repo"
-    );
+    expect(encodeClaudeProjectPath("C:\\Users\\me\\repo")).toBe("C--Users-me-repo");
   });
 });
 

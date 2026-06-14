@@ -15,7 +15,7 @@ import { notify, notifyWarning, notifyError } from "./notify";
 import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import { currentPipelineVersions, PIPELINE_VERSION } from "./pipeline/pipelineVersions";
-import { resolvePromptLanguage } from "./llm/promptLanguage";
+import { resolveOutputLanguageForEvents } from "./llm/promptLanguage";
 import { countUserQueries } from "./llm/sanitizeTopicGraph";
 import {
   LlmProviderError,
@@ -308,6 +308,7 @@ export async function loadSession(
   );
   const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
+  const outputLanguage = resolveOutputLanguageForEvents(events);
   // Freshness token: count of parsed user/assistant/tool events. Stable
   // against metadata-only appends (mode, ai-title, file-history-snapshot…)
   // that Claude Code writes on session resume; only changes when real
@@ -340,6 +341,7 @@ export async function loadSession(
             `recordModel=${existing.meta.llm.model || "(default)"} currentModel=${settings.llm.model || "(default)"} ` +
             `recordProvider=${existing.meta.llm.provider} currentProvider=${settings.llm.provider} ` +
             `recordHost=${existing.meta.hostId || "(none)"} currentHost=${host.id} ` +
+            `recordOutputLanguage=${existing.meta.outputLanguage || "(legacy)"} currentOutputLanguage=${outputLanguage} ` +
             `recordPipeline=${JSON.stringify(existing.meta.pipelineVersions || existing.meta.promptVersion)} ` +
             `currentPipeline=${JSON.stringify(currentPipelineVersions())}`
         );
@@ -363,6 +365,7 @@ export async function loadSession(
             model: settings.llm.model || undefined,
           },
           hostId: host.id,
+          outputLanguage,
         })
       ) {
         const userQueryCount = countUserQueries(events);
@@ -377,7 +380,8 @@ export async function loadSession(
             maxDetailsPerNode: settings.llm.maxItemsPerTopic,
           },
           host.id,
-          projectPath
+          projectPath,
+          outputLanguage
         );
         agentDebugLog(
           "sessionLoader.ts:loadSession",
@@ -417,7 +421,7 @@ export async function loadSession(
             cache: settings.cache,
             timeoutMs: settings.llm.timeoutMs,
             storeDir: getStoreDir(),
-            promptLanguage: resolvePromptLanguage(),
+            outputLanguage,
           });
         } else {
           // Code refs are up-to-date. Evict any stale single-session pending
@@ -438,7 +442,8 @@ export async function loadSession(
             session.label,
             sessionMeta,
             existing.sessionAnalysis?.codeReferences,
-            projectPath
+            projectPath,
+            outputLanguage
           ),
           source: "topic",
           fromLibrary: true,
@@ -478,6 +483,7 @@ export async function loadSession(
         cache: settings.cache,
         hostId: host.id,
         storeDir: getStoreDir(),
+        outputLanguage,
       },
       provider,
       signal,
@@ -510,7 +516,13 @@ export async function loadSession(
     );
     return {
       session: { ...session, hostId: host.id },
-      mindMap: buildTurnMindMap(events, settings.turnOptions, session.label, sessionMeta),
+      mindMap: buildTurnMindMap(
+        events,
+        settings.turnOptions,
+        session.label,
+        sessionMeta,
+        outputLanguage
+      ),
       source: "turn",
       llmErrorCode,
     };
@@ -548,6 +560,7 @@ export async function loadSession(
         sessionLabel: session.label,
         hostId: host.id,
         userQueryCount,
+        outputLanguage,
       });
       const record = buildSessionRecord(meta, outline, {
         sessionAnalysis: pipelineResult.sessionAnalysis,
@@ -573,7 +586,7 @@ export async function loadSession(
           cache: settings.cache,
           timeoutMs: settings.llm.timeoutMs,
           storeDir,
-          promptLanguage: resolvePromptLanguage(),
+          outputLanguage,
         });
       }
 
@@ -593,6 +606,7 @@ export async function loadSession(
               providerId: provider.id,
               model: settings.llm.model,
               hostId: host.id,
+              outputLanguage,
             };
             const projectSlug = ctx.projectSlug;
             const projectRecords = all.filter((r) => r.meta.projectSlug === projectSlug);
@@ -605,6 +619,7 @@ export async function loadSession(
               providerId: provider.id,
               model: settings.llm.model,
               hostId: host.id,
+              outputLanguage,
               signal: AbortSignal.timeout(10 * 60 * 1000),
             };
             const concept = incrementalOntology
@@ -651,7 +666,8 @@ export async function loadSession(
       session.label,
       sessionMeta,
       pipelineResult.sessionAnalysis?.codeReferences,
-      projectPath
+      projectPath,
+      outputLanguage
     ),
     source: "topic",
   };

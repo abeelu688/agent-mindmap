@@ -7,6 +7,10 @@ import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
+  mindMapLabelsForOutputLanguage,
+  type MindMapLanguageLabels,
+} from "../mindmap/outputLanguageLabels";
+import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology,
 } from "./prepareConceptMergeRecords";
@@ -246,7 +250,11 @@ export function buildOutlineFromConceptTrie(
   return { outline };
 }
 
-function buildCodeReferencesNode(refs: CodeReference[], sessionMeta: SessionMeta): MindMapNodeData {
+function buildCodeReferencesNode(
+  refs: CodeReference[],
+  sessionMeta: SessionMeta,
+  labels: MindMapLanguageLabels
+): MindMapNodeData {
   const groups = new Map<string, CodeReference[]>();
   for (const ref of refs) {
     let arr = groups.get(ref.path);
@@ -267,13 +275,14 @@ function buildCodeReferencesNode(refs: CodeReference[], sessionMeta: SessionMeta
     const fileRefs = unionChildRefs(descs);
     children.push(fileRefs.length ? withOrigin(fileBranch, fileRefs) : fileBranch);
   }
-  const node = branch("相关代码", children, false);
+  const node = branch(labels.relatedCode, children, false);
   return withOrigin(node, unionChildRefs(children));
 }
 
 function topicBranch(loc: TopicLocation): MindMapNodeData {
   const heading = topicHeadline(loc.topic);
   const sessionMeta = locSessionMeta(loc);
+  const labels = mindMapLabelsForOutputLanguage(loc.record.meta.outputLanguage);
   const children: MindMapNodeData[] = [];
   const items = loc.topic.items ?? [];
   if (items.length) {
@@ -286,11 +295,7 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
       );
     }
   } else {
-    children.push(
-      withOrigin(leaf(uiTranslate("mindmap.concept.noDetails", "(No details)")), [
-        { ...sessionMeta },
-      ])
-    );
+    children.push(withOrigin(leaf(labels.noDetails), [{ ...sessionMeta }]));
   }
   const rawCodeRefs = loc.record.sessionAnalysis?.codeReferences;
   const codeRefs = rawCodeRefs?.length
@@ -303,7 +308,7 @@ function topicBranch(loc: TopicLocation): MindMapNodeData {
       ? codeRefs.filter((ref) => ref.sourceTurnIndices?.some((t) => topicTurns.has(t)))
       : codeRefs;
     if (filtered.length) {
-      children.push(buildCodeReferencesNode(filtered, sessionMeta));
+      children.push(buildCodeReferencesNode(filtered, sessionMeta, labels));
     }
   }
   const node = branch(heading, children, false);
@@ -363,6 +368,22 @@ export type ConceptTrieStructure = {
   filtered: SessionRecord[];
   stats: ConceptMergeStats;
 };
+
+function outputLanguageFromRecords(records: SessionRecord[]): string | undefined {
+  const votes = new Map<string, { count: number; latestIndex: number }>();
+  records.forEach((record, index) => {
+    const language = record.meta.outputLanguage;
+    if (!language) {
+      return;
+    }
+    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
+    votes.set(language, { count: current.count + 1, latestIndex: index });
+  });
+  const ranked = [...votes.entries()].sort(
+    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
+  );
+  return ranked[0]?.[0];
+}
 
 function conceptTrieEmptyLeaf(
   filteredRecordCount: number,
@@ -453,12 +474,16 @@ export function buildConceptTrieMindMap(
   options: ConceptMergeOptions = {}
 ): { mindMap: MindMapRoot; stats: ConceptMergeStats } {
   const { root, orphans, stats } = buildConceptTrieStructure(records, options);
+  const filtered = options.projectSlug
+    ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
+    : records;
+  const labels = mindMapLabelsForOutputLanguage(outputLanguageFromRecords(filtered));
 
   const title =
     options.title ??
     (options.projectSlug
-      ? `Concept Mind Map · ${options.projectSlug}`
-      : uiTranslate("mindmap.concept.titleAll", "Concept Mind Map · All"));
+      ? labels.conceptTitleProject(options.projectSlug)
+      : labels.conceptTitleAll);
 
   const sortedTop = [...root.children.values()].sort(
     (a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label)
@@ -466,11 +491,7 @@ export function buildConceptTrieMindMap(
   const topChildren = sortedTop.map(renderNode);
   if (orphans.length) {
     const orphanNodes = orphans.map(topicBranch);
-    const orphanBranch = branch(
-      uiTranslate("mindmap.concept.uncategorized", "Uncategorized ({0})", orphans.length),
-      orphanNodes,
-      false
-    );
+    const orphanBranch = branch(labels.uncategorized(orphans.length), orphanNodes, false);
     topChildren.push(withOrigin(orphanBranch, unionChildRefs(orphanNodes)));
   }
 

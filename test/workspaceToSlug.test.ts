@@ -8,7 +8,9 @@ describe("workspaceToSlug", () => {
 
   it("encodes unix absolute paths", () => {
     vi.stubGlobal("process", { ...process, platform: "linux" });
-    expect(workspaceToSlug("/home/example/cursor/airecorder")).toBe("home-example-cursor-airecorder");
+    expect(workspaceToSlug("/home/example/cursor/airecorder")).toBe(
+      "home-example-cursor-airecorder"
+    );
   });
 
   it("encodes windows paths like Cursor project dirs", () => {

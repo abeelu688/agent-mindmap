@@ -24,6 +24,8 @@
     "check": "npm run version:check && npm run typecheck && npm run lint && npm run format:check && npm run check:concept-nodes && npm run check:l10n",
     "eval": "npm run build --prefix extension && node extension/dist/eval-run.js",
     "eval:fixtures:export": "node test/eval/export-aosp14-fixtures.mjs",
+    "fixtures:html": "npm run build --prefix extension && node extension/dist/multilingual-html-run.js",
+    "fixtures:generate": "node scripts/generate-multilingual-fixtures.mjs",
     "package": "npm run build && npm run package --prefix extension",
     "package:vsix": "bash scripts/package-vsix.sh",
     "prepare": "husky"

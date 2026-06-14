@@ -1,18 +1,19 @@
-import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
 import { __testing as promptTesting } from "./prompt";
 import {
   formatSessionAnalysisJsonContract,
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
 } from "./promptSessionAnalysisJsonContract";
+import type { AgentHostId } from "../host/types";
+import type { ChatEvent } from "../transcript/types";
+import type { OutputLanguage } from "./promptLanguage";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
   "claude-code": "Claude Code Agent",
 };
 
-/** Bump when {@link buildSessionAnalysisPrompt} JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 16;
+/** Bump when {@link buildSessionAnalysisPrompt} behavior or JSON schema changes. */
+export const SESSION_ANALYSIS_PROMPT_VERSION = 17;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -27,7 +28,8 @@ export function buildSessionAnalysisPrompt(
   events: ChatEvent[],
   options: SessionAnalysisPromptOptions,
   hostId: AgentHostId = "cursor",
-  projectPath?: string
+  projectPath?: string,
+  outputLanguage: OutputLanguage = "English"
 ): string {
   const chatLabel = HOST_CHAT_LABELS[hostId];
   const turns = groupTurns(events);
@@ -38,58 +40,69 @@ export function buildSessionAnalysisPrompt(
   const maxDetails = Math.max(1, options.maxDetailsPerNode);
 
   return [
-    `你是会话综合分析助手。下面是 ${chatLabel} 聊天记录（已脱敏），段标记 [Q#]/[T#]/[F#]/[A#]（[F#] 列出该 turn 涉及的源文件相对路径）。`,
+    `You are a session synthesis assistant. Below is a sanitized ${chatLabel} chat transcript. Segment markers are [Q#]/[T#]/[F#]/[A#]; [F#] lists source file paths relative to the project root for that turn.`,
     "",
-    "## Working order（必须按序完成，再输出 JSON）",
-    "在脑中**依次**完成下面 1→2→3→4→5，全部做完后再**一次性**输出严格 JSON（不要 markdown / 解释 / ```）。",
-    "后一步必须使用前一步的结果；禁止跳步或按 Q/A 时间线平铺代替概念分析。",
+    "## Output language rule",
+    `Write all user-visible natural-language output fields in ${outputLanguage}: labels, evidence snippets, outline titles, summaries, detail text, and aliases when a natural translation is appropriate.`,
+    "Keep JSON property names, canonical `key` values, conceptPath segments, and schema-required structural tokens stable and lowercase where required.",
     "",
-    "### Step 1 — 领域分析 → domains[]",
-    "识别本对话涉及的顶层领域/行业（开放集合，可多词；从原文归纳，不要套用固定领域表）。",
-    "输出 3-" + maxDomains + " 个，小写 key（如 software、platform、backend 等**从本 transcript 归纳**的词）。",
+    "## Working order (complete in order before writing JSON)",
+    "Mentally complete steps 1→2→3→4→5 in order, then output strict JSON once. Do not output markdown, explanations, or ``` fences.",
+    "Each later step must use the previous step's results; do not skip steps or flatten the analysis by Q/A timeline instead of concepts.",
     "",
-    "### Step 2 — 专业名词提取 → nodes[]（最多 " + maxNodes + " 个）",
-    "从原文抓取专业名词/概念，每项含：",
-    "- key（canonical，小写）、label、aliases[]（原文 mention）、evidence[]（≤80 字上下文片段，必填）",
-    "- 此步先**不要**定 parentKeys；可选 mappings[]（mention→key）",
+    "### Step 1 — Domain analysis → domains[]",
+    "Identify the top-level domains/industries involved in this conversation (open set, multi-word allowed; derive from the transcript, do not use a fixed domain table).",
+    "Output 3-" +
+      maxDomains +
+      " lowercase keys (for example software, platform, backend; derive actual words from this transcript).",
     "",
-    "### Step 3 — 概念分级 + 第一次同义归并 → 完善 nodes[].parentKeys[]",
-    "基于 Step 1 的 domains 与 Step 2 的 nodes，建立 DAG 上下级（parentKeys[]）。",
-    "**每个 node 必须含 parentKeys[]（根概念用 []）与 evidence[]**——供 Step 4 同义判断时作 domain/上级/下级提示，并用于跨会话合并，不可省略。",
-    "**在本步合并同层/同链上的同义说法**（第一次归并）：",
-    "- **同层并列**：同一 parent 下多个 key 若指同一概念，保留更短更稳的 canonical key，其余写入 aliases 并删除重复 node",
-    "- **同链上下级**：若 outer/inner 实际同指（如 platform-wrapper/subsystem 与 subsystem 单独出现），合并为单一 canonical key，调整 parentKeys 使层级不重复",
-    "- 禁止无 evidence 的合并；跨 domain（Step 1 中无关领域）禁止合并",
+    "### Step 2 — Term/concept extraction → nodes[] (max " + maxNodes + ")",
+    "Extract technical terms and concepts from the transcript. Each item includes:",
+    "- key (canonical, lowercase), label, aliases[] (mentions from the transcript), evidence[] (required context snippets, <=80 chars)",
+    "- Do **not** set parentKeys yet in this step; optional mappings[] (mention→key)",
     "",
-    "### Step 4 — 本对话第二次同义归并 → segmentEquivalences[] + termAliases[]",
-    "在 Step 3 定稿的层级上，再扫全文，对**可能同义的 path 段**逐对判断（必须带 scope，禁止无 scope 全局合并）。",
+    "### Step 3 — Concept hierarchy + first synonym fold → complete nodes[].parentKeys[]",
+    "Using Step 1 domains and Step 2 nodes, build a DAG hierarchy (parentKeys[]).",
+    "**Every node must include parentKeys[] (root concepts use []) and evidence[]**. These fields provide domain/parent/child context for Step 4 and cross-session merge; never omit them.",
+    "**Fold synonyms at the same level or along the same chain in this step** (first fold):",
+    "- **Same-level siblings**: if multiple keys under the same parent mean the same concept, keep the shorter/stabler canonical key, move the others into aliases, and remove duplicate nodes",
+    "- **Same-chain outer/inner**: if outer/inner effectively refer to the same concept (for example platform-wrapper/subsystem and subsystem alone), fold into one canonical key and adjust parentKeys to avoid repeated hierarchy",
+    "- Never merge without evidence; never merge across unrelated domains from Step 1",
     "",
-    "**工作方式（以理解为主，结构提示为辅）：**",
-    "1. 先锁定该段所在的 **domain**（Step 1 的 domains[] + 该段在 nodes 上经 parentKeys 链所属领域）。",
-    "2. 用 Step 3 给出的 **上级（parentKeys）与下级（同层兄弟 / 子概念 / evidence 中的从属）** 作为语境提示，弄清该段在概念树中的位置。",
-    "3. 对每一对候选段 A、B：**先分别理解** A、B 在本对话、该 domain、该上下级语境下各自指什么（结合 nodes[].evidence 与 transcript，形成你对两个名词的语义判断）。",
-    "4. **仅当你基于上述理解认为 A 与 B 指同一概念** 时，才写入 segmentEquivalences；禁止只因字面相近/相同就合并，也禁止与理解矛盾的硬并。",
+    "### Step 4 — Session-level second synonym fold → segmentEquivalences[] + termAliases[]",
+    "On top of the finalized Step 3 hierarchy, rescan the transcript and judge potentially equivalent path segments pair by pair (scope is required; no global unscoped merge).",
     "",
-    "scope 用于限定「在何种 path 语境下该等价成立」：",
+    "**How to work (semantic understanding first, structure as context):**",
+    "1. First lock the segment's **domain** (Step 1 domains[] + the domain implied by the node's parentKeys chain).",
+    "2. Use Step 3 **parents (parentKeys) and children** (same-level siblings / sub-concepts / evidence dependencies) as context to understand the segment's place in the concept tree.",
+    "3. For each candidate pair A/B: **first understand separately** what A and B mean in this conversation, this domain, and this parent/child context (use nodes[].evidence and the transcript).",
+    "4. Write segmentEquivalences **only when that understanding says A and B are the same concept**. Do not merge merely because strings are similar/same, and do not force a merge that contradicts the semantics.",
+    "",
+    "scope constrains the path context where the equivalence is valid:",
     ...SCOPE_PATH_PREFIX_GUIDANCE_LINES,
-    "- **同链折叠**：outer/inner/suffix 与 inner/suffix 同指时，canonical 取 inner，aliases 含 outer；scope 用非空 pathPrefix + 可选 downstreamFirst",
-    "- segmentEquivalences[]：{ canonical, aliases[]（≥1，必填）, scope（必填，见 JSON 契约）, confidence? }",
-    "- termAliases[]（可选）：term 级别名 { canonical, aliases[], evidence[] }",
+    "- **Same-chain fold**: when outer/inner/suffix and inner/suffix refer to the same thing, use inner as canonical and include outer in aliases; scope uses non-empty pathPrefix plus optional downstreamFirst",
+    "- segmentEquivalences[]: { canonical, aliases[] (>=1, required), scope (required, see JSON contract), confidence? }",
+    "- termAliases[] (optional): term-level aliases { canonical, aliases[], evidence[] }",
     "",
-    "### Step 5 — 内容大纲 → outline",
-    "按**实际内容/概念**组织（不要按 Q/A 时间顺序平铺）：",
-    "- title / summary：整段总主题",
-    "- outline[]：2-4 层，顶层 2-" + maxBranches + " 条，按概念聚类",
-    "- 叶子：summary（必填）+ details[]（≤40 字）+ conceptPath（3-5 段，与 Step 3 nodes 层级一致，段名用 canonical key）",
-    "- 同一 domain 内 conceptPath 根段尽量统一；每叶子 1-" + maxDetails + " 条细节",
-    "- 引用本 transcript 用户提问时 details[].sourceTurnIndices（0-based）",
+    "### Step 5 — Content outline → outline",
+    "Organize by **actual content/concepts**, not Q/A chronology:",
+    "- title / summary: overall topic of the session",
+    "- outline[]: 2-4 levels, 2-" + maxBranches + " top branches, clustered by concept",
+    "- Leaves: summary (required) + details[] (<=40 chars) + conceptPath (3-5 segments, aligned with Step 3 node hierarchy, using canonical keys)",
+    "- Within the same domain, keep conceptPath root segments consistent when possible; each leaf has 1-" +
+      maxDetails +
+      " details",
+    "- When referencing user questions in this transcript, use details[].sourceTurnIndices (0-based)",
     "",
-    formatSessionAnalysisJsonContract({ includeSourceTurnIndices: true, includeCodeReferences: false }),
+    formatSessionAnalysisJsonContract({
+      includeSourceTurnIndices: true,
+      includeCodeReferences: false,
+    }),
     "",
-    "只输出严格 JSON，示例（neutral，勿照搬字面）：",
-    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["讨论 platform-alpha 模块"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem 负责路由"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}}',
+    "Output strict JSON only. Neutral example (do not copy literals):",
+    '{"domains":["software","platform"],"nodes":[{"key":"platform-alpha","label":"Platform Alpha","aliases":["platform-a"],"parentKeys":["platform"],"evidence":["discussion of the platform-alpha module"]},{"key":"subsystem","label":"Subsystem","aliases":["core-subsystem"],"parentKeys":["platform-alpha"],"evidence":["subsystem handles routing"]}],"mappings":[],"segmentEquivalences":[{"canonical":"subsystem","aliases":["core-subsystem"],"scope":{"pathPrefix":["platform-alpha"],"evidenceKeywords":["routing"]},"confidence":0.9}],"termAliases":[],"outline":{"title":"...","outline":[{"title":"...","children":[{"title":"...","summary":"...","conceptPath":["platform","platform-alpha","subsystem"],"details":[{"text":"...","sourceTurnIndices":[0]}]}]}]}}',
     "",
     "===",
-    body || "(空会话)",
+    body || "(empty session)",
   ].join("\n");
 }

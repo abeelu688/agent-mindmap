@@ -77,8 +77,7 @@ function mergeConfig(base: EvalConfig, patch: Record<string, unknown>): EvalConf
   if (isObject(patch.promptParams)) {
     const pp = patch.promptParams;
     out.promptParams = {
-      maxTopics:
-        typeof pp.maxTopics === "number" ? pp.maxTopics : out.promptParams.maxTopics,
+      maxTopics: typeof pp.maxTopics === "number" ? pp.maxTopics : out.promptParams.maxTopics,
       maxItemsPerTopic:
         typeof pp.maxItemsPerTopic === "number"
           ? pp.maxItemsPerTopic
@@ -183,10 +182,7 @@ export async function loadEvalConfig(repoRoot: string): Promise<{
   return { config, paths: resolved };
 }
 
-export function filterSessionIds(
-  config: EvalConfig,
-  manifestSessionIds: string[]
-): string[] {
+export function filterSessionIds(config: EvalConfig, manifestSessionIds: string[]): string[] {
   if (config.sessionFilter === "all") {
     return manifestSessionIds;
   }

@@ -15,6 +15,7 @@ import type {
 } from "../llm/types";
 import type { ConceptContextForMerge } from "../store/storeTypes";
 import type { LlmStageTimingOut } from "./llmStage";
+import type { OutputLanguage } from "../llm/promptLanguage";
 
 export type SessionPipelinePromptOpts = {
   maxDomains: number;
@@ -36,6 +37,7 @@ export type SessionPipelineOpts = {
   hostId?: AgentHostId;
   storeDir?: string;
   skipTiming?: boolean;
+  outputLanguage?: OutputLanguage;
   /** Skip LLM when full analysis already available (tests). */
   preloaded?: SessionAnalysis;
 };
@@ -101,6 +103,7 @@ export async function runSessionPipeline(
             sessionId: opts.sessionId,
             projectSlug: opts.projectSlug,
             projectPath: opts.projectPath,
+            outputLanguage: opts.outputLanguage,
             timingRunId: timing?.runId,
             timingOut: s1Timing,
           },

@@ -26,32 +26,32 @@ describe("buildTopicMindMap", () => {
   });
 
   it("uses graph.title as root when present, ignoring session label", () => {
-    const root = buildTopicMindMap(
-      { ...sampleGraph, title: "Binder 命令字段调研" },
-      "abc12345…"
-    );
+    const root = buildTopicMindMap({ ...sampleGraph, title: "Binder 命令字段调研" }, "abc12345…");
     expect(root.data.text).toBe("Binder 命令字段调研");
   });
 
   it("falls back to session label when graph.title is blank", () => {
-    const root = buildTopicMindMap(
-      { ...sampleGraph, title: "   " },
-      "abc12345…"
-    );
+    const root = buildTopicMindMap({ ...sampleGraph, title: "   " }, "abc12345…");
     expect(root.data.text).toBe("abc12345…");
   });
 
-  it("creates one branch per topic with 核心 prefix", () => {
+  it("creates one branch per topic with Core prefix by default", () => {
     const root = buildTopicMindMap(sampleGraph, "label");
     expect(root.children?.length).toBe(2);
-    expect(root.children?.[0].data.text).toMatch(/^核心1:/);
-    expect(root.children?.[1].data.text).toMatch(/^核心2:/);
+    expect(root.children?.[0].data.text).toMatch(/^Core1:/);
+    expect(root.children?.[1].data.text).toMatch(/^Core2:/);
   });
 
-  it("prepends summary as a 概述 leaf when present", () => {
+  it("prepends summary as a Summary leaf by default", () => {
     const root = buildTopicMindMap(sampleGraph, "label");
     const firstChildren = root.children?.[0].children ?? [];
-    expect(firstChildren[0].data.text).toMatch(/^概述：/);
+    expect(firstChildren[0].data.text).toMatch(/^Summary: /);
+  });
+
+  it("uses Chinese fixed labels when requested", () => {
+    const root = buildTopicMindMap(sampleGraph, "label", undefined, "Chinese");
+    expect(root.children?.[0].data.text).toMatch(/^核心1:/);
+    expect(root.children?.[0].children?.[0].data.text).toMatch(/^概述：/);
   });
 
   it("annotates items with Q# references", () => {

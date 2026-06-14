@@ -27,6 +27,10 @@ import type { ChatEvent, NodeOrigin } from "./transcript/types";
 import type { AgentHostId } from "./host/types";
 import type { SessionRecord } from "./store/storeTypes";
 
+function isSummaryNodeLabel(text: string): boolean {
+  return /^(概述|Summary|概要|요약)\s*[:：]/i.test(text.trim());
+}
+
 // Untitled markdown docs created via `vscode.workspace.openTextDocument({ content })`.
 // When the user closes one, reveal the mind map editor tab again.
 const transcriptDocUrisToAutoReveal = new Set<string>();
@@ -583,7 +587,7 @@ async function resolveJumpCandidate(
   const needsCrossSession =
     Boolean(opts.listSessionRecords) &&
     Boolean(hintText) &&
-    !hintText.startsWith("概述") &&
+    !isSummaryNodeLabel(hintText) &&
     (onlyMetaSearch || (desiredTurn !== undefined && desiredTurn >= userQueries.length));
 
   if (!needsCrossSession) {

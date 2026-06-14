@@ -19,16 +19,17 @@ import {
 } from "./stages/mergeSessionAnalysis";
 import { prepareRecordsBeforeReattach, updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import { createPipelineTimingCollector } from "./pipelineTiming";
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider, SessionAnalysis } from "../llm/types";
-import type { MindMapProgress } from "../progress";
-import type { ConceptOntologyRecord } from "../store/ontologyTypes";
-import type { MergeRecord, SessionRecord } from "../store/storeTypes";
-import type { MindMapRoot } from "../transcript/types";
 import {
   finalizeSessionAnalysis,
   type FinalizedSessionAnalysis,
 } from "./stages/finalizeSessionAnalysis";
+import type { AgentHostId } from "../host/types";
+import type { LlmProvider, SessionAnalysis } from "../llm/types";
+import type { OutputLanguage } from "../llm/promptLanguage";
+import type { MindMapProgress } from "../progress";
+import type { ConceptOntologyRecord } from "../store/ontologyTypes";
+import type { MergeRecord, SessionRecord } from "../store/storeTypes";
+import type { MindMapRoot } from "../transcript/types";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
 
@@ -42,7 +43,7 @@ export type MergePipelineOpts = {
   model?: string;
   hostId?: AgentHostId;
   providerId: string;
-  promptLanguage?: "zh" | "en";
+  outputLanguage?: OutputLanguage;
   refineMode?: MergeRefineMode;
   /** Reuse nodes/mappings from latest subset ontology cache. */
   incrementalFromIndex?: boolean;
@@ -76,17 +77,33 @@ export function mindMapTopLevelCount(merge: MergeRecord): number {
   return children.length;
 }
 
+function outputLanguageFromRecords(records: SessionRecord[]): OutputLanguage {
+  const votes = new Map<string, { count: number; latestIndex: number }>();
+  records.forEach((record, index) => {
+    const language = record.meta.outputLanguage;
+    if (!language) {
+      return;
+    }
+    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
+    votes.set(language, { count: current.count + 1, latestIndex: index });
+  });
+  const ranked = [...votes.entries()].sort(
+    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
+  );
+  return ranked[0]?.[0] ?? "English";
+}
+
 function sessionSegmentEquivalences(records: SessionRecord[]) {
   return collectSessionSegmentEquivalences(records);
 }
 
 function enhancedOntologyCacheKey(
   records: SessionRecord[],
-  opts: Pick<MergePipelineOpts, "model" | "hostId" | "providerId">
+  opts: Pick<MergePipelineOpts, "model" | "hostId" | "providerId" | "outputLanguage">
 ): string {
   const base = computeOntologyCacheKey(
     records,
-    { model: opts.model, hostId: opts.hostId },
+    { model: opts.model, hostId: opts.hostId, outputLanguage: opts.outputLanguage },
     opts.providerId
   );
   const stageVersions = [
@@ -99,7 +116,12 @@ function enhancedOntologyCacheKey(
 /** Same cache key formula used by runMergePipeline; exported for batchMergeCache short-circuit. */
 export function computeBatchMergeCacheKey(
   records: SessionRecord[],
-  opts: { model?: string; hostId?: AgentHostId; providerId: string }
+  opts: {
+    model?: string;
+    hostId?: AgentHostId;
+    providerId: string;
+    outputLanguage?: OutputLanguage;
+  }
 ): string {
   return enhancedOntologyCacheKey(records, opts);
 }
@@ -111,10 +133,12 @@ export async function runMergePipeline(
 ): Promise<MergePipelineResult> {
   const refineMode = opts.refineMode ?? "batch";
   const llmRecords = opts.llmRecords ?? opts.records;
+  const outputLanguage = opts.outputLanguage ?? outputLanguageFromRecords(llmRecords);
   const cacheKey = enhancedOntologyCacheKey(opts.records, {
     model: opts.model,
     hostId: opts.hostId,
     providerId: opts.providerId,
+    outputLanguage,
   });
 
   const timing = opts.skipTiming
@@ -221,6 +245,7 @@ export async function runMergePipeline(
             hostId: opts.hostId,
             mergeMode: opts.mergeMode,
             snapshotSessionId: opts.snapshotSessionId,
+            outputLanguage,
             llmTimeoutMs: opts.llmTimeoutMs,
           },
           provider,

@@ -56,18 +56,9 @@ describe("prepareRecordsForFinalTrie android reattach", () => {
   it("rewrites top-level android-app and android-framework paths", () => {
     const records = [
       record("s1", [
-        topic(
-          ["android-app", "system-version", "android-framework"],
-          "app version"
-        ),
-        topic(
-          ["android-framework", "android-os-build", "build-version"],
-          "framework build"
-        ),
-        topic(
-          ["aosp", "android-framework", "android-os-build"],
-          "aosp build"
-        ),
+        topic(["android-app", "system-version", "android-framework"], "app version"),
+        topic(["android-framework", "android-os-build", "build-version"], "framework build"),
+        topic(["aosp", "android-framework", "android-os-build"], "aosp build"),
       ]),
     ];
 
@@ -79,15 +70,11 @@ describe("prepareRecordsForFinalTrie android reattach", () => {
     });
 
     const tops = new Set(
-      prepared[0].graph.topics
-        .map((t) => t.conceptPath?.[0])
-        .filter(Boolean) as string[]
+      prepared[0].graph.topics.map((t) => t.conceptPath?.[0]).filter(Boolean) as string[]
     );
     expect(tops.has("android-app")).toBe(false);
     expect(tops.has("android-framework")).toBe(false);
-    expect(collectStaleReattachTopRoots(prepared, androidReattachSteps)).toEqual(
-      []
-    );
+    expect(collectStaleReattachTopRoots(prepared, androidReattachSteps)).toEqual([]);
   });
 });
 
@@ -95,14 +82,8 @@ describe("buildConceptMergeRecord ontologyForPrep gate", () => {
   it("does not show android-app or android-framework as mind map top roots", () => {
     const records = [
       record("s1", [
-        topic(
-          ["android-app", "system-version", "android-framework"],
-          "app version"
-        ),
-        topic(
-          ["android-framework", "system-properties"],
-          "framework props"
-        ),
+        topic(["android-app", "system-version", "android-framework"], "app version"),
+        topic(["android-framework", "system-properties"], "framework props"),
       ]),
     ];
 
@@ -117,8 +98,7 @@ describe("buildConceptMergeRecord ontologyForPrep gate", () => {
       },
     });
 
-    const topLabels =
-      merge.mindMap.children?.map((c) => c.data.text.split(" (")[0]) ?? [];
+    const topLabels = merge.mindMap.children?.map((c) => c.data.text.split(" (")[0]) ?? [];
     expect(topLabels.some((l) => l === "android-app")).toBe(false);
     expect(topLabels.some((l) => l === "android-framework")).toBe(false);
     expect(topLabels.some((l) => l === "android" || l === "aosp")).toBe(true);

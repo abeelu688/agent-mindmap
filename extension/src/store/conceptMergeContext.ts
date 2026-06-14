@@ -1,6 +1,3 @@
-import type { AgentHostId } from "../host/types";
-import type { LlmProvider, SegmentEquivalence } from "../llm/types";
-import type { MindMapProgress } from "../progress";
 import { runMergePipeline, type MergeRefineMode } from "../pipeline/mergePipeline";
 import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
 import {
@@ -9,7 +6,10 @@ import {
 } from "../llm/synonymHintDerive";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
-import { MERGE_APPLY_SEGMENT_EQUIVALENCES, MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import {
+  MERGE_APPLY_SEGMENT_EQUIVALENCES,
+  MERGE_DERIVE_SEGMENT_EQUIVALENCES,
+} from "../pipeline/mergeSynonymPolicy";
 import {
   ontologySliceForPrep,
   prepareRecordsForFinalTrie,
@@ -21,7 +21,6 @@ import {
   type ConceptMergeOptions,
   type ConceptMergePrepOntology,
 } from "./mergeConceptTrie";
-import type { ConceptOntologyRecord } from "./ontologyTypes";
 import {
   computeOntologyCacheKey,
   isCompleteOntologyRecord,
@@ -29,13 +28,18 @@ import {
   readOntologyRecord,
   type EnsureOntologyMemoryFlags,
 } from "./ontologyStore";
+import type { ConceptOntologyRecord } from "./ontologyTypes";
+import type { MindMapProgress } from "../progress";
+import type { LlmProvider, SegmentEquivalence } from "../llm/types";
+import type { OutputLanguage } from "../llm/promptLanguage";
+import type { AgentHostId } from "../host/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
 export type ConceptMergeLlmOpts = {
   model?: string;
   hostId?: AgentHostId;
   providerId: string;
-  promptLanguage?: "zh" | "en";
+  outputLanguage?: OutputLanguage;
   timeoutMs?: number;
 };
 
@@ -45,10 +49,7 @@ export type LoadedConceptMergeContext = {
   ontology?: ConceptOntologyRecord;
 };
 
-function sessionIdsSubsetOf(
-  subset: string[],
-  superset: string[]
-): boolean {
+function sessionIdsSubsetOf(subset: string[], superset: string[]): boolean {
   const set = new Set(superset);
   return subset.every((id) => set.has(id));
 }
@@ -86,17 +87,13 @@ function mergeOptionsWithContext(
   return {
     ...options,
     ontologyForPrep: ontologyForPrep ?? options.ontologyForPrep,
-    segmentEquivalences:
-      options.segmentEquivalences ?? ctx.segmentEquivalences,
-    applySegmentEquivalences:
-      options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
+    segmentEquivalences: options.segmentEquivalences ?? ctx.segmentEquivalences,
+    applySegmentEquivalences: options.applySegmentEquivalences ?? MERGE_APPLY_SEGMENT_EQUIVALENCES,
     recordsAlreadyPrepared: options.recordsAlreadyPrepared ?? false,
   };
 }
 
-function fallbackSegmentEquivalences(
-  records: SessionRecord[]
-): SegmentEquivalence[] {
+function fallbackSegmentEquivalences(records: SessionRecord[]): SegmentEquivalence[] {
   const sessionEquivalences = collectSessionSegmentEquivalences(records);
   if (!MERGE_DERIVE_SEGMENT_EQUIVALENCES) {
     return sessionEquivalences;
@@ -210,10 +207,7 @@ export function isOntologyReadyForConceptMerge(
   if (countDistinctTopRoots(records) < 2) {
     return true;
   }
-  return (
-    (ont.reattachSteps?.length ?? 0) > 0 ||
-    (ont.reattachMoves?.length ?? 0) > 0
-  );
+  return (ont.reattachSteps?.length ?? 0) > 0 || (ont.reattachMoves?.length ?? 0) > 0;
 }
 
 /**
@@ -232,11 +226,7 @@ export async function buildConceptMergeForRecords(
     ontologyFlags?: EnsureOntologyMemoryFlags;
   }
 ): Promise<{ merge: MergeRecord; ctx: LoadedConceptMergeContext }> {
-  const ctx = await loadSegmentEquivalencesForRecords(
-    opts.storeDir,
-    records,
-    opts.llm
-  );
+  const ctx = await loadSegmentEquivalencesForRecords(opts.storeDir, records, opts.llm);
   const ontologyReady = isOntologyReadyForConceptMerge(ctx, records);
 
   if (ontologyReady && !opts.forceReattach) {
@@ -283,10 +273,7 @@ export function buildConceptMergeWithOntology(
   options: ConceptMergeOptions = {},
   ctx: LoadedConceptMergeContext = {}
 ): MergeRecord {
-  return buildConceptMergeRecord(
-    records,
-    mergeOptionsWithContext(records, options, ctx)
-  );
+  return buildConceptMergeRecord(records, mergeOptionsWithContext(records, options, ctx));
 }
 
 export async function resolveAndBuildConceptMergeAsync(
@@ -295,19 +282,10 @@ export async function resolveAndBuildConceptMergeAsync(
   options: ConceptMergeOptions,
   llmOpts: ConceptMergeLlmOpts
 ): Promise<MergeRecord> {
-  const ctx = await loadSegmentEquivalencesForRecords(
-    storeDir,
-    records,
-    llmOpts
-  );
+  const ctx = await loadSegmentEquivalencesForRecords(storeDir, records, llmOpts);
   const { sanitizeSessionRecord } = await import("./sanitizeRecords");
-  const sanitized = await Promise.all(
-    records.map((r) => sanitizeSessionRecord(r))
-  );
-  return buildConceptMergeRecordAsync(
-    sanitized,
-    mergeOptionsWithContext(sanitized, options, ctx)
-  );
+  const sanitized = await Promise.all(records.map((r) => sanitizeSessionRecord(r)));
+  return buildConceptMergeRecordAsync(sanitized, mergeOptionsWithContext(sanitized, options, ctx));
 }
 
 function flagsToRefineMode(flags: EnsureOntologyMemoryFlags): MergeRefineMode {
@@ -344,7 +322,7 @@ export async function ensureOntologyAndBuildConceptMerge(
       model: opts.llm.model,
       hostId: opts.llm.hostId,
       providerId: opts.llm.providerId,
-      promptLanguage: opts.llm.promptLanguage,
+      outputLanguage: opts.llm.outputLanguage,
       refineMode: flagsToRefineMode(flags),
       incrementalFromIndex: flags.incrementalFromIndex,
       forceReattach: opts.forceReattach,

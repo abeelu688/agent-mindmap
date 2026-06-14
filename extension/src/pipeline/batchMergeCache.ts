@@ -1,16 +1,10 @@
-import type { AgentHostId } from "../host/types";
-import type { MergeRecord, SessionRecord } from "../store/storeTypes";
-import {
-  isCompleteOntologyRecord,
-  readOntologyRecord,
-} from "../store/ontologyStore";
-import {
-  conceptTrieMergePath,
-  readMergeRecord,
-  recordFreshnessToken,
-} from "../store/sessionStore";
-import { computeBatchMergeCacheKey } from "./mergePipeline";
+import { isCompleteOntologyRecord, readOntologyRecord } from "../store/ontologyStore";
+import { conceptTrieMergePath, readMergeRecord, recordFreshnessToken } from "../store/sessionStore";
 import { mindMapLog } from "../webview/MindMapLog";
+import { computeBatchMergeCacheKey } from "./mergePipeline";
+import type { AgentHostId } from "../host/types";
+import type { OutputLanguage } from "../llm/promptLanguage";
+import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 
 export type BatchMergeCacheLookup =
   | { hit: true; merge: MergeRecord }
@@ -21,7 +15,12 @@ export type TryReuseBatchMergeOpts = {
   projectSlug: string;
   /** All real (non-virtual) session records currently in the project. */
   allRecords: SessionRecord[];
-  llm: { providerId: string; model?: string; hostId?: AgentHostId };
+  llm: {
+    providerId: string;
+    model?: string;
+    hostId?: AgentHostId;
+    outputLanguage?: OutputLanguage;
+  };
 };
 
 /**
@@ -56,7 +55,7 @@ export async function tryReuseBatchMerge(
     llm: r.meta.llm,
   }));
   mindMapLog(
-    `[tryReuseBatchMerge] inputs: count=${opts.allRecords.length} provider=${opts.llm.providerId} model=${opts.llm.model || "(default)"} hostId=${opts.llm.hostId || "(none)"} records=${JSON.stringify(recordSummary)}`
+    `[tryReuseBatchMerge] inputs: count=${opts.allRecords.length} provider=${opts.llm.providerId} model=${opts.llm.model || "(default)"} hostId=${opts.llm.hostId || "(none)"} outputLanguage=${opts.llm.outputLanguage || "(record/default)"} records=${JSON.stringify(recordSummary)}`
   );
 
   if (opts.allRecords.length === 0) {
@@ -69,9 +68,7 @@ export async function tryReuseBatchMerge(
 
   const ontology = await readOntologyRecord(opts.storeDir, cacheKey);
   if (!ontology) {
-    mindMapLog(
-      `[tryReuseBatchMerge] MISS: ontology cache file not found at key=${cacheKey}`
-    );
+    mindMapLog(`[tryReuseBatchMerge] MISS: ontology cache file not found at key=${cacheKey}`);
     return { hit: false, reason: "ontology cache key not found" };
   }
   mindMapLog(
@@ -112,9 +109,7 @@ export async function tryReuseBatchMerge(
   }
   for (const id of expected) {
     if (!stored.has(id)) {
-      mindMapLog(
-        `[tryReuseBatchMerge] MISS: sessionId not in stored merge: ${id.slice(0, 8)}…`
-      );
+      mindMapLog(`[tryReuseBatchMerge] MISS: sessionId not in stored merge: ${id.slice(0, 8)}…`);
       return {
         hit: false,
         reason: `sessionId not in stored merge: ${id.slice(0, 8)}…`,
@@ -122,6 +117,8 @@ export async function tryReuseBatchMerge(
     }
   }
 
-  mindMapLog(`[tryReuseBatchMerge] HIT: returning cached merge with ${merge.meta.sessionIds.length} sessions`);
+  mindMapLog(
+    `[tryReuseBatchMerge] HIT: returning cached merge with ${merge.meta.sessionIds.length} sessions`
+  );
   return { hit: true, merge };
 }
