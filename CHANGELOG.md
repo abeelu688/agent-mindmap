@@ -12,23 +12,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Unified error handling**: `AgentMindmapError` base class, `agentLog` (debug/info/warn/error), `notify()` / `notifyInfo` / `notifyWarning` / `notifyError`, `wrapCommand()` for command handlers — replaces 30+ scattered `console.*` calls and 24+ direct `vscode.window.showXxx` calls
 - **Entry-file refactor**: `extension.ts` slimmed from 1,229 → 232 lines; commands extracted to `extension/src/commands/`, batch-merge orchestration into `extension/src/batch/`
 - **CI / tooling**: ESLint 9 flat config, Prettier, GitHub Actions CI, husky + lint-staged pre-commit, `npm run typecheck:{extension,webview}`, `npm run check` umbrella script
-- **i18n infrastructure**: `bundle.l10n.ja.json` and `bundle.l10n.ko.json` placeholders; `agentMindmap.ui.locale` extended to `auto | en | zh-cn | ja | ko`; new `agentMindmap.llm.promptLanguage` setting; `resolvePromptLanguage()` follows UI locale; `promptOutline.ts` is the reference implementation for language-aware prompts; `scripts/check-l10n-keys.mjs` ensures locale bundles stay in sync with the English baseline
-- **Community infrastructure**: Issue templates (bug / feature / question), PR template, label catalog in `docs/MAINTAINING.md`, this `CHANGELOG.md`, `docs/RELEASE.md` release runbook, `docs/ARCHITECTURE.md`
+- **Community infrastructure**: Issue templates (bug / feature / question), PR template, label catalog in `docs/MAINTAINING.md`, `docs/RELEASE.md` release runbook, `docs/ARCHITECTURE.md`
 
 ### Changed
 
 - `LlmProviderError` retained alongside `AgentMindmapError`; `toMindmapError()` bridges them
 - `extension/l10n/bundle.l10n.{json,zh-cn.json}` gain `notify.unexpected` key for the unified-error path
-- `extension/package.json` settings: `agentMindmap.ui.locale` enum widened, `agentMindmap.llm.promptLanguage` added
 - `webview/` now has its own `tsconfig.json` (was missing)
 
 ### Deprecated
 
 - `mindMapLog()` — call sites should migrate to `agentLog.info()` over time
 
-### Known issues
+---
 
-- Production LLM prompts are still Chinese-only; language-aware prompt migration is open for `session-analysis`, `code-ref-descriptions`, and `merge-session-analysis`
+## [0.2.2] — 2026-06-15
+
+### Added
+
+- **Multilingual mind map output**: auto-detect primary language from `user_query` questions (Chinese, English, Japanese, Korean); structural labels (e.g. "Related code", "Research", concept map titles) follow the detected language via `outputLanguageLabels`
+- **UI locale placeholders**: `agentMindmap.ui.locale` extended with `ja` and `ko`; `scripts/check-l10n-keys.mjs` keeps locale bundles in sync with the English baseline
+- **Multilingual eval fixtures**: sample JSONL workspaces in `test/fixtures/multilingual-jsonl/` and HTML export harness for cross-language smoke tests
+
+### Changed
+
+- **English LLM prompts**: production analysis prompts (`session-analysis`, `merge-session-analysis`, code-ref extraction) are now English; `agentMindmap.llm.promptLanguage` (`auto` | `en` | `zh`) acts as an output-language override and invalidates the session cache when changed
+- **Pipeline version bump**: existing `SessionRecord` / merge caches re-analyze on upgrade
+
+### Fixed
+
+- **Code references**: transcripts using `ApplyPatch` tool calls no longer drop file paths or write snippets (Cursor + Claude Code parsers)
+- **CI / local tests**: extension tests no longer require legacy eval fixtures to be present on disk
+
+---
+
+## [0.2.1] — 2026-06-13
+
+### Changed
+
+- Updated extension marketplace details with a clearer product overview, feature list, usage guide, settings summary, privacy note, GitHub repository link, and feedback path.
+
+### Fixed
+
+- Optimized code reference extraction via LLM for more accurate file path and line range detection.
+
+---
+
+## [0.2.0] — 2026-06-12
+
+Initial public release. See `extension/CHANGELOG.md` for the feature list.
 
 ---
 
@@ -36,5 +68,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Internal pre-release. Refer to git history for details.
 
-[Unreleased]: https://github.com/abeelu688/agent-mindmap/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/abeelu688/agent-mindmap/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/abeelu688/agent-mindmap/releases/tag/v0.1.1
