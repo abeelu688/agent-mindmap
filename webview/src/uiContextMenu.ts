@@ -5,6 +5,19 @@ export type ModelOption = {
   label: string;
 };
 
+export type WebviewBatchStrings = {
+  title: string;
+  refresh: string;
+  refreshReady: string;
+  statusOk: string;
+  statusCached: string;
+  statusFailed: string;
+  statusRunning: string;
+  statusDone: string;
+  statusUpdateBatch: string;
+  statusUpdate: string;
+};
+
 export type WebviewStrings = {
   menu: {
     sectionTheme: string;
@@ -32,9 +45,7 @@ export type UiSettingPick = {
   value: string;
 };
 
-function presetOptions(
-  strings: WebviewStrings
-): { value: MindMapUiPreset; label: string }[] {
+function presetOptions(strings: WebviewStrings): { value: MindMapUiPreset; label: string }[] {
   return [
     { value: "auto", label: strings.menu.presetAuto },
     { value: "dark", label: strings.menu.presetDark },
@@ -66,10 +77,7 @@ function directionOptions(
 let menuEl: HTMLDivElement | undefined;
 let dismissListenersBound = false;
 
-export function isBlankCanvasTarget(
-  target: EventTarget | null,
-  container: HTMLElement
-): boolean {
+export function isBlankCanvasTarget(target: EventTarget | null, container: HTMLElement): boolean {
   if (!(target instanceof Node)) {
     return false;
   }

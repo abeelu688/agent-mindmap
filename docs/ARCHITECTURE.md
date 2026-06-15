@@ -254,13 +254,13 @@ These are also mapped into [`AgentMindmapError`](../extension/src/errors.ts) so 
 
 Three independent dimensions:
 
-| Layer               | Setting                           | What it controls                                                          |
-| ------------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| **UI**              | `agentMindmap.ui.locale`          | Notifications, progress messages, command labels                          |
-| **Mind map output** | `agentMindmap.llm.promptLanguage` | Natural language used for LLM-visible labels and structural mind map text |
-| **Documentation**   | (file naming)                     | `README.md` vs `README.zh-cn.md`, etc.                                    |
+| Layer               | Setting                           | What it controls                                                                             |
+| ------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| **UI**              | `agentMindmap.ui.locale`          | Notifications, progress messages, webview chrome (default `auto` → VS Code Display Language) |
+| **Mind map output** | `agentMindmap.llm.promptLanguage` | Natural language used for LLM-visible labels and structural mind map text                    |
+| **Documentation**   | (file naming)                     | `README.md` vs `README.zh-cn.md`, etc.                                                       |
 
-UI strings go through `t(key, englishMessage, ...args)` or `uiTranslate(key, englishMessage, ...args)` ([`l10n/uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts)). When adding a user-visible string, add the key to the English baseline and every shipped `bundle.l10n.*.json` file. Community reviewers use [`docs/multilingual-checklist/`](../docs/multilingual-checklist/README.md) for human translation QA (`npm run checklist:l10n` regenerates per-locale checklists).
+Runtime UI strings use `t()` or `uiTranslate()` — equivalent wrappers around [`resolveUiLocale()`](../extension/src/l10n/uiTranslate.ts) and `bundle.l10n.*.json` ([`l10n/uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts)). When `agentMindmap.ui.locale` is `auto`, locale follows `vscode.env.language` (Configure Display Language). Command palette titles in `package.json` stay English-only. When adding a user-visible string, add the key to the English baseline and every shipped `bundle.l10n.*.json` file. Community reviewers use [`docs/multilingual-checklist/`](../docs/multilingual-checklist/README.md) for human translation QA (`npm run checklist:l10n` regenerates per-locale checklists).
 
 Production LLM prompt templates are English. Conversation language is detected from `user_query` events in [`llm/promptLanguage.ts`](../extension/src/llm/promptLanguage.ts), and prompts ask the model to write user-visible fields in that output language. Structural mind map labels come from [`mindmap/outputLanguageLabels.ts`](../extension/src/mindmap/outputLanguageLabels.ts).
 
