@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Multilingual review checklists**: [`docs/multilingual-checklist/`](docs/multilingual-checklist/README.md) with per-locale EN/target review files, `REVIEW-STATUS.md`, and `npm run checklist:l10n` generator for contributors.
+- **10-language locale support**: UI bundles now cover English, Simplified Chinese, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian; `agentMindmap.ui.locale=auto` maps matching VS Code display languages to those bundles.
+- **Expanded mind map output languages**: conversation-language detection and structural mind map labels now support Portuguese, Spanish, German, French, Hindi, and Indonesian in addition to English, Chinese, Japanese, and Korean.
 - **Open-source readiness**: `CONTRIBUTING.md` (EN + zh-cn), `CODE_OF_CONDUCT.md`, `SECURITY.md`, MIT license header, README badges, double-language README cross-links
 - **Unified error handling**: `AgentMindmapError` base class, `agentLog` (debug/info/warn/error), `notify()` / `notifyInfo` / `notifyWarning` / `notifyError`, `wrapCommand()` for command handlers — replaces 30+ scattered `console.*` calls and 24+ direct `vscode.window.showXxx` calls
 - **Entry-file refactor**: `extension.ts` slimmed from 1,229 → 232 lines; commands extracted to `extension/src/commands/`, batch-merge orchestration into `extension/src/batch/`
