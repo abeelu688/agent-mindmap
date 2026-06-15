@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Mind maps now follow the language of your agent conversations. Titles, summaries, and labels such as "Related code" and "Research" are generated in Chinese, English, Japanese, or Korean based on the questions in the transcript.
+- Added a setting to override the output language when auto-detection does not match your preference.
+- Added Japanese and Korean options for extension UI language.
+- Fixed missing "Related code" nodes and file links in some sessions.
+
 ## 0.2.1
 
 - Updated extension marketplace details with a clearer product overview, feature list, usage guide, settings summary, privacy note, GitHub repository link, and feedback path.
