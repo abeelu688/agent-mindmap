@@ -308,6 +308,7 @@ export async function loadSession(
   );
   const settings = await readSettings(host);
   const signal = deps.signal ?? new AbortController().signal;
+  const useLlmCache = settings.cache && !options.forceRefresh;
   const outputLanguage = resolveOutputLanguageForEvents(events);
   // Freshness token: count of parsed user/assistant/tool events. Stable
   // against metadata-only appends (mode, ai-title, file-history-snapshot…)
@@ -406,7 +407,8 @@ export async function loadSession(
           sessionId: session.id,
           projectSlug: ctx.projectSlug,
         });
-        if (needsCodeRefRetry(existing.sessionAnalysis?.codeReferences)) {
+        const retryCodeRefs = needsCodeRefRetry(existing.sessionAnalysis?.codeReferences);
+        if (retryCodeRefs) {
           enqueueCodeRefUpdate({
             sessionId: existing.meta.sessionId,
             projectSlug: existing.meta.projectSlug,
@@ -418,7 +420,7 @@ export async function loadSession(
             provider: getProvider(settings.llm),
             model: settings.llm.model || undefined,
             cacheDir: getCacheDir(deps.context),
-            cache: settings.cache,
+            cache: useLlmCache,
             timeoutMs: settings.llm.timeoutMs,
             storeDir: getStoreDir(),
             outputLanguage,
@@ -480,7 +482,7 @@ export async function loadSession(
         },
         modelHint: settings.llm.model || undefined,
         cacheDir: getCacheDir(deps.context),
-        cache: settings.cache,
+        cache: useLlmCache,
         hostId: host.id,
         storeDir: getStoreDir(),
         outputLanguage,
@@ -583,7 +585,7 @@ export async function loadSession(
           provider: getProvider(settings.llm),
           model: settings.llm.model || undefined,
           cacheDir: getCacheDir(deps.context),
-          cache: settings.cache,
+          cache: useLlmCache,
           timeoutMs: settings.llm.timeoutMs,
           storeDir,
           outputLanguage,

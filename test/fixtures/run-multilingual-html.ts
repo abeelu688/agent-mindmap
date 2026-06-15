@@ -23,7 +23,7 @@ import {
   conceptTrieMergePath,
 } from "../../extension/src/store/sessionStore";
 import { sanitizeSessionRecord } from "../../extension/src/store/sanitizeRecords";
-import { deleteSnapshotHierarchy } from "../../extension/src/store/mergeSnapshot";
+import { clearProjectAnalysisCache } from "../../extension/src/store/clearProjectAnalysisCache";
 import {
   listCursorSessions,
 } from "../../extension/src/transcript/listSessions";
@@ -475,7 +475,7 @@ async function analyzeSelectedSessions(
   const host = cursorHost;
   await ensureStore(opts.storeDir);
   if (opts.forceRefresh) {
-    await deleteSnapshotHierarchy(opts.storeDir, projectSlug);
+    await clearProjectAnalysisCache(opts.storeDir, projectSlug);
   }
 
   const signal = new AbortController().signal;
@@ -598,7 +598,7 @@ async function analyzeProject(
 
   await ensureStore(opts.storeDir);
   if (opts.forceRefresh) {
-    await deleteSnapshotHierarchy(opts.storeDir, projectSlug);
+    await clearProjectAnalysisCache(opts.storeDir, projectSlug);
   }
 
   const llmOpts = await readLlmOptions(context);

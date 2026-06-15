@@ -3,7 +3,10 @@ import {
   __testing,
   CODE_REF_DESC_PROMPT_VERSION,
   extractFilePathsFromEvents,
+  generateCodeReferenceDescriptions,
 } from "../extension/src/llm/extractCodeReferences";
+import { type LlmProvider } from "../extension/src/llm/types";
+import type { LlmProviderError } from "../extension/src/llm/types";
 import type { ChatEvent } from "../extension/src/transcript/types";
 
 // Mock fs.accessSync so isProjectRelativePath doesn't fail on nonexistent paths
@@ -194,5 +197,57 @@ describe("code reference description prompt", () => {
     expect(prompt).toContain("Below are code file paths");
     expect(prompt).toContain("Write every natural-language `description` value in Chinese");
     expect(prompt).toContain('Output ONLY a JSON array: [{"path":"...","description":"..."}]');
+  });
+});
+
+describe("generateCodeReferenceDescriptions", () => {
+  it("fails instead of saving fallback descriptions when the LLM returns no descriptions", async () => {
+    const provider: LlmProvider = {
+      id: "fake",
+      summarize: async () => [],
+    };
+
+    await expect(
+      generateCodeReferenceDescriptions(
+        [
+          {
+            path: "src/router.ts",
+            turnIndex: 0,
+            query: "Fix router",
+            summary: "Updated routing",
+          },
+        ],
+        provider,
+        new AbortController().signal,
+        { cache: false }
+      )
+    ).rejects.toMatchObject({
+      code: "bad-shape",
+    } satisfies Partial<LlmProviderError>);
+  });
+
+  it("fails instead of mixing fallback descriptions when LLM paths do not match", async () => {
+    const provider: LlmProvider = {
+      id: "fake",
+      summarize: async () => [{ path: "other.ts", description: "Other file" }],
+    };
+
+    await expect(
+      generateCodeReferenceDescriptions(
+        [
+          {
+            path: "src/router.ts",
+            turnIndex: 0,
+            query: "Fix router",
+            summary: "Updated routing",
+          },
+        ],
+        provider,
+        new AbortController().signal,
+        { cache: false }
+      )
+    ).rejects.toMatchObject({
+      code: "bad-shape",
+    } satisfies Partial<LlmProviderError>);
   });
 });
