@@ -22,7 +22,7 @@ A VS Code extension that reads AI agent chat transcripts and renders them as **i
 
 Set `agentMindmap.host` to `auto` (default), `cursor`, or `claude-code`. In `auto` mode, the extension detects your editor and falls back to scanning both directories.
 
-The mind map is **read-only** �?it does not write back to chat storage or affect the Agent panel.
+The mind map is **read-only** — it does not write back to chat storage or affect the Agent panel.
 
 ## LLM Integration
 
@@ -40,7 +40,7 @@ The extension runs the matching **headless CLI** as a subprocess, so **no separa
 | Command                                                    | Description                                                                                       |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | **Agent Mind Map: Open Latest Session**                    | Load the most recent transcript and show a single-session mind map                                |
-| \*_Agent Mind Map: Choose Session�?_                       | Pick a transcript by title + time                                                                 |
+| **Agent Mind Map: Choose Session…**                        | Pick a transcript by title + time                                                                 |
 | **Agent Mind Map: Analyze All Sessions (Current Project)** | Scan every transcript, run per-session LLM analysis, then build and open the **Concept Mind Map** |
 
 Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text.
@@ -51,12 +51,12 @@ Every mind-map node is clickable. The extension traces the node back to its orig
 
 ## Offline Export
 
-Right-click the empty canvas �?\*_Download mind map & transcripts�?_. The export includes:
+Right-click the empty canvas → **Download mind map & transcripts…**. The export includes:
 
 - A self-contained `index.html` mind map
 - Pre-rendered `transcripts/*.html` (and `*.md` for editors)
 
-No local HTTP server required �?just open `index.html` in a browser. Clicking nodes opens the matching transcript at the correct anchor.
+No local HTTP server required — just open `index.html` in a browser. Clicking nodes opens the matching transcript at the correct anchor.
 
 ## Development
 
@@ -75,13 +75,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide and [CLAU
 
 ## Multilingual review (contributors)
 
-UI strings and mind map output support 10 languages. Automated checks (`npm run check:l10n`) only verify **key parity** �?translation **quality** needs native-speaker review.
+UI strings and mind map output support 10 languages. Automated checks (`npm run check:l10n`) only verify **key parity** — translation **quality** needs native-speaker review.
 
 | Start here                                                                                     | Purpose                                          |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [docs/multilingual-checklist/README.md](docs/multilingual-checklist/README.md)                 | Review workflow, criteria, PR format             |
 | [docs/multilingual-checklist/REVIEW-STATUS.md](docs/multilingual-checklist/REVIEW-STATUS.md)   | Which locales still need sign-off                |
-| [docs/multilingual-checklist/\<locale\>.md](docs/multilingual-checklist/)                      | Per-locale EN �?translation checklist (154 keys) |
+| [docs/multilingual-checklist/\<locale\>.md](docs/multilingual-checklist/)                      | Per-locale EN ↔ translation checklist (154 keys) |
 | [docs/multilingual-checklist/mindmap-output.md](docs/multilingual-checklist/mindmap-output.md) | Conversation-language labels & detection         |
 
 **How to contribute a review**
@@ -101,12 +101,12 @@ Open for community contribution:
 - [x] Full UI translations for Simplified Chinese, English, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian
 - [x] Multilingual mind map output detection for Chinese, English, Japanese, Korean, Portuguese, Spanish, German, French, Hindi, and Indonesian
 - [ ] Add eval coverage for more multilingual real-world transcripts
-- [ ] Community polish pass on AI-drafted UI bundles �?see [multilingual checklists](docs/multilingual-checklist/README.md)
+- [ ] Community polish pass on AI-drafted UI bundles — see [multilingual checklists](docs/multilingual-checklist/README.md)
 - [ ] And more ideas from real-world usage and community feedback
 
 ## Privacy
 
-Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The library only stores summarized `TopicGraph` and metadata �?**not** the raw transcript. There is **no telemetry** and no third-party server.
+Transcripts may contain local file paths and code snippets. The extension sends transcript content to the configured CLI (`cursor-agent` or `claude`), which forwards it under your existing subscription terms. The library only stores summarized `TopicGraph` and metadata — **not** the raw transcript. There is **no telemetry** and no third-party server.
 
 See [`PRIVACY.md`](PRIVACY.md) for the full privacy policy.
 
