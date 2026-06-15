@@ -8,9 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Multilingual review checklists**: [`docs/multilingual-checklist/`](docs/multilingual-checklist/README.md) with per-locale EN/target review files, `REVIEW-STATUS.md`, and `npm run checklist:l10n` generator for contributors.
-- **10-language locale support**: UI bundles now cover English, Simplified Chinese, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian; `agentMindmap.ui.locale=auto` maps matching VS Code display languages to those bundles.
-- **Expanded mind map output languages**: conversation-language detection and structural mind map labels now support Portuguese, Spanish, German, French, Hindi, and Indonesian in addition to English, Chinese, Japanese, and Korean.
 - **Open-source readiness**: `CONTRIBUTING.md` (EN + zh-cn), `CODE_OF_CONDUCT.md`, `SECURITY.md`, MIT license header, README badges, double-language README cross-links
 - **Unified error handling**: `AgentMindmapError` base class, `agentLog` (debug/info/warn/error), `notify()` / `notifyInfo` / `notifyWarning` / `notifyError`, `wrapCommand()` for command handlers — replaces 30+ scattered `console.*` calls and 24+ direct `vscode.window.showXxx` calls
 - **Entry-file refactor**: `extension.ts` slimmed from 1,229 → 232 lines; commands extracted to `extension/src/commands/`, batch-merge orchestration into `extension/src/batch/`
@@ -26,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Deprecated
 
 - `mindMapLog()` — call sites should migrate to `agentLog.info()` over time
+
+---
+
+## [0.2.3] — 2026-06-15
+
+### Added
+
+- **Multilingual review checklists**: [`docs/multilingual-checklist/`](docs/multilingual-checklist/README.md) with per-locale EN/target review files, `REVIEW-STATUS.md`, and `npm run checklist:l10n` generator for contributors.
+- **10-language UI locale support**: UI bundles now cover Simplified Chinese, English, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian; `agentMindmap.ui.locale=auto` follows VS Code display language when a matching bundle exists.
+- **Expanded mind map output languages**: conversation-language detection and structural mind map labels now support Portuguese, Spanish, German, French, Hindi, and Indonesian in addition to English, Chinese, Japanese, and Korean.
+
+### Changed
+
+- **Webview localization**: batch progress bar, refresh control, and canvas context menu strings are delivered through the UI locale pipeline and refresh when `agentMindmap.ui.locale` changes.
+- **Force re-analyze all**: clears the project's session library, merge snapshot hierarchy, and ontology cache before re-running LLM analysis; batch updates use pending Refresh instead of auto-apply so you can review before updating the panel.
+
+### Fixed
+
+- **Conversation language detection**: refined scoring for mixed-language and late-language-switch transcripts so mind map output language better matches user questions.
+- **Code reference extraction**: LLM or validation failures during code-ref extraction no longer corrupt session mind maps; failed topics are skipped with a warning instead of aborting the whole session outline.
 
 ---
 
@@ -71,7 +88,8 @@ Initial public release. See `extension/CHANGELOG.md` for the feature list.
 
 Internal pre-release. Refer to git history for details.
 
-[Unreleased]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/abeelu688/agent-mindmap/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/abeelu688/agent-mindmap/compare/v0.1.1...v0.2.0
