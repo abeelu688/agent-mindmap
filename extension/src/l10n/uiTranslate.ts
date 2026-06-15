@@ -53,19 +53,11 @@ export function format(message: string, args: Array<string | number | boolean>):
 }
 
 /**
- * Translate a message using VS Code's l10n API, falling back to format().
- * This is the shared t() function — use it instead of duplicating the
- * l10n lookup logic in every file.
+ * Translate a runtime UI string. Alias for {@link uiTranslate} — use either
+ * `t()` or `uiTranslate()` for notifications, progress, and webview chrome.
  */
 export function t(key: string, message: string, ...args: Array<string | number | boolean>): string {
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message, args });
-  }
-  return format(message, args);
+  return uiTranslate(key, message, ...args);
 }
 
 export function readUiLocaleSetting(): UiLocaleSetting {
@@ -110,13 +102,13 @@ export function isChineseUiLanguage(): boolean {
 }
 
 /**
- * UI strings for extension notifications.
+ * Translate a runtime UI string (notifications, progress, webview chrome).
  *
  * Resolution order:
  * 1. Active locale from {@link resolveUiLocale} → look up in `BUNDLES`.
- * 2. VS Code's `l10n.t()` (which honors `agentMindmap.ui.locale` via
- *    `bundle.l10n.<locale>.json` files in the extension manifest).
- * 3. The English `enMessage` argument.
+ * 2. The English `enMessage` argument.
+ *
+ * Command palette titles in `package.json` are intentionally English-only.
  */
 export function uiTranslate(
   key: string,
@@ -130,13 +122,6 @@ export function uiTranslate(
     if (typeof localized === "string") {
       return format(localized, args);
     }
-  }
-  const l10n = (vscode as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message: enMessage, args });
   }
   return format(enMessage, args);
 }

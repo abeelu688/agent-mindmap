@@ -14,7 +14,7 @@ import {
 } from "./toMindElixir";
 import { isBlankCanvasTarget, showUiContextMenu } from "./uiContextMenu";
 import type { MindMapUiOptions, SideBranchOrder } from "./uiTypes";
-import type { WebviewStrings } from "./uiContextMenu";
+import type { WebviewBatchStrings, WebviewStrings } from "./uiContextMenu";
 
 type ExtensionMessage =
   | { type: "setData"; data: MindMapNodeData }
@@ -24,6 +24,7 @@ type ExtensionMessage =
       type: "setStrings";
       strings: {
         loadingTitle: string;
+        batch: WebviewBatchStrings;
         menu: WebviewStrings["menu"];
         modelOptions?: WebviewStrings["modelOptions"];
         currentModel?: string;
@@ -75,7 +76,30 @@ const loadingMessageEl = loadingEl?.querySelector(".mindmap-loading__message");
 const batchStatusEl = document.getElementById("batchStatusBar");
 const batchProgressEl = batchStatusEl?.querySelector(".batch-status__progress");
 const batchDetailEl = batchStatusEl?.querySelector(".batch-status__detail");
+const batchTitleEl = batchStatusEl?.querySelector(".batch-status__title");
+
+function formatBatchLabel(template: string, ...args: Array<string | number>): string {
+  return template.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
+    const idx = Number(rawIdx);
+    const v = args[idx];
+    return v === undefined ? "" : String(v);
+  });
+}
+
 const batchRefreshBtn = document.getElementById("batchStatusRefresh") as HTMLButtonElement | null;
+
+const defaultBatchStrings: WebviewBatchStrings = {
+  title: "Batch",
+  refresh: "Refresh",
+  refreshReady: "Update ready — click to refresh mind map",
+  statusOk: "ok",
+  statusCached: "cached",
+  statusFailed: "failed",
+  statusRunning: "running",
+  statusDone: "done",
+  statusUpdateBatch: "update:batch{0}",
+  statusUpdate: "update:{0}",
+};
 
 function setLoadingOverlay(active: boolean, message?: string): void {
   if (!loadingEl) {
@@ -116,21 +140,22 @@ function setBatchStatus(status: BatchStatus): void {
   const pct = status.total > 0 ? Math.floor((status.processed / status.total) * 100) : 0;
   batchProgressEl.textContent = `${status.processed}/${status.total} (${pct}%)`;
 
+  const batch = uiStrings.batch;
   const parts: string[] = [];
-  parts.push(`ok:${status.analyzed}`);
-  parts.push(`cached:${status.cached}`);
+  parts.push(`${batch.statusOk}:${status.analyzed}`);
+  parts.push(`${batch.statusCached}:${status.cached}`);
   if (status.failed) {
-    parts.push(`failed:${status.failed}`);
+    parts.push(`${batch.statusFailed}:${status.failed}`);
   }
   if (status.running) {
-    parts.push("running");
+    parts.push(batch.statusRunning);
   } else {
-    parts.push("done");
+    parts.push(batch.statusDone);
   }
   if (status.pendingUpdateBatchNo !== undefined) {
-    parts.push(`update:batch${status.pendingUpdateBatchNo}`);
+    parts.push(formatBatchLabel(batch.statusUpdateBatch, status.pendingUpdateBatchNo));
   } else if (status.pendingUpdateLabel) {
-    parts.push(`update:${status.pendingUpdateLabel}`);
+    parts.push(formatBatchLabel(batch.statusUpdate, status.pendingUpdateLabel));
   }
   batchDetailEl.textContent = parts.join(" · ");
 
@@ -139,7 +164,7 @@ function setBatchStatus(status: BatchStatus): void {
       status.pendingUpdateBatchNo !== undefined || Boolean(status.pendingUpdateLabel);
     batchRefreshBtn.disabled = !canRefresh;
     batchRefreshBtn.classList.toggle("batch-status__button--attention", canRefresh);
-    batchRefreshBtn.title = canRefresh ? "Update ready — click to refresh mind map" : "";
+    batchRefreshBtn.title = canRefresh ? batch.refreshReady : "";
   }
 }
 
@@ -151,11 +176,13 @@ let pendingData: MindMapNodeData | undefined;
 let lastRenderedData: MindMapNodeData | undefined;
 let uiStrings: {
   loadingTitle: string;
+  batch: WebviewBatchStrings;
   menu: WebviewStrings["menu"];
   modelOptions?: WebviewStrings["modelOptions"];
   currentModel?: string;
 } = {
   loadingTitle: "Generating mind map…",
+  batch: defaultBatchStrings,
   menu: {
     sectionTheme: "Theme",
     sectionDirection: "Layout direction",
@@ -181,6 +208,15 @@ function applyStrings(next: typeof uiStrings): void {
   uiStrings = next;
   if (loadingTitleEl) {
     loadingTitleEl.textContent = uiStrings.loadingTitle;
+  }
+  if (batchTitleEl) {
+    batchTitleEl.textContent = uiStrings.batch.title;
+  }
+  if (batchRefreshBtn) {
+    batchRefreshBtn.textContent = uiStrings.batch.refresh;
+  }
+  if (lastBatchStatus) {
+    setBatchStatus(lastBatchStatus);
   }
 }
 
@@ -364,6 +400,7 @@ if (!offlineMode) {
     if (msg?.type === "setStrings" && msg.strings) {
       applyStrings({
         loadingTitle: msg.strings.loadingTitle,
+        batch: msg.strings.batch,
         menu: msg.strings.menu,
         modelOptions: msg.strings.modelOptions,
         currentModel: msg.strings.currentModel,
