@@ -10,20 +10,12 @@ import { mindMapLog } from "./webview/MindMapLog";
 import { initLog } from "./log";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { MindMapHost } from "./webview/MindMapHost";
-import {
-  getActiveHost,
-  getWorkspaceSlug,
-  resetHostCache,
-  resolveHostId,
-} from "./host";
+import { getActiveHost, getWorkspaceSlug, resetHostCache, resolveHostId } from "./host";
 import { getStoreDir } from "./paths";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import { LlmProviderError } from "./llm/types";
-import {
-  ensureStore,
-  listRecords,
-} from "./store/sessionStore";
+import { ensureStore, listRecords } from "./store/sessionStore";
 import { resolveLlmProviderId } from "./llmOptions";
 import { setActiveSession } from "./commands/openLatest";
 import { commandOpenLatest } from "./commands/openLatest";
@@ -32,7 +24,7 @@ import { commandDownloadPackage } from "./commands/downloadPackage";
 import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
-import { applyPendingMergeToPanel, getLastBatchStatus } from "./batch/batchStatus";
+import { applyPendingMergeToPanel } from "./batch/batchStatus";
 import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
 
@@ -45,8 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "extension activated",
     {
       extensionPath: context.extensionPath,
-      workspaceFolder:
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+      workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
       dumpFolder: "agent-mindmap-llm-dumps",
     },
     "E"
@@ -100,15 +91,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── WebView event handlers ─────────────────────────────────────────────
 
-  MindMapPanel.onNodeClicked((payload) =>
-    void handleNodeClicked(payload, {
-      context,
-      listSessionRecords: async () => {
-        const storeDir = getStoreDir();
-        await ensureStore(storeDir);
-        return listRecords(storeDir);
-      },
-    })
+  MindMapPanel.onNodeClicked(
+    (payload) =>
+      void handleNodeClicked(payload, {
+        context,
+        listSessionRecords: async () => {
+          const storeDir = getStoreDir();
+          await ensureStore(storeDir);
+          return listRecords(storeDir);
+        },
+      })
   );
 
   MindMapPanel.onDownloadRequested(() => {
@@ -180,10 +172,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     void loadGlassResumableIds().then(
-      (ids) =>
-        mindMapLog(
-          `[activate] pre-warmed glass registry: ${ids.size} resumable ids`
-        ),
+      (ids) => mindMapLog(`[activate] pre-warmed glass registry: ${ids.size} resumable ids`),
       (err) => mindMapLog(`[activate] glass registry preload failed: ${err}`)
     );
   });
@@ -197,9 +186,7 @@ export function deactivate(): void {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
-async function maybeWarnEmptyClaudeTranscripts(
-  context: vscode.ExtensionContext
-): Promise<void> {
+async function maybeWarnEmptyClaudeTranscripts(context: vscode.ExtensionContext): Promise<void> {
   const host = await getActiveHost(context);
   if (host.id !== "claude-code") {
     return;

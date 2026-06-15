@@ -315,6 +315,10 @@ const MAX_DESC_LEN = 60;
 
 type DescEntry = { path: string; description: string };
 
+export function isFallbackCodeReferenceDescription(description: string | undefined): boolean {
+  return Boolean(description?.startsWith("support "));
+}
+
 function fallbackDescription(entry: FileEntry): string {
   const topic = entry.topicContexts?.[0]?.split("\uff1a")[0]?.trim();
   const base = topic ? `support ${topic} code change` : "support code change";
@@ -434,8 +438,10 @@ export async function generateCodeReferenceDescriptions(
   }
 
   if (!allDescs.length) {
-    // Fallback: use topic-shaped wording instead of transcript excerpts.
-    return buildFallbackReferences(entries);
+    throw new LlmProviderError(
+      "bad-shape",
+      "Code reference description LLM returned no descriptions for non-empty input"
+    );
   }
 
   // Build descMap: path -> descriptions (ordered)
@@ -452,10 +458,12 @@ export async function generateCodeReferenceDescriptions(
   // Match entries to descriptions, collecting turn indices per (path, description)
   const acc = new Map<string, { path: string; desc: string; turns: number[] }>();
   const usedDescs = new Map<string, number>(); // path -> next description index
+  let unmatchedPathCount = 0;
   for (const entry of entries) {
     const pathDescs = descMap.get(entry.path);
     let desc: string;
     if (!pathDescs?.length) {
+      unmatchedPathCount += 1;
       desc = fallbackDescription(entry);
     } else {
       const idx = usedDescs.get(entry.path) ?? 0;
@@ -469,6 +477,13 @@ export async function generateCodeReferenceDescriptions(
       acc.set(key, g);
     }
     g.turns.push(entry.turnIndex);
+  }
+
+  if (unmatchedPathCount > 0) {
+    throw new LlmProviderError(
+      "bad-shape",
+      `Code reference description LLM returned paths that did not match ${unmatchedPathCount} input entr${unmatchedPathCount === 1 ? "y" : "ies"}`
+    );
   }
 
   return [...acc.values()].map((g) => ({

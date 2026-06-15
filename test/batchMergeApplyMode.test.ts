@@ -44,21 +44,26 @@ describe("shouldAutoApplyBatchUpdates", () => {
       })
     ).toBe(true);
   });
+
+  it("returns false for force re-analyze even with full library coverage", () => {
+    expect(
+      shouldAutoApplyBatchUpdates({
+        sessionCount: 7,
+        libraryRecordCount: 7,
+        panelHasMindMap: false,
+        forceRefresh: true,
+      })
+    ).toBe(false);
+  });
 });
 
 describe("hadFullLibraryCoverage", () => {
   it("is false for zero sessions", () => {
-    expect(
-      hadFullLibraryCoverage({ sessionCount: 0, libraryRecordCount: 0 })
-    ).toBe(false);
+    expect(hadFullLibraryCoverage({ sessionCount: 0, libraryRecordCount: 0 })).toBe(false);
   });
 
   it("is true only when counts match and sessions > 0", () => {
-    expect(
-      hadFullLibraryCoverage({ sessionCount: 5, libraryRecordCount: 5 })
-    ).toBe(true);
-    expect(
-      hadFullLibraryCoverage({ sessionCount: 5, libraryRecordCount: 4 })
-    ).toBe(false);
+    expect(hadFullLibraryCoverage({ sessionCount: 5, libraryRecordCount: 5 })).toBe(true);
+    expect(hadFullLibraryCoverage({ sessionCount: 5, libraryRecordCount: 4 })).toBe(false);
   });
 });

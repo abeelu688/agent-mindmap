@@ -40,7 +40,7 @@
   "ui.batch.mode.skipCached.label": "跳过已缓存会话",
   "ui.batch.mode.skipCached.desc": "仅分析库中缺失或已过期的 transcript",
   "ui.batch.mode.force.label": "全部强制重新分析",
-  "ui.batch.mode.force.desc": "忽略分析库缓存，每条会话重新调用 LLM",
+  "ui.batch.mode.force.desc": "清除本项目的分析库、合并快照与 ontology 缓存，并对每条会话重新调用 LLM",
   "ui.batch.pickMode.placeholder": "批量分析当前项目的 agent 会话",
   "ui.batch.progress.scanSessions": "正在扫描当前项目的 agent 会话…",
   "ui.batch.emptyOnDisk": "Agent Mind Map: 当前项目 ({0}) 磁盘上暂无 agent 会话记录。",
