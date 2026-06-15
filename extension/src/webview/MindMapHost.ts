@@ -3,7 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { applyUiSettingToWorkspace } from "../ui/applyUiSettingWorkspace";
 import { readMindMapUiConfig, resolveThemeFilePath } from "../ui/mindMapUiConfig";
-import { format, t } from "../l10n/uiTranslate";
+import { t } from "../l10n/uiTranslate";
 import { getCuratedModels } from "../llm/modelList";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
@@ -41,6 +41,18 @@ export type BatchStatus = {
 
 export type WebviewStrings = {
   loadingTitle: string;
+  batch: {
+    title: string;
+    refresh: string;
+    refreshReady: string;
+    statusOk: string;
+    statusCached: string;
+    statusFailed: string;
+    statusRunning: string;
+    statusDone: string;
+    statusUpdateBatch: string;
+    statusUpdate: string;
+  };
   menu: {
     sectionTheme: string;
     sectionDirection: string;
@@ -193,6 +205,7 @@ export class MindMapHost {
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("agentMindmap.ui")) {
           this.postUi();
+          this.postStrings();
           this.updateThemeFileWatcher();
         }
         if (e.affectsConfiguration("agentMindmap.llm")) {
@@ -310,6 +323,18 @@ export class MindMapHost {
       .trim();
     return {
       loadingTitle: t("webview.loading.title", "Generating mind map…"),
+      batch: {
+        title: t("webview.batch.title", "Batch"),
+        refresh: t("webview.batch.refresh", "Refresh"),
+        refreshReady: t("webview.batch.refreshReady", "Update ready — click to refresh mind map"),
+        statusOk: t("webview.batch.status.ok", "ok"),
+        statusCached: t("webview.batch.status.cached", "cached"),
+        statusFailed: t("webview.batch.status.failed", "failed"),
+        statusRunning: t("webview.batch.status.running", "running"),
+        statusDone: t("webview.batch.status.done", "done"),
+        statusUpdateBatch: t("webview.batch.status.updateBatch", "update:batch{0}"),
+        statusUpdate: t("webview.batch.status.update", "update:{0}"),
+      },
       menu: {
         sectionTheme: t("webview.menu.section.theme", "Theme"),
         sectionDirection: t("webview.menu.section.direction", "Layout direction"),
