@@ -2,7 +2,7 @@
   "name": "agent-mindmap",
   "displayName": "Agent Mind Map",
   "description": "Read Cursor or Claude Code agent chat transcripts and visualize them as an interactive mind map.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "icon": "icon.png",
   "publisher": "Abeelu",
   "license": "MIT",

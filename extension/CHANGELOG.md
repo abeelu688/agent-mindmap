@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+- Extension UI is now available in 10 languages: Simplified Chinese, English, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian. In settings, set **Agent Mind Map › Ui › Locale** to your language, or leave **auto** to follow your VS Code display language.
+- Mind map titles and labels (such as "Related code" and "Research") now also support Portuguese, Spanish, German, French, Hindi, and Indonesian — in addition to Chinese, English, Japanese, and Korean — based on the language of your agent conversations.
+- Improved language detection for mixed-language transcripts so generated mind maps better match how you ask questions.
+- The mind map panel — batch progress bar, refresh button, and right-click menu — now appears in your chosen UI language.
+- Fixed cases where code-reference extraction failures could produce incorrect or incomplete mind maps.
+- **Force re-analyze all** now fully clears this project's saved analysis (session library and merge cache) before re-running, and waits for you to click **Refresh** when updates are ready.
+
 ## 0.2.2
 
 - Mind maps now follow the language of your agent conversations. Titles, summaries, and labels such as "Related code" and "Research" are generated in Chinese, English, Japanese, or Korean based on the questions in the transcript.
