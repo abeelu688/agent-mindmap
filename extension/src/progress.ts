@@ -1,30 +1,16 @@
+import { uiTranslate } from "./l10n/uiTranslate";
 import type * as vscode from "vscode";
-import * as vs from "vscode";
-import { format, t } from "./l10n/uiTranslate";
-
-const safeT = t;
 
 function localeFallback(
   key: string,
   enMessage: string,
-  zhMessage: string,
+  _zhMessage: string,
   ...args: Array<string | number | boolean>
 ): string {
-  const l10n = (vs as unknown as { l10n?: { t?: Function } }).l10n;
-  const fn = l10n?.t as
-    | undefined
-    | ((opts: { key: string; message: string; args?: unknown[] }) => string);
-  if (fn) {
-    return fn({ key, message: enMessage, args });
-  }
-  const lang = (vs.env?.language ?? "").toLowerCase();
-  const isZh = lang.startsWith("zh") || lang.includes("zh-cn");
-  return format(isZh ? zhMessage : enMessage, args);
+  return uiTranslate(key, enMessage, ...args);
 }
 
-export type MindMapProgressUpdate =
-  | string
-  | { message?: string; increment?: number };
+export type MindMapProgressUpdate = string | { message?: string; increment?: number };
 
 export type MindMapProgress = {
   report(update: MindMapProgressUpdate): void;

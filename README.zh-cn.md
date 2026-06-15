@@ -73,14 +73,35 @@ npm test
 
 完整贡献指南请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)，架构概览请参阅 [CLAUDE.md](CLAUDE.md)。
 
+## 多语言人工复核（贡献者）
+
+UI 与思维导图输出已支持 10 种语言。`npm run check:l10n` 只校验 **key 一致性**，**译文质量**仍需母语者复核。
+
+| 入口                                                                                           | 说明                                |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [docs/multilingual-checklist/README.md](docs/multilingual-checklist/README.md)                 | 复核流程、标准、PR 格式             |
+| [docs/multilingual-checklist/REVIEW-STATUS.md](docs/multilingual-checklist/REVIEW-STATUS.md)   | 各语言复核进度                      |
+| [docs/multilingual-checklist/\<locale\>.md](docs/multilingual-checklist/)                      | 各语言 EN ↔ 译文对照清单（154 key） |
+| [docs/multilingual-checklist/mindmap-output.md](docs/multilingual-checklist/mindmap-output.md) | 对话语言标签与检测逻辑              |
+
+**参与复核**
+
+1. 在 [REVIEW-STATUS.md](docs/multilingual-checklist/REVIEW-STATUS.md) 中选择你熟悉的语言。
+2. 打开对应清单（如 [ja.md](docs/multilingual-checklist/ja.md)），修改 `extension/l10n/bundle.l10n.<locale>.json`。
+3. 运行 `npm run check:l10n`。
+4. 在扩展开发宿主中设置 `agentMindmap.ui.locale` 为对应语言，触发批量分析 / 导出 / 右键菜单等 UI 路径做抽查。
+5. 提交 PR（如 `i18n(ja): polish UI notifications`），并更新 [REVIEW-STATUS.md](docs/multilingual-checklist/REVIEW-STATUS.md)。
+
+修改 bundle 后可用 `npm run checklist:l10n` 重新生成对照清单。
+
 ## 路线图
 
 欢迎社区贡献：
 
-- [ ] 为更多语言补全 UI 翻译
-- [ ] 将生产路径仍在使用的 LLM prompt 迁移到 language-aware `TEXTS` 模式：
-      `session-analysis`、`code-ref-descriptions`、`merge-session-analysis`
-- [ ] 为非中文 prompt 变体补充 eval 覆盖，再将 `auto` prompt language 切到英文
+- [x] 补全简体中文、英文、日文、韩文、巴西葡萄牙文、西班牙文、德文、法文、印地文、印尼文 UI 翻译
+- [x] 支持中文、英文、日文、韩文、葡萄牙文、西班牙文、德文、法文、印地文、印尼文思维导图输出语言检测
+- [ ] 为更多真实多语言 transcript 补充 eval 覆盖
+- [ ] 社区润色 AI 初译 UI bundle — 见 [多语言复核清单](docs/multilingual-checklist/README.md)
 - [ ] 以及更多来自真实使用场景和社区反馈的新功能
 
 ## 隐私

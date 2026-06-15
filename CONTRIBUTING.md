@@ -85,7 +85,7 @@ chore: update dependencies
 ### L10n / i18n
 
 - UI strings: use `t(key, englishMessage, ...args)` or `uiTranslate(key, englishMessage, ...args)`
-- Always add new keys to **both** `extension/l10n/bundle.l10n.json` AND `extension/l10n/bundle.l10n.zh-cn.json`
+- Always add new keys to the English baseline and **every shipped** `extension/l10n/bundle.l10n.*.json` file
 - LLM prompt language is controlled by the `PromptLanguage` type
 
 ## Architecture Overview
@@ -121,13 +121,14 @@ Key points:
 
 ### Adding a New UI Language
 
-The extension's UI strings (notifications, command labels, install guides) live in `extension/l10n/`. To add a new language (e.g., Japanese):
+The extension's UI strings (notifications, command labels, install guides) live in `extension/l10n/`. Shipped UI locales are `en`, `zh-cn`, `ja`, `ko`, `pt-br`, `es`, `de`, `fr`, `hi`, and `id`.
 
-1. **Copy the English bundle as a starting point.** The placeholder files `bundle.l10n.ja.json` and `bundle.l10n.ko.json` already exist as empty templates:
+To add another language:
+
+1. **Copy the English bundle as a starting point.**
 
    ```bash
-   # Replace the placeholder with the full key set
-   cat extension/l10n/bundle.l10n.json > extension/l10n/bundle.l10n.ja.json
+   cp extension/l10n/bundle.l10n.json extension/l10n/bundle.l10n.<locale>.json
    ```
 
    Then translate every value while keeping the keys intact. Placeholders like `{0}`, `{1}` must remain in the same positions.
@@ -139,33 +140,30 @@ The extension's UI strings (notifications, command labels, install guides) live 
 
    const BUNDLES: Partial<Record<UiLocale, Record<string, string>>> = {
      "zh-cn": zhL10n as Record<string, string>,
-     ja: jaL10n as Record<string, string>, // ← add
+     ja: jaL10n as Record<string, string>,
    };
    ```
 
-3. **Update the locale enum.** [`extension/package.json`](extension/package.json) → `agentMindmap.ui.locale.enum` currently includes the shipped locales plus `ja`/`ko` placeholders. Contributions for any language are welcome; add the locale code there when introducing a new one.
+3. **Update the locale enum and auto detection.** Add the locale to [`extension/package.json`](extension/package.json) → `agentMindmap.ui.locale.enum`, `UiLocale`, `readUiLocaleSetting()`, and `resolveUiLocale()`.
 
 4. **Verify key consistency.** Run `npm run check:l10n` — it ensures every locale bundle has the same keys as the English baseline.
 
-5. **Add a cross-language link in the README.** Update [`README.md`](README.md) and [`README.zh-cn.md`](README.zh-cn.md) badges, then create `README.<locale>.md` if appropriate.
+5. **Human review.** Use the checklists in [`docs/multilingual-checklist/`](docs/multilingual-checklist/README.md). Regenerate EN/target pairs with `npm run checklist:l10n`. Update [`REVIEW-STATUS.md`](docs/multilingual-checklist/REVIEW-STATUS.md) when review is complete.
+
+6. **Add a cross-language link in the README.** Update [`README.md`](README.md) and [`README.zh-cn.md`](README.zh-cn.md) badges, then create `README.<locale>.md` if appropriate.
 
 ### Translating LLM Prompts
 
-Production LLM prompts are still mostly Chinese-only. The English template scaffold is in place ([`promptOutline.ts`](extension/src/llm/promptOutline.ts) is the reference implementation), and the `agentMindmap.llm.promptLanguage` setting toggles between `zh` and `en`.
+Production LLM prompt templates are English. The `agentMindmap.llm.promptLanguage` setting is a legacy output-language override (`auto` | `en` | `zh`), while `auto` detects the primary language of `user_query` questions and asks the LLM to write user-visible fields in that language.
 
-To add full English (or other language) prompts:
+To add another mind map output language:
 
-1. **Pick one production prompt path at a time.** The active LLM paths are session analysis, code-reference descriptions, and merge analysis. Don't mass-translate deprecated prompt files — verify each active prompt against the eval pipeline.
+1. Extend `KnownOutputLanguage` and the scoring logic in [`extension/src/llm/promptLanguage.ts`](extension/src/llm/promptLanguage.ts).
+2. Add structural labels in [`extension/src/mindmap/outputLanguageLabels.ts`](extension/src/mindmap/outputLanguageLabels.ts).
+3. Add detection and label tests under [`test/`](test/).
+4. Run `npm run test:vitest`.
 
-2. **Follow the `TEXTS` pattern in [`promptOutline.ts`](extension/src/llm/promptOutline.ts)**: extract every Chinese line into a `TEXTS: Record<PromptLanguage, ...>` object, then assemble the prompt from the localized strings. The JSON schema markers (`{"title":...}`) stay identical across languages.
-
-3. **Verify the JSON output schema is unchanged.** Add a test that runs the new prompt against `validateSessionAnalysis()` (or the relevant validator) with a fixture transcript. Both `zh` and `en` outputs must validate identically.
-
-4. **Run the eval pipeline** (`npm run eval`) with both `agentMindmap.llm.promptLanguage=zh` and `=en` to compare output quality. A direct word-for-word translation often produces worse results than the original — adapt as needed.
-
-5. **Bump `PIPELINE_VERSION`** in [`pipelineVersions.ts`](extension/src/pipeline/pipelineVersions.ts) if your changes alter the JSON output shape (rare for pure language flips, but required for any schema tweak).
-
-> **Note:** LLM prompt translation requires both fluency in the target language AND familiarity with AI product usage patterns. A direct word-for-word translation may produce worse results than the original.
+Do not add a third production LLM stage for language detection; keep detection deterministic unless the pipeline contract changes.
 
 ## Code of Conduct
 

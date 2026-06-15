@@ -8,7 +8,17 @@ import type { ChatEvent } from "../transcript/types";
 export type PromptLanguage = "zh" | "en";
 
 export type OutputLanguage = string;
-type KnownOutputLanguage = "Chinese" | "English" | "Japanese" | "Korean";
+type KnownOutputLanguage =
+  | "Chinese"
+  | "English"
+  | "Japanese"
+  | "Korean"
+  | "Portuguese"
+  | "Spanish"
+  | "German"
+  | "French"
+  | "Hindi"
+  | "Indonesian";
 
 type PromptLanguageSetting = "auto" | PromptLanguage;
 
@@ -35,6 +45,128 @@ const LATE_OVERRIDE_MARGIN = 2;
 
 const LATIN_NATURAL_WORD =
   /\b(?:how|what|why|can|should|is|are|do|does|the|this|that|we|you|fix|help|please|error|with|for|and|or|not|when|where|who|which|have|has|been|from|them|they|all|your|already|create|work|stop|until|attached|reference|implement|plan|file|starting|completed)\b/i;
+
+const LATIN_LANGUAGE_WORDS: Record<
+  Extract<KnownOutputLanguage, "Portuguese" | "Spanish" | "German" | "French" | "Indonesian">,
+  Set<string>
+> = {
+  Portuguese: new Set([
+    "ajuda",
+    "como",
+    "corrigir",
+    "de",
+    "do",
+    "esse",
+    "esta",
+    "este",
+    "isso",
+    "nao",
+    "não",
+    "onde",
+    "para",
+    "pode",
+    "porque",
+    "por",
+    "qual",
+    "quando",
+    "erro",
+    "falha",
+  ]),
+  Spanish: new Set([
+    "ayuda",
+    "como",
+    "cómo",
+    "corregir",
+    "de",
+    "donde",
+    "dónde",
+    "el",
+    "este",
+    "esto",
+    "para",
+    "por",
+    "porque",
+    "porqué",
+    "puede",
+    "que",
+    "qué",
+    "cuando",
+    "cuándo",
+    "fallo",
+  ]),
+  German: new Set([
+    "bitte",
+    "das",
+    "den",
+    "der",
+    "die",
+    "dies",
+    "diese",
+    "diesen",
+    "fehler",
+    "helfen",
+    "hilfe",
+    "ist",
+    "kann",
+    "mit",
+    "nicht",
+    "und",
+    "warum",
+    "was",
+    "wie",
+    "wo",
+  ]),
+  French: new Set([
+    "aide",
+    "avec",
+    "ce",
+    "cette",
+    "comment",
+    "corriger",
+    "dans",
+    "de",
+    "des",
+    "erreur",
+    "est",
+    "le",
+    "les",
+    "peut",
+    "pour",
+    "pourquoi",
+    "que",
+    "quoi",
+    "une",
+  ]),
+  Indonesian: new Set([
+    "apa",
+    "bagaimana",
+    "bantu",
+    "bisa",
+    "dengan",
+    "di",
+    "ini",
+    "kenapa",
+    "memperbaiki",
+    "mengapa",
+    "tidak",
+    "tolong",
+    "untuk",
+    "yang",
+  ]),
+};
+
+const LATIN_LANGUAGE_MARKS: Record<keyof typeof LATIN_LANGUAGE_WORDS, RegExp> = {
+  Portuguese: /[ãõçáâàéêíóôú]/i,
+  Spanish: /[ñáéíóúü¿¡]/i,
+  German: /[äöüß]/i,
+  French: /[àâæçéèêëîïôœùûüÿ]/i,
+  Indonesian: /$a/,
+};
+
+const LATIN_LANGUAGE_FEATURE_WEIGHT = 1.8;
+const LATIN_LANGUAGE_MARK_WEIGHT = 4;
+const LATIN_FOREIGN_CONFIDENCE_MIN = 4;
+const LATIN_FOREIGN_ENGLISH_MULTIPLIER = 0.2;
 
 const AGENT_INSTRUCTION_PATTERNS = [
   /Implement the plan as specified/i,
@@ -100,6 +232,12 @@ function emptyScores(): LanguageScores {
     English: 0,
     Japanese: 0,
     Korean: 0,
+    Portuguese: 0,
+    Spanish: 0,
+    German: 0,
+    French: 0,
+    Hindi: 0,
+    Indonesian: 0,
   };
 }
 
@@ -112,12 +250,16 @@ function extractLettersOnly(text: string): string {
 }
 
 function hasNativeScript(text: string): boolean {
-  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Devanagari}]/u.test(
+    text
+  );
 }
 
 function countNativeLetters(text: string): number {
   return (
-    text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) ?? []
+    text.match(
+      /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Devanagari}]/gu
+    ) ?? []
   ).length;
 }
 
@@ -269,6 +411,49 @@ function scoreLatinToken(token: string, weight: number): number {
   return LATIN_WORD_WEIGHT * weight * letterCount;
 }
 
+function normalizeLatinToken(token: string): string {
+  return token
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Mark}/gu, "");
+}
+
+function scoreLatinLanguageFeatures(
+  tokens: string[],
+  scores: LanguageScores,
+  weight: number
+): KnownOutputLanguage | undefined {
+  const featureScores = new Map<KnownOutputLanguage, number>();
+  for (const token of tokens) {
+    const normalized = normalizeLatinToken(token);
+    const letterCount = (token.match(/\p{L}/gu) ?? []).length;
+    for (const [language, words] of Object.entries(LATIN_LANGUAGE_WORDS) as Array<
+      [keyof typeof LATIN_LANGUAGE_WORDS, Set<string>]
+    >) {
+      if (words.has(token.toLowerCase()) || words.has(normalized)) {
+        featureScores.set(
+          language,
+          (featureScores.get(language) ?? 0) + letterCount * LATIN_LANGUAGE_FEATURE_WEIGHT
+        );
+      }
+      if (LATIN_LANGUAGE_MARKS[language].test(token)) {
+        featureScores.set(
+          language,
+          (featureScores.get(language) ?? 0) + LATIN_LANGUAGE_MARK_WEIGHT
+        );
+      }
+    }
+  }
+
+  const ranked = [...featureScores.entries()].sort((a, b) => b[1] - a[1]);
+  const [bestLanguage, bestScore] = ranked[0] ?? [];
+  if (!bestLanguage || !bestScore || bestScore < LATIN_FOREIGN_CONFIDENCE_MIN) {
+    return undefined;
+  }
+  scores[bestLanguage] += bestScore * weight;
+  return bestLanguage;
+}
+
 function scoreLatinText(
   text: string,
   scores: LanguageScores,
@@ -277,10 +462,13 @@ function scoreLatinText(
 ): number {
   let latinLetters = 0;
   const effectiveWeight = weight * latinMultiplier;
-  for (const token of text.match(/[A-Za-z][A-Za-z0-9._$/\\-]*/g) ?? []) {
-    const letterCount = (token.match(/[A-Za-z]/g) ?? []).length;
+  const tokens = text.match(/[\p{Script=Latin}][\p{Script=Latin}\p{Mark}'._$/\\-]*/gu) ?? [];
+  const foreignLanguage = scoreLatinLanguageFeatures(tokens, scores, effectiveWeight);
+  const englishMultiplier = foreignLanguage ? LATIN_FOREIGN_ENGLISH_MULTIPLIER : 1;
+  for (const token of tokens) {
+    const letterCount = (token.match(/\p{Script=Latin}/gu) ?? []).length;
     latinLetters += letterCount;
-    scores.English += scoreLatinToken(token, effectiveWeight);
+    scores.English += scoreLatinToken(token, effectiveWeight * englishMultiplier);
   }
   return latinLetters;
 }
@@ -317,6 +505,9 @@ function addScriptScores(
     } else if (/\p{Script=Hangul}/u.test(ch)) {
       scores.Korean += NATIVE_SCRIPT_WEIGHT * weight;
       nativeLetters += 1;
+    } else if (/\p{Script=Devanagari}/u.test(ch)) {
+      scores.Hindi += NATIVE_SCRIPT_WEIGHT * weight;
+      nativeLetters += 1;
     }
   }
   const latinLetters = scoreLatinText(text, scores, weight, latinMultiplier);
@@ -332,6 +523,19 @@ function isIntentLine(line: string): boolean {
     return true;
   }
   if (/^(how|what|why|can|should|is|are|do|does)\b/i.test(trimmed)) {
+    return true;
+  }
+  if (
+    /^(como|cómo|por\s+qué|porque|puede|qual|quando|wie|was|warum|kann|comment|pourquoi|peut|apa|bagaimana|mengapa|kenapa)\b/i.test(
+      trimmed
+    )
+  ) {
+    return true;
+  }
+  if (/[¿¡]/.test(trimmed)) {
+    return true;
+  }
+  if (/[\p{Script=Devanagari}].*[?？]|(कैसे|क्या|क्यों|कब|कहाँ|मदद)/u.test(trimmed)) {
     return true;
   }
   if (/[かな]|ですか|どう|なぜ/.test(trimmed)) {
@@ -359,6 +563,7 @@ function applyNativeRatioBonus(
   scores.Chinese *= NATIVE_RATIO_BONUS;
   scores.Japanese *= NATIVE_RATIO_BONUS;
   scores.Korean *= NATIVE_RATIO_BONUS;
+  scores.Hindi *= NATIVE_RATIO_BONUS;
 }
 
 function sortedScoreEntries(scores: LanguageScores): Array<[KnownOutputLanguage, number]> {

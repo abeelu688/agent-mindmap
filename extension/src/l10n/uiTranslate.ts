@@ -1,8 +1,16 @@
 import * as vscode from "vscode";
+import deL10n from "../../l10n/bundle.l10n.de.json";
+import esL10n from "../../l10n/bundle.l10n.es.json";
+import frL10n from "../../l10n/bundle.l10n.fr.json";
+import hiL10n from "../../l10n/bundle.l10n.hi.json";
+import idL10n from "../../l10n/bundle.l10n.id.json";
+import jaL10n from "../../l10n/bundle.l10n.ja.json";
+import koL10n from "../../l10n/bundle.l10n.ko.json";
+import ptBrL10n from "../../l10n/bundle.l10n.pt-br.json";
 import zhL10n from "../../l10n/bundle.l10n.zh-cn.json";
 
 /** Supported UI locales. To add a new one: see CONTRIBUTING.md → "Adding a new language". */
-export type UiLocale = "en" | "zh-cn" | "ja" | "ko";
+export type UiLocale = "en" | "zh-cn" | "ja" | "ko" | "pt-br" | "es" | "de" | "fr" | "hi" | "id";
 
 export type UiLocaleSetting = "auto" | UiLocale;
 
@@ -12,11 +20,29 @@ export type UiLocaleSetting = "auto" | UiLocale;
  * `bundle.l10n.<locale>.json`. Empty bundle means "fall back to English".
  */
 const BUNDLES: Partial<Record<UiLocale, Record<string, string>>> = {
+  de: deL10n as Record<string, string>,
+  es: esL10n as Record<string, string>,
+  fr: frL10n as Record<string, string>,
+  hi: hiL10n as Record<string, string>,
+  id: idL10n as Record<string, string>,
+  ja: jaL10n as Record<string, string>,
+  ko: koL10n as Record<string, string>,
+  "pt-br": ptBrL10n as Record<string, string>,
   "zh-cn": zhL10n as Record<string, string>,
-  // ja / ko bundles are loaded only when present (see CONTRIBUTING.md)
-  // Add `import jaL10n from "../../l10n/bundle.l10n.ja.json";` etc. once
-  // the bundle is non-empty.
 };
+
+const UI_LOCALES = new Set<UiLocale>([
+  "en",
+  "zh-cn",
+  "ja",
+  "ko",
+  "pt-br",
+  "es",
+  "de",
+  "fr",
+  "hi",
+  "id",
+]);
 
 export function format(message: string, args: Array<string | number | boolean>): string {
   return message.replace(/\{(\d+)\}/g, (_m, rawIdx) => {
@@ -44,8 +70,8 @@ export function t(key: string, message: string, ...args: Array<string | number |
 
 export function readUiLocaleSetting(): UiLocaleSetting {
   const raw = vscode.workspace.getConfiguration("agentMindmap").get<string>("ui.locale", "auto");
-  if (raw === "en" || raw === "zh-cn" || raw === "ja" || raw === "ko") {
-    return raw;
+  if (UI_LOCALES.has(raw as UiLocale)) {
+    return raw as UiLocale;
   }
   return "auto";
 }
@@ -66,6 +92,12 @@ export function resolveUiLocale(): UiLocale {
   if (lang.startsWith("zh")) return "zh-cn";
   if (lang.startsWith("ja")) return "ja";
   if (lang.startsWith("ko")) return "ko";
+  if (lang.startsWith("pt")) return "pt-br";
+  if (lang.startsWith("es")) return "es";
+  if (lang.startsWith("de")) return "de";
+  if (lang.startsWith("fr")) return "fr";
+  if (lang.startsWith("hi")) return "hi";
+  if (lang.startsWith("id")) return "id";
   return "en";
 }
 

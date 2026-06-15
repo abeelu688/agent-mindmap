@@ -254,15 +254,15 @@ These are also mapped into [`AgentMindmapError`](../extension/src/errors.ts) so 
 
 Three independent dimensions:
 
-| Layer             | Setting                           | What it controls                                 |
-| ----------------- | --------------------------------- | ------------------------------------------------ |
-| **UI**            | `agentMindmap.ui.locale`          | Notifications, progress messages, command labels |
-| **Prompt**        | `agentMindmap.llm.promptLanguage` | Language used inside the LLM prompt template     |
-| **Documentation** | (file naming)                     | `README.md` vs `README.zh-cn.md`, etc.           |
+| Layer               | Setting                           | What it controls                                                          |
+| ------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| **UI**              | `agentMindmap.ui.locale`          | Notifications, progress messages, command labels                          |
+| **Mind map output** | `agentMindmap.llm.promptLanguage` | Natural language used for LLM-visible labels and structural mind map text |
+| **Documentation**   | (file naming)                     | `README.md` vs `README.zh-cn.md`, etc.                                    |
 
-UI strings go through `t(key, englishMessage, ...args)` ([`l10n/uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts)). When adding a user-visible string, add the key to **both** `bundle.l10n.json` (English) and `bundle.l10n.zh-cn.json`. Other locales fall back to English when the bundle is empty.
+UI strings go through `t(key, englishMessage, ...args)` or `uiTranslate(key, englishMessage, ...args)` ([`l10n/uiTranslate.ts`](../extension/src/l10n/uiTranslate.ts)). When adding a user-visible string, add the key to the English baseline and every shipped `bundle.l10n.*.json` file. Community reviewers use [`docs/multilingual-checklist/`](../docs/multilingual-checklist/README.md) for human translation QA (`npm run checklist:l10n` regenerates per-locale checklists).
 
-LLM prompts are being migrated to a `TEXTS: Record<PromptLanguage, ...>` pattern — see [`llm/promptOutline.ts`](../extension/src/llm/promptOutline.ts) for the reference implementation. Only active production prompt paths should be migrated; deprecated prompt files should not be wired back into the pipeline.
+Production LLM prompt templates are English. Conversation language is detected from `user_query` events in [`llm/promptLanguage.ts`](../extension/src/llm/promptLanguage.ts), and prompts ask the model to write user-visible fields in that output language. Structural mind map labels come from [`mindmap/outputLanguageLabels.ts`](../extension/src/mindmap/outputLanguageLabels.ts).
 
 ---
 

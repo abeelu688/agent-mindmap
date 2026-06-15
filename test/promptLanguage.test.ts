@@ -10,6 +10,18 @@ describe("output language detection", () => {
       "Japanese"
     );
     expect(__testing.classifyUserQueryLanguage("이 오류를 어떻게 고치나요?")).toBe("Korean");
+    expect(__testing.classifyUserQueryLanguage("Como posso corrigir esse erro?")).toBe(
+      "Portuguese"
+    );
+    expect(__testing.classifyUserQueryLanguage("¿Cómo puedo corregir este error?")).toBe("Spanish");
+    expect(__testing.classifyUserQueryLanguage("Wie kann ich diesen Fehler beheben?")).toBe(
+      "German"
+    );
+    expect(__testing.classifyUserQueryLanguage("Comment corriger cette erreur ?")).toBe("French");
+    expect(__testing.classifyUserQueryLanguage("इस त्रुटि को कैसे ठीक करें?")).toBe("Hindi");
+    expect(__testing.classifyUserQueryLanguage("Bagaimana cara memperbaiki error ini?")).toBe(
+      "Indonesian"
+    );
   });
 
   it("uses user_query votes and ignores assistant/tool text", () => {
@@ -184,5 +196,100 @@ describe("output language detection", () => {
     ].join("\n");
 
     expect(__testing.classifyUserQueryLanguage(mixedHandwritten)).toBe("English");
+  });
+
+  it("detects Portuguese with English technical terms in session voting", () => {
+    const events: ChatEvent[] = [
+      {
+        kind: "user_query",
+        text: "Como posso corrigir esse erro no getUserById handler?",
+        lineIndex: 0,
+      },
+      {
+        kind: "user_query",
+        text: "Também revise o retry middleware e explique por que falha.",
+        lineIndex: 1,
+      },
+    ];
+
+    expect(resolveOutputLanguageForEvents(events)).toBe("Portuguese");
+  });
+
+  it("detects Spanish with English technical terms in session voting", () => {
+    const events: ChatEvent[] = [
+      {
+        kind: "user_query",
+        text: "¿Cómo puedo corregir este error en el auth middleware?",
+        lineIndex: 0,
+      },
+      {
+        kind: "user_query",
+        text: "Ayuda a revisar por qué falla el webhook retry.",
+        lineIndex: 1,
+      },
+    ];
+
+    expect(resolveOutputLanguageForEvents(events)).toBe("Spanish");
+  });
+
+  it("detects German with English technical terms in session voting", () => {
+    const events: ChatEvent[] = [
+      {
+        kind: "user_query",
+        text: "Wie kann ich diesen Fehler im cache refresh beheben?",
+        lineIndex: 0,
+      },
+      {
+        kind: "user_query",
+        text: "Bitte prüfe warum der build step nicht funktioniert.",
+        lineIndex: 1,
+      },
+    ];
+
+    expect(resolveOutputLanguageForEvents(events)).toBe("German");
+  });
+
+  it("detects French with English technical terms in session voting", () => {
+    const events: ChatEvent[] = [
+      {
+        kind: "user_query",
+        text: "Comment corriger cette erreur dans le payment controller ?",
+        lineIndex: 0,
+      },
+      {
+        kind: "user_query",
+        text: "Peut-on aussi vérifier pourquoi le webhook retry échoue ?",
+        lineIndex: 1,
+      },
+    ];
+
+    expect(resolveOutputLanguageForEvents(events)).toBe("French");
+  });
+
+  it("detects Hindi around pasted English logs", () => {
+    const logHeavyQuestion = [
+      "2026-06-14T12:00:00.000Z ERROR com.example.Service failed",
+      "at com.example.Service.handle(Service.java:123:45)",
+      "ऊपर वाली त्रुटि को कैसे ठीक करें?",
+    ].join("\n");
+
+    expect(__testing.classifyUserQueryLanguage(logHeavyQuestion)).toBe("Hindi");
+  });
+
+  it("detects Indonesian with English technical terms in session voting", () => {
+    const events: ChatEvent[] = [
+      {
+        kind: "user_query",
+        text: "Bagaimana cara memperbaiki error ini di session loader?",
+        lineIndex: 0,
+      },
+      {
+        kind: "user_query",
+        text: "Tolong jelaskan kenapa cache refresh tidak berjalan.",
+        lineIndex: 1,
+      },
+    ];
+
+    expect(resolveOutputLanguageForEvents(events)).toBe("Indonesian");
   });
 });

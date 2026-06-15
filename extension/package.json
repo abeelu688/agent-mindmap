@@ -253,10 +253,16 @@
             "en",
             "zh-cn",
             "ja",
-            "ko"
+            "ko",
+            "pt-br",
+            "es",
+            "de",
+            "fr",
+            "hi",
+            "id"
           ],
           "default": "auto",
-          "description": "Language for extension notifications. auto follows Configure Display Language. Locale bundles beyond English/Chinese are community-contributed and fall back to English when missing."
+          "description": "Language for extension notifications. auto follows Configure Display Language. Supports English, Simplified Chinese, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian."
         },
         "agentMindmap.llm.promptLanguage": {
           "type": "string",
@@ -266,7 +272,7 @@
             "zh"
           ],
           "default": "auto",
-          "description": "Legacy override for LLM natural-language output. Production analysis prompts are English; auto detects the primary language of user_query questions, zh forces Chinese output, and en forces English output. Changing this invalidates the SessionRecord cache."
+          "description": "Legacy override for LLM natural-language output. Production analysis prompts are English; auto detects English, Chinese, Japanese, Korean, Brazilian Portuguese, Spanish, German, French, Hindi, and Indonesian user_query questions; zh forces Chinese output, and en forces English output. Changing this invalidates the SessionRecord cache."
         },
         "agentMindmap.ui.direction": {
           "type": "string",
