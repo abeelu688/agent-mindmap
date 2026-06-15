@@ -85,7 +85,7 @@ chore: 升级依赖
 ### L10n / i18n
 
 - UI 字符串：使用 `t(key, englishMessage, ...args)` 或 `uiTranslate(key, englishMessage, ...args)`
-- 新增 key 时，必须**同时**写入 `extension/l10n/bundle.l10n.json`（英文）和 `extension/l10n/bundle.l10n.zh-cn.json`（中文）
+- 新增 key 时，必须写入英文基准以及**所有已发布**的 `extension/l10n/bundle.l10n.*.json`
 - LLM prompt 语言由 `PromptLanguage` 类型控制
 
 ## 架构概览
@@ -121,13 +121,14 @@ chore: 升级依赖
 
 ### 添加一种新的 UI 语言
 
-扩展的 UI 字符串（通知、命令名、安装引导）位于 `extension/l10n/`。添加新语言（例如日文）的步骤：
+扩展的 UI 字符串（通知、命令名、安装引导）位于 `extension/l10n/`。目前随包发布的 UI locale 是 `en`、`zh-cn`、`ja`、`ko`、`pt-br`、`es`、`de`、`fr`、`hi`、`id`。
 
-1. **以英文 bundle 为模板拷一份**。占位文件 `bundle.l10n.ja.json` 和 `bundle.l10n.ko.json` 已经存在：
+添加其他语言时：
+
+1. **以英文 bundle 为模板拷一份**。
 
    ```bash
-   # 用完整 key 集合替换占位内容
-   cat extension/l10n/bundle.l10n.json > extension/l10n/bundle.l10n.ja.json
+   cp extension/l10n/bundle.l10n.json extension/l10n/bundle.l10n.<locale>.json
    ```
 
    然后逐条翻译 value，保持 key 不变。`{0}`、`{1}` 等占位符必须保留在原位置。
@@ -139,33 +140,30 @@ chore: 升级依赖
 
    const BUNDLES: Partial<Record<UiLocale, Record<string, string>>> = {
      "zh-cn": zhL10n as Record<string, string>,
-     ja: jaL10n as Record<string, string>, // ← 新增
+     ja: jaL10n as Record<string, string>,
    };
    ```
 
-3. **更新 locale 枚举**。[`extension/package.json`](extension/package.json) 中的 `agentMindmap.ui.locale.enum` 目前包含已发布语言以及 `ja`/`ko` 占位。任何语言的翻译贡献都欢迎；新增语言时把对应 locale code 加到这里。
+3. **更新 locale 枚举和自动检测**。把 locale 加到 [`extension/package.json`](extension/package.json) 的 `agentMindmap.ui.locale.enum`、`UiLocale`、`readUiLocaleSetting()` 和 `resolveUiLocale()`。
 
 4. **校验 key 一致性**。运行 `npm run check:l10n` —— 确保每个 locale bundle 的 key 集合与英文基准一致。
 
-5. **在 README 中加跨语言链接**。更新 [`README.md`](README.md) 和 [`README.zh-cn.md`](README.zh-cn.md) 顶部的 badge，必要时创建 `README.<locale>.md`。
+5. **人工复核**。使用 [`docs/multilingual-checklist/`](docs/multilingual-checklist/README.md) 中的对照清单；运行 `npm run checklist:l10n` 可重新生成 EN/译文对照。复核完成后更新 [`REVIEW-STATUS.md`](docs/multilingual-checklist/REVIEW-STATUS.md)。
+
+6. **在 README 中加跨语言链接**。更新 [`README.md`](README.md) 和 [`README.zh-cn.md`](README.zh-cn.md) 顶部的 badge，必要时创建 `README.<locale>.md`。
 
 ### 翻译 LLM Prompt
 
-生产路径 LLM prompt 目前仍基本只有中文。英文模板的脚手架已就绪（[`promptOutline.ts`](extension/src/llm/promptOutline.ts) 是参考实现），`agentMindmap.llm.promptLanguage` 设置在 `zh` / `en` 之间切换。
+生产路径 LLM prompt 模板是英文。`agentMindmap.llm.promptLanguage` 是遗留的输出语言覆盖项（`auto` | `en` | `zh`）；`auto` 会从 `user_query` 问题中检测主要语言，并要求 LLM 用该语言写用户可见字段。
 
-添加完整英文（或其他语言）prompt 的流程：
+添加一种新的思维导图输出语言时：
 
-1. **一次只迁移一条生产 prompt 路径**。当前活跃 LLM 路径是会话分析、代码引用描述、合并分析。不要批量翻译已废弃 prompt 文件；每条活跃 prompt 都要在 eval 流水线上验证。
+1. 扩展 [`extension/src/llm/promptLanguage.ts`](extension/src/llm/promptLanguage.ts) 中的 `KnownOutputLanguage` 和评分逻辑。
+2. 在 [`extension/src/mindmap/outputLanguageLabels.ts`](extension/src/mindmap/outputLanguageLabels.ts) 添加结构标签。
+3. 在 [`test/`](test/) 下添加检测和标签测试。
+4. 运行 `npm run test:vitest`。
 
-2. **遵循 [`promptOutline.ts`](extension/src/llm/promptOutline.ts) 的 `TEXTS` 模式**：把每行中文抽进一个 `TEXTS: Record<PromptLanguage, ...>` 对象，再用本地化字符串拼接成 prompt。JSON schema 标记（如 `{"title":...}`）在所有语言下保持一致。
-
-3. **验证 JSON 输出 schema 不变**。添加一个测试，用 fixture transcript 跑新 prompt 并通过 `validateSessionAnalysis()`（或对应 validator）。`zh` 和 `en` 输出必须 schema 一致。
-
-4. **运行 eval 流水线**（`npm run eval`），分别用 `agentMindmap.llm.promptLanguage=zh` 和 `=en` 比较输出质量。**直译往往效果不如原版** —— 必要时本地化措辞。
-
-5. **递增 `PIPELINE_VERSION`**（位于 [`pipelineVersions.ts`](extension/src/pipeline/pipelineVersions.ts)）—— 如果你的改动改变了 JSON 输出形状（纯语言切换通常不需要，但 schema 变更必须）。
-
-> **提示**：LLM prompt 翻译既需要目标语言的母语水平，也需要 AI 产品的使用经验。逐字翻译往往不如原版有效。
+不要为了语言检测添加第三个生产 LLM 阶段；除非 pipeline contract 变更，否则保持确定性检测。
 
 ## 行为准则
 

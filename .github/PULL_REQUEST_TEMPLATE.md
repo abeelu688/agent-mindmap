@@ -30,6 +30,7 @@
 - [ ] Manually verified in Extension Development Host (F5)
 - [ ] `npm run lint` clean (or only existing warnings)
 - [ ] `npm run check:l10n` passes (if l10n bundles changed)
+- [ ] If I polished translations, I updated `docs/multilingual-checklist/REVIEW-STATUS.md` for the locale
 
 ## Screenshots / mind-map snapshots
 
@@ -40,7 +41,7 @@
 - [ ] Branch follows naming convention (`feature/...`, `fix/...`, `i18n/...`)
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 - [ ] If I changed a `prompt*.ts` JSON output schema, I bumped `PIPELINE_VERSION`
-- [ ] If I added a user-visible string, I added the key to **both** `bundle.l10n.json` and `bundle.l10n.zh-cn.json`
+- [ ] If I added a user-visible string, I added the key to `bundle.l10n.json` and every shipped `bundle.l10n.*.json`
 - [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Notes for reviewers
