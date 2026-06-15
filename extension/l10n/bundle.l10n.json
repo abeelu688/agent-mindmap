@@ -40,7 +40,7 @@
   "ui.batch.mode.skipCached.label": "Skip cached sessions",
   "ui.batch.mode.skipCached.desc": "Only analyze transcripts missing or stale in the library",
   "ui.batch.mode.force.label": "Force re-analyze all",
-  "ui.batch.mode.force.desc": "Ignore library cache and call the LLM for every session",
+  "ui.batch.mode.force.desc": "Clear this project's library, merge snapshots, and ontology cache, then re-run the LLM for every session",
   "ui.batch.pickMode.placeholder": "Batch analyze agent sessions in current project",
   "ui.batch.progress.scanSessions": "Scanning agent sessions for current project…",
   "ui.batch.emptyOnDisk": "Agent Mind Map: No agent transcripts found on disk for current project ({0}).",

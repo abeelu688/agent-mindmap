@@ -109,8 +109,8 @@ function enhancedOntologyCacheKey(
   const stageVersions = [
     SESSION_ANALYSIS_PROMPT_VERSION,
     MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
-  ].join(":");
-  return `${base}:${stageVersions}`;
+  ].join("-");
+  return `${base}-v${stageVersions}`;
 }
 
 /** Same cache key formula used by runMergePipeline; exported for batchMergeCache short-circuit. */

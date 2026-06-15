@@ -4,18 +4,14 @@ import { getStoreDir } from "../paths";
 import { showCliInstallGuide } from "../llm/cliInstallGuide";
 import { uiTranslate, t } from "../l10n/uiTranslate";
 import { ensureModelSelected, readLlmOptions, resolveLlmProviderId } from "../llmOptions";
-import {
-  ensureStore,
-  readRecord,
-} from "../store/sessionStore";
-import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
+import { ensureStore, readRecord } from "../store/sessionStore";
 import { runFinalRootRefresh } from "../pipeline/snapshotHierarchy";
-import { deleteSnapshotHierarchy } from "../store/mergeSnapshot";
+import { clearProjectAnalysisCache } from "../store/clearProjectAnalysisCache";
+import { flushPendingCodeRefRefreshForProject, purgeCodeRefQueueForProject } from "../codeRefQueue";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import { getProvider } from "../llm";
 import { agentLog } from "../log";
 import { notifyWarning, notifyInfo, notifyError } from "../notify";
-import type { SessionRecord } from "../store/storeTypes";
 import {
   runProjectSessionBatches,
   type AnalyzeProjectBatchInfo,
@@ -39,7 +35,10 @@ import {
   getLastBatchStatus,
   setLastBatchStatus,
   getPendingBatchNo,
+  getPendingMindMap,
 } from "../batch/batchStatus";
+import type { SessionRecord } from "../store/storeTypes";
+import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
 
 function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
   const newlyAnalyzed = result.analyzed - result.skippedFresh;
@@ -55,10 +54,7 @@ function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
       .slice(0, 3)
       .map((f) => f.label)
       .join("、");
-    const more =
-      result.failures.length > 3
-        ? ` 等 ${result.failures.length} 条`
-        : "";
+    const more = result.failures.length > 3 ? ` 等 ${result.failures.length} 条` : "";
     msg = t(
       "ui.batch.summary.withFailures",
       "Agent Mind Map: {0} session(s) total, {1} newly analyzed, {2} cached, {3} failed ({4}{5}).",
@@ -82,10 +78,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
   const mode = await vscode.window.showQuickPick(
     [
       {
-        label: t(
-          "ui.batch.mode.skipCached.label",
-          "Skip cached sessions"
-        ),
+        label: t("ui.batch.mode.skipCached.label", "Skip cached sessions"),
         description: t(
           "ui.batch.mode.skipCached.desc",
           "Only analyze transcripts missing or stale in the library"
@@ -96,12 +89,17 @@ export async function commandAnalyzeAndMergeCurrentProject(
         label: t("ui.batch.mode.force.label", "Force re-analyze all"),
         description: t(
           "ui.batch.mode.force.desc",
-          "Ignore library cache and call the LLM for every session"
+          "Clear this project's library, merge snapshots, and ontology cache, then re-run the LLM for every session"
         ),
         forceRefresh: true,
       },
     ],
-    { placeHolder: t("ui.batch.pickMode.placeholder", "Batch analyze agent sessions in current project") }
+    {
+      placeHolder: t(
+        "ui.batch.pickMode.placeholder",
+        "Batch analyze agent sessions in current project"
+      ),
+    }
   );
   if (!mode) {
     return;
@@ -111,10 +109,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
   const slug = getWorkspaceSlug(host);
   if (!slug) {
     notifyWarning(
-      t(
-        "ui.warning.openWorkspaceFolderFirst",
-        "Agent Mind Map: Open a workspace folder first."
-      )
+      t("ui.warning.openWorkspaceFolderFirst", "Agent Mind Map: Open a workspace folder first.")
     );
     return;
   }
@@ -166,7 +161,8 @@ export async function commandAnalyzeAndMergeCurrentProject(
         const storeDir = getStoreDir();
         await ensureStore(storeDir);
         if (mode.forceRefresh) {
-          await deleteSnapshotHierarchy(storeDir, slug);
+          purgeCodeRefQueueForProject(slug);
+          await clearProjectAnalysisCache(storeDir, slug);
         }
         const projectRecordsById = new Map<string, SessionRecord>();
 
@@ -195,8 +191,8 @@ export async function commandAnalyzeAndMergeCurrentProject(
           sessionCount: sessions.length,
           libraryRecordCount: projectRecordsById.size,
           panelHasMindMap: Boolean(panel.getMindMapData()),
+          forceRefresh: mode.forceRefresh,
         });
-
         const llmOpts = await readLlmOptions(context);
         const provider = getProvider(llmOpts);
         const conceptLlm = toConceptMergeLlmOpts(llmOpts, provider.id);
@@ -211,8 +207,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
         const mergeMode =
           (vscode.workspace
             .getConfiguration("agentMindmap")
-            .get<string>("library.mergeMode", "delta") as ProjectMergeMode) ||
-          "delta";
+            .get<string>("library.mergeMode", "delta") as ProjectMergeMode) || "delta";
         const mergeFullReconcileEvery =
           vscode.workspace
             .getConfiguration("agentMindmap")
@@ -220,227 +215,211 @@ export async function commandAnalyzeAndMergeCurrentProject(
         let batchOntologyFailed = false;
 
         const deps: LoadDeps = { context, signal, progress };
-        const result = await runProjectSessionBatches(
-          sessions,
-          slug,
-          host,
-          deps,
-          {
-            forceRefresh: mode.forceRefresh,
-            skipAutoMerge: true,
-            batchSize: 5,
-            onBatchDone: async (info: AnalyzeProjectBatchInfo) => {
+        const result = await runProjectSessionBatches(sessions, slug, host, deps, {
+          forceRefresh: mode.forceRefresh,
+          skipAutoMerge: true,
+          batchSize: 5,
+          onBatchDone: async (info: AnalyzeProjectBatchInfo) => {
+            if (signal.aborted) {
+              return;
+            }
+
+            const cached = info.skippedFresh;
+            agentLog.info(
+              `[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} fresh=${info.freshlyAnalyzedSessionIds.length} batchSessionIds=${info.batchSessionIds.join(",")} freshSessionIds=${info.freshlyAnalyzedSessionIds.join(",")}`
+            );
+
+            // Refresh in-memory record cache for every session in this
+            // batch (even cache hits — we still need their latest record
+            // for the "all records" set passed to merge / final refresh).
+            for (const sessionId of info.batchSessionIds) {
               if (signal.aborted) {
                 return;
               }
-
-              const cached = info.skippedFresh;
-              agentLog.info(`[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} fresh=${info.freshlyAnalyzedSessionIds.length} batchSessionIds=${info.batchSessionIds.join(",")} freshSessionIds=${info.freshlyAnalyzedSessionIds.join(",")}`);
-
-              // Refresh in-memory record cache for every session in this
-              // batch (even cache hits — we still need their latest record
-              // for the "all records" set passed to merge / final refresh).
-              for (const sessionId of info.batchSessionIds) {
-                if (signal.aborted) {
-                  return;
-                }
-                const rec = await readRecord(storeDir, slug, sessionId);
-                if (!rec) {
-                  continue;
-                }
-                const sanitized = await sanitizeSessionRecord(rec);
-                projectRecordsById.set(sessionId, sanitized);
+              const rec = await readRecord(storeDir, slug, sessionId);
+              if (!rec) {
+                continue;
               }
-              if (signal.aborted) {
-                return;
-              }
+              const sanitized = await sanitizeSessionRecord(rec);
+              projectRecordsById.set(sessionId, sanitized);
+            }
+            if (signal.aborted) {
+              return;
+            }
 
-              // Pure-cache batch with an existing snapshot hierarchy: skip
-              // merge entirely. The on-disk concept-trie.json is still valid
-              // because nothing in the session set changed.
-              const noFreshSessions =
-                info.freshlyAnalyzedSessionIds.length === 0;
-              const batchRecords: SessionRecord[] = [];
-              for (const sessionId of info.batchSessionIds) {
-                const rec = projectRecordsById.get(sessionId);
-                if (rec) {
-                  batchRecords.push(rec);
-                }
+            // Pure-cache batch with an existing snapshot hierarchy: skip
+            // merge entirely. The on-disk concept-trie.json is still valid
+            // because nothing in the session set changed.
+            const noFreshSessions = info.freshlyAnalyzedSessionIds.length === 0;
+            const batchRecords: SessionRecord[] = [];
+            for (const sessionId of info.batchSessionIds) {
+              const rec = projectRecordsById.get(sessionId);
+              if (rec) {
+                batchRecords.push(rec);
               }
+            }
 
-              let conceptMerge: import("../store/storeTypes").MergeRecord | undefined;
-              try {
-                if (mode.forceRefresh) {
-                  // Force mode: keep the original full-batch rebuild path so
-                  // every session's leaf gets recomputed from scratch.
-                  conceptMerge = await buildProjectConceptMergeForBatch(
-                    storeDir,
-                    [...projectRecordsById.values()],
-                    batchRecords,
-                    {
-                      projectSlug: slug,
-                      conceptLlm,
-                      provider,
-                      signal,
-                      progress,
-                      batchRefineOntology,
-                      batchNo: info.batchNo,
-                      processed: info.processed,
-                      total: info.total,
-                      forceReattach: true,
-                      mergeMode,
-                      mergeFullReconcileEvery,
-                      forceRefresh: mode.forceRefresh,
-                    }
-                  );
-                } else if (noFreshSessions) {
-                  // All cache hits → no LLM merge needed. Read the existing
-                  // concept-trie merge record from disk so the panel stays
-                  // up to date when the user opens the panel mid-run.
-                  agentLog.info(
-                    `[onBatchDone] batch ${info.batchNo} all cache hits, skipping merge`
-                  );
-                  progress.report(
-                    t(
-                      "ui.batch.progress.cacheHitNoMerge",
-                      "Batch {0}/{1}: all sessions cached, skipping merge…",
-                      info.processed,
-                      info.total
-                    )
-                  );
-                  // Lazy-load existing merge for first cache-only batch only.
-                  if (!panel.getMindMapData()) {
-                    const { readMergeRecord, conceptTrieMergePath } =
-                      await import("../store/sessionStore");
-                    const existingMerge = await readMergeRecord(
-                      conceptTrieMergePath(storeDir)
-                    );
-                    if (existingMerge) {
-                      conceptMerge = existingMerge;
-                    }
+            let conceptMerge: import("../store/storeTypes").MergeRecord | undefined;
+            try {
+              if (mode.forceRefresh) {
+                // Force mode: keep the original full-batch rebuild path so
+                // every session's leaf gets recomputed from scratch.
+                conceptMerge = await buildProjectConceptMergeForBatch(
+                  storeDir,
+                  [...projectRecordsById.values()],
+                  batchRecords,
+                  {
+                    projectSlug: slug,
+                    conceptLlm,
+                    provider,
+                    signal,
+                    progress,
+                    batchRefineOntology,
+                    batchNo: info.batchNo,
+                    processed: info.processed,
+                    total: info.total,
+                    forceReattach: true,
+                    mergeMode,
+                    mergeFullReconcileEvery,
+                    forceRefresh: mode.forceRefresh,
                   }
-                } else {
-                  // Incremental: refresh only the snapshot leaves whose
-                  // sessions actually changed, then cascade up.
-                  progress.report(
-                    t(
-                      "ui.batch.progress.incrementalMerge",
-                      "Updating snapshots for {0} changed session(s)…",
-                      info.freshlyAnalyzedSessionIds.length
-                    )
-                  );
-                  conceptMerge = await refreshSnapshotsForFreshSessions(
-                    storeDir,
-                    [...projectRecordsById.values()],
-                    info.freshlyAnalyzedSessionIds,
-                    {
-                      projectSlug: slug,
-                      conceptLlm,
-                      provider,
-                      signal,
-                      progress,
-                      llmTimeoutMs: conceptLlm.timeoutMs,
-                    }
-                  );
-                }
-              } catch (err) {
-                if (signal.aborted) {
-                  return;
-                }
-                batchOntologyFailed = true;
-                const detail =
-                  err instanceof Error ? err.message : String(err);
-                agentLog.error(
-                  `Batch ${info.batchNo} concept merge failed`,
-                  err
                 );
-                notifyError(
+              } else if (noFreshSessions) {
+                // All cache hits → no LLM merge needed. Read the existing
+                // concept-trie merge record from disk so the panel stays
+                // up to date when the user opens the panel mid-run.
+                agentLog.info(`[onBatchDone] batch ${info.batchNo} all cache hits, skipping merge`);
+                progress.report(
                   t(
-                    "ui.batch.mergeFailed",
-                    "Agent Mind Map: Batch {0} concept merge failed: {1}",
-                    info.batchNo,
-                    detail
-                  ),
-                  err
+                    "ui.batch.progress.cacheHitNoMerge",
+                    "Batch {0}/{1}: all sessions cached, skipping merge…",
+                    info.processed,
+                    info.total
+                  )
                 );
-                return;
-              }
-
-              // No new merge produced (e.g. cache-only batch with panel
-              // already showing data) → still update batch status.
-              if (!conceptMerge) {
-                setLastBatchStatus({
-                  total: info.total,
-                  processed: info.processed,
-                  analyzed: info.analyzed,
-                  cached,
-                  failed: info.failed,
-                  batchNo: info.batchNo,
-                  running: true,
-                  ...(autoApplyUpdates
-                    ? {}
-                    : { pendingUpdateBatchNo: getPendingBatchNo() }),
-                });
-                panel.setBatchStatus(getLastBatchStatus()!);
-                return;
-              }
-
-              if (autoApplyUpdates) {
-                clearPendingMerge();
-                panel.setMindMapData(conceptMerge.mindMap);
-                setLastBatchStatus({
-                  total: info.total,
-                  processed: info.processed,
-                  analyzed: info.analyzed,
-                  cached,
-                  failed: info.failed,
-                  batchNo: info.batchNo,
-                  running: true,
-                });
-              } else {
-                setPendingMindMap(conceptMerge.mindMap, info.batchNo);
-                setLastBatchStatus({
-                  total: info.total,
-                  processed: info.processed,
-                  analyzed: info.analyzed,
-                  cached,
-                  failed: info.failed,
-                  batchNo: info.batchNo,
-                  running: true,
-                  pendingUpdateBatchNo: getPendingBatchNo(),
-                });
-              }
-              panel.setBatchStatus(getLastBatchStatus()!);
-
-              if (!autoApplyUpdates) {
+                // Lazy-load existing merge for first cache-only batch only.
                 if (!panel.getMindMapData()) {
-                  applyPendingMergeToPanel(panel);
-                } else {
-                  notifyInfo(
-                    t(
-                      "ui.batch.pendingRefresh",
-                      "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
-                      info.batchNo,
-                      info.processed,
-                      info.total
-                    )
-                  );
+                  const { readMergeRecord, conceptTrieMergePath } =
+                    await import("../store/sessionStore");
+                  const existingMerge = await readMergeRecord(conceptTrieMergePath(storeDir));
+                  if (existingMerge) {
+                    conceptMerge = existingMerge;
+                  }
                 }
+              } else {
+                // Incremental: refresh only the snapshot leaves whose
+                // sessions actually changed, then cascade up.
+                progress.report(
+                  t(
+                    "ui.batch.progress.incrementalMerge",
+                    "Updating snapshots for {0} changed session(s)…",
+                    info.freshlyAnalyzedSessionIds.length
+                  )
+                );
+                conceptMerge = await refreshSnapshotsForFreshSessions(
+                  storeDir,
+                  [...projectRecordsById.values()],
+                  info.freshlyAnalyzedSessionIds,
+                  {
+                    projectSlug: slug,
+                    conceptLlm,
+                    provider,
+                    signal,
+                    progress,
+                    llmTimeoutMs: conceptLlm.timeoutMs,
+                  }
+                );
               }
-            },
-          }
-        );
+            } catch (err) {
+              if (signal.aborted) {
+                return;
+              }
+              batchOntologyFailed = true;
+              const detail = err instanceof Error ? err.message : String(err);
+              agentLog.error(`Batch ${info.batchNo} concept merge failed`, err);
+              notifyError(
+                t(
+                  "ui.batch.mergeFailed",
+                  "Agent Mind Map: Batch {0} concept merge failed: {1}",
+                  info.batchNo,
+                  detail
+                ),
+                err
+              );
+              return;
+            }
+
+            // No new merge produced (e.g. cache-only batch with panel
+            // already showing data) → still update batch status.
+            if (!conceptMerge) {
+              setLastBatchStatus({
+                total: info.total,
+                processed: info.processed,
+                analyzed: info.analyzed,
+                cached,
+                failed: info.failed,
+                batchNo: info.batchNo,
+                running: true,
+                ...(autoApplyUpdates ? {} : { pendingUpdateBatchNo: getPendingBatchNo() }),
+              });
+              panel.setBatchStatus(getLastBatchStatus()!);
+              return;
+            }
+
+            if (autoApplyUpdates) {
+              clearPendingMerge();
+              panel.setMindMapData(conceptMerge.mindMap);
+              setLastBatchStatus({
+                total: info.total,
+                processed: info.processed,
+                analyzed: info.analyzed,
+                cached,
+                failed: info.failed,
+                batchNo: info.batchNo,
+                running: true,
+              });
+            } else {
+              setPendingMindMap(conceptMerge.mindMap, info.batchNo);
+              setLastBatchStatus({
+                total: info.total,
+                processed: info.processed,
+                analyzed: info.analyzed,
+                cached,
+                failed: info.failed,
+                batchNo: info.batchNo,
+                running: true,
+                pendingUpdateBatchNo: getPendingBatchNo(),
+              });
+            }
+            panel.setBatchStatus(getLastBatchStatus()!);
+            await flushPendingCodeRefRefreshForProject(slug);
+
+            if (!autoApplyUpdates) {
+              if (!panel.getMindMapData()) {
+                applyPendingMergeToPanel(panel);
+              } else {
+                notifyInfo(
+                  t(
+                    "ui.batch.pendingRefresh",
+                    "Agent Mind Map: Batch {0} merge is ready ({1}/{2} sessions). Click Refresh in the mind map to update.",
+                    info.batchNo,
+                    info.processed,
+                    info.total
+                  )
+                );
+              }
+            }
+          },
+        });
 
         if (projectRecordsById.size === 0) {
           const allNewTurnFallbacks =
             result.turnFallbacks > 0 &&
             result.turnFallbacks >= result.analyzed - result.skippedFresh;
           const allCliMissing =
-            result.cliMissingCount > 0 &&
-            result.cliMissingCount >= result.turnFallbacks;
+            result.cliMissingCount > 0 && result.cliMissingCount >= result.turnFallbacks;
           const allBadJson =
-            result.jsonParseFailures > 0 &&
-            result.jsonParseFailures >= result.turnFallbacks;
+            result.jsonParseFailures > 0 && result.jsonParseFailures >= result.turnFallbacks;
           if (allNewTurnFallbacks && allCliMissing) {
             await showCliInstallGuide(host.id, { modal: true });
           } else if (allNewTurnFallbacks && allBadJson) {
@@ -465,12 +444,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
                 slug
               ) +
                 (result.failed > 0
-                  ? " " +
-                    t(
-                      "ui.batch.failedSuffix",
-                      "{0} session(s) failed.",
-                      result.failed
-                    )
+                  ? " " + t("ui.batch.failedSuffix", "{0} session(s) failed.", result.failed)
                   : "")
             );
           }
@@ -489,12 +463,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
           !(result.skippedFresh === result.analyzed && result.failed === 0 && !mode.forceRefresh)
         ) {
           const batchRecords = [...projectRecordsById.values()];
-          progress.report(
-            t(
-              "ui.batch.progress.finalRefine",
-              "Final concept synonym refine…"
-            )
-          );
+          progress.report(t("ui.batch.progress.finalRefine", "Final concept synonym refine…"));
           try {
             const finalMerge = await runFinalRootRefresh(
               {
@@ -514,6 +483,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
             } else {
               setPendingMindMap(finalMerge.mindMap, Math.max(1, Math.ceil(result.total / 5)));
             }
+            await flushPendingCodeRefRefreshForProject(slug);
           } catch (err) {
             batchOntologyFailed = true;
             const detail = err instanceof Error ? err.message : String(err);
@@ -554,11 +524,10 @@ export async function commandAnalyzeAndMergeCurrentProject(
           failed: result.failed,
           batchNo: Math.max(1, Math.ceil(result.total / 5)),
           running: false,
-          ...(autoApplyUpdates
-            ? {}
-            : { pendingUpdateBatchNo: getPendingBatchNo() }),
+          ...(autoApplyUpdates ? {} : { pendingUpdateBatchNo: getPendingBatchNo() }),
         });
         panel.setBatchStatus(getLastBatchStatus()!);
+        await flushPendingCodeRefRefreshForProject(slug);
 
         return undefined;
       },
