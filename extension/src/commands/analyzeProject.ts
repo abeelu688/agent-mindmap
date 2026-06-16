@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "../host";
+import { refreshMcpIndexForProject } from "../mcp/mcpConfig";
 import { getStoreDir } from "../paths";
 import { showCliInstallGuide } from "../llm/cliInstallGuide";
 import { uiTranslate, t } from "../l10n/uiTranslate";
@@ -528,6 +529,13 @@ export async function commandAnalyzeAndMergeCurrentProject(
         });
         panel.setBatchStatus(getLastBatchStatus()!);
         await flushPendingCodeRefRefreshForProject(slug);
+
+        const autoRefreshMcp = vscode.workspace
+          .getConfiguration("agentMindmap")
+          .get<boolean>("mcp.autoRefreshOnAnalyze", false);
+        if (autoRefreshMcp && projectRecordsById.size > 0) {
+          await refreshMcpIndexForProject(slug);
+        }
 
         return undefined;
       },

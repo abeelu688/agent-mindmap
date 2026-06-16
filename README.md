@@ -42,6 +42,8 @@ The extension runs the matching **headless CLI** as a subprocess, so **no separa
 | **Agent Mind Map: Open Latest Session**                    | Load the most recent transcript and show a single-session mind map                                |
 | **Agent Mind Map: Choose Session…**                        | Pick a transcript by title + time                                                                 |
 | **Agent Mind Map: Analyze All Sessions (Current Project)** | Scan every transcript, run per-session LLM analysis, then build and open the **Concept Mind Map** |
+| **Agent Mind Map: Install MCP Server (Cursor & Claude Code)** | Write `.cursor/mcp.json` and `.mcp.json` so Cursor Agent and Claude Code can query analyzed project history via MCP |
+| **Agent Mind Map: Sync AI Context (Current Project)**      | Refresh the MCP search index for the current workspace after new analysis                         |
 
 Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text.
 
@@ -57,6 +59,50 @@ Right-click the empty canvas → **Download mind map & transcripts…**. The exp
 - Pre-rendered `transcripts/*.html` (and `*.md` for editors)
 
 No local HTTP server required — just open `index.html` in a browser. Clicking nodes opens the matching transcript at the correct anchor.
+
+## MCP: Feed analyzed history back to Cursor / Claude
+
+After you analyze sessions, Agent Mind Map stores structured project memory under `~/.agent-mindmap/` (`SessionRecord`, concept trie, snapshot hierarchy). The bundled **MCP server** exposes that library to AI agents on demand — so new chats can query prior decisions without stuffing full transcripts into context.
+
+### Setup
+
+1. Run **Analyze All Sessions (Current Project)** at least once.
+2. Run **Agent Mind Map: Install MCP Server (Cursor & Claude Code)** — writes `.cursor/mcp.json` (Cursor) and `.mcp.json` (Claude Code) in the workspace.
+3. Restart Cursor or reload MCP servers; in Claude Code run `/mcp` or restart the session.
+
+Optional: enable **Agent Mind Map: Sync AI Context (Current Project)** after analysis, or turn on `agentMindmap.mcp.autoRefreshOnAnalyze` to refresh the MCP search index automatically when batch analyze completes.
+
+### MCP tools
+
+| Tool | Purpose |
+| ---- | ------- |
+| `list_projects` | List analyzed projects with session counts |
+| `get_project_briefing` | Project overview: concept map top level + recent sessions |
+| `search_project_history` | Keyword search across outlines and concept evidence |
+| `get_concept_detail` | Deep dive on one concept node |
+| `get_session_outline` | Structured markdown outline for one session |
+
+Manual config (if you prefer editing config files yourself):
+
+**Cursor** — `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-mindmap": {
+      "command": "node",
+      "args": ["<path-to-extension>/mcp-server/index.js"],
+      "env": {
+        "AGENT_MINDMAP_STORE_DIR": "~/.agent-mindmap"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** — `.mcp.json` at the project root (same `mcpServers` object as above).
+
+Build the bundled server with `npm run build:mcp` (also runs as part of `npm run build`).
 
 ## Development
 

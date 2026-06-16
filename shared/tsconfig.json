@@ -5,16 +5,12 @@
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": "src",
+    "declaration": true,
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "paths": {
-      "@agent-mindmap/shared": ["../shared/src/index.ts"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*"]
 }

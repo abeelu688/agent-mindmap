@@ -1,0 +1,116 @@
+import { describe, expect, it } from "vitest";
+import { bumpMcpProjectRevision, readMcpIndex } from "../shared/src/mcpIndex";
+import {
+  renderConceptDetail,
+  renderProjectBriefing,
+  renderSearchResults,
+  renderSessionOutlineMarkdown,
+} from "../shared/src/markdownRender";
+import { workspaceToSlug } from "../shared/src/paths";
+import { searchProjectRecords } from "../shared/src/searchIndex";
+import type { ConceptContextForMerge, SessionRecord } from "../shared/src/storeTypes";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+
+function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
+  return {
+    schemaVersion: 1,
+    meta: {
+      sessionId: "sess-1",
+      projectSlug: "home-example-proj",
+      projectPath: "/home/example/proj",
+      transcriptPath: "/tmp/sess-1.jsonl",
+      transcriptMtimeMs: 1,
+      analyzedAt: 1000,
+      llm: { provider: "cursor-cli" },
+      promptParams: { maxTopics: 8, maxItemsPerTopic: 6 },
+      sessionLabel: "Fix auth bug",
+      ...overrides,
+    },
+    outline: {
+      title: "Authentication fix",
+      summary: "Investigated JWT refresh failures in login flow.",
+      outline: [
+        {
+          title: "Token refresh",
+          summary: "Refresh endpoint returned 401 when clock skew exceeded tolerance.",
+          details: [{ text: "Adjusted leeway in verify options." }],
+        },
+      ],
+    },
+    conceptContexts: [
+      {
+        key: "auth",
+        label: "Authentication",
+        domainKeys: ["backend"],
+        parentKeys: [],
+        childKeys: ["jwt"],
+        evidence: ["Refresh endpoint returned 401 under clock skew."],
+        sessionId: "sess-1",
+        projectSlug: "home-example-proj",
+      },
+    ],
+  };
+}
+
+describe("workspaceToSlug (shared)", () => {
+  it("encodes unix absolute paths", () => {
+    expect(workspaceToSlug("/home/example/cursor/airecorder")).toBe(
+      "home-example-cursor-airecorder"
+    );
+  });
+});
+
+describe("searchProjectRecords", () => {
+  it("matches concept evidence and outline text", () => {
+    const hits = searchProjectRecords([sampleRecord()], "clock skew", 5);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].sessionId).toBe("sess-1");
+  });
+});
+
+describe("markdown renderers", () => {
+  it("renders session outline with sessionId reference", () => {
+    const md = renderSessionOutlineMarkdown(sampleRecord());
+    expect(md).toContain("sess-1");
+    expect(md).toContain("Authentication fix");
+  });
+
+  it("renders project briefing for recent sessions", () => {
+    const md = renderProjectBriefing({
+      projectSlug: "home-example-proj",
+      records: [sampleRecord()],
+    });
+    expect(md).toContain("home-example-proj");
+    expect(md).toContain("sess-1");
+  });
+
+  it("renders concept detail with evidence citations", () => {
+    const contexts: ConceptContextForMerge[] = sampleRecord().conceptContexts ?? [];
+    const md = renderConceptDetail("auth", contexts, [sampleRecord()]);
+    expect(md).toContain("Authentication");
+    expect(md).toContain("[sess-1]");
+  });
+
+  it("renders empty search message", () => {
+    const md = renderSearchResults("missing-term", [], 5);
+    expect(md).toContain("missing-term");
+  });
+});
+
+describe("mcp index revision", () => {
+  it("bumps project revision on refresh", async () => {
+    const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-mcp-"));
+    try {
+      const first = await bumpMcpProjectRevision(storeDir, "proj-a", 3);
+      expect(first.projects["proj-a"].revision).toBe(1);
+      const second = await bumpMcpProjectRevision(storeDir, "proj-a", 4);
+      expect(second.projects["proj-a"].revision).toBe(2);
+      const loaded = await readMcpIndex(storeDir);
+      expect(loaded.projects["proj-a"].recordCount).toBe(4);
+    } finally {
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
+  });
+});

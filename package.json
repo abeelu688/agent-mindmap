@@ -6,17 +6,21 @@
   "scripts": {
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
-    "build": "npm run version:sync && npm run build:webview && npm run build:extension",
+    "build": "npm run version:sync && npm run build:shared && npm run build:mcp && npm run build:webview && npm run build:extension",
+    "build:shared": "npm run build --prefix shared",
+    "build:mcp": "node scripts/bundle-mcp-server.mjs",
     "build:extension": "npm run build --prefix extension",
     "build:webview": "npm run build --prefix webview",
     "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
     "test": "npm run build --prefix extension && npm run test --prefix extension",
     "test:vitest": "vitest run",
-    "lint": "eslint \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
-    "lint:fix": "eslint --fix \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
+    "test:mcp": "vitest run test/mcpShared.test.ts test/mcpInstallConfig.test.ts test/workspaceToSlug.test.ts",
+    "lint": "eslint \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"shared/src/**/*.ts\" \"mcp-server/src/**/*.ts\" \"test/**/*.ts\"",
+    "lint:fix": "eslint --fix \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"shared/src/**/*.ts\" \"mcp-server/src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\" \"*.md\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\"",
-    "typecheck": "npm run typecheck:extension && npm run typecheck:webview",
+    "typecheck": "npm run typecheck:shared && npm run typecheck:extension && npm run typecheck:webview",
+    "typecheck:shared": "tsc --noEmit --project shared/tsconfig.json",
     "typecheck:extension": "tsc --noEmit --project extension/tsconfig.json",
     "typecheck:webview": "tsc --noEmit --project webview/tsconfig.json",
     "check:concept-nodes": "node scripts/check-hardcoded-concept-nodes.mjs",
@@ -42,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "eslint": "9.39.4",
     "eslint-config-prettier": "9.1.2",
     "eslint-import-resolver-typescript": "3.10.1",
@@ -51,6 +56,7 @@
     "prettier": "3.8.4",
     "typescript": "^5.4.5",
     "typescript-eslint": "8.61.0",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "zod": "^3.24.2"
   }
 }

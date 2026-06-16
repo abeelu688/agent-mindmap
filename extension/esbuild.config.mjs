@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 const watch = process.argv.includes("--watch");
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(HERE, "..");
 const TRANSCRIPT_MD_OUT = path.join(HERE, "media", "transcript-markdown.js");
 
 const extensionBuild = {
@@ -18,6 +19,9 @@ const extensionBuild = {
   target: "node18",
   sourcemap: true,
   logLevel: "info",
+  alias: {
+    "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
+  },
 };
 
 const transcriptMarkdownBuild = {

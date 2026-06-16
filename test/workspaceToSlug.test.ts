@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { slugToWorkspacePath, workspaceToSlug } from "../extension/src/paths";
+import { slugToWorkspacePath, workspaceToSlug } from "../shared/src/paths";
 
 describe("workspaceToSlug", () => {
   afterEach(() => {
