@@ -6,12 +6,14 @@ import {
   listRecordsForProject,
   McpSearchIndexCache,
   projectRevision,
+  projectSessionsLatestMtimeMs,
   readConceptTrieMerge,
   readMcpIndex,
   readRecord,
   renderConceptDetail,
   renderProjectBriefing,
   renderProjectList,
+  renderProjectSessionsList,
   renderSearchResults,
   renderSessionOutlineMarkdown,
   resolveProjectSlug,
@@ -23,6 +25,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
+declare const __MCP_SERVER_VERSION__: string;
+const SERVER_VERSION =
+  typeof __MCP_SERVER_VERSION__ !== "undefined" ? __MCP_SERVER_VERSION__ : "0.0.0-dev";
+
 const storeDir = resolveStoreDir();
 const indexCache = new McpSearchIndexCache();
 
@@ -30,13 +36,15 @@ async function ensureProjectIndex(projectSlug: string): Promise<ProjectSearchInd
   const cached = indexCache.get(projectSlug);
   const mcpIndex = await readMcpIndex(storeDir);
   const revision = projectRevision(mcpIndex, projectSlug);
-  if (cached && cached.revision === revision) {
+  const latestMtime = await projectSessionsLatestMtimeMs(storeDir, projectSlug);
+  if (cached && cached.revision === revision && cached.sourceMtimeMs >= latestMtime) {
     return cached;
   }
   const records = await listRecordsForProject(storeDir, projectSlug);
   const built: ProjectSearchIndex = {
     projectSlug,
     revision,
+    sourceMtimeMs: latestMtime,
     records,
     builtAt: Date.now(),
   };
@@ -63,10 +71,14 @@ function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
+function errorResult(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true };
+}
+
 async function main(): Promise<void> {
   const server = new McpServer({
     name: "agent-mindmap",
-    version: "0.2.3",
+    version: SERVER_VERSION,
   });
 
   server.tool("list_projects", {}, async () => {
@@ -85,14 +97,14 @@ async function main(): Promise<void> {
     async ({ projectPath, projectSlug, recentLimit, conceptLimit }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
-        return textResult(
-          "Error: provide projectPath or projectSlug, and ensure the project has been analyzed in Agent Mind Map."
+        return errorResult(
+          "provide projectPath or projectSlug, and ensure the project has been analyzed in Agent Mind Map."
         );
       }
       const index = await ensureProjectIndex(slug);
       if (!index.records.length) {
-        return textResult(
-          `Error: no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`
+        return errorResult(
+          `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`
         );
       }
       const conceptTrie = await readConceptTrieMerge(storeDir);
@@ -112,6 +124,32 @@ async function main(): Promise<void> {
   );
 
   server.tool(
+    "list_project_sessions",
+    {
+      projectPath: z.string().optional(),
+      projectSlug: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      offset: z.number().int().min(0).optional(),
+    },
+    async ({ projectPath, projectSlug, limit = 20, offset = 0 }) => {
+      const slug = await resolveSlug({ projectPath, projectSlug });
+      if (!slug) {
+        return errorResult("provide projectPath or projectSlug.");
+      }
+      const index = await ensureProjectIndex(slug);
+      const sorted = [...index.records].sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+      const page = sorted.slice(offset, offset + limit);
+      return textResult(
+        renderProjectSessionsList(slug, page, {
+          limit,
+          offset,
+          total: sorted.length,
+        })
+      );
+    }
+  );
+
+  server.tool(
     "search_project_history",
     {
       query: z.string().min(1),
@@ -122,7 +160,7 @@ async function main(): Promise<void> {
     async ({ query, projectPath, projectSlug, limit = 10 }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
-        return textResult("Error: provide projectPath or projectSlug.");
+        return errorResult("provide projectPath or projectSlug.");
       }
       const index = await ensureProjectIndex(slug);
       const hits = searchProjectRecords(index.records, query, limit);
@@ -140,7 +178,7 @@ async function main(): Promise<void> {
     async ({ conceptKey, projectPath, projectSlug }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
-        return textResult("Error: provide projectPath or projectSlug.");
+        return errorResult("provide projectPath or projectSlug.");
       }
       const index = await ensureProjectIndex(slug);
       const contexts = collectConceptContexts(index.records);
@@ -158,11 +196,11 @@ async function main(): Promise<void> {
     async ({ sessionId, projectPath, projectSlug }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
-        return textResult("Error: provide projectPath or projectSlug.");
+        return errorResult("provide projectPath or projectSlug.");
       }
       const record = await readRecord(storeDir, slug, sessionId);
       if (!record) {
-        return textResult(`Error: session \`${sessionId}\` not found for project \`${slug}\`.`);
+        return errorResult(`session \`${sessionId}\` not found for project \`${slug}\`.`);
       }
       return textResult(renderSessionOutlineMarkdown(record));
     }

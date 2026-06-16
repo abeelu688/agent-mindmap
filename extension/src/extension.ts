@@ -26,6 +26,7 @@ import { commandSelectModel } from "./commands/selectModel";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
 import { commandInstallMcp } from "./commands/installMcp";
 import { commandSyncAiContext } from "./commands/syncAiContext";
+import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingMergeToPanel } from "./batch/batchStatus";
 import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
@@ -79,6 +80,15 @@ export function activate(context: vscode.ExtensionContext): void {
   // ── Claude Code empty transcript warning ───────────────────────────────
 
   void maybeWarnEmptyClaudeTranscripts(context);
+
+  // ── Refresh stale MCP install path after extension upgrade ─────────────
+
+  const upgradeWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (upgradeWorkspace) {
+    void refreshStaleMcpInstall(context.extensionPath, upgradeWorkspace).catch(() => {
+      // Silent: this is best-effort.
+    });
+  }
 
   // ── Document close listener (auto-reveal mind map) ────────────────────
 

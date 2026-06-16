@@ -12,6 +12,7 @@ export {
   renderConceptTrieTopLevel,
   renderProjectBriefing,
   renderProjectList,
+  renderProjectSessionsList,
   renderSearchResults,
   renderSessionOutlineMarkdown,
 } from "./markdownRender";
@@ -28,6 +29,7 @@ export {
   listRecords,
   listRecordsForProject,
   mergeSnapshotPath,
+  projectSessionsLatestMtimeMs,
   readConceptTrieMerge,
   readMergeRecord,
   readRecord,

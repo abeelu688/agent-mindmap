@@ -53,16 +53,25 @@ export function renderConceptTrieTopLevel(
     return `_No concept trie merge found for project \`${projectSlug}\`. Run **Analyze All Sessions** first._`;
   }
   const children = merge.mindMap.children ?? [];
-  const projectChildren = children.filter((c) => {
-    const text = nodeText(c);
-    return text.includes(projectSlug) || merge.meta.projectSlugs.includes(projectSlug);
-  });
-  const roots = projectChildren.length ? projectChildren : children;
-  if (!roots.length) {
+  if (!children.length) {
     return `_Concept trie is empty for \`${projectSlug}\`._`;
   }
-  const lines = ["## Concept map (top level)", ""];
-  lines.push(...renderMindMapChildren(roots, 0, limit));
+  const trieProjects = merge.meta.projectSlugs ?? [];
+  const isProjectScoped = trieProjects.length === 1 && trieProjects[0] === projectSlug;
+  const lines: string[] = [];
+  if (!isProjectScoped && trieProjects.length && !trieProjects.includes(projectSlug)) {
+    return `_Concept trie does not include \`${projectSlug}\`. Run **Analyze All Sessions (Current Project)** to refresh._`;
+  }
+  if (!isProjectScoped) {
+    lines.push(
+      `## Concept map (top level)`,
+      `_Trie is shared across projects: ${trieProjects.map((p) => `\`${p}\``).join(", ") || "(none)"}_`,
+      ""
+    );
+  } else {
+    lines.push(`## Concept map (top level)`, "");
+  }
+  lines.push(...renderMindMapChildren(children, 0, limit));
   return lines.join("\n");
 }
 
@@ -138,11 +147,15 @@ export function renderProjectBriefing(opts: {
     lines.push(`- **projectPath**: \`${opts.projectPath}\``);
   }
   lines.push("");
-  lines.push(renderConceptTrieTopLevel(opts.conceptTrie, opts.projectSlug, opts.conceptLimit ?? 12));
+  lines.push(
+    renderConceptTrieTopLevel(opts.conceptTrie, opts.projectSlug, opts.conceptLimit ?? 12)
+  );
   lines.push("");
   lines.push("## Recent sessions", "");
   if (!sorted.length) {
-    lines.push("_No analyzed sessions. Run **Analyze All Sessions (Current Project)** in Agent Mind Map._");
+    lines.push(
+      "_No analyzed sessions. Run **Analyze All Sessions (Current Project)** in Agent Mind Map._"
+    );
   } else {
     for (const record of sorted.slice(0, recentLimit)) {
       const title = record.outline.title ?? record.meta.sessionLabel;
@@ -210,7 +223,12 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
   if (!hits.length) {
     return `_No matches for \`${query}\` in analyzed project history._`;
   }
-  const lines = [`# Search: ${query}`, "", `Showing ${Math.min(hits.length, limit)} result(s).`, ""];
+  const lines = [
+    `# Search: ${query}`,
+    "",
+    `Showing ${Math.min(hits.length, limit)} result(s).`,
+    "",
+  ];
   for (const hit of hits.slice(0, limit)) {
     lines.push(`## ${hit.conceptLabel ?? hit.sessionLabel}`);
     lines.push(`- **sessionId**: \`${hit.sessionId}\``);
@@ -227,7 +245,12 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
 }
 
 export function renderProjectList(
-  projects: { projectSlug: string; projectPath?: string; sessionCount: number; lastAnalyzedAt: number }[]
+  projects: {
+    projectSlug: string;
+    projectPath?: string;
+    sessionCount: number;
+    lastAnalyzedAt: number;
+  }[]
 ): string {
   if (!projects.length) {
     return "_No analyzed projects in Agent Mind Map store. Run **Analyze All Sessions** first._";
@@ -237,6 +260,36 @@ export function renderProjectList(
     lines.push(
       `- **${p.projectPath ?? p.projectSlug}** (\`${p.projectSlug}\`) — ${p.sessionCount} session(s), last analyzed ${new Date(p.lastAnalyzedAt).toISOString()}`
     );
+  }
+  return lines.join("\n");
+}
+
+export function renderProjectSessionsList(
+  projectSlug: string,
+  records: SessionRecord[],
+  opts: { limit: number; offset: number; total: number }
+): string {
+  if (!records.length) {
+    if (opts.total === 0) {
+      return `_No analyzed sessions for project \`${projectSlug}\`._`;
+    }
+    return `_No sessions in range for \`${projectSlug}\` (offset=${opts.offset}, total=${opts.total})._`;
+  }
+  const end = Math.min(opts.offset + records.length, opts.total);
+  const lines = [
+    `# Sessions: ${projectSlug}`,
+    "",
+    `Showing ${opts.offset + 1}-${end} of ${opts.total} session(s) (most recent first).`,
+    "",
+  ];
+  for (const record of records) {
+    const title = record.outline.title ?? record.meta.sessionLabel;
+    lines.push(`- \`${record.meta.sessionId}\` — ${title}`);
+    const summary = record.outline.summary ?? record.outline.outline[0]?.summary ?? "";
+    if (summary.trim()) {
+      lines.push(`  - ${truncate(summary, 200)}`);
+    }
+    lines.push(`  - analyzedAt: ${new Date(record.meta.analyzedAt).toISOString()}`);
   }
   return lines.join("\n");
 }

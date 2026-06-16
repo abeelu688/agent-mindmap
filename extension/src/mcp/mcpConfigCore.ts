@@ -44,6 +44,6 @@ export function mergeAgentMindmapIntoConfig(
 }
 
 export type McpInstallResult = {
-  cursorConfigPath: string;
-  claudeConfigPath: string;
+  cursorConfigPath?: string;
+  claudeConfigPath?: string;
 };

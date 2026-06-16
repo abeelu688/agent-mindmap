@@ -1,7 +1,46 @@
 import type { ConceptContextForMerge, SearchHit, SessionRecord } from "./storeTypes";
 
+const CJK_REGEX = /[㐀-鿿豈-﫿]/;
+
 function normalizeQuery(query: string): string {
   return query.toLowerCase().trim();
+}
+
+function hasCjk(text: string): boolean {
+  return CJK_REGEX.test(text);
+}
+
+function ngrams(text: string, n: number): string[] {
+  if (text.length < n) {
+    return text ? [text] : [];
+  }
+  const out: string[] = [];
+  for (let i = 0; i + n <= text.length; i++) {
+    out.push(text.slice(i, i + n));
+  }
+  return out;
+}
+
+function tokenizeQuery(query: string): string[] {
+  const lower = normalizeQuery(query);
+  if (!lower) {
+    return [];
+  }
+  const out = new Set<string>();
+  // Whitespace-separated tokens (good for English/numbers).
+  for (const t of lower.split(/\s+/)) {
+    if (!t) continue;
+    out.add(t);
+    // For CJK chunks inside a token, also push 2-grams + 3-grams so we can
+    // match any of them inside the haystack.
+    if (hasCjk(t) && t.length >= 2) {
+      for (const g of ngrams(t, 2)) out.add(g);
+      if (t.length >= 3) {
+        for (const g of ngrams(t, 3)) out.add(g);
+      }
+    }
+  }
+  return [...out].filter(Boolean);
 }
 
 function scoreText(text: string, terms: string[]): number {
@@ -14,7 +53,8 @@ function scoreText(text: string, terms: string[]): number {
     if (lower === term) {
       score += 10;
     } else if (lower.includes(term)) {
-      score += 5;
+      // Longer terms are more specific → weight more.
+      score += Math.max(2, Math.min(8, term.length));
     }
   }
   return score;
@@ -51,11 +91,10 @@ export function searchProjectRecords(
   query: string,
   limit: number
 ): SearchHit[] {
-  const normalized = normalizeQuery(query);
-  if (!normalized) {
+  const terms = tokenizeQuery(query);
+  if (!terms.length) {
     return [];
   }
-  const terms = normalized.split(/\s+/).filter(Boolean);
   const hits: SearchHit[] = [];
 
   for (const record of records) {
@@ -82,7 +121,14 @@ export function searchProjectRecords(
         ...ctx.evidence,
       ].join("\n");
       const ctxScore = scoreText(ctxText, terms);
-      if (ctxScore <= 0) {
+      // Aliases/key matches deserve a small extra boost.
+      const aliasBoost =
+        (ctx.aliases ?? []).some((a) => terms.includes(a.toLowerCase())) ||
+        terms.includes(ctx.key.toLowerCase()) ||
+        terms.includes(ctx.label.toLowerCase())
+          ? 4
+          : 0;
+      if (ctxScore <= 0 && aliasBoost <= 0) {
         continue;
       }
       hits.push({
@@ -91,7 +137,7 @@ export function searchProjectRecords(
         sessionLabel: record.meta.sessionLabel,
         conceptKey: ctx.key,
         conceptLabel: ctx.label,
-        score: ctxScore + 2,
+        score: ctxScore + 2 + aliasBoost,
         snippet: truncateSnippet(ctx.evidence[0] ?? ctx.label),
         evidence: ctx.evidence.slice(0, 5),
       });
@@ -123,6 +169,7 @@ function truncateSnippet(text: string, max = 240): string {
 export type ProjectSearchIndex = {
   projectSlug: string;
   revision: number;
+  sourceMtimeMs: number;
   records: SessionRecord[];
   builtAt: number;
 };

@@ -7,6 +7,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(ROOT, "extension", "mcp-server");
 const OUT_FILE = path.join(OUT_DIR, "index.js");
 
+const rootPkg = JSON.parse(await fs.readFile(path.join(ROOT, "package.json"), "utf8"));
+const version = rootPkg.version;
+
 await fs.mkdir(OUT_DIR, { recursive: true });
 await esbuild.build({
   entryPoints: [path.join(ROOT, "mcp-server", "src", "index.ts")],
@@ -17,6 +20,9 @@ await esbuild.build({
   outfile: OUT_FILE,
   sourcemap: true,
   logLevel: "info",
+  define: {
+    __MCP_SERVER_VERSION__: JSON.stringify(version),
+  },
   alias: {
     "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
   },
@@ -27,4 +33,4 @@ if (!raw.startsWith("#!")) {
   await fs.writeFile(OUT_FILE, `#!/usr/bin/env node\n${raw}`, "utf8");
 }
 await fs.chmod(OUT_FILE, 0o755);
-console.log(`Bundled MCP server -> ${OUT_FILE}`);
+console.log(`Bundled MCP server -> ${OUT_FILE} (version ${version})`);

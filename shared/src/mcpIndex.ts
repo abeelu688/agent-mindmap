@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { writeJsonAtomic } from "./atomicWrite";
 import { MCP_INDEX_SCHEMA_VERSION, STORE_LAYOUT } from "./storeLayout";
 import type { McpIndexFile, McpIndexProjectEntry } from "./storeTypes";
 
@@ -42,8 +43,7 @@ export async function bumpMcpProjectRevision(
   };
   index.projects[projectSlug] = entry;
   index.updatedAt = Date.now();
-  await fs.mkdir(storeDir, { recursive: true });
-  await fs.writeFile(mcpIndexPath(storeDir), JSON.stringify(index, null, 2), "utf8");
+  await writeJsonAtomic(mcpIndexPath(storeDir), index);
   return index;
 }
 

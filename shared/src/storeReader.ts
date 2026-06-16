@@ -108,8 +108,55 @@ export async function listRecordsForProject(
   storeDir: string,
   projectSlug: string
 ): Promise<SessionRecord[]> {
-  const all = await listRecords(storeDir);
-  return all.filter((r) => r.meta.projectSlug === projectSlug);
+  const slugDir = path.join(storeDir, STORE_LAYOUT.sessionsDir, projectSlug);
+  if (!(await pathExists(slugDir))) {
+    return [];
+  }
+  let files: string[];
+  try {
+    files = await fs.readdir(slugDir);
+  } catch {
+    return [];
+  }
+  const out: SessionRecord[] = [];
+  for (const file of files) {
+    if (!file.endsWith(".json")) {
+      continue;
+    }
+    const parsed = await readJson<unknown>(path.join(slugDir, file));
+    if (parsed && isSessionRecord(parsed)) {
+      out.push(parsed);
+    }
+  }
+  return out;
+}
+
+export async function projectSessionsLatestMtimeMs(
+  storeDir: string,
+  projectSlug: string
+): Promise<number> {
+  const slugDir = path.join(storeDir, STORE_LAYOUT.sessionsDir, projectSlug);
+  let entries: string[];
+  try {
+    entries = await fs.readdir(slugDir);
+  } catch {
+    return 0;
+  }
+  let latest = 0;
+  for (const file of entries) {
+    if (!file.endsWith(".json")) {
+      continue;
+    }
+    try {
+      const stat = await fs.stat(path.join(slugDir, file));
+      if (stat.mtimeMs > latest) {
+        latest = stat.mtimeMs;
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return latest;
 }
 
 export async function listProjectSummaries(storeDir: string): Promise<ProjectSummary[]> {
