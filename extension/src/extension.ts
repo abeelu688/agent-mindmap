@@ -24,8 +24,6 @@ import { commandDownloadPackage } from "./commands/downloadPackage";
 import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
-import { commandInstallMcp } from "./commands/installMcp";
-import { commandSyncAiContext } from "./commands/syncAiContext";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingMergeToPanel } from "./batch/batchStatus";
 import { wrapCommand } from "./commands/commandWrapper";
@@ -167,14 +165,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.selectModel",
       wrapCommand(() => commandSelectModel(context))
-    ),
-    vscode.commands.registerCommand(
-      "agent-mindmap.installMcp",
-      wrapCommand(() => commandInstallMcp(context))
-    ),
-    vscode.commands.registerCommand(
-      "agent-mindmap.syncAiContext",
-      wrapCommand(() => commandSyncAiContext())
     )
   );
 

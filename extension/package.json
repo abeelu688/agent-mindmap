@@ -39,9 +39,7 @@
     "onStartupFinished",
     "onCommand:agent-mindmap.openLatest",
     "onCommand:agent-mindmap.pickSession",
-    "onCommand:agent-mindmap.analyzeAndMergeCurrentProject",
-    "onCommand:agent-mindmap.installMcp",
-    "onCommand:agent-mindmap.syncAiContext"
+    "onCommand:agent-mindmap.analyzeAndMergeCurrentProject"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -69,16 +67,6 @@
       {
         "command": "agent-mindmap.selectModel",
         "title": "Agent Mind Map: Select Model",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.installMcp",
-        "title": "Agent Mind Map: Install MCP Server (Cursor & Claude Code)",
-        "category": "Agent Mind Map"
-      },
-      {
-        "command": "agent-mindmap.syncAiContext",
-        "title": "Agent Mind Map: Sync AI Context (Current Project)",
         "category": "Agent Mind Map"
       }
     ],
