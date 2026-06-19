@@ -90,20 +90,18 @@ export async function installMcpServerConfig(
   const serverEntry = await resolveExistingMcpServerEntry(extensionPath);
   const cursorConfigPath = cursorMcpConfigPath(workspaceRoot);
   const claudeConfigPathResolved = claudeMcpConfigPath(workspaceRoot);
+
   if (targets.cursor) {
-    const cursorExisting = await readJsonFile<McpServersConfig>(cursorConfigPath);
-    await writeJsonFile(
-      cursorConfigPath,
-      mergeAgentMindmapIntoConfig(cursorExisting, serverEntry, storeDir)
-    );
+    let cursorExisting = await readJsonFile<McpServersConfig>(cursorConfigPath);
+    cursorExisting = mergeAgentMindmapIntoConfig(cursorExisting, serverEntry, storeDir);
+    await writeJsonFile(cursorConfigPath, cursorExisting);
   }
   if (targets.claude) {
-    const claudeExisting = await readJsonFile<McpServersConfig>(claudeConfigPathResolved);
-    await writeJsonFile(
-      claudeConfigPathResolved,
-      mergeAgentMindmapIntoConfig(claudeExisting, serverEntry, storeDir)
-    );
+    let claudeExisting = await readJsonFile<McpServersConfig>(claudeConfigPathResolved);
+    claudeExisting = mergeAgentMindmapIntoConfig(claudeExisting, serverEntry, storeDir);
+    await writeJsonFile(claudeConfigPathResolved, claudeExisting);
   }
+
   return {
     cursorConfigPath: targets.cursor ? cursorConfigPath : undefined,
     claudeConfigPath: targets.claude ? claudeConfigPathResolved : undefined,
@@ -145,10 +143,10 @@ export function showMcpInstallHint(result: McpInstallResult): void {
 }
 
 /**
- * Detect stale `agent-mindmap` entries in `.cursor/mcp.json` / `.mcp.json` whose
- * `args[0]` path no longer exists (typical after the extension is upgraded and
- * the previous version directory is deleted), and rewrite them in place to
- * point at the current bundled MCP server entry.
+ * Detect stale `agent-mindmap` entries in `.cursor/mcp.json` / `.mcp.json`
+ * whose `args[0]` path no longer exists (typical after the extension is
+ * upgraded and the previous version directory is deleted), and rewrite them in
+ * place.
  *
  * Runs silently — it only logs to console; emits at most one info message
  * after a successful refresh.
@@ -175,17 +173,14 @@ export async function refreshStaleMcpInstall(
       );
       continue;
     }
-    const entry = existing?.mcpServers?.["agent-mindmap"];
-    if (!entry) {
-      continue;
-    }
-    const referenced = entry.args?.[0];
-    if (!referenced) {
+
+    const mainEntry = existing?.mcpServers?.["agent-mindmap"];
+    if (!mainEntry?.args?.[0]) {
       continue;
     }
     let stillValid = true;
     try {
-      await fs.access(referenced);
+      await fs.access(mainEntry.args[0]);
     } catch {
       stillValid = false;
     }
@@ -196,14 +191,14 @@ export async function refreshStaleMcpInstall(
       try {
         serverEntry = await resolveExistingMcpServerEntry(extensionPath);
       } catch {
-        // Bundled server isn't available — bail; the user will need to rebuild.
         return;
       }
     }
-    const storeDir = entry.env?.AGENT_MINDMAP_STORE_DIR;
-    const merged = mergeAgentMindmapIntoConfig(existing, serverEntry, storeDir ?? "");
+    const storeDir = mainEntry.env?.AGENT_MINDMAP_STORE_DIR;
+    existing = mergeAgentMindmapIntoConfig(existing, serverEntry, storeDir ?? "");
+
     try {
-      await writeJsonFile(configPath, merged);
+      await writeJsonFile(configPath, existing);
       refreshed.push(label);
     } catch (err) {
       console.warn(
