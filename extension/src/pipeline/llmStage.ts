@@ -2,7 +2,6 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import type { MindMapProgress } from "../progress";
 import { createHeartbeat } from "../progress";
 import {
   LlmProviderError,
@@ -10,11 +9,12 @@ import {
   type LlmResponseSchema,
   type LlmSummarizeResult,
 } from "../llm/types";
-import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
 import { dumpLlmReplay } from "../llm/llmIoDump";
 import { agentDebugLog } from "../debugLog";
 import { format, t as safeT } from "../l10n/uiTranslate";
+import type { ChatEvent } from "../transcript/types";
+import type { AgentHostId } from "../host/types";
+import type { MindMapProgress } from "../progress";
 import type { PipelineKind } from "./pipelineTiming";
 
 export type LlmStageTimingOut = {
@@ -84,11 +84,7 @@ async function readStageCache<T>(
   }
 }
 
-async function writeStageCache<T>(
-  cacheDir: string,
-  key: string,
-  value: T
-): Promise<void> {
+async function writeStageCache<T>(cacheDir: string, key: string, value: T): Promise<void> {
   try {
     await fs.mkdir(cacheDir, { recursive: true });
     const file = path.join(cacheDir, `${key}.json`);
@@ -113,7 +109,8 @@ export async function runLlmStage<T>(
 
   if (useCache && opts.cacheDir) {
     const cached = await readStageCache(opts.cacheDir, cacheKey, opts.validate);
-    if (cached) {
+    const emptyArrayCache = Array.isArray(cached) && cached.length === 0;
+    if (cached !== undefined && !emptyArrayCache) {
       progress?.report(safeT("ui.llm.cacheHit", "LLM cache hit…"));
       if (opts.timingOut) {
         opts.timingOut.cacheHit = true;
@@ -175,16 +172,15 @@ export async function runLlmStage<T>(
         },
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(
-              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-            );
+            progress?.report(safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts));
           }
         },
       },
       signal
     );
     const validated = opts.validate(result as LlmSummarizeResult);
-    if (useCache && opts.cacheDir) {
+    const emptyValidated = Array.isArray(validated) && validated.length === 0;
+    if (useCache && opts.cacheDir && !emptyValidated) {
       await writeStageCache(opts.cacheDir, cacheKey, validated);
     }
     return validated;

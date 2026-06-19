@@ -5,30 +5,16 @@ import { LlmProviderError } from "../extension/src/llm/types";
 
 describe("isRetryableError", () => {
   it("retries on transient codes", () => {
-    expect(
-      __testing.isRetryableError(new LlmProviderError("timeout", "x"))
-    ).toBe(true);
-    expect(
-      __testing.isRetryableError(new LlmProviderError("cli-failed", "x"))
-    ).toBe(true);
-    expect(
-      __testing.isRetryableError(new LlmProviderError("bad-json", "x"))
-    ).toBe(true);
-    expect(
-      __testing.isRetryableError(new LlmProviderError("bad-shape", "x"))
-    ).toBe(true);
+    expect(__testing.isRetryableError(new LlmProviderError("timeout", "x"))).toBe(true);
+    expect(__testing.isRetryableError(new LlmProviderError("cli-failed", "x"))).toBe(true);
+    expect(__testing.isRetryableError(new LlmProviderError("bad-json", "x"))).toBe(true);
+    expect(__testing.isRetryableError(new LlmProviderError("bad-shape", "x"))).toBe(true);
   });
 
   it("does not retry on terminal codes", () => {
-    expect(
-      __testing.isRetryableError(new LlmProviderError("cli-missing", "x"))
-    ).toBe(false);
-    expect(
-      __testing.isRetryableError(new LlmProviderError("cancelled", "x"))
-    ).toBe(false);
-    expect(
-      __testing.isRetryableError(new LlmProviderError("empty", "x"))
-    ).toBe(false);
+    expect(__testing.isRetryableError(new LlmProviderError("cli-missing", "x"))).toBe(false);
+    expect(__testing.isRetryableError(new LlmProviderError("cancelled", "x"))).toBe(false);
+    expect(__testing.isRetryableError(new LlmProviderError("empty", "x"))).toBe(false);
   });
 });
 
@@ -71,9 +57,7 @@ describe("sleepWithCancel", () => {
   it("rejects immediately when already aborted", async () => {
     const c = new AbortController();
     c.abort();
-    await expect(__testing.sleepWithCancel(1000, c.signal)).rejects.toThrow(
-      LlmProviderError
-    );
+    await expect(__testing.sleepWithCancel(1000, c.signal)).rejects.toThrow(LlmProviderError);
   });
 
   it("rejects promptly when aborted mid-sleep", async () => {
@@ -90,9 +74,7 @@ describe("sleepWithCancel", () => {
 describe("validateTopicGraph", () => {
   it("accepts well-formed graphs", () => {
     const g = validateTopicGraph({
-      topics: [
-        { title: "A", items: [{ text: "x" }] },
-      ],
+      topics: [{ title: "A", items: [{ text: "x" }] }],
     });
     expect(g.topics.length).toBe(1);
     expect(g.topics[0].items[0].text).toBe("x");
@@ -111,9 +93,9 @@ describe("validateTopicGraph", () => {
   });
 
   it("drops topics with no usable items", () => {
-    expect(() =>
-      validateTopicGraph({ topics: [{ title: "A", items: [] }] })
-    ).toThrow(LlmProviderError);
+    expect(() => validateTopicGraph({ topics: [{ title: "A", items: [] }] })).toThrow(
+      LlmProviderError
+    );
   });
 
   it("rejects non-object root", () => {
@@ -122,9 +104,7 @@ describe("validateTopicGraph", () => {
   });
 
   it("rejects when topics is not an array", () => {
-    expect(() => validateTopicGraph({ topics: "nope" })).toThrow(
-      LlmProviderError
-    );
+    expect(() => validateTopicGraph({ topics: "nope" })).toThrow(LlmProviderError);
   });
 
   it("filters bad sourceTurnIndices", () => {
@@ -132,9 +112,7 @@ describe("validateTopicGraph", () => {
       topics: [
         {
           title: "A",
-          items: [
-            { text: "x", sourceTurnIndices: [0, -1, "bad", 2.5, 3] },
-          ],
+          items: [{ text: "x", sourceTurnIndices: [0, -1, "bad", 2.5, 3] }],
         },
       ],
     });
@@ -260,6 +238,33 @@ describe("extractTopicsJson", () => {
     const obj = JSON.parse(stripped);
     expect(obj.topics[0].title).toBe("with } brace");
   });
+
+  it("extracts top-level JSON array from prose-prefixed code-ref output", () => {
+    const stripped = __testing.extractTopicsJson(
+      'Reviewing files.\n[{"path":"src/a.ts","description":"Add helper"},{"path":"src/b.ts","description":"Wire export"}]'
+    );
+    const arr = JSON.parse(stripped);
+    expect(Array.isArray(arr)).toBe(true);
+    expect(arr).toHaveLength(2);
+    expect(arr[0].path).toBe("src/a.ts");
+  });
+});
+
+describe("parseJsonFromStdout", () => {
+  it("parses code-ref array from cursor-cli envelope with leading prose", () => {
+    const stdout = JSON.stringify({
+      type: "result",
+      result:
+        'Reviewing the referenced files.\n[{"path":"src/import/types.ts","description":"Shared import types"},{"path":"src/report/exportJob.ts","description":"Failure CSV export"}]',
+    });
+    const parsed = __testing.parseJsonFromStdout(stdout, "cursor-cli") as Array<{
+      path: string;
+      description: string;
+    }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]?.path).toBe("src/import/types.ts");
+  });
 });
 
 describe("extractPayload", () => {
@@ -279,9 +284,7 @@ describe("extractPayload", () => {
   });
 
   it("scans NDJSON for last string payload", () => {
-    const out = __testing.extractPayload(
-      '{"event":"start"}\n{"result":"final"}\n'
-    );
+    const out = __testing.extractPayload('{"event":"start"}\n{"result":"final"}\n');
     expect(out).toBe("final");
   });
 });

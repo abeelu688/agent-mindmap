@@ -267,17 +267,11 @@ function stripFences(s: string): string {
     .trim();
 }
 
-function extractTopicsJson(payload: string): string {
-  const cleaned = stripFences(payload.trim());
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch {
-    // fall through
-  }
-  const start = cleaned.indexOf("{");
+function extractBalancedJsonSlice(cleaned: string, open: "{" | "["): string | undefined {
+  const close = open === "{" ? "}" : "]";
+  const start = cleaned.indexOf(open);
   if (start < 0) {
-    return cleaned;
+    return undefined;
   }
   let depth = 0;
   let inString = false;
@@ -299,14 +293,54 @@ function extractTopicsJson(payload: string): string {
     if (inString) {
       continue;
     }
-    if (ch === "{") {
+    if (ch === open) {
       depth++;
-    } else if (ch === "}") {
+    } else if (ch === close) {
       depth--;
       if (depth === 0) {
         return cleaned.slice(start, i + 1);
       }
     }
+  }
+  return undefined;
+}
+
+function firstParseableJsonSlice(cleaned: string, open: "{" | "["): string | undefined {
+  const slice = extractBalancedJsonSlice(cleaned, open);
+  if (!slice) {
+    return undefined;
+  }
+  for (const candidate of [slice, repairJsonText(slice)]) {
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // try next variant
+    }
+  }
+  return slice;
+}
+
+function extractTopicsJson(payload: string): string {
+  const cleaned = stripFences(payload.trim());
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    // fall through
+  }
+  const arrayStart = cleaned.indexOf("[");
+  const objectStart = cleaned.indexOf("{");
+  // Prefer a top-level JSON array (e.g. code-ref-descriptions) over the first object inside it.
+  if (arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart)) {
+    const arraySlice = firstParseableJsonSlice(cleaned, "[");
+    if (arraySlice) {
+      return arraySlice;
+    }
+  }
+  const objectSlice = firstParseableJsonSlice(cleaned, "{");
+  if (objectSlice) {
+    return objectSlice;
   }
   return cleaned;
 }

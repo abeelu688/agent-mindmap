@@ -434,6 +434,12 @@ export async function generateCodeReferenceDescriptions(
       { ...opts, outputLanguage: opts?.outputLanguage },
       progress
     );
+    if (!batchDescs.length) {
+      throw new LlmProviderError(
+        "bad-shape",
+        `Code reference description LLM returned no descriptions for batch of ${batch.length} entr${batch.length === 1 ? "y" : "ies"}`
+      );
+    }
     allDescs.push(...batchDescs);
   }
 
@@ -532,4 +538,5 @@ export async function extractCodeReferencesFromEvents(
 
 export const __testing = {
   buildCodeRefDescriptionPrompt,
+  BATCH_SIZE,
 };
