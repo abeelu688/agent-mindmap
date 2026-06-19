@@ -6,8 +6,8 @@ import { agentDebugLog } from "../debugLog";
 import { agentLog } from "../log";
 import { getStoreDir } from "../paths";
 import { mindMapLog } from "../webview/MindMapLog";
-import type { LlmDumpMeta, LlmErrorCode, LlmResponseSchema } from "./types";
 import { LlmProviderError } from "./types";
+import type { LlmDumpMeta, LlmErrorCode, LlmResponseSchema } from "./types";
 
 /** Visible folder name (no leading dot — easier to find in the workspace tree). */
 export const LLM_DUMP_FOLDER = "agent-mindmap-llm-dumps";
@@ -27,9 +27,7 @@ export function dumpDirForWorkspace(workspaceRoot: string): string {
 
 export function isLlmDumpEnabled(): boolean {
   return (
-    vscode.workspace
-      .getConfiguration("agentMindmap")
-      .get<boolean>("llm.dumpIo", true) ?? true
+    vscode.workspace.getConfiguration("agentMindmap").get<boolean>("llm.dumpIo", false) ?? false
   );
 }
 
@@ -42,9 +40,42 @@ function expandHome(p: string): string {
 
 /** All directories that receive LLM IO dumps (storeDir always; workspace when open). */
 export function resolveLlmDumpRoots(): string[] {
-  // TEMP: force dump to /tmp for debugging
-  const forcedRoot = path.join(os.tmpdir(), "agent-mindmap-llm-dumps");
-  return [forcedRoot];
+  const enabled = isLlmDumpEnabled();
+  if (!enabled) {
+    agentDebugLog(
+      "llmIoDump.ts:resolveLlmDumpRoots",
+      "dump disabled by config",
+      { dumpIo: false },
+      "A"
+    );
+    return [];
+  }
+  const custom = vscode.workspace
+    .getConfiguration("agentMindmap")
+    .get<string>("llm.dumpDir", "")
+    .trim();
+  if (custom) {
+    return [expandHome(custom)];
+  }
+  const roots: string[] = [path.join(getStoreDir(), LLM_DUMP_FOLDER)];
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (folder) {
+    const wsRoot = dumpDirForWorkspace(folder.uri.fsPath);
+    if (!roots.includes(wsRoot)) {
+      roots.push(wsRoot);
+    }
+  }
+  agentDebugLog(
+    "llmIoDump.ts:resolveLlmDumpRoots",
+    "resolved dump roots",
+    {
+      roots,
+      storeDir: getStoreDir(),
+      workspaceFolder: folder?.uri.fsPath ?? null,
+    },
+    "A"
+  );
+  return roots;
 }
 
 /** @deprecated Prefer resolveLlmDumpRoots; first root or undefined when disabled. */
@@ -64,13 +95,15 @@ export function logLlmDumpLocationsOnce(): void {
   }
   const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   mindMapLog(
-    `LLM dumps enabled → ${roots.join(" | ")}` +
-      (ws ? ` (current workspace: ${ws})` : "")
+    `LLM dumps enabled → ${roots.join(" | ")}` + (ws ? ` (current workspace: ${ws})` : "")
   );
 }
 
 function compactTimestamp(d = new Date()): string {
-  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return d
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 function randomSuffix(): string {
@@ -139,20 +172,12 @@ async function writeLlmIoDumpToRoot(
     skipReason: payload.skipReason ?? null,
     ok: payload.error === undefined,
   };
-  await fs.writeFile(
-    path.join(outDir, "meta.json"),
-    JSON.stringify(meta, null, 2),
-    "utf8"
-  );
+  await fs.writeFile(path.join(outDir, "meta.json"), JSON.stringify(meta, null, 2), "utf8");
   return outDir;
 }
 
-export async function writeLlmIoDump(
-  payload: LlmIoDumpPayload
-): Promise<string | undefined> {
-  const roots = payload.dumpRoot
-    ? [payload.dumpRoot]
-    : resolveLlmDumpRoots();
+export async function writeLlmIoDump(payload: LlmIoDumpPayload): Promise<string | undefined> {
+  const roots = payload.dumpRoot ? [payload.dumpRoot] : resolveLlmDumpRoots();
   agentDebugLog(
     "llmIoDump.ts:writeLlmIoDump",
     "writeLlmIoDump enter",
@@ -186,9 +211,7 @@ export async function writeLlmIoDump(
       if (!firstOut) {
         firstOut = outDir;
       }
-      mindMapLog(
-        `LLM dump (${payload.source ?? "live-cli"}): ${outDir}`
-      );
+      mindMapLog(`LLM dump (${payload.source ?? "live-cli"}): ${outDir}`);
       agentDebugLog(
         "llmIoDump.ts:writeLlmIoDump",
         "dump write ok",
@@ -243,8 +266,15 @@ export async function dumpLlmReplay(opts: {
   stdout?: string;
   dumpRoot?: string;
 }): Promise<void> {
-  // TEMP: always dump for debugging
-  // if (!opts.dumpRoot && !isLlmDumpEnabled()) { return; }
+  if (!opts.dumpRoot && !isLlmDumpEnabled()) {
+    agentDebugLog(
+      "llmIoDump.ts:dumpLlmReplay",
+      "skip replay: dumpIo off",
+      { stageId: opts.stageId, source: opts.source },
+      "A"
+    );
+    return;
+  }
   agentDebugLog(
     "llmIoDump.ts:dumpLlmReplay",
     "dumpLlmReplay enter",
@@ -303,8 +333,15 @@ export async function dumpLlmCallResult(opts: {
     );
     return;
   }
-  // TEMP: always dump for debugging
-  // if (!opts.dumpRoot && !isLlmDumpEnabled()) { return; }
+  if (!opts.dumpRoot && !isLlmDumpEnabled()) {
+    agentDebugLog(
+      "llmIoDump.ts:dumpLlmCallResult",
+      "skip live dump: dumpIo off",
+      { stageId: opts.input.dumpMeta.stageId },
+      "A"
+    );
+    return;
+  }
   agentDebugLog(
     "llmIoDump.ts:dumpLlmCallResult",
     "dumpLlmCallResult enter",
@@ -317,10 +354,7 @@ export async function dumpLlmCallResult(opts: {
     },
     "C"
   );
-  const stageId =
-    opts.input.dumpMeta?.stageId ??
-    opts.input.responseSchema ??
-    "unknown";
+  const stageId = opts.input.dumpMeta?.stageId ?? opts.input.responseSchema ?? "unknown";
   await writeLlmIoDump({
     stageId,
     responseSchema: opts.input.responseSchema ?? "session-outline",

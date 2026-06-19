@@ -23,6 +23,7 @@ import {
 } from "./batch/batchStatus";
 import { notifyInfo } from "./notify";
 import { t } from "./l10n/uiTranslate";
+import { isRetryableError } from "./errors";
 import { LlmProviderError } from "./llm/types";
 import { mindMapLabelsForOutputLanguage } from "./mindmap/outputLanguageLabels";
 import type { ChatEvent } from "./transcript/types";
@@ -153,7 +154,27 @@ export type CodeRefQueueItem = {
   timeoutMs: number;
   storeDir: string;
   outputLanguage?: OutputLanguage;
+  /** 1-based attempt counter; defaults to 1 on first enqueue. */
+  attempt?: number;
 };
+
+/** Total attempts per session code-ref LLM job (initial + retries). */
+export const CODE_REF_MAX_ATTEMPTS = 3;
+
+function normalizeAttempt(attempt?: number): number {
+  return attempt ?? 1;
+}
+
+function mergeEnqueueAttempt(existing?: number, incoming?: number): number {
+  return Math.max(normalizeAttempt(existing), normalizeAttempt(incoming));
+}
+
+function shouldScheduleCodeRefRetry(err: unknown, attempt: number): boolean {
+  if (err instanceof LlmProviderError && err.code === "cancelled") {
+    return false;
+  }
+  return attempt < CODE_REF_MAX_ATTEMPTS && isRetryableError(err);
+}
 
 const queue: CodeRefQueueItem[] = [];
 const dirtyProjectItems = new Map<string, CodeRefQueueItem>();
@@ -186,14 +207,19 @@ export function purgeCodeRefQueueForProject(projectSlug: string): number {
 }
 
 export function enqueueCodeRefUpdate(item: CodeRefQueueItem): void {
-  // Replace any existing pending item for the same session (deduplicate)
+  enqueueCodeRefItemOnly(item);
+  processNext();
+}
+
+function enqueueCodeRefItemOnly(item: CodeRefQueueItem): void {
+  const attempt = normalizeAttempt(item.attempt);
   const idx = queue.findIndex((q) => q.sessionId === item.sessionId);
   if (idx >= 0) {
-    queue[idx] = item;
+    const existing = queue[idx]!;
+    queue[idx] = { ...item, attempt: mergeEnqueueAttempt(existing.attempt, attempt) };
   } else {
-    queue.push(item);
+    queue.push({ ...item, attempt });
   }
-  processNext();
 }
 
 function processNext(): void {
@@ -236,8 +262,9 @@ function markCodeRefsFailed(
 }
 
 async function runItem(item: CodeRefQueueItem): Promise<void> {
+  const attempt = normalizeAttempt(item.attempt);
   mindMapLog(
-    `[codeRefQueue] start session=${item.sessionId.slice(0, 8)} queue_remaining=${queue.length}`
+    `[codeRefQueue] start session=${item.sessionId.slice(0, 8)} attempt=${attempt}/${CODE_REF_MAX_ATTEMPTS} queue_remaining=${queue.length}`
   );
   const signal = AbortSignal.timeout(item.timeoutMs);
 
@@ -274,7 +301,14 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
       );
       return;
     }
-    // Persist failed status so next load can retry
+    if (shouldScheduleCodeRefRetry(err, attempt)) {
+      enqueueCodeRefUpdate({ ...item, attempt: attempt + 1 });
+      mindMapLog(
+        `[codeRefQueue] retry session=${item.sessionId.slice(0, 8)} attempt=${attempt + 1}/${CODE_REF_MAX_ATTEMPTS}`
+      );
+      return;
+    }
+    // Persist failed status so next load can retry on a later session open
     try {
       const latest = await readRecord(item.storeDir, item.projectSlug, item.sessionId);
       if (latest?.sessionAnalysis) {
@@ -369,3 +403,16 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
     agentLog.error("[codeRefQueue] failed to persist done refs", writeErr);
   }
 }
+
+export const __testing = {
+  shouldScheduleCodeRefRetry,
+  mergeEnqueueAttempt,
+  normalizeAttempt,
+  enqueueCodeRefItemOnly,
+  getQueueSnapshot: (): ReadonlyArray<CodeRefQueueItem> => [...queue],
+  resetQueueState: (): void => {
+    queue.length = 0;
+    dirtyProjectItems.clear();
+    running = false;
+  },
+};

@@ -13,10 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@ext": path.resolve(__dirname, "extension/src"),
-      "@vscode/sqlite3": path.resolve(
-        __dirname,
-        "extension/node_modules/@vscode/sqlite3"
-      ),
+      "@agent-mindmap/shared": path.resolve(__dirname, "shared/src/index.ts"),
+      "@vscode/sqlite3": path.resolve(__dirname, "extension/node_modules/@vscode/sqlite3"),
       vscode: path.resolve(__dirname, "test/mocks/vscode.ts"),
     },
   },
