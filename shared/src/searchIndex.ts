@@ -53,9 +53,25 @@ function tokenizeQuery(query: string): string[] {
   return [...out].filter(Boolean);
 }
 
+export type ConceptTermEntry = {
+  ctx: ConceptContextForMerge;
+  terms: string[];
+};
+
+export function buildConceptTermIndex(records: SessionRecord[]): ConceptTermEntry[] {
+  const out: ConceptTermEntry[] = [];
+  for (const record of records) {
+    for (const ctx of record.conceptContexts ?? []) {
+      const conceptTerms = [ctx.key, ctx.label, ...(ctx.aliases ?? [])];
+      out.push({ ctx, terms: conceptTerms.map(normalizeQuery) });
+    }
+  }
+  return out;
+}
+
 function weightedTerms(
   query: string,
-  records: SessionRecord[],
+  conceptTerms: ConceptTermEntry[],
   equivalences: SegmentEquivalence[] = []
 ): WeightedTerm[] {
   const rawTerms = tokenizeQuery(query);
@@ -72,18 +88,14 @@ function weightedTerms(
     add(term, 1);
   }
 
-  for (const record of records) {
-    for (const ctx of record.conceptContexts ?? []) {
-      const conceptTerms = [ctx.key, ctx.label, ...(ctx.aliases ?? [])];
-      const searchableConcept = conceptTerms.map(normalizeQuery);
-      if (!searchableConcept.some((term) => rawTerms.some((q) => term.includes(q)))) {
-        continue;
-      }
-      for (const term of conceptTerms) {
-        add(term, 0.7);
-        for (const token of tokenizeQuery(term)) {
-          add(token, 0.55);
-        }
+  for (const entry of conceptTerms) {
+    if (!entry.terms.some((term) => rawTerms.some((q) => term.includes(q)))) {
+      continue;
+    }
+    for (const term of entry.terms) {
+      add(term, 0.7);
+      for (const token of tokenizeQuery(term)) {
+        add(token, 0.55);
       }
     }
   }
@@ -256,9 +268,11 @@ export function searchProjectRecords(
   records: SessionRecord[],
   query: string,
   limit: number,
-  equivalences: SegmentEquivalence[] = []
+  equivalences: SegmentEquivalence[] = [],
+  precomputedConceptTerms?: ConceptTermEntry[]
 ): SearchHit[] {
-  const terms = weightedTerms(query, records, equivalences);
+  const conceptTerms = precomputedConceptTerms ?? buildConceptTermIndex(records);
+  const terms = weightedTerms(query, conceptTerms, equivalences);
   if (!terms.length) {
     return [];
   }
@@ -377,6 +391,7 @@ export type ProjectSearchIndex = {
   revision: number;
   sourceMtimeMs: number;
   records: SessionRecord[];
+  conceptTerms: ConceptTermEntry[];
   builtAt: number;
 };
 

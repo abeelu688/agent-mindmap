@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  buildConceptTermIndex,
   collectConceptContexts,
   findProjectSlugByPath,
   listProjectSummaries,
@@ -56,6 +57,7 @@ async function ensureProjectIndex(projectSlug: string): Promise<ProjectSearchInd
       revision,
       sourceMtimeMs: latestMtime,
       records,
+      conceptTerms: buildConceptTermIndex(records),
       builtAt: Date.now(),
     };
     return built;
@@ -174,7 +176,13 @@ async function main(): Promise<void> {
       }
       const index = await ensureProjectIndex(slug);
       const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
-      const hits = searchProjectRecords(index.records, query, limit, equivalences);
+      const hits = searchProjectRecords(
+        index.records,
+        query,
+        limit,
+        equivalences,
+        index.conceptTerms
+      );
       return textResult(renderSearchResults(query, hits, limit));
     }
   );
@@ -194,7 +202,13 @@ async function main(): Promise<void> {
       }
       const index = await ensureProjectIndex(slug);
       const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
-      const hits = searchProjectRecords(index.records, query, limit, equivalences);
+      const hits = searchProjectRecords(
+        index.records,
+        query,
+        limit,
+        equivalences,
+        index.conceptTerms
+      );
       return textResult(renderMemoryRetrieval(query, hits, limit));
     }
   );

@@ -19,9 +19,11 @@ export {
   renderSessionOutlineMarkdown,
 } from "./markdownRender";
 export {
+  buildConceptTermIndex,
   collectConceptContexts,
   McpSearchIndexCache,
   searchProjectRecords,
+  type ConceptTermEntry,
   type ProjectSearchIndex,
 } from "./searchIndex";
 export {
