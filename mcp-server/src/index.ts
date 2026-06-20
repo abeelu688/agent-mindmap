@@ -66,14 +66,14 @@ async function resolveSlug(opts: {
   projectSlug?: string;
 }): Promise<string | undefined> {
   const direct = resolveProjectSlug(opts);
-  if (direct && (await listRecordsForProject(storeDir, direct)).length) {
+  if (direct) {
     return direct;
   }
   if (opts.projectPath) {
     const summaries = await listProjectSummaries(storeDir);
     return findProjectSlugByPath(summaries, opts.projectPath);
   }
-  return direct;
+  return undefined;
 }
 
 function textResult(text: string) {
