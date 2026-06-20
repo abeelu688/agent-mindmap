@@ -20,6 +20,7 @@ export {
 } from "./markdownRender";
 export {
   buildConceptTermIndex,
+  buildRecordTokenSets,
   collectConceptContexts,
   McpSearchIndexCache,
   searchProjectRecords,

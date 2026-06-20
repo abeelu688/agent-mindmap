@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   buildConceptTermIndex,
+  buildRecordTokenSets,
   collectConceptContexts,
   findProjectSlugByPath,
   listProjectSummaries,
@@ -58,6 +59,7 @@ async function ensureProjectIndex(projectSlug: string): Promise<ProjectSearchInd
       sourceMtimeMs: latestMtime,
       records,
       conceptTerms: buildConceptTermIndex(records),
+      recordTokens: buildRecordTokenSets(records),
       builtAt: Date.now(),
     };
     return built;
@@ -181,7 +183,8 @@ async function main(): Promise<void> {
         query,
         limit,
         equivalences,
-        index.conceptTerms
+        index.conceptTerms,
+        index.recordTokens
       );
       return textResult(renderSearchResults(query, hits, limit));
     }
@@ -207,7 +210,8 @@ async function main(): Promise<void> {
         query,
         limit,
         equivalences,
-        index.conceptTerms
+        index.conceptTerms,
+        index.recordTokens
       );
       return textResult(renderMemoryRetrieval(query, hits, limit));
     }

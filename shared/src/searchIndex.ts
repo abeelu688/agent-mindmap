@@ -238,6 +238,66 @@ function diversifyHits(hits: SearchHit[], limit: number): SearchHit[] {
   return out;
 }
 
+function buildRecordTokenSet(text: string): Set<string> {
+  const lower = text.toLowerCase();
+  const tokens = new Set<string>();
+  for (let i = 0; i + 2 <= lower.length; i++) {
+    tokens.add(lower.slice(i, i + 2));
+  }
+  for (let i = 0; i + 3 <= lower.length; i++) {
+    tokens.add(lower.slice(i, i + 3));
+  }
+  for (const word of lower.split(/\s+/)) {
+    if (word) {
+      tokens.add(word);
+    }
+  }
+  return tokens;
+}
+
+export function buildRecordTokenSets(records: SessionRecord[]): Set<string>[] {
+  return records.map((record) => {
+    const parts = [collectOutlineText(record), record.meta.sessionLabel];
+    for (const ctx of record.conceptContexts ?? []) {
+      parts.push(ctx.key, ctx.label, ...(ctx.aliases ?? []));
+      parts.push(...ctx.domainKeys, ...ctx.parentKeys, ...ctx.childKeys);
+      parts.push(...ctx.evidence);
+    }
+    return buildRecordTokenSet(parts.join("\n"));
+  });
+}
+
+function queryTermNgrams(term: string): string[] {
+  if (term.length >= 3) {
+    const out: string[] = [];
+    for (let i = 0; i + 3 <= term.length; i++) {
+      out.push(term.slice(i, i + 3));
+    }
+    return out;
+  }
+  if (term.length === 2) {
+    return [term];
+  }
+  return [];
+}
+
+function recordCouldMatch(tokenSet: Set<string>, queryTerms: WeightedTerm[]): boolean {
+  for (const { term, weight } of queryTerms) {
+    if (weight < 1) {
+      continue;
+    }
+    if (tokenSet.has(term)) {
+      return true;
+    }
+    for (const ng of queryTermNgrams(term)) {
+      if (tokenSet.has(ng)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function collectOutlineText(record: SessionRecord): string {
   const parts: string[] = [];
   if (record.outline.title) {
@@ -269,7 +329,8 @@ export function searchProjectRecords(
   query: string,
   limit: number,
   equivalences: SegmentEquivalence[] = [],
-  precomputedConceptTerms?: ConceptTermEntry[]
+  precomputedConceptTerms?: ConceptTermEntry[],
+  precomputedRecordTokens?: Set<string>[]
 ): SearchHit[] {
   const conceptTerms = precomputedConceptTerms ?? buildConceptTermIndex(records);
   const terms = weightedTerms(query, conceptTerms, equivalences);
@@ -278,7 +339,11 @@ export function searchProjectRecords(
   }
   const hits: SearchHit[] = [];
 
-  for (const record of records) {
+  for (let recordIdx = 0; recordIdx < records.length; recordIdx++) {
+    const record = records[recordIdx];
+    if (precomputedRecordTokens && !recordCouldMatch(precomputedRecordTokens[recordIdx], terms)) {
+      continue;
+    }
     const outlineText = collectOutlineText(record);
     const outlineScore = scoreText(outlineText, terms) + scoreText(record.meta.sessionLabel, terms);
 
@@ -392,6 +457,7 @@ export type ProjectSearchIndex = {
   sourceMtimeMs: number;
   records: SessionRecord[];
   conceptTerms: ConceptTermEntry[];
+  recordTokens: Set<string>[];
   builtAt: number;
 };
 
