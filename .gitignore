@@ -26,6 +26,7 @@ test/fixtures/aosp14/
 test/eval/eval.config.local.json
 test/eval/reports/
 test/eval/.cache/
+demo-import-admin/
 
 # LLM prompt/stdout debug dumps (may contain full transcripts)
 .agent-mindmap-llm-dumps/
@@ -52,3 +53,4 @@ git-status.txt
 *.swp
 .vscode/settings.json
 .vscode/tasks.json
+

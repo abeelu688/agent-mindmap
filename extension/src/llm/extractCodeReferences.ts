@@ -1,4 +1,5 @@
 import { runLlmStage } from "../pipeline/llmStage";
+import { t } from "../l10n/uiTranslate";
 import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { LlmProviderError } from "./types";
@@ -315,6 +316,187 @@ const MAX_DESC_LEN = 60;
 
 type DescEntry = { path: string; description: string };
 
+function readDescPathField(obj: Record<string, unknown>): string {
+  for (const key of ["path", "file", "filePath", "filepath"]) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+/** Align LLM path strings with FileEntry.path (relative project paths). */
+export function normalizeCodeRefDescPath(
+  raw: string,
+  projectPath: string | undefined,
+  entryPaths: readonly string[]
+): string {
+  let p = raw.trim().replace(/\\/g, "/");
+  const indexed = p.match(/^\[\d+\]\s*path:\s*(.+)$/i);
+  if (indexed) {
+    p = indexed[1]!.trim();
+  }
+  p = p.replace(/^path:\s*/i, "").trim();
+  if (projectPath) {
+    const rel = toRelPath(p, projectPath);
+    if (rel) {
+      p = rel;
+    }
+  }
+  p = p.replace(/^\.\/+/, "");
+  if (entryPaths.includes(p)) {
+    return p;
+  }
+  const suffixHit = entryPaths.find((ep) => p === ep || p.endsWith(`/${ep}`));
+  if (suffixHit) {
+    return suffixHit;
+  }
+  const base = p.split("/").pop();
+  if (base) {
+    const baseHits = entryPaths.filter((ep) => ep.split("/").pop() === base);
+    if (baseHits.length === 1) {
+      return baseHits[0]!;
+    }
+  }
+  return p;
+}
+
+function matchEntriesToDescriptions(
+  entries: FileEntry[],
+  descEntries: DescEntry[],
+  projectPath?: string
+): CodeReference[] {
+  const entryPaths = entries.map((e) => e.path);
+  const descMap = new Map<string, string[]>();
+  for (const d of descEntries) {
+    const normalizedPath = normalizeCodeRefDescPath(d.path, projectPath, entryPaths);
+    let arr = descMap.get(normalizedPath);
+    if (!arr) {
+      arr = [];
+      descMap.set(normalizedPath, arr);
+    }
+    arr.push(d.description);
+  }
+
+  const acc = new Map<string, { path: string; desc: string; turns: number[] }>();
+  const usedDescs = new Map<string, number>();
+  let unmatchedPathCount = 0;
+  for (const entry of entries) {
+    const pathDescs = descMap.get(entry.path);
+    let desc: string;
+    if (!pathDescs?.length) {
+      unmatchedPathCount += 1;
+      desc = fallbackDescription(entry);
+    } else {
+      const idx = usedDescs.get(entry.path) ?? 0;
+      desc = idx < pathDescs.length ? pathDescs[idx] : pathDescs[pathDescs.length - 1];
+      usedDescs.set(entry.path, idx + 1);
+    }
+    const key = `${entry.path}\0${desc}`;
+    let g = acc.get(key);
+    if (!g) {
+      g = { path: entry.path, desc, turns: [] };
+      acc.set(key, g);
+    }
+    g.turns.push(entry.turnIndex);
+  }
+
+  if (unmatchedPathCount > 0) {
+    throw new LlmProviderError(
+      "bad-shape",
+      `Code reference description LLM returned paths that did not match ${unmatchedPathCount} input entr${unmatchedPathCount === 1 ? "y" : "ies"}`
+    );
+  }
+
+  return [...acc.values()].map((g) => ({
+    path: g.path,
+    lines: "-",
+    description: g.desc,
+    sourceTurnIndices: g.turns,
+  }));
+}
+
+/** Merge finished batch refs with pending placeholders for entries not yet sent to the LLM. */
+export function composeIncrementalCodeRefs(
+  doneRefs: CodeReference[],
+  remainingEntries: FileEntry[],
+  projectPath?: string
+): CodeReference[] {
+  const now = Date.now();
+  const done = doneRefs.map((ref) => ({
+    ...ref,
+    llmStatus: "done" as const,
+    llmUpdatedAt: now,
+    llmError: undefined,
+  }));
+  const pending = remainingEntries.length
+    ? buildFallbackReferences(remainingEntries).map((ref) => ({
+        ...ref,
+        llmStatus: "pending" as const,
+        llmUpdatedAt: now,
+      }))
+    : [];
+  return filterProjectCodeReferences([...done, ...pending], projectPath);
+}
+
+function markCodeReferencesDone(refs: CodeReference[]): CodeReference[] {
+  const now = Date.now();
+  return refs.map((ref) => ({
+    ...ref,
+    llmStatus: "done" as const,
+    llmUpdatedAt: now,
+    llmError: undefined,
+  }));
+}
+
+function formatCodeRefBatchLabel(batchNo: number, batchCount: number): string {
+  return t("ui.codeRefs.generating.batch", "Batch {0}/{1}", batchNo, batchCount);
+}
+
+function createCodeRefBatchProgress(
+  parent: MindMapProgress | undefined,
+  batchNo: number,
+  batchCount: number
+): MindMapProgress | undefined {
+  if (!parent) {
+    return undefined;
+  }
+  const batchLabel = formatCodeRefBatchLabel(batchNo, batchCount);
+  return {
+    report(update) {
+      const step = typeof update === "string" ? update : update.message;
+      if (!step) {
+        if (typeof update !== "string" && update.increment !== undefined) {
+          parent.report(update);
+        }
+        return;
+      }
+      parent.report(`${batchLabel} — ${step}`);
+    },
+  };
+}
+
+export type CodeRefBatchProgress = {
+  batchIndex: number;
+  batchCount: number;
+  batchDoneRefs: CodeReference[];
+  /** Done refs from batches so far plus pending placeholders for the rest. */
+  snapshotRefs: CodeReference[];
+  processedEntryCount: number;
+  totalEntryCount: number;
+};
+
+export type GenerateCodeReferenceDescriptionsOpts = {
+  model?: string;
+  timeoutMs?: number;
+  cacheDir?: string;
+  cache?: boolean;
+  outputLanguage?: OutputLanguage;
+  projectPath?: string;
+  onBatchComplete?: (progress: CodeRefBatchProgress) => void | Promise<void>;
+};
+
 export function isFallbackCodeReferenceDescription(description: string | undefined): boolean {
   return Boolean(description?.startsWith("support "));
 }
@@ -346,7 +528,7 @@ function validateDescArray(value: unknown): DescEntry[] {
       continue;
     }
     const obj = item as Record<string, unknown>;
-    const p = typeof obj.path === "string" ? obj.path.trim() : "";
+    const p = readDescPathField(obj);
     const d = typeof obj.description === "string" ? obj.description.trim() : "";
     if (!p || !d) {
       continue;
@@ -395,7 +577,10 @@ async function runDescBatch(
       responseSchema: "code-ref-descriptions",
       maxTopics: 50,
       maxItemsPerTopic: 1,
-      heartbeatMessage: "Generating code reference descriptions...",
+      heartbeatMessage: t(
+        "ui.codeRefs.generating.heartbeat",
+        "Generating code reference descriptions…"
+      ),
       validate: validateDescArray,
       timeoutMs: opts?.timeoutMs,
     },
@@ -410,29 +595,29 @@ export async function generateCodeReferenceDescriptions(
   entries: FileEntry[],
   provider: LlmProvider,
   signal: AbortSignal,
-  opts?: {
-    model?: string;
-    timeoutMs?: number;
-    cacheDir?: string;
-    cache?: boolean;
-    outputLanguage?: OutputLanguage;
-  },
+  opts?: GenerateCodeReferenceDescriptionsOpts,
   progress?: MindMapProgress
 ): Promise<CodeReference[]> {
   if (!entries.length) {
     return [];
   }
 
-  // Strategy D: split into batches and merge
-  const allDescs: DescEntry[] = [];
-  for (let start = 0; start < entries.length; start += BATCH_SIZE) {
+  const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
+  const accumulatedDone: CodeReference[] = [];
+
+  // Strategy D: split into batches; notify after each batch when requested
+  for (let batchIndex = 0, start = 0; start < entries.length; batchIndex++, start += BATCH_SIZE) {
     const batch = entries.slice(start, start + BATCH_SIZE);
+    const batchNo = batchIndex + 1;
+    const batchLabel = formatCodeRefBatchLabel(batchNo, totalBatches);
+    progress?.report(batchLabel);
+
     const batchDescs = await runDescBatch(
       batch,
       provider,
       signal,
       { ...opts, outputLanguage: opts?.outputLanguage },
-      progress
+      createCodeRefBatchProgress(progress, batchNo, totalBatches)
     );
     if (!batchDescs.length) {
       throw new LlmProviderError(
@@ -440,64 +625,39 @@ export async function generateCodeReferenceDescriptions(
         `Code reference description LLM returned no descriptions for batch of ${batch.length} entr${batch.length === 1 ? "y" : "ies"}`
       );
     }
-    allDescs.push(...batchDescs);
-  }
 
-  if (!allDescs.length) {
-    throw new LlmProviderError(
-      "bad-shape",
-      "Code reference description LLM returned no descriptions for non-empty input"
+    const batchDoneRefs = matchEntriesToDescriptions(batch, batchDescs, opts?.projectPath);
+    accumulatedDone.push(...batchDoneRefs);
+
+    const remainingEntries = entries.slice(start + BATCH_SIZE);
+    const snapshotRefs = composeIncrementalCodeRefs(
+      accumulatedDone,
+      remainingEntries,
+      opts?.projectPath
     );
-  }
-
-  // Build descMap: path -> descriptions (ordered)
-  const descMap = new Map<string, string[]>();
-  for (const d of allDescs) {
-    let arr = descMap.get(d.path);
-    if (!arr) {
-      arr = [];
-      descMap.set(d.path, arr);
+    if (opts?.onBatchComplete) {
+      await opts.onBatchComplete({
+        batchIndex,
+        batchCount: totalBatches,
+        batchDoneRefs,
+        snapshotRefs,
+        processedEntryCount: start + batch.length,
+        totalEntryCount: entries.length,
+      });
     }
-    arr.push(d.description);
+
+    progress?.report({
+      message: t(
+        "ui.codeRefs.generating.batchDone",
+        "Batch {0}/{1} complete",
+        batchNo,
+        totalBatches
+      ),
+      increment: totalBatches > 0 ? 100 / totalBatches : 0,
+    });
   }
 
-  // Match entries to descriptions, collecting turn indices per (path, description)
-  const acc = new Map<string, { path: string; desc: string; turns: number[] }>();
-  const usedDescs = new Map<string, number>(); // path -> next description index
-  let unmatchedPathCount = 0;
-  for (const entry of entries) {
-    const pathDescs = descMap.get(entry.path);
-    let desc: string;
-    if (!pathDescs?.length) {
-      unmatchedPathCount += 1;
-      desc = fallbackDescription(entry);
-    } else {
-      const idx = usedDescs.get(entry.path) ?? 0;
-      desc = idx < pathDescs.length ? pathDescs[idx] : pathDescs[pathDescs.length - 1];
-      usedDescs.set(entry.path, idx + 1);
-    }
-    const key = `${entry.path}\0${desc}`;
-    let g = acc.get(key);
-    if (!g) {
-      g = { path: entry.path, desc, turns: [] };
-      acc.set(key, g);
-    }
-    g.turns.push(entry.turnIndex);
-  }
-
-  if (unmatchedPathCount > 0) {
-    throw new LlmProviderError(
-      "bad-shape",
-      `Code reference description LLM returned paths that did not match ${unmatchedPathCount} input entr${unmatchedPathCount === 1 ? "y" : "ies"}`
-    );
-  }
-
-  return [...acc.values()].map((g) => ({
-    path: g.path,
-    lines: "-",
-    description: g.desc,
-    sourceTurnIndices: g.turns,
-  }));
+  return markCodeReferencesDone(accumulatedDone);
 }
 
 /** Extract codeReferences from ChatEvents using a small LLM call for descriptions. */
@@ -513,6 +673,7 @@ export async function extractCodeReferencesFromEvents(
     cache?: boolean;
     outline?: SessionOutline;
     outputLanguage?: OutputLanguage;
+    onBatchComplete?: (progress: CodeRefBatchProgress) => void | Promise<void>;
   },
   progress?: MindMapProgress
 ): Promise<CodeReference[]> {
@@ -530,6 +691,8 @@ export async function extractCodeReferencesFromEvents(
       cacheDir: opts?.cacheDir,
       cache: opts?.cache,
       outputLanguage: opts?.outputLanguage,
+      projectPath: opts?.projectPath,
+      onBatchComplete: opts?.onBatchComplete,
     },
     progress
   );
@@ -539,4 +702,8 @@ export async function extractCodeReferencesFromEvents(
 export const __testing = {
   buildCodeRefDescriptionPrompt,
   BATCH_SIZE,
+  composeIncrementalCodeRefs,
+  matchEntriesToDescriptions,
+  normalizeCodeRefDescPath,
+  formatCodeRefBatchLabel,
 };

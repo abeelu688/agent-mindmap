@@ -25,7 +25,7 @@ import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
-import { applyPendingMergeToPanel } from "./batch/batchStatus";
+import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
 
@@ -122,7 +122,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!panel) {
       return;
     }
-    applyPendingMergeToPanel(panel);
+    void applyPendingUpdatesToPanel(panel);
   });
 
   MindMapPanel.onSelectModelRequested(() => {

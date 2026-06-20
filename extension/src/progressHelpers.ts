@@ -14,17 +14,77 @@ function progressMessage(update: MindMapProgressUpdate): string {
 }
 
 export function progressTitle(): string {
-  return t(
-    "ui.progress.analyzingSession.title",
-    "Agent Mind Map: Analyzing session…"
+  return t("ui.progress.analyzingSession.title", "Agent Mind Map: Analyzing session…");
+}
+
+export async function withNotificationProgress<T>(
+  title: string,
+  initialMessage: string,
+  run: (progress: MindMapProgress) => Promise<T>
+): Promise<T> {
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title,
+      cancellable: false,
+    },
+    async (vscodeProgress) => {
+      const progress = createProgressReporter(vscodeProgress);
+      progress.report(initialMessage);
+      return run(progress);
+    }
+  );
+}
+
+function linkAbortSignal(source: AbortSignal, controller: AbortController): void {
+  if (source.aborted) {
+    controller.abort(source.reason);
+    return;
+  }
+  source.addEventListener("abort", () => controller.abort(source.reason), { once: true });
+}
+
+/** Merge multiple abort sources; aborts when any input signal aborts. */
+export function mergeAbortSignals(...sources: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  for (const source of sources) {
+    linkAbortSignal(source, controller);
+  }
+  return controller.signal;
+}
+
+export async function withCancellableNotificationProgress<T>(
+  title: string,
+  initialMessage: string,
+  run: (ctx: { progress: MindMapProgress; signal: AbortSignal }) => Promise<T>
+): Promise<T | undefined> {
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title,
+      cancellable: true,
+    },
+    async (vscodeProgress, token) => {
+      const controller = new AbortController();
+      const sub = token.onCancellationRequested(() => controller.abort());
+      const progress = createProgressReporter(vscodeProgress);
+      progress.report(initialMessage);
+      try {
+        return await run({ progress, signal: controller.signal });
+      } catch (err) {
+        if (controller.signal.aborted) {
+          return undefined;
+        }
+        throw err;
+      } finally {
+        sub.dispose();
+      }
+    }
   );
 }
 
 export async function withCancellableProgress<T>(
-  run: (ctx: {
-    signal: AbortSignal;
-    progress: MindMapProgress;
-  }) => Promise<T>,
+  run: (ctx: { signal: AbortSignal; progress: MindMapProgress }) => Promise<T>,
   title: string = progressTitle(),
   panel?: MindMapPanel,
   options?: { forwardToWebviewLoading?: boolean }
@@ -73,19 +133,12 @@ export function attachTranscriptWatch(
     const currentPanel = MindMapPanel.getCurrent();
     currentPanel?.setLoading(
       true,
-      t(
-        "ui.loading.transcriptUpdatedReanalyzing",
-        "Transcript updated, re-analyzing…"
-      )
+      t("ui.loading.transcriptUpdatedReanalyzing", "Transcript updated, re-analyzing…")
     );
     try {
       const refreshed = await withCancellableProgress(
         ({ signal, progress }) =>
-          loadSession(
-            session.session,
-            { context, signal, progress },
-            { forceRefresh: true }
-          ),
+          loadSession(session.session, { context, signal, progress }, { forceRefresh: true }),
         progressTitle(),
         currentPanel
       );

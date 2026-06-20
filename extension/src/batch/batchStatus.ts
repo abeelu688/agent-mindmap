@@ -29,11 +29,7 @@ export function setLastBatchStatus(status: BatchStatus): void {
   lastStatus = status;
 }
 
-export function applyPendingMergeToPanel(panel: MindMapPanel): boolean {
-  if (!pendingMindMap) {
-    return false;
-  }
-  panel.setMindMapData(pendingMindMap);
+export function clearPendingPanelUpdateFlags(panel: MindMapPanel): void {
   pendingMindMap = undefined;
   pendingBatchNo = undefined;
   pendingUpdateLabel = undefined;
@@ -45,6 +41,14 @@ export function applyPendingMergeToPanel(panel: MindMapPanel): boolean {
     };
     panel.setBatchStatus(lastStatus);
   }
+}
+
+export function applyPendingMergeToPanel(panel: MindMapPanel): boolean {
+  if (!pendingMindMap) {
+    return false;
+  }
+  panel.setMindMapData(pendingMindMap);
+  clearPendingPanelUpdateFlags(panel);
   return true;
 }
 

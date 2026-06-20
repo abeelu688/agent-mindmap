@@ -29,8 +29,8 @@ import {
   buildProjectConceptMergeForBatch,
   refreshSnapshotsForFreshSessions,
 } from "../batch/conceptMerge";
+import { applyPendingUpdatesToPanel } from "../batch/applyPendingUpdates";
 import {
-  applyPendingMergeToPanel,
   setPendingMindMap,
   clearPendingMerge,
   getLastBatchStatus,
@@ -397,7 +397,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
 
             if (!autoApplyUpdates) {
               if (!panel.getMindMapData()) {
-                applyPendingMergeToPanel(panel);
+                void applyPendingUpdatesToPanel(panel);
               } else {
                 notifyInfo(
                   t(

@@ -37,6 +37,10 @@ export type BatchStatus = {
   running: boolean;
   pendingUpdateBatchNo?: number;
   pendingUpdateLabel?: string;
+  codeRefActive?: boolean;
+  codeRefSessionLabel?: string;
+  codeRefMessage?: string;
+  codeRefQueueRemaining?: number;
 };
 
 export type WebviewStrings = {
@@ -52,6 +56,8 @@ export type WebviewStrings = {
     statusDone: string;
     statusUpdateBatch: string;
     statusUpdate: string;
+    codeRefsRunning: string;
+    codeRefsQueue: string;
   };
   menu: {
     sectionTheme: string;
@@ -334,6 +340,8 @@ export class MindMapHost {
         statusDone: t("webview.batch.status.done", "done"),
         statusUpdateBatch: t("webview.batch.status.updateBatch", "update:batch{0}"),
         statusUpdate: t("webview.batch.status.update", "update:{0}"),
+        codeRefsRunning: t("webview.batch.codeRefsRunning", "Code refs"),
+        codeRefsQueue: t("webview.batch.codeRefsQueue", "{0} in queue"),
       },
       menu: {
         sectionTheme: t("webview.menu.section.theme", "Theme"),

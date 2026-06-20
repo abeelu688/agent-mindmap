@@ -51,6 +51,10 @@ type BatchStatus = {
   running: boolean;
   pendingUpdateBatchNo?: number;
   pendingUpdateLabel?: string;
+  codeRefActive?: boolean;
+  codeRefSessionLabel?: string;
+  codeRefMessage?: string;
+  codeRefQueueRemaining?: number;
 };
 
 type VsCodeApi = {
@@ -99,6 +103,8 @@ const defaultBatchStrings: WebviewBatchStrings = {
   statusDone: "done",
   statusUpdateBatch: "update:batch{0}",
   statusUpdate: "update:{0}",
+  codeRefsRunning: "Code refs",
+  codeRefsQueue: "{0} in queue",
 };
 
 function setLoadingOverlay(active: boolean, message?: string): void {
@@ -154,8 +160,24 @@ function setBatchStatus(status: BatchStatus): void {
   }
   if (status.pendingUpdateBatchNo !== undefined) {
     parts.push(formatBatchLabel(batch.statusUpdateBatch, status.pendingUpdateBatchNo));
-  } else if (status.pendingUpdateLabel) {
+  }
+  if (status.pendingUpdateLabel) {
     parts.push(formatBatchLabel(batch.statusUpdate, status.pendingUpdateLabel));
+  }
+  if (status.codeRefActive) {
+    const codeRefParts: string[] = [];
+    if (status.codeRefSessionLabel) {
+      codeRefParts.push(`${batch.codeRefsRunning}: ${status.codeRefSessionLabel}`);
+    } else {
+      codeRefParts.push(batch.codeRefsRunning);
+    }
+    if (status.codeRefMessage) {
+      codeRefParts.push(status.codeRefMessage);
+    }
+    if (status.codeRefQueueRemaining !== undefined && status.codeRefQueueRemaining > 0) {
+      codeRefParts.push(formatBatchLabel(batch.codeRefsQueue, status.codeRefQueueRemaining));
+    }
+    parts.push(codeRefParts.join(" · "));
   }
   batchDetailEl.textContent = parts.join(" · ");
 

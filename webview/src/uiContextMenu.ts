@@ -16,6 +16,8 @@ export type WebviewBatchStrings = {
   statusDone: string;
   statusUpdateBatch: string;
   statusUpdate: string;
+  codeRefsRunning: string;
+  codeRefsQueue: string;
 };
 
 export type WebviewStrings = {
