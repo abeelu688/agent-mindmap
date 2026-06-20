@@ -35,20 +35,21 @@ Goal: one storage abstraction, current JSON behavior preserved behind it. No new
 
 **Rollback**: revert; MCP server returns to `storeDir`-based handlers.
 
-### P1.3 — Port extension store callers to `Store`
+### P1.3 — Port extension store READ callers to `Store`
 
 **Scope**
 
-- The extension has its own store layer at `extension/src/store/` (sessionStore, ontologyStore, mergeSnapshot, etc.) that writes JSON directly. Introduce a `Store` instance constructed at activation (`extension/src/extension.ts`) from `getStoreDir()`, pass it through command handlers and `sessionLoader.ts`.
-- This is the largest PR in phase 1. Files touched: `extension.ts`, `commands/analyzeProject.ts`, `commands/syncAiContext.ts`, `sessionLoader.ts`, `mindmap/rebuildMindMapFromStore.ts`, `store/sessionStore.ts`, `store/clearProjectAnalysisCache.ts`, `codeRefQueue.ts`.
-- The extension's write paths (pipeline → sessionStore → JSON) route through `Store.upsertRecord` / `Store.bumpProjectRevision`. Read paths route through `Store.listRecordsForProject` etc.
-- `mcpConfig.ts`'s `refreshMcpIndexForProject` / `refreshMcpIndexForWorkspace` call `bumpMcpProjectRevision` directly — switch to `Store`.
+- The extension has its own store layer at `extension/src/store/` (sessionStore, ontologyStore, mergeSnapshot, etc.) that reads/writes JSON directly. Add a memoized `getStore(): Store` accessor (`extension/src/store/storeClient.ts`) keyed on `getStoreDir()`, and route the extension's session-record **read** paths through it.
+- Files touched: `store/storeClient.ts` (new), `commands/analyzeProject.ts`, `sessionLoader.ts`, `mindmap/rebuildMindMapFromStore.ts`, `mcp/mcpConfig.ts`, `pipeline/batchMergeCache.ts`.
+- Read paths route through `Store.getRecord` / `Store.listRecordsForProject` / `Store.readConceptTrieMerge`. The existing MCP-index bump flow (`mcpConfig.ts` → `refreshMcpIndexForProject` / `refreshMcpIndexForWorkspace`) already routes through `Store.bumpProjectRevision`; those call sites swap their inline `new JsonFsStore(getStoreDir())` to `getStore()`.
+- **Session-record writes stay on the raw `writeRecord` helper.** Routing them through `Store.upsertRecord` is NOT behavior-preserving: `upsertRecord` bumps the MCP project revision + rewrites `.mcp-index.json` + re-reads all project records on every call, while `writeRecord` writes only the file. With default `agentMindmap.mcp.autoRefreshOnAnalyze=false`, that turns ~0 `.mcp-index.json` writes per batch into 100+, and double-bumps when the flag is on. `upsertRecord`'s bump-on-write semantic is correct for team mode (it drives the P4.3 push queue + P5.1 merge worker), so it must not change. Write-routing lands in a follow-up PR alongside the P4.3 push queue, where bump-on-write is the correct semantic.
+- Out of scope (stay raw): `writeRecord` (all sites); unfiltered `listRecords(storeDir)` list-all (no `listAllRecords` on `Store`); `rebuildIndex`/`readIndex` (extension-local `index.json`); all merge-snapshot / ontology / deterministic-merge / llm-refined-merge writers and readers (none on the `Store` interface — absorbed in a later team-mode phase); `codeRefQueue.ts` (uses `item.storeDir` captured at enqueue time; the queue's writes stay raw, so leaving it raw is consistent); `ensureStore`; equivalences reads (the extension's subset-matching loader has different semantics than `Store.readLatestSegmentEquivalences`).
 
 **Not in scope**: changing what gets written or read. Same JSON files, same contents.
 
-**Test**: existing extension tests green; add a smoke test that activating the extension and analyzing a session still produces the same JSON on disk (byte-compare a fixture).
+**Test**: existing extension tests green; add `test/store/extensionStoreRouting.test.ts` — a contract test asserting the `Store` methods P1.3 routes to are byte-compatible with the raw functions they replaced (read parity, `upsertRecord` write byte-compat, concept-trie read parity, `getRecord` does NOT mutate `.mcp-index.json`, `bumpProjectRevision` does). The heavier end-to-end "analyze a session, byte-compare on-disk JSON" smoke test is deferred to a follow-up.
 
-**Rollback**: revert; extension returns to direct `storeReader`/`sessionStore` calls. Since P1.1/P1.2 only added wrappers, the extension works again without them.
+**Rollback**: revert; extension returns to direct `sessionStore` reads. The raw functions are unchanged (they still back the un-ported writers), so `getStore()` simply becomes unused and `storeClient.ts` is deleted. `mcpConfig.ts` reverts to inline `new JsonFsStore(getStoreDir())`. On-disk JSON unchanged.
 
 ### P1.4 — Retire `storeReader.ts` direct exports from internal call sites
 

@@ -5,7 +5,8 @@ import { getStoreDir } from "../paths";
 import { showCliInstallGuide } from "../llm/cliInstallGuide";
 import { uiTranslate, t } from "../l10n/uiTranslate";
 import { ensureModelSelected, readLlmOptions, resolveLlmProviderId } from "../llmOptions";
-import { ensureStore, readRecord } from "../store/sessionStore";
+import { ensureStore } from "../store/sessionStore";
+import { getStore } from "../store/storeClient";
 import { runFinalRootRefresh } from "../pipeline/snapshotHierarchy";
 import { clearProjectAnalysisCache } from "../store/clearProjectAnalysisCache";
 import { flushPendingCodeRefRefreshForProject, purgeCodeRefQueueForProject } from "../codeRefQueue";
@@ -180,7 +181,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
         panel.setBatchStatus(getLastBatchStatus()!);
 
         for (const session of sessions) {
-          const rec = await readRecord(storeDir, slug, session.id);
+          const rec = await getStore().getRecord(slug, session.id);
           if (!rec) {
             continue;
           }
@@ -237,7 +238,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
               if (signal.aborted) {
                 return;
               }
-              const rec = await readRecord(storeDir, slug, sessionId);
+              const rec = await getStore().getRecord(slug, sessionId);
               if (!rec) {
                 continue;
               }
@@ -300,9 +301,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
                 );
                 // Lazy-load existing merge for first cache-only batch only.
                 if (!panel.getMindMapData()) {
-                  const { readMergeRecord, conceptTrieMergePath } =
-                    await import("../store/sessionStore");
-                  const existingMerge = await readMergeRecord(conceptTrieMergePath(storeDir));
+                  const existingMerge = await getStore().readConceptTrieMerge();
                   if (existingMerge) {
                     conceptMerge = existingMerge;
                   }

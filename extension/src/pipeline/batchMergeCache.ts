@@ -1,5 +1,6 @@
 import { isCompleteOntologyRecord, readOntologyRecord } from "../store/ontologyStore";
-import { conceptTrieMergePath, readMergeRecord, recordFreshnessToken } from "../store/sessionStore";
+import { conceptTrieMergePath, recordFreshnessToken } from "../store/sessionStore";
+import { getStore } from "../store/storeClient";
 import { mindMapLog } from "../webview/MindMapLog";
 import { computeBatchMergeCacheKey } from "./mergePipeline";
 import type { AgentHostId } from "../host/types";
@@ -86,9 +87,9 @@ export async function tryReuseBatchMerge(
     return { hit: false, reason: "ontology missing mergeSessionAnalysis" };
   }
 
-  const mergePath = conceptTrieMergePath(opts.storeDir);
-  const merge = await readMergeRecord(mergePath);
+  const merge = await getStore().readConceptTrieMerge();
   if (!merge) {
+    const mergePath = conceptTrieMergePath(opts.storeDir);
     mindMapLog(`[tryReuseBatchMerge] MISS: concept-trie.json not found at ${mergePath}`);
     return { hit: false, reason: "concept-trie.json not found" };
   }

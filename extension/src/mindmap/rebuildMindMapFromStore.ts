@@ -1,4 +1,5 @@
-import { conceptTrieMergePath, listRecords, readRecord } from "../store/sessionStore";
+import { conceptTrieMergePath } from "../store/sessionStore";
+import { getStore } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import {
   buildConceptMergeWithOntology,
@@ -24,8 +25,7 @@ export async function rebuildProjectMergeFromStore(
   storeDir: string,
   projectSlug: string
 ): Promise<MergeRecord | undefined> {
-  const all = await listRecords(storeDir);
-  const projectRecords = all.filter((r) => r.meta.projectSlug === projectSlug);
+  const projectRecords = await getStore().listRecordsForProject(projectSlug);
   if (!projectRecords.length) {
     return undefined;
   }
@@ -49,7 +49,7 @@ export async function rebuildSingleSessionMindMapFromStore(
   projectSlug: string,
   sessionId: string
 ): Promise<MindMapRoot | undefined> {
-  const record = await readRecord(storeDir, projectSlug, sessionId);
+  const record = await getStore().getRecord(projectSlug, sessionId);
   if (!record?.sessionAnalysis?.outline) {
     return undefined;
   }

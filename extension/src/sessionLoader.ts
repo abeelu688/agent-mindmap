@@ -26,6 +26,7 @@ import {
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import { getStoreDir } from "./paths";
+import { getStore } from "./store/storeClient";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
 import { runBatchSnapshotPipeline, refreshSnapshotForSession } from "./pipeline/snapshotHierarchy";
@@ -37,7 +38,6 @@ import {
   deterministicMergePath,
   isRecordFresh,
   listRecords,
-  readRecord,
   rebuildIndex,
   recordFreshnessToken,
   writeMergeRecord,
@@ -329,7 +329,7 @@ export async function loadSession(
   if (settings.library.enabled && !options.forceRefresh) {
     progress?.report(t("ui.progress.checkLibraryCache", "Checking library cache…"));
     try {
-      const existing = await readRecord(getStoreDir(), ctx.projectSlug, session.id);
+      const existing = await getStore().getRecord(ctx.projectSlug, session.id);
       // Debug: surface freshness inputs so we can diagnose "why did this
       // session re-analyze even though I didn't change anything?"
       if (existing) {

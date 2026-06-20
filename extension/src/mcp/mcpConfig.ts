@@ -1,8 +1,9 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import { JsonFsStore, workspaceToSlug } from "@agent-mindmap/shared";
+import { workspaceToSlug } from "@agent-mindmap/shared";
 import { getStoreDir, getWorkspacePath } from "../paths";
+import { getStore } from "../store/storeClient";
 import {
   claudeMcpConfigPath,
   cursorMcpConfigPath,
@@ -32,7 +33,7 @@ export async function resolveExistingMcpServerEntry(extensionPath: string): Prom
 }
 
 export async function refreshMcpIndexForProject(projectSlug: string): Promise<void> {
-  const store = new JsonFsStore(getStoreDir());
+  const store = getStore();
   const records = await store.listRecordsForProject(projectSlug);
   const lastAnalyzedAt = records.length
     ? Math.max(...records.map((r) => r.meta.analyzedAt))
@@ -52,7 +53,7 @@ export async function refreshMcpIndexForWorkspace(): Promise<
     return undefined;
   }
   const projectSlug = workspaceToSlug(projectPath);
-  const store = new JsonFsStore(getStoreDir());
+  const store = getStore();
   const records = await store.listRecordsForProject(projectSlug);
   if (!records.length) {
     return undefined;
