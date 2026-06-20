@@ -122,6 +122,19 @@ function errorResult(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
+function withErrorHandler<TArgs extends Record<string, unknown>>(
+  fn: (args: TArgs) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>
+): (args: TArgs) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }> {
+  return async (args) => {
+    try {
+      return await fn(args);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return errorResult(`internal error: ${detail}`);
+    }
+  };
+}
+
 async function main(): Promise<void> {
   const server = new McpServer({
     name: "agent-mindmap",
@@ -129,8 +142,13 @@ async function main(): Promise<void> {
   });
 
   server.tool("list_projects", {}, async () => {
-    const projects = await listProjectSummaries(storeDir);
-    return textResult(renderProjectList(projects));
+    try {
+      const projects = await listProjectSummaries(storeDir);
+      return textResult(renderProjectList(projects));
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return errorResult(`internal error: ${detail}`);
+    }
   });
 
   server.tool(
@@ -141,7 +159,7 @@ async function main(): Promise<void> {
       recentLimit: z.number().int().min(1).max(20).optional(),
       conceptLimit: z.number().int().min(1).max(30).optional(),
     },
-    async ({ projectPath, projectSlug, recentLimit, conceptLimit }) => {
+    withErrorHandler(async ({ projectPath, projectSlug, recentLimit, conceptLimit }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
         return errorResult(
@@ -167,7 +185,7 @@ async function main(): Promise<void> {
           conceptLimit,
         })
       );
-    }
+    })
   );
 
   server.tool(
@@ -178,7 +196,7 @@ async function main(): Promise<void> {
       limit: z.number().int().min(1).max(100).optional(),
       offset: z.number().int().min(0).optional(),
     },
-    async ({ projectPath, projectSlug, limit = 20, offset = 0 }) => {
+    withErrorHandler(async ({ projectPath, projectSlug, limit = 20, offset = 0 }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
         return errorResult("provide projectPath or projectSlug.");
@@ -193,7 +211,7 @@ async function main(): Promise<void> {
           total: sorted.length,
         })
       );
-    }
+    })
   );
 
   server.tool(
@@ -205,13 +223,13 @@ async function main(): Promise<void> {
       limit: z.number().int().min(1).max(30).optional(),
       verbose: z.boolean().optional(),
     },
-    async ({ query, projectPath, projectSlug, limit = 10, verbose = false }) => {
+    withErrorHandler(async ({ query, projectPath, projectSlug, limit = 10, verbose = false }) => {
       const result = await runProjectSearch({ query, projectPath, projectSlug, limit, verbose });
       if (result.kind === "error") {
         return errorResult(result.message);
       }
       return textResult(renderSearchResults(query, result.hits, limit, verbose));
-    }
+    })
   );
 
   server.tool(
@@ -222,13 +240,13 @@ async function main(): Promise<void> {
       projectSlug: z.string().optional(),
       limit: z.number().int().min(1).max(20).optional(),
     },
-    async ({ query, projectPath, projectSlug, limit = 8 }) => {
+    withErrorHandler(async ({ query, projectPath, projectSlug, limit = 8 }) => {
       const result = await runProjectSearch({ query, projectPath, projectSlug, limit });
       if (result.kind === "error") {
         return errorResult(result.message);
       }
       return textResult(renderMemoryRetrieval(query, result.hits, limit));
-    }
+    })
   );
 
   server.tool(
@@ -238,7 +256,7 @@ async function main(): Promise<void> {
       projectPath: z.string().optional(),
       projectSlug: z.string().optional(),
     },
-    async ({ conceptKey, projectPath, projectSlug }) => {
+    withErrorHandler(async ({ conceptKey, projectPath, projectSlug }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
         return errorResult("provide projectPath or projectSlug.");
@@ -246,7 +264,7 @@ async function main(): Promise<void> {
       const index = await ensureProjectIndex(slug);
       const contexts = collectConceptContexts(index.records);
       return textResult(renderConceptDetail(conceptKey, contexts, index.records));
-    }
+    })
   );
 
   server.tool(
@@ -256,7 +274,7 @@ async function main(): Promise<void> {
       projectPath: z.string().optional(),
       projectSlug: z.string().optional(),
     },
-    async ({ sessionId, projectPath, projectSlug }) => {
+    withErrorHandler(async ({ sessionId, projectPath, projectSlug }) => {
       const slug = await resolveSlug({ projectPath, projectSlug });
       if (!slug) {
         return errorResult("provide projectPath or projectSlug.");
@@ -266,7 +284,7 @@ async function main(): Promise<void> {
         return errorResult(`session \`${sessionId}\` not found for project \`${slug}\`.`);
       }
       return textResult(renderSessionOutlineMarkdown(record));
-    }
+    })
   );
 
   const transport = new StdioServerTransport();
