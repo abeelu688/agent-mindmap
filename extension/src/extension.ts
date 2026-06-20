@@ -28,6 +28,7 @@ import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
+import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -66,6 +67,9 @@ export function activate(context: vscode.ExtensionContext): void {
         const providerId = resolveLlmProviderId(providerSetting, host.defaultLlmProvider);
         MindMapHost.setProviderId(providerId);
       }
+      if (affectsMcpLocale(e)) {
+        void syncMcpLocaleFile();
+      }
     })
   );
 
@@ -87,6 +91,10 @@ export function activate(context: vscode.ExtensionContext): void {
       // Silent: this is best-effort.
     });
   }
+
+  // ── Sync MCP locale file so stdio server can localize tool examples ────
+
+  void syncMcpLocaleFile();
 
   // ── Document close listener (auto-reveal mind map) ────────────────────
 

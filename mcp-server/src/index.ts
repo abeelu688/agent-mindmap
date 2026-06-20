@@ -21,6 +21,8 @@ import {
   resolveSlug,
   runProjectSearch,
 } from "./handlers";
+import { resolveMcpLocale } from "./mcpLocale";
+import { resolveAllToolDescriptions } from "./toolDescriptions";
 
 declare const __MCP_SERVER_VERSION__: string;
 const SERVER_VERSION =
@@ -69,7 +71,10 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  server.tool("list_projects", {}, async () => {
+  const locale = resolveMcpLocale();
+  const descriptions = resolveAllToolDescriptions(locale);
+
+  server.tool("list_projects", descriptions.list_projects, {}, async () => {
     try {
       const projects = await ctx.store.listProjectSummaries();
       return textResult(renderProjectList(projects));
@@ -79,20 +84,36 @@ async function main(): Promise<void> {
     }
   });
 
-  server.tool("server_info", {}, async () => {
-    const lines = [
-      "# agent-mindmap MCP server",
-      "",
-      `- **name**: \`agent-mindmap\``,
-      `- **version**: \`${SERVER_VERSION}\``,
-      `- **storeDir**: \`${ctx.storeDir ?? "(remote)"}\``,
-      `- **cached projects**: ${ctx.indexCache.size()}`,
-    ];
-    return textResult(lines.join("\n"));
-  });
+  server.tool(
+    "server_info",
+    "Server orientation: capabilities, store path, and recommended call flow. " +
+      "This server indexes past AI agent sessions (Cursor/Claude Code) analyzed by the Agent Mind Map VS Code extension. " +
+      "Recommended flow: call `list_projects` first to discover `projectSlug`s, then `search_project_history` or `retrieve_project_memory` for content, `get_project_briefing` for a recap, `get_concept_detail` / `get_session_outline` to drill in.",
+    {},
+    async () => {
+      const lines = [
+        "# agent-mindmap MCP server",
+        "",
+        `- **name**: \`agent-mindmap\``,
+        `- **version**: \`${SERVER_VERSION}\``,
+        `- **storeDir**: \`${ctx.storeDir ?? "(remote)"}\``,
+        `- **cached projects**: ${ctx.indexCache.size()}`,
+        `- **example-locale**: \`${locale}\``,
+        "",
+        "**Recommended flow**",
+        "1. `list_projects` → discover `projectSlug`s.",
+        "2. `search_project_history` (semantic + keyword) or `retrieve_project_memory` (synthesis) for content.",
+        "3. `get_project_briefing` for a high-level recap; `get_concept_detail` / `get_session_outline` to drill in.",
+        "",
+        "This server indexes past AI agent sessions (Cursor/Claude Code) analyzed by the Agent Mind Map VS Code extension. It does NOT see your current files or live code.",
+      ];
+      return textResult(lines.join("\n"));
+    }
+  );
 
   server.tool(
     "get_project_briefing",
+    descriptions.get_project_briefing,
     {
       projectPath: z.string().optional().describe("Workspace filesystem path"),
       projectSlug: z.string().optional().describe("Cursor project slug"),
@@ -130,6 +151,7 @@ async function main(): Promise<void> {
 
   server.tool(
     "list_project_sessions",
+    descriptions.list_project_sessions,
     {
       projectPath: z.string().optional(),
       projectSlug: z.string().optional(),
@@ -156,6 +178,7 @@ async function main(): Promise<void> {
 
   server.tool(
     "search_project_history",
+    descriptions.search_project_history,
     {
       query: z.string().min(1),
       projectPath: z.string().optional(),
@@ -180,6 +203,7 @@ async function main(): Promise<void> {
 
   server.tool(
     "retrieve_project_memory",
+    descriptions.retrieve_project_memory,
     {
       query: z.string().min(1),
       projectPath: z.string().optional(),
@@ -197,6 +221,7 @@ async function main(): Promise<void> {
 
   server.tool(
     "get_concept_detail",
+    descriptions.get_concept_detail,
     {
       conceptKey: z.string().min(1),
       projectPath: z.string().optional(),
@@ -215,6 +240,7 @@ async function main(): Promise<void> {
 
   server.tool(
     "get_session_outline",
+    descriptions.get_session_outline,
     {
       sessionId: z.string().min(1),
       projectPath: z.string().optional(),
