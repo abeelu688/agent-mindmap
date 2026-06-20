@@ -382,6 +382,7 @@ export type ProjectSearchIndex = {
 
 export class McpSearchIndexCache {
   private cache = new Map<string, ProjectSearchIndex>();
+  private inflight = new Map<string, Promise<ProjectSearchIndex>>();
 
   get(projectSlug: string): ProjectSearchIndex | undefined {
     return this.cache.get(projectSlug);
@@ -389,6 +390,36 @@ export class McpSearchIndexCache {
 
   set(index: ProjectSearchIndex): void {
     this.cache.set(index.projectSlug, index);
+  }
+
+  /**
+   * Dedupe concurrent builds for the same project slug. If a build is already
+   * running, callers share its promise instead of triggering another full
+   * `listRecordsForProject` scan.
+   */
+  async build(
+    projectSlug: string,
+    builder: () => Promise<ProjectSearchIndex>
+  ): Promise<ProjectSearchIndex> {
+    const cached = this.cache.get(projectSlug);
+    if (cached) {
+      return cached;
+    }
+    const existing = this.inflight.get(projectSlug);
+    if (existing) {
+      return existing;
+    }
+    const promise = (async () => {
+      try {
+        const index = await builder();
+        this.cache.set(projectSlug, index);
+        return index;
+      } finally {
+        this.inflight.delete(projectSlug);
+      }
+    })();
+    this.inflight.set(projectSlug, promise);
+    return promise;
   }
 
   invalidate(projectSlug?: string): void {

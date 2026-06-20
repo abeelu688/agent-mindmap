@@ -49,16 +49,17 @@ async function ensureProjectIndex(projectSlug: string): Promise<ProjectSearchInd
   ) {
     return cached;
   }
-  const records = await listRecordsForProject(storeDir, projectSlug);
-  const built: ProjectSearchIndex = {
-    projectSlug,
-    revision,
-    sourceMtimeMs: latestMtime,
-    records,
-    builtAt: Date.now(),
-  };
-  indexCache.set(built);
-  return built;
+  return indexCache.build(projectSlug, async () => {
+    const records = await listRecordsForProject(storeDir, projectSlug);
+    const built: ProjectSearchIndex = {
+      projectSlug,
+      revision,
+      sourceMtimeMs: latestMtime,
+      records,
+      builtAt: Date.now(),
+    };
+    return built;
+  });
 }
 
 async function resolveSlug(opts: {
