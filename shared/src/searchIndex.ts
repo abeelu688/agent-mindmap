@@ -381,15 +381,31 @@ export type ProjectSearchIndex = {
 };
 
 export class McpSearchIndexCache {
+  private static readonly MAX_ENTRIES = 8;
   private cache = new Map<string, ProjectSearchIndex>();
   private inflight = new Map<string, Promise<ProjectSearchIndex>>();
 
   get(projectSlug: string): ProjectSearchIndex | undefined {
-    return this.cache.get(projectSlug);
+    const value = this.cache.get(projectSlug);
+    if (value) {
+      this.cache.delete(projectSlug);
+      this.cache.set(projectSlug, value);
+    }
+    return value;
   }
 
   set(index: ProjectSearchIndex): void {
+    if (this.cache.has(index.projectSlug)) {
+      this.cache.delete(index.projectSlug);
+    }
     this.cache.set(index.projectSlug, index);
+    while (this.cache.size > McpSearchIndexCache.MAX_ENTRIES) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      this.cache.delete(oldestKey);
+    }
   }
 
   /**
@@ -412,7 +428,7 @@ export class McpSearchIndexCache {
     const promise = (async () => {
       try {
         const index = await builder();
-        this.cache.set(projectSlug, index);
+        this.set(index);
         return index;
       } finally {
         this.inflight.delete(projectSlug);
