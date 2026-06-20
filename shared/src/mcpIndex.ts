@@ -32,7 +32,8 @@ export function emptyMcpIndex(): McpIndexFile {
 export async function bumpMcpProjectRevision(
   storeDir: string,
   projectSlug: string,
-  recordCount: number
+  recordCount: number,
+  opts?: { lastAnalyzedAt?: number; projectPath?: string }
 ): Promise<McpIndexFile> {
   const index = await readMcpIndex(storeDir);
   const prev = index.projects[projectSlug];
@@ -40,6 +41,8 @@ export async function bumpMcpProjectRevision(
     lastBuiltAt: Date.now(),
     recordCount,
     revision: (prev?.revision ?? 0) + 1,
+    lastAnalyzedAt: opts?.lastAnalyzedAt ?? prev?.lastAnalyzedAt,
+    projectPath: opts?.projectPath ?? prev?.projectPath,
   };
   index.projects[projectSlug] = entry;
   index.updatedAt = Date.now();

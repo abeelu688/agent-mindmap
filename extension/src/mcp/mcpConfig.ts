@@ -38,7 +38,14 @@ export async function resolveExistingMcpServerEntry(extensionPath: string): Prom
 export async function refreshMcpIndexForProject(projectSlug: string): Promise<void> {
   const storeDir = getStoreDir();
   const records = await listRecordsForProject(storeDir, projectSlug);
-  await bumpMcpProjectRevision(storeDir, projectSlug, records.length);
+  const lastAnalyzedAt = records.length
+    ? Math.max(...records.map((r) => r.meta.analyzedAt))
+    : undefined;
+  const projectPath = records.find((r) => r.meta.projectPath)?.meta.projectPath;
+  await bumpMcpProjectRevision(storeDir, projectSlug, records.length, {
+    lastAnalyzedAt,
+    projectPath,
+  });
 }
 
 export async function refreshMcpIndexForWorkspace(): Promise<
@@ -54,7 +61,11 @@ export async function refreshMcpIndexForWorkspace(): Promise<
   if (!records.length) {
     return undefined;
   }
-  await bumpMcpProjectRevision(storeDir, projectSlug, records.length);
+  const lastAnalyzedAt = Math.max(...records.map((r) => r.meta.analyzedAt));
+  await bumpMcpProjectRevision(storeDir, projectSlug, records.length, {
+    lastAnalyzedAt,
+    projectPath,
+  });
   return { projectSlug, recordCount: records.length };
 }
 

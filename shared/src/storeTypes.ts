@@ -86,6 +86,8 @@ export type McpIndexProjectEntry = {
   lastBuiltAt: number;
   recordCount: number;
   revision: number;
+  lastAnalyzedAt?: number;
+  projectPath?: string;
 };
 
 export type McpIndexFile = {

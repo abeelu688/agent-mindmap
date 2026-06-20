@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { readMcpIndex } from "./mcpIndex";
 import { workspaceToSlug } from "./paths";
 import { STORE_LAYOUT } from "./storeLayout";
 import type {
@@ -175,6 +176,22 @@ export async function projectSessionsLatestMtimeMs(
 }
 
 export async function listProjectSummaries(storeDir: string): Promise<ProjectSummary[]> {
+  const index = await readMcpIndex(storeDir);
+  const entries = Object.entries(index.projects);
+  if (entries.length) {
+    const summaries: ProjectSummary[] = entries.map(([projectSlug, entry]) => ({
+      projectSlug,
+      projectPath: entry.projectPath,
+      sessionCount: entry.recordCount,
+      lastAnalyzedAt: entry.lastAnalyzedAt ?? entry.lastBuiltAt,
+    }));
+    summaries.sort((a, b) => b.lastAnalyzedAt - a.lastAnalyzedAt);
+    return summaries;
+  }
+  return listProjectSummariesFromRecords(storeDir);
+}
+
+async function listProjectSummariesFromRecords(storeDir: string): Promise<ProjectSummary[]> {
   const records = await listRecords(storeDir);
   const bySlug = new Map<string, SessionRecord[]>();
   for (const record of records) {
