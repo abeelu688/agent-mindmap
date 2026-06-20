@@ -168,6 +168,7 @@ export async function refreshStaleMcpInstall(
 ): Promise<void> {
   const cursorPath = cursorMcpConfigPath(workspaceRoot);
   const claudePath = claudeMcpConfigPath(workspaceRoot);
+  const currentStoreDir = getStoreDir();
   let serverEntry: string | undefined;
   const refreshed: string[] = [];
 
@@ -189,13 +190,15 @@ export async function refreshStaleMcpInstall(
     if (!mainEntry?.args?.[0]) {
       continue;
     }
-    let stillValid = true;
+    let pathValid = true;
     try {
       await fs.access(mainEntry.args[0]);
     } catch {
-      stillValid = false;
+      pathValid = false;
     }
-    if (stillValid) {
+    const envStoreDir = mainEntry.env?.AGENT_MINDMAP_STORE_DIR;
+    const storeDirMatches = envStoreDir === currentStoreDir;
+    if (pathValid && storeDirMatches) {
       continue;
     }
     if (!serverEntry) {
@@ -205,8 +208,7 @@ export async function refreshStaleMcpInstall(
         return;
       }
     }
-    const storeDir = mainEntry.env?.AGENT_MINDMAP_STORE_DIR;
-    existing = mergeAgentMindmapIntoConfig(existing, serverEntry, storeDir ?? "");
+    existing = mergeAgentMindmapIntoConfig(existing, serverEntry, currentStoreDir);
 
     try {
       await writeJsonFile(configPath, existing);
@@ -220,7 +222,7 @@ export async function refreshStaleMcpInstall(
 
   if (refreshed.length) {
     void vscode.window.showInformationMessage(
-      `Agent Mind Map: Refreshed stale MCP server path in ${refreshed.join(" and ")} after extension upgrade.`
+      `Agent Mind Map: Refreshed MCP server config in ${refreshed.join(" and ")} (path or store dir drift detected).`
     );
   }
 }
