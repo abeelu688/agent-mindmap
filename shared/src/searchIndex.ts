@@ -171,7 +171,8 @@ function rerankHit(
   hit: SearchHit,
   query: string,
   terms: WeightedTerm[],
-  newestAnalyzedAt: number
+  newestAnalyzedAt: number,
+  verbose = false
 ): SearchHit {
   const searchableText = [
     hit.snippet,
@@ -184,13 +185,22 @@ function rerankHit(
     .join("\n");
   const recencyBoost =
     newestAnalyzedAt > 0 ? Math.max(0, hit.analyzedAt / newestAnalyzedAt) * 1.5 : 0;
-  const score =
-    hit.score +
-    kindRank(hit.kind) * 2 +
-    phraseBoost(searchableText, query) +
-    queryCoverage(searchableText, terms) * 6 +
-    recencyBoost;
-  return { ...hit, score };
+  const kindRankScore = kindRank(hit.kind) * 2;
+  const phraseScore = phraseBoost(searchableText, query);
+  const coverageScore = queryCoverage(searchableText, terms) * 6;
+  const score = hit.score + kindRankScore + phraseScore + coverageScore + recencyBoost;
+  const out: SearchHit = { ...hit, score };
+  if (verbose) {
+    out.scoreBreakdown = {
+      base: hit.score,
+      kindRank: kindRankScore,
+      phraseBoost: phraseScore,
+      coverage: coverageScore,
+      recency: recencyBoost,
+      total: score,
+    };
+  }
+  return out;
 }
 
 function diversifyHits(hits: SearchHit[], limit: number): SearchHit[] {
@@ -330,7 +340,8 @@ export function searchProjectRecords(
   limit: number,
   equivalences: SegmentEquivalence[] = [],
   precomputedConceptTerms?: ConceptTermEntry[],
-  precomputedRecordTokens?: Set<string>[]
+  precomputedRecordTokens?: Set<string>[],
+  verbose = false
 ): SearchHit[] {
   const conceptTerms = precomputedConceptTerms ?? buildConceptTermIndex(records);
   const terms = weightedTerms(query, conceptTerms, equivalences);
@@ -422,7 +433,7 @@ export function searchProjectRecords(
         b.sessionId.localeCompare(a.sessionId)
     )
     .slice(0, candidateLimit)
-    .map((hit) => rerankHit(hit, query, terms, newestAnalyzedAt))
+    .map((hit) => rerankHit(hit, query, terms, newestAnalyzedAt, verbose))
     .sort(
       (a, b) =>
         b.score - a.score ||

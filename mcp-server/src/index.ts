@@ -86,6 +86,7 @@ async function runProjectSearch(opts: {
   projectPath?: string;
   projectSlug?: string;
   limit: number;
+  verbose?: boolean;
 }): Promise<
   { kind: "ok"; hits: ReturnType<typeof searchProjectRecords> } | { kind: "error"; message: string }
 > {
@@ -107,7 +108,8 @@ async function runProjectSearch(opts: {
     opts.limit,
     equivalences,
     index.conceptTerms,
-    index.recordTokens
+    index.recordTokens,
+    opts.verbose ?? false
   );
   return { kind: "ok", hits };
 }
@@ -201,13 +203,14 @@ async function main(): Promise<void> {
       projectPath: z.string().optional(),
       projectSlug: z.string().optional(),
       limit: z.number().int().min(1).max(30).optional(),
+      verbose: z.boolean().optional(),
     },
-    async ({ query, projectPath, projectSlug, limit = 10 }) => {
-      const result = await runProjectSearch({ query, projectPath, projectSlug, limit });
+    async ({ query, projectPath, projectSlug, limit = 10, verbose = false }) => {
+      const result = await runProjectSearch({ query, projectPath, projectSlug, limit, verbose });
       if (result.kind === "error") {
         return errorResult(result.message);
       }
-      return textResult(renderSearchResults(query, result.hits, limit));
+      return textResult(renderSearchResults(query, result.hits, limit, verbose));
     }
   );
 

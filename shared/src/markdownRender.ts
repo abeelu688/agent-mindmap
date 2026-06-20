@@ -219,7 +219,12 @@ export function renderConceptDetail(
   return lines.join("\n");
 }
 
-export function renderSearchResults(query: string, hits: SearchHit[], limit: number): string {
+export function renderSearchResults(
+  query: string,
+  hits: SearchHit[],
+  limit: number,
+  verbose = false
+): string {
   if (!hits.length) {
     return `_No matches for \`${query}\` in analyzed project history._`;
   }
@@ -230,7 +235,7 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
     "",
   ];
   for (const hit of hits.slice(0, limit)) {
-    lines.push(...renderSearchHit(hit));
+    lines.push(...renderSearchHit(hit, verbose));
   }
   return lines.join("\n");
 }
@@ -304,7 +309,7 @@ export function renderMemoryRetrieval(query: string, hits: SearchHit[], limit: n
   return lines.join("\n");
 }
 
-function renderSearchHit(hit: SearchHit): string[] {
+function renderSearchHit(hit: SearchHit, verbose = false): string[] {
   const lines = [`## ${hit.conceptLabel ?? hit.sessionLabel}`];
   lines.push(`- **type**: ${hit.kind}`);
   lines.push(`- **sessionId**: \`${hit.sessionId}\``);
@@ -317,6 +322,12 @@ function renderSearchHit(hit: SearchHit): string[] {
   lines.push(`- ${hit.snippet}`);
   for (const ev of hit.evidence.slice(0, 3)) {
     lines.push(`  - ${truncate(ev, 160)}`);
+  }
+  if (verbose && hit.scoreBreakdown) {
+    const b = hit.scoreBreakdown;
+    lines.push(
+      `- **score**: ${b.total.toFixed(2)} (base ${b.base.toFixed(2)} + kind ${b.kindRank} + phrase ${b.phraseBoost} + coverage ${b.coverage.toFixed(2)} + recency ${b.recency.toFixed(2)})`
+    );
   }
   lines.push("");
   return lines;

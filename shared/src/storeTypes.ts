@@ -147,4 +147,12 @@ export type SearchHit = {
   score: number;
   snippet: string;
   evidence: string[];
+  scoreBreakdown?: {
+    base: number;
+    kindRank: number;
+    phraseBoost: number;
+    coverage: number;
+    recency: number;
+    total: number;
+  };
 };
