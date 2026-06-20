@@ -15,6 +15,7 @@
     "test": "npm run build --prefix extension && npm run test --prefix extension",
     "test:vitest": "vitest run",
     "test:mcp": "vitest run test/mcpShared.test.ts test/mcpInstallConfig.test.ts test/workspaceToSlug.test.ts",
+    "test:retrieval": "vitest run test/retrievalEval.test.ts",
     "lint": "eslint \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"shared/src/**/*.ts\" \"mcp-server/src/**/*.ts\" \"test/**/*.ts\"",
     "lint:fix": "eslint --fix \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"shared/src/**/*.ts\" \"mcp-server/src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"extension/src/**/*.ts\" \"webview/src/**/*.ts\" \"test/**/*.ts\" \"*.md\" \"docs/**/*.md\"",

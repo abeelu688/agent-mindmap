@@ -24,6 +24,11 @@ export {
   type ProjectSearchIndex,
 } from "./searchIndex";
 export {
+  evaluateRetrieval,
+  type RetrievalEvalCase,
+  type RetrievalEvalReport,
+} from "./retrievalEval";
+export {
   conceptTrieMergePath,
   findProjectSlugByPath,
   listProjectSummaries,
