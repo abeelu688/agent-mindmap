@@ -28,6 +28,7 @@ import {
 } from "@agent-mindmap/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 declare const __MCP_SERVER_VERSION__: string;
@@ -297,6 +298,76 @@ async function main(): Promise<void> {
       }
       return textResult(renderSessionOutlineMarkdown(record));
     })
+  );
+
+  server.registerResource(
+    "project_sessions",
+    new ResourceTemplate("agent-mindmap://project/{projectSlug}/sessions", {
+      list: undefined,
+    }),
+    {
+      description:
+        "List analyzed sessions for a project. URI: agent-mindmap://project/{projectSlug}/sessions?limit=&offset=",
+      mimeType: "text/markdown",
+    },
+    async (uri, variables) => {
+      const projectSlug = String(variables.projectSlug ?? "");
+      const limit = Number(uri.searchParams.get("limit") ?? 20);
+      const offset = Number(uri.searchParams.get("offset") ?? 0);
+      const index = await ensureProjectIndex(projectSlug);
+      const sorted = [...index.records].sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+      const page = sorted.slice(offset, offset + limit);
+      const markdown = renderProjectSessionsList(projectSlug, page, {
+        limit,
+        offset,
+        total: sorted.length,
+      });
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "text/markdown",
+            text: markdown,
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerResource(
+    "session_outline",
+    new ResourceTemplate("agent-mindmap://session/{projectSlug}/{sessionId}", {
+      list: undefined,
+    }),
+    {
+      description: "Render a single session outline as markdown.",
+      mimeType: "text/markdown",
+    },
+    async (uri, variables) => {
+      const projectSlug = String(variables.projectSlug ?? "");
+      const sessionId = String(variables.sessionId ?? "");
+      const record = await readRecord(storeDir, projectSlug, sessionId);
+      if (!record) {
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "text/markdown",
+              text: `_session \`${sessionId}\` not found for project \`${projectSlug}\`._`,
+            },
+          ],
+        };
+      }
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "text/markdown",
+            text: renderSessionOutlineMarkdown(record),
+          },
+        ],
+      };
+    }
   );
 
   const transport = new StdioServerTransport();
