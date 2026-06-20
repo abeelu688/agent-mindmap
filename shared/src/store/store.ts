@@ -28,6 +28,8 @@ import type {
 export interface Store {
   listProjectSummaries(): Promise<ProjectSummary[]>;
   getProjectRevision(projectSlug: string): Promise<number>;
+  /** Cached record count from the index, or undefined if not tracked. */
+  getProjectRecordCount(projectSlug: string): Promise<number | undefined>;
 
   getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined>;
   listRecordsForProject(projectSlug: string): Promise<SessionRecord[]>;

@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 import {
   collectConceptContexts,
-  listProjectSummaries,
-  readConceptTrieMerge,
-  readRecord,
+  JsonFsStore,
   renderConceptDetail,
   renderMemoryRetrieval,
   renderProjectBriefing,
@@ -28,7 +26,9 @@ declare const __MCP_SERVER_VERSION__: string;
 const SERVER_VERSION =
   typeof __MCP_SERVER_VERSION__ !== "undefined" ? __MCP_SERVER_VERSION__ : "0.0.0-dev";
 
-const ctx = createMcpHandlerContext(resolveStoreDir());
+const storeDir = resolveStoreDir();
+const store = new JsonFsStore(storeDir);
+const ctx = createMcpHandlerContext(store, storeDir);
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
 
   server.tool("list_projects", {}, async () => {
     try {
-      const projects = await listProjectSummaries(ctx.storeDir);
+      const projects = await ctx.store.listProjectSummaries();
       return textResult(renderProjectList(projects));
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
       "",
       `- **name**: \`agent-mindmap\``,
       `- **version**: \`${SERVER_VERSION}\``,
-      `- **storeDir**: \`${ctx.storeDir}\``,
+      `- **storeDir**: \`${ctx.storeDir ?? "(remote)"}\``,
       `- **cached projects**: ${ctx.indexCache.size()}`,
     ];
     return textResult(lines.join("\n"));
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
           `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`
         );
       }
-      const conceptTrie = await readConceptTrieMerge(ctx.storeDir);
+      const conceptTrie = await ctx.store.readConceptTrieMerge();
       const projectPathDisplay =
         projectPath ?? index.records.find((r) => r.meta.projectPath)?.meta.projectPath;
       return textResult(
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
       if (!slug) {
         return errorResult("provide projectPath or projectSlug.");
       }
-      const record = await readRecord(ctx.storeDir, slug, sessionId);
+      const record = await ctx.store.getRecord(slug, sessionId);
       if (!record) {
         return errorResult(`session \`${sessionId}\` not found for project \`${slug}\`.`);
       }
@@ -267,7 +267,7 @@ async function main(): Promise<void> {
     async (uri, variables) => {
       const projectSlug = String(variables.projectSlug ?? "");
       const sessionId = String(variables.sessionId ?? "");
-      const record = await readRecord(ctx.storeDir, projectSlug, sessionId);
+      const record = await ctx.store.getRecord(projectSlug, sessionId);
       if (!record) {
         return {
           contents: [

@@ -1,40 +1,70 @@
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
   buildConceptTermIndex,
   buildRecordTokenSets,
   findProjectSlugByPath,
-  listProjectSummaries,
-  listRecordsForProject,
   McpSearchIndexCache,
-  projectRecordCount,
-  projectRevision,
-  projectSessionsLatestMtimeMs,
-  readLatestProjectSegmentEquivalences,
-  readMcpIndex,
-  readRecord,
   resolveProjectSlug,
   searchProjectRecords,
+  STORE_LAYOUT,
   type ProjectSearchIndex,
+  type Store,
 } from "@agent-mindmap/shared";
 
 export type McpHandlerContext = {
-  storeDir: string;
+  store: Store;
+  /**
+   * Filesystem path to the on-disk store, used only for the mtime-based
+   * cache-invalidation fast path. Undefined when the store is not backed by
+   * a local directory (e.g. RemoteStore over HTTP); in that case the cache
+   * falls back to revision-only invalidation.
+   */
+  storeDir?: string;
   indexCache: McpSearchIndexCache;
 };
 
-export function createMcpHandlerContext(storeDir: string): McpHandlerContext {
-  return { storeDir, indexCache: new McpSearchIndexCache() };
+export function createMcpHandlerContext(store: Store, storeDir?: string): McpHandlerContext {
+  return { store, storeDir, indexCache: new McpSearchIndexCache() };
+}
+
+async function getLatestSourceMtime(ctx: McpHandlerContext, projectSlug: string): Promise<number> {
+  if (!ctx.storeDir) {
+    return 0;
+  }
+  const slugDir = path.join(ctx.storeDir, STORE_LAYOUT.sessionsDir, projectSlug);
+  let entries: string[];
+  try {
+    entries = await fs.readdir(slugDir);
+  } catch {
+    return 0;
+  }
+  let latest = 0;
+  for (const file of entries) {
+    if (!file.endsWith(".json")) {
+      continue;
+    }
+    try {
+      const stat = await fs.stat(path.join(slugDir, file));
+      if (stat.mtimeMs > latest) {
+        latest = stat.mtimeMs;
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return latest;
 }
 
 export async function ensureProjectIndex(
   ctx: McpHandlerContext,
   projectSlug: string
 ): Promise<ProjectSearchIndex> {
-  const { storeDir, indexCache } = ctx;
+  const { store, indexCache } = ctx;
   const cached = indexCache.get(projectSlug);
-  const mcpIndex = await readMcpIndex(storeDir);
-  const revision = projectRevision(mcpIndex, projectSlug);
-  const expectedRecordCount = projectRecordCount(mcpIndex, projectSlug);
-  const latestMtime = await projectSessionsLatestMtimeMs(storeDir, projectSlug);
+  const revision = await store.getProjectRevision(projectSlug);
+  const expectedRecordCount = await store.getProjectRecordCount(projectSlug);
+  const latestMtime = await getLatestSourceMtime(ctx, projectSlug);
   if (
     cached &&
     cached.revision === revision &&
@@ -44,7 +74,7 @@ export async function ensureProjectIndex(
     return cached;
   }
   return indexCache.build(projectSlug, async () => {
-    const records = await listRecordsForProject(storeDir, projectSlug);
+    const records = await store.listRecordsForProject(projectSlug);
     const built: ProjectSearchIndex = {
       projectSlug,
       revision,
@@ -67,7 +97,7 @@ export async function resolveSlug(
     return direct;
   }
   if (opts.projectPath) {
-    const summaries = await listProjectSummaries(ctx.storeDir);
+    const summaries = await ctx.store.listProjectSummaries();
     return findProjectSlugByPath(summaries, opts.projectPath);
   }
   return undefined;
@@ -101,7 +131,7 @@ export async function runProjectSearch(
       message: `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`,
     };
   }
-  const equivalences = await readLatestProjectSegmentEquivalences(ctx.storeDir, slug);
+  const equivalences = await ctx.store.readLatestSegmentEquivalences(slug);
   const hits = searchProjectRecords(
     index.records,
     opts.query,
@@ -119,5 +149,5 @@ export async function readSessionRecord(
   projectSlug: string,
   sessionId: string
 ) {
-  return readRecord(ctx.storeDir, projectSlug, sessionId);
+  return ctx.store.getRecord(projectSlug, sessionId);
 }

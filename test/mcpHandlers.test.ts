@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { bumpMcpProjectRevision } from "../shared/src";
+import { bumpMcpProjectRevision, JsonFsStore } from "../shared/src";
 import { writeJsonAtomic } from "../shared/src/atomicWrite";
 import { STORE_LAYOUT } from "../shared/src/storeLayout";
 import {
@@ -75,21 +75,21 @@ async function setupTempStore(): Promise<string> {
 describe("resolveSlug", () => {
   it("returns direct slug when projectSlug provided", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const slug = await resolveSlug(ctx, { projectSlug: "home-test-proj" });
     expect(slug).toBe("home-test-proj");
   });
 
   it("resolves via projectPath when direct slug not provided", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const slug = await resolveSlug(ctx, { projectPath: "/home/test/proj" });
     expect(slug).toBe("home-test-proj");
   });
 
   it("returns undefined when neither option matches", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const slug = await resolveSlug(ctx, {});
     expect(slug).toBeUndefined();
   });
@@ -98,7 +98,7 @@ describe("resolveSlug", () => {
 describe("ensureProjectIndex", () => {
   it("loads records from the store and builds concept/token indexes", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const index = await ensureProjectIndex(ctx, "home-test-proj");
     expect(index.records).toHaveLength(1);
     expect(index.records[0].meta.sessionId).toBe("sess-1");
@@ -110,7 +110,7 @@ describe("ensureProjectIndex", () => {
 
   it("caches index across calls when revision and mtime are stable", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const first = await ensureProjectIndex(ctx, "home-test-proj");
     const second = await ensureProjectIndex(ctx, "home-test-proj");
     expect(second).toBe(first);
@@ -120,7 +120,7 @@ describe("ensureProjectIndex", () => {
 describe("runProjectSearch", () => {
   it("returns error when slug cannot be resolved", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const result = await runProjectSearch(ctx, {
       query: "auth",
       limit: 5,
@@ -130,7 +130,7 @@ describe("runProjectSearch", () => {
 
   it("returns hits when query matches concept evidence", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const result = await runProjectSearch(ctx, {
       query: "clock skew",
       projectSlug: "home-test-proj",
@@ -145,7 +145,7 @@ describe("runProjectSearch", () => {
 
   it("attaches score breakdown when verbose", async () => {
     const tmp = await setupTempStore();
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const result = await runProjectSearch(ctx, {
       query: "clock skew",
       projectSlug: "home-test-proj",
@@ -165,7 +165,7 @@ describe("runProjectSearch", () => {
       recursive: true,
     });
     await bumpMcpProjectRevision(tmp, "empty-proj", 0);
-    const ctx = createMcpHandlerContext(tmp);
+    const ctx = createMcpHandlerContext(new JsonFsStore(tmp), tmp);
     const result = await runProjectSearch(ctx, {
       query: "anything",
       projectSlug: "empty-proj",

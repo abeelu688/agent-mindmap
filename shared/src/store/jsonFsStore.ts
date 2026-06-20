@@ -44,6 +44,11 @@ export class JsonFsStore implements Store {
     return projectRevision(index, projectSlug);
   }
 
+  async getProjectRecordCount(projectSlug: string): Promise<number | undefined> {
+    const index = await readMcpIndex(this.storeDir);
+    return projectRecordCount(index, projectSlug);
+  }
+
   async getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined> {
     return readRecordFromFs(this.storeDir, projectSlug, sessionId);
   }
@@ -89,16 +94,5 @@ export class JsonFsStore implements Store {
     opts?: { lastAnalyzedAt?: number; projectPath?: string }
   ): Promise<McpIndexFile> {
     return bumpMcpProjectRevision(this.storeDir, projectSlug, recordCount, opts);
-  }
-
-  /** Exposed for callers that still need raw index access during migration. */
-  async readMcpIndex(): Promise<McpIndexFile> {
-    return readMcpIndex(this.storeDir);
-  }
-
-  /** Exposed for callers that need record count without listing records. */
-  async getProjectRecordCount(projectSlug: string): Promise<number | undefined> {
-    const index = await readMcpIndex(this.storeDir);
-    return projectRecordCount(index, projectSlug);
   }
 }
