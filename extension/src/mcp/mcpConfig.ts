@@ -1,11 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import {
-  bumpMcpProjectRevision,
-  listRecordsForProject,
-  workspaceToSlug,
-} from "@agent-mindmap/shared";
+import { JsonFsStore, workspaceToSlug } from "@agent-mindmap/shared";
 import { getStoreDir, getWorkspacePath } from "../paths";
 import {
   claudeMcpConfigPath,
@@ -36,13 +32,13 @@ export async function resolveExistingMcpServerEntry(extensionPath: string): Prom
 }
 
 export async function refreshMcpIndexForProject(projectSlug: string): Promise<void> {
-  const storeDir = getStoreDir();
-  const records = await listRecordsForProject(storeDir, projectSlug);
+  const store = new JsonFsStore(getStoreDir());
+  const records = await store.listRecordsForProject(projectSlug);
   const lastAnalyzedAt = records.length
     ? Math.max(...records.map((r) => r.meta.analyzedAt))
     : undefined;
   const projectPath = records.find((r) => r.meta.projectPath)?.meta.projectPath;
-  await bumpMcpProjectRevision(storeDir, projectSlug, records.length, {
+  await store.bumpProjectRevision(projectSlug, records.length, {
     lastAnalyzedAt,
     projectPath,
   });
@@ -56,13 +52,13 @@ export async function refreshMcpIndexForWorkspace(): Promise<
     return undefined;
   }
   const projectSlug = workspaceToSlug(projectPath);
-  const storeDir = getStoreDir();
-  const records = await listRecordsForProject(storeDir, projectSlug);
+  const store = new JsonFsStore(getStoreDir());
+  const records = await store.listRecordsForProject(projectSlug);
   if (!records.length) {
     return undefined;
   }
   const lastAnalyzedAt = Math.max(...records.map((r) => r.meta.analyzedAt));
-  await bumpMcpProjectRevision(storeDir, projectSlug, records.length, {
+  await store.bumpProjectRevision(projectSlug, records.length, {
     lastAnalyzedAt,
     projectPath,
   });
