@@ -402,20 +402,115 @@ P1.1 → P1.2 → P1.3 → P1.4
                                                                                               ↓
                                                                                          P5.1 → P5.2 → P5.3
                                                                                                                       ↓
-                                                                                                                 P6.1, P6.2, P6.3, P6.4
+                                                                                                                 P5.4 → P5.5 → P5.6
+                                                                                                                                ↓
+                                                                                                                           P6.1, P6.2, P6.3, P6.4
+
+Q1 (codeRef retrieval)  ──┐  (independent, lands before P2.1)
+Q2 (tool descriptions)   ──┘  (independent, lands anytime)
 ```
 
 P2.4 (deprecate JSON write path) and P2.5 (remove `JsonFsStore`) can land after P3.x starts — they're independent of the service work. P5 and P6 require P4 complete (clients connected) to be meaningful, but P5.1 (worker) can start in parallel with P4 since it only depends on P3.
+
+**Q1 / Q2 / Q3 placement notes**:
+
+- **Q1 (codeRef retrieval signal)**: standalone PR, no phase dependency. Touches `shared/src/searchIndex.ts` + `SearchHit` type + `retrievalEval.ts`. Recommended to land before P2.1 so the SQLite migration and later Go port (P5.4) pick up the codeRef retrieval branch from the start. Q1 is a prerequisite of P5.4: the Go token-scorer port must include the `"code"` hit kind, the `MAX_HITS_PER_CODE` cap, and the reverse concept boost — otherwise the Go port diverges from the TypeScript reference and fixture-parity tests fail.
+- **Q2 (tool descriptions)**: standalone PR, no phase dependency, no code dependency on Q1 or Q3. Lands anytime; recommended before the MCP server's first real release.
+- **Q3 (embedding hybrid retrieval)**: lands as P5.4 → P5.5 → P5.6, after P5.1 (merge worker exists, embedding worker runs alongside it). P5.4 depends on Q1 being landed (the Go token-scorer port must mirror the TypeScript scorer _including_ Q1's codeRef branch — fixture-parity tests assert identical output, so Q1 must be in the TypeScript reference first). P5.4 also depends on P3.2 (REST API exists, so the new `/search` endpoint has a router to plug into). P5.5 and P5.6 depend on P5.4.
 
 ### Estimated effort
 
 Rough, for planning not commitment:
 
-| Phase | PRs | Effort                                                             |
-| ----- | --- | ------------------------------------------------------------------ |
-| 1     | 4   | Small — pure refactor, mechanics                                   |
-| 2     | 5   | Medium — SQLite migration is the risky part                        |
-| 3     | 4   | Medium — new Go service, no `shared/` reuse; storage + REST + auth |
-| 4     | 4   | Medium — push queue and bulk migration are fiddly                  |
-| 5     | 3   | Medium — Go port of trie-merge algorithm with fixture-parity tests |
-| 6     | 4   | Small-to-medium — depends on which PRs are needed                  |
+| Phase | PRs | Effort                                                                                                                  |
+| ----- | --- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1     | 4   | Small — pure refactor, mechanics                                                                                        |
+| 2     | 5   | Medium — SQLite migration is the risky part                                                                             |
+| 3     | 4   | Medium — new Go service, no `shared/` reuse; storage + REST + auth                                                      |
+| 4     | 4   | Medium — push queue and bulk migration are fiddly                                                                       |
+| 5     | 6   | Medium-large — trie-merge port (P5.1-3) + search/embedding port (P5.4-6), both cross-language with fixture-parity tests |
+| 6     | 4   | Small-to-medium — depends on which PRs are needed                                                                       |
+| Q1    | 1   | Small — retrieval-layer change in `searchIndex.ts`, no schema bump                                                      |
+| Q2    | 1   | Small — copy + locale file, no logic change                                                                             |
+
+---
+
+## Open design questions (pending placement)
+
+Companion to `TEAM_MODE.md` §Open design questions. These three MCP-server improvements are recorded but **not yet placed** in the phase plan above. Each needs a decision before it can be slotted into a PR. The candidate placements below are starting points for discussion, not commitments.
+
+### Q1 — Use `codeReferences` as a retrieval signal
+
+**Placement decision**: standalone PR, no phase dependency. Lands before phase 2 (independent of team mode, applies to single-machine today). Design is finalized in `TEAM_MODE.md` §Q1.
+
+Scope:
+
+- `shared/src/searchIndex.ts` only:
+  - `buildRecordTokenSets`: append `codeReferences[].description` (ngram tokens) + split `path` into whole-word tokens.
+  - `searchProjectRecords`: add a `"code"` scoring branch producing `SearchHit` with `kind: "code"`, `path`, `lines`, `description`, `sourceTurnIndices`.
+  - Reverse concept boost: codeRef hit → `sourceTurnIndices` → outline details (same turn) → `conceptPath` → matching concept hit gets `codeRefScore * 0.3 / linkedConceptCount`.
+  - `diversifyHits`: add `MAX_HITS_PER_CODE = 2` independent cap.
+  - `SearchHit` type (in `storeTypes.ts`) gains optional `path`, `lines`, `description` fields for the `"code"` kind.
+- `shared/src/retrievalEval.ts`: two new cases (semantic-complement + filename-fragment).
+- No `SessionRecord` schema change, no `PIPELINE_VERSION` bump, no re-analysis. Pure retrieval-layer change.
+
+**Tuning sub-question**: the `0.3` reverse-boost factor and `MAX_HITS_PER_CODE = 2` are starting guesses; tune against the eval set during implementation.
+
+**Forward dependency on Q3 / P5.4**: once Q1 lands, the TypeScript `searchIndex.ts` becomes the reference implementation that the Go token-scorer port (P5.4) must mirror byte-for-byte — including the `"code"` hit kind, the path/description tokenization, the reverse concept boost, and `MAX_HITS_PER_CODE`. The fixture-parity tests in P5.4 will fail if Q1's behavior is not reproduced in Go. So Q1's constants and scoring formula should be considered frozen (or changed in both places simultaneously) once P5.4 lands.
+
+### Q2 — Rewrite MCP tool descriptions for discoverability
+
+**Placement decision**: standalone PR, no phase dependency. Lands anytime; recommend before the MCP server's first real release. Design finalized in `TEAM_MODE.md` §Q2.
+
+Scope:
+
+- `mcp-server/src/index.ts`: rewrite every `server.tool(...)` description field in three-part form (function / Use when / Do NOT). Add recommended call-flow line to `server_info`.
+- `mcp-server/src/toolDescriptions.ts` (new): localized example-query sets for all 10 UI locales (`en`, `zh-cn`, `ja`, `ko`, `pt-br`, `es`, `de`, `fr`, `hi`, `id`). A `resolveDescription(toolId, locale)` helper picks the right example set; falls back to `en` for missing locales.
+- `mcp-server/src/mcpLocale.ts` (new): read `~/.agent-mindmap/mcp-locale.json` at startup, return `UiLocale | "en"`. Missing/unreadable → `en`.
+- `extension/src/extension.ts` (and anywhere `resolveUiLocale()` is first called): write `~/.agent-mindmap/mcp-locale.json` with the resolved locale. Re-write on `agentMindmap.ui.locale` setting change (register a `workspace.onDidChangeConfiguration` listener).
+- No hot-update: changing locale requires MCP server restart. Documented in the description PR.
+
+**Test**: unit test `resolveDescription` for at least `en` + `zh-cn` + one fallback case; unit test `mcpLocale` reading a fixture file and falling back on missing file. Snapshot test of `server_info` output.
+
+**Rollback**: revert; descriptions return to current terse form. The `mcp-locale.json` file left on disk is harmless (extension keeps writing it, MCP server stops reading it).
+
+### Q3 — Two-level retrieval: embedding (team mode) + text fallback (single-machine)
+
+**Placement decision**: lands as phase 5 sub-PRs, after the Go team service exists (P3.x) and the merge worker is in place (P5.1). Depends on team mode being functional. Design finalized in `TEAM_MODE.md` §Q3 (Route A: search moves to the team service in team mode). Single-machine mode is unchanged — zero PR needed there.
+
+Scope (split into sub-PRs because of size):
+
+**P5.4 — Go port of `searchIndex.ts` token scorer**
+
+- `team-server/internal/search/token_scorer.go` — port of `buildRecordTokenSets`, `weightedTerms`, `scoreText`, `diversifyHits`, `rerankHit`, `collectOutlineText`, `buildConceptTermIndex`. Reads `SessionRecord` JSON from Postgres (same `record_json` column), runs entirely on the server. **Must include Q1's codeRef retrieval branch** — the `"code"` hit kind, path/description tokenization, reverse concept boost (`codeRefScore * 0.3 / linkedConceptCount`), and `MAX_HITS_PER_CODE = 2` cap — because fixture-parity tests compare against the TypeScript `searchIndex.ts` which has Q1 merged.
+- Fixture-parity tests under `team-server/internal/search/token_scorer_test.go`: same input records as `test/searchIndex.test.ts` (or equivalent fixtures), assert byte-identical `SearchHit[]` output (scores, kinds, ordering) to the TypeScript version. Fixtures must include codeRef-bearing records so the Q1 branch is exercised.
+- New endpoint `POST /v1/projects/:slug/search` with `query`, `limit`, `verbose` params, returning `SearchHit[]` JSON. Text-only at this stage (no embedding yet).
+- `RemoteStore.search(projectSlug, query, limit, opts)` in `shared/src/store/remoteStore.ts` — calls the new endpoint.
+- MCP client `search_project_history` / `retrieve_project_memory` handlers: in team mode, delegate to `Store.search()`; in single-machine mode, keep calling `searchProjectRecords` directly.
+- **Test**: Go fixture-parity tests pass (including codeRef cases from Q1); `RemoteStore.search` test with mocked HTTP; end-to-end team-mode search returns same hits as single-machine for a text-only query.
+
+**P5.5 — Embedding worker (Go) + bge-m3 client**
+
+- `team-server/internal/embedding/bge_client.go` — HTTP client for the bge-m3 endpoint (`POST /embed` with batched texts). Configurable via `AGENT_MINDMAP_EMBEDDING_ENDPOINT`, `AGENT_MINDMAP_EMBEDDING_MODEL`.
+- `team-server/internal/embedding/worker.go` — runs alongside the merge worker (P5.1), rebuilds the embedding index when a project's revision changes. Batches `ConceptContextForMerge` texts (label + aliases + evidence) per project, calls bge-m3, writes vectors to Postgres.
+- New Postgres table `embeddings(project_slug, concept_key, model, vector BYTEA, built_at, PK(project_slug, concept_key, model))`. Migration in `team-server/migrations/`.
+- Health check: if `AGENT_MINDMAP_EMBEDDING_ENDPOINT` is unset, worker is a no-op; search endpoint falls back to text-only. Team mode still functions without the 3090.
+- **Test**: worker test — seed sessions, run worker, verify embeddings in Postgres with expected dimensions; bge-m3 client test against a mock HTTP server.
+
+**P5.6 — Hybrid scoring + eval validation**
+
+- `team-server/internal/search/hybrid_scorer.go` — combines token score (from P5.4) and embedding cosine similarity. `final = α * embedding_score + (1-α) * token_score`, with `α` from `AGENT_MINDMAP_EMBEDDING_ALPHA` (default 0.5). Embedding score = max cosine similarity between query embedding and the session's concept embeddings, normalized to `[0,1]`.
+- Query embedding: the search endpoint embeds the query via bge-m3 at request time (one HTTP call per search), then joins against stored concept embeddings.
+- `diversifyHits` runs on the merged hybrid hits, unchanged caps (plus `MAX_HITS_PER_CODE` from Q1).
+- `shared/src/retrievalEval.ts` gains team-mode cases: run eval against the Go endpoint (via `RemoteStore.search`), assert hybrid beats text-only baseline on hit-rate / recall. Eval cases must include fuzzy conceptual queries (where embedding should help) and exact-keyword queries (where token must still dominate).
+- **Test**: hybrid scorer unit tests; eval shows improvement; exact-keyword query still returns the same top hit as text-only (no regression from embedding noise).
+
+**Configuration**: `AGENT_MINDMAP_EMBEDDING_ENDPOINT`, `AGENT_MINDMAP_EMBEDDING_MODEL` (default `bge-m3`), `AGENT_MINDMAP_EMBEDDING_ALPHA` (default `0.5`). All optional — team mode works text-only without them.
+
+**Rollback**: P5.4 is independently revertable (client falls back to local `searchProjectRecords` even in team mode — slower but correct, since `RemoteStore` already has `listRecordsForProject`). P5.5/P5.6 revert together; team mode returns to text-only search from P5.4.
+
+**Open sub-questions for implementation**:
+
+- Exact normalization formula for embedding score (max cosine vs top-k mean vs softmax-weighted) — decide during P5.6 based on eval results.
+- Whether to embed the query at request time (latency per search) or cache recent query embeddings (LRU) — decide during P5.6 based on measured latency.
+- Embedding rebuild batching size and concurrency — decide during P5.5.

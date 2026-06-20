@@ -68,7 +68,9 @@ Scope of the Go service:
 What stays on the TypeScript client:
 
 - **LLM pipeline** (S1/S2) — always runs locally on the member's machine.
-- **Search index, markdown rendering, retrieval eval** — stays in `shared/`. The MCP server runs locally per member, hits `RemoteStore` only for raw `SessionRecord` JSON, and does all concept-term indexing, token-set building, scoring, and rendering in-process. This preserves the existing local-RAG boundary: no remote search, no remote rerank, no remote embeddings.
+- **Markdown rendering and retrieval eval** — stays in `shared/`. The MCP server consumes `SearchHit[]` (returned by the store) and renders markdown in-process; the eval harness runs against whichever store is active.
+- **Search (single-machine mode)** — the TypeScript `searchIndex.ts` is the single-machine search implementation, used directly by the MCP client when `serverUrl` is unset.
+- **Search (team mode) — moves to the Go service.** See §Open design questions → Q3 (Route A). The Go service implements hybrid embedding+token retrieval; the MCP client's `RemoteStore.search()` delegates to a `POST /v1/projects/:slug/search` endpoint. The Go token scorer is a port of `searchIndex.ts` with fixture-parity tests. This supersedes the earlier "search stays on client" principle: in team mode, search is a server-side concern because hybrid scoring needs both signals over the same candidate set, and embedding lives on the server (cross-machine 3090 + bge-m3, owned by the team service per the boundary decision in Q3).
 - **Push queue** — client-side, drains local new analyses to the Go server via `PUT /sessions/:id`.
 
 Rationale for Go: the server is intentionally thin (storage + one deterministic worker), so the language choice is driven by deployment ergonomics — single static binary, no Node runtime, native Postgres pool, straightforward Docker image. The cost is re-implementing the trie-merge algorithm in Go; that algorithm is deterministic and well-tested in TypeScript, and the Go port is bounded to that one worker.
@@ -261,6 +263,123 @@ The client never deletes its local DB in team mode — it's the cache and offlin
 | 6     | Hardening: API key auth middleware (Go), rate limiting, audit logging, observability.                                      | Production-ready.                                        |
 
 Phase 1 is pure refactor and can land immediately. Each later phase is independently shippable and revertable.
+
+## Open design questions
+
+These are MCP-server-side improvements that came out of a review of the current `mcp-server/` tooling. They are **not** team-mode-specific — they apply to both single-machine and team mode — but they interact with the team-mode design in places (embedding boundary, client/server split). Each is recorded here as an open question; decisions and PR placement are finalized in `TEAM_MODE_PR_PLAN.md` after discussion.
+
+### Q1 — Use `codeReferences` as a retrieval signal, not just a render field
+
+**Observation.** `SessionAnalysis.codeReferences` (path + lines + description + sourceTurnIndices) is populated by `extension/src/llm/extractCodeReferences.ts` — a **separate LLM call** from S1, triggered only when the transcript contains file-write operations (Write/StrReplace/EditNotebook/ApplyPatch/Delete). The `description` field summarizes _what the code in question does_ (e.g. "JWT verify with clock-skew leeway"), generated from the diff + turn context. This means:
+
+- codeRef is **sparse by design** — only sessions that touched code have it; discussion-only sessions have none.
+- codeRef description is an **independent semantic view** of the session, produced by a separate LLM pass focused on the diff. It often names the exact concept a user would query for, even when outline / concept / evidence text does not.
+- `codeRef.sourceTurnIndices` links to specific turns, and turns link to outline `details[].sourceTurnIndices` → topic → `conceptPath` → concept. So codeRef → concept is a real, traversable many-to-many linkage (one codeRef can span multiple turns, each turn can appear in multiple topics).
+
+Today the MCP retrieval path (`shared/src/searchIndex.ts`) ignores `codeReferences` entirely:
+
+- `buildRecordTokenSets` builds the per-record pre-filter token set from `collectOutlineText` + `sessionLabel` + `conceptContexts` fields only. A record whose only match is in `codeReferences[].description` fails `recordCouldMatch` and is skipped before scoring.
+- `searchProjectRecords` has no `codeReferences` branch in scoring. Even if a record passes the pre-filter on other text, a codeRef description match contributes nothing to the hit score.
+
+**Question.** Should `codeReferences[].description` and `path` be added as a first-class retrieval signal so a query like "鉴权" or "jwt.ts" hits sessions whose code refs describe/name that, even when outline text doesn't? This is a retrieval-quality improvement, not a rendering change.
+
+**Decided design**
+
+1. **Both `path` and `description` enter retrieval, but with different tokenization.**
+   - `description`: fed to `buildRecordTokenSet` for ngram tokens (same as outline/evidence), and scored via `scoreText` in the main scoring loop.
+   - `path`: split on `/`, `.`, `_`, `-` into whole words (`src/auth/jwt.ts` → `src`, `auth`, `jwt`, `ts`), added as whole-word tokens only (no ngrams — avoids `sr`/`ut` noise from path characters). Whole-word path match scores high because a filename hit is a strong precise signal.
+
+2. **New `SearchHit.kind = "code"`**, carrying `path`, `lines`, `description`, `sourceTurnIndices`. Reasons: codeRef is sparse (folding into `session` would let codeRef-heavy sessions crowd out outline/concept hits); a new kind lets `kindRank` weight code hits independently (code match ≈ precise, should rank high); the payload directly tells the agent which file matched, higher density than stuffing into `snippet`.
+
+3. **Reverse concept boost.** When a codeRef scores above threshold, traverse `codeRef.sourceTurnIndices` → outline `details[].sourceTurnIndices` (same turn) → owning node's `conceptPath` → concept, and add a decayed boost to the matching concept hit. Must handle the many-to-many: one codeRef can map to multiple concepts. Proposed: `boost = codeRefScore * 0.3 / linkedConceptCount`, so a codeRef linked to 3 concepts gives each 0.1× — enough to lift an otherwise-tied concept, not enough to swamp a direct concept match.
+
+4. **`diversifyHits` adds `MAX_HITS_PER_CODE = 2`** independent of `MAX_HITS_PER_SESSION`, so a session with many codeRefs cannot flood results. This caps code hits per session separately from outline/concept hits per session.
+
+5. **Validation.** `retrievalEval.ts` gains two cases:
+   - Query matches `codeReferences[].description` but not outline/concept/evidence (proves semantic complement).
+   - Query is a filename fragment (proves precise path hit).
+     Both must fail before the change and pass after.
+
+**Sub-questions resolved**: path is searchable (decision 1); `sourceTurnIndices` does link to concept and is used for reverse boost (decision 3); new `SearchHit.kind` not fold-into-session (decision 2).
+
+**Remaining open**: the `0.3` and `2` constants in decisions 3/4 are starting guesses; tune against the eval set once the implementation lands.
+
+### Q2 — Make the MCP server discoverable / self-describing so agents know when to call it
+
+**Observation.** MCP discovery relies on the client (Cursor / Claude Code) feeding the tool list + descriptions to the model; the model then decides whether to call. The only levers we have are (a) tool names, (b) tool `description` strings, (c) `server_info` content, and (d) the server's display name in the MCP install config. Current tool descriptions are mostly absent or phrased as "what this tool does" rather than "when to call this tool".
+
+**Decided design**
+
+1. **Three-part description structure for every tool.** Each `description` field follows: `<one-sentence function>. Use when <trigger scenario with examples>. Do NOT use for <negative case>.` This is the primary lever — the "Use when" / "Do NOT" semantic boundary matters more than example language for agent trigger accuracy.
+
+2. **Description body is English-only.** Only the example queries are localized. Rationale: tool descriptions are agent instructions, not UI strings; agent models (Claude, GPT, etc.) recognize intent most reliably from English instruction text regardless of the user's query language. Translating the body to the user's locale would _lower_ trigger accuracy for non-English users, not raise it. The user's query language does not need to match the description language — modern agents map "我们之前怎么处理 X 的" to English "Use when user asks about past work" without trouble.
+
+3. **Example queries localized per locale, alongside English.** The `Use when` clause includes example queries in the active locale plus English. Example for `search_project_history` under `zh-cn`:
+
+   ```
+   Search past session history by query (semantic + keyword matching).
+   Use when the user asks about past work, decisions, or debugging in a project.
+   Examples: EN "did we ever solve Y" / ZH "我们之前怎么处理 X 的" / "上次改 auth 是哪次 session".
+   Do NOT use for current-file questions or live code lookup.
+   ```
+
+   If the active locale is `en`, only English examples appear. All 10 supported UI locales (`en`, `zh-cn`, `ja`, `ko`, `pt-br`, `es`, `de`, `fr`, `hi`, `id`) get their own example set.
+
+4. **Locale propagation via a config file, not VS Code API.** The MCP server is a stdio subprocess launched by the client (Cursor / Claude Code), not by the extension — it has no access to `vscode.env.language` or `vscode.workspace.getConfiguration`. To bridge the locale:
+   - The extension writes `~/.agent-mindmap/mcp-locale.json` (content `{"locale":"zh-cn"}`) whenever `resolveUiLocale()` is first computed and whenever the user changes `agentMindmap.ui.locale`. Reuses the existing `resolveUiLocale()` from `extension/src/l10n/uiTranslate.ts`.
+   - The MCP server reads `mcp-locale.json` at startup to select the example-set language. Missing file or unreadable → fallback to `en`.
+   - **No hot update**: changing `ui.locale` requires restarting the MCP server (re-launching the client process) to take effect on descriptions. Accepted trade-off — descriptions are static for a server's lifetime; hot-reloading would require runtime tool re-registration which the MCP SDK does not cleanly support.
+
+5. **`server_info` gains a recommended call-flow line.** A short blurb: "Recommended flow: call list_projects first to discover slugs, then search_project_history or get_project_briefing for content. This server indexes past AI agent sessions (Cursor/Claude Code) analyzed by the Agent Mind Map extension." This gives agents a first-touch orientation when they probe the server.
+
+6. **Per-tool trigger scenarios** (English body, examples omitted here — localized at render time):
+   - `list_projects`: discover projects that have been analyzed. First step before other tools when the user mentions a project.
+   - `get_project_briefing`: summarize recent sessions and key concepts of a project.
+   - `list_project_sessions`: list sessions for a project, paged.
+   - `search_project_history`: search past session history by query (semantic + keyword). The primary tool for "what did we do about X" questions.
+   - `retrieve_project_memory`: retrieve condensed memory for a query — synthesis, not a session list.
+   - `get_concept_detail`: detail for a specific concept key (typically called after another tool returned a conceptKey).
+   - `get_session_outline`: render one session's outline (called when you have a sessionId).
+
+**Not in scope**: localizing the `server_info` output or error messages. MCP output is agent-consumed markdown; agent models handle English output regardless of query language. Revisit if user-facing curl workflows become common.
+
+### Q3 — Two-level retrieval: embedding (team mode) + text fallback (single-machine)
+
+**Observation.** The user has a separate machine with an RTX 3090 running `bge-m3:latest`, usable for embedding. Current MCP search is token/concept-term based (`buildRecordTokenSets` + `buildConceptTermIndex` + deterministic scoring), entirely client-side. Semantic similarity would help for fuzzy queries ("登录失败相关的讨论") but not for exact keyword queries (`jwt.ts`).
+
+**Boundary decision.** The 3090 is cross-machine from where the MCP server runs. Memory `project_mcp-local-rag-boundary.md` says MCP RAG must stay local — no external embedding API — _unless moved to a team service_. Putting embedding into the Go team service is exactly that豁免 path: the 3090 + bge-m3 becomes team infrastructure, not an external API the MCP client calls directly. This drives the placement decision below.
+
+**Decided design — Route A: search moves to the team service in team mode**
+
+1. **Embedding lives in the team service, not the MCP client.** The Go service owns the bge-m3 HTTP client and the embedding index. The MCP client never calls the 3090 directly. This satisfies the boundary: in team mode, embedding is part of the team service, not an external request from the MCP client.
+
+2. **Single-machine mode skips embedding entirely.** No 3090, no team service → MCP client uses the existing `searchProjectRecords` text/token scorer unchanged. The single-machine path is the fallback level; team mode is the embedding level. This is the "two-level" split: level 1 (team) = hybrid embedding+token, level 2 (single-machine) = text-only.
+
+3. **In team mode, the entire retrieval runs on the team service.** `RemoteStore` gains a `search(projectSlug, query, limit, opts)` method that calls a new Go endpoint `POST /v1/projects/:slug/search`. The Go service runs the full hybrid pipeline (embedding cosine + token scoring + diversify) and returns ranked `SearchHit[]`. The MCP client's `search_project_history` / `retrieve_project_memory` handlers, when in team mode, delegate to `Store.search()` instead of calling `searchProjectRecords` locally.
+   - Rationale: hybrid scoring needs both signals over the same candidate set. Splitting token-search (client) and embedding-search (server) and merging client-side means two round-trips, inconsistent candidate sets, and no clean way to do `diversifyHits` across merged results. Doing both on the server keeps the hybrid pipeline coherent.
+   - Cost: the Go service must re-implement `searchIndex.ts`'s token-scoring logic (ngram tokens, `weightedTerms`, `scoreText`, `diversifyHits`, `rerankHit`). This is a cross-language port like the trie-merge in P5.1, with fixture-parity tests asserting identical output to the TypeScript version on the same input records.
+
+4. **The "search stays on client" principle in §Team service implementation is superseded.** That section currently says search/index/render/eval all stay in `shared/` on the client. With Q3 Route A, **search moves to the server in team mode**. Markdown rendering and retrieval eval stay on the client (they consume `SearchHit[]`, which the server returns; rendering doesn't need the raw records beyond what hits carry). The Go service gains a search module; the TypeScript `searchIndex.ts` stays as the single-machine implementation and the reference for the Go port's fixture-parity tests.
+
+5. **Embedding granularity: per concept-context.** One vector per `ConceptContextForMerge` (built from `label + aliases + evidence`). Rationale: aligns with the existing concept-indexing structure; concept-level granularity is coarse enough to keep the index small (hundreds of vectors per project) and fine enough to disambiguate ("jwt" vs "session-store" concepts in the same project). Per-session is too coarse (one vector summarizes too much); per-outline-node is too fine (topic text is short, embedding quality drops).
+   - Session-level similarity is derived: a session's embedding score = max (or top-k mean) of its concept embedding scores. This avoids storing per-session vectors while still letting embedding hits roll up to sessions in `diversifyHits`.
+
+6. **Embedding index storage (Go/Postgres).** New table `embeddings(project_slug TEXT, concept_key TEXT, model TEXT, vector BYTEA, built_at BIGINT, PK(project_slug, concept_key, model))`. `vector` is 1024 × float32 = 4096 bytes, stored as `BYTEA` (not JSONB — avoid float parsing overhead). Rebuilt by the Go merge worker (P5.x) when a project's revision changes; `model = "bge-m3"` for v1. The worker batches concept texts to the bge-m3 endpoint in one HTTP call per project rebuild.
+
+7. **Hybrid scoring.** Final hit score = `α * embedding_score + (1-α) * token_score`, with `α = 0.5` as the starting default. Embedding score is cosine similarity normalized to `[0,1]`; token score is the existing `searchProjectRecords` score normalized by the max token score in the candidate set (so the two scales are comparable). Tunable via server config `AGENT_MINDMAP_EMBEDDING_ALPHA`.
+   - For exact-keyword queries (filename `jwt.ts`, identifier `verifyToken`), token score dominates and embedding is a tiebreaker.
+   - For fuzzy conceptual queries ("登录失败相关的讨论"), embedding score dominates.
+   - The `diversifyHits` caps (`MAX_HITS_PER_SESSION`, `MAX_HITS_PER_CONCEPT`, and the new `MAX_HITS_PER_CODE` from Q1) apply to the merged hybrid hits, unchanged.
+
+8. **Validation.** `shared/src/retrievalEval.ts` must show the team-mode hybrid pipeline beats the text-only baseline on hit-rate / recall. Because the Go service re-implements the token scorer, the eval runs against the Go endpoint in team mode (via `RemoteStore.search`) and against the TypeScript `searchProjectRecords` in single-machine mode. Fixture-parity tests (same input → same output) cover the token-only portion; eval covers the hybrid improvement.
+
+**Configuration.** New team-service env vars: `AGENT_MINDMAP_EMBEDDING_ENDPOINT` (bge-m3 URL, e.g. `http://3090-host:port/embed`), `AGENT_MINDMAP_EMBEDDING_MODEL` (default `bge-m3`), `AGENT_MINDMAP_EMBEDDING_ALPHA` (default `0.5`). If `AGENT_MINDMAP_EMBEDDING_ENDPOINT` is unset, the team service falls back to text-only search (same as single-machine) — embedding is opt-in per deployment, not required for team mode to function.
+
+**What does NOT change.**
+
+- Single-machine mode: zero change. `searchProjectRecords` stays in `shared/`, used directly by the MCP client.
+- Markdown rendering (`markdownRender.ts`): unchanged. Still runs on the client, consumes `SearchHit[]`.
+- Retrieval eval harness: unchanged in structure; gains team-mode cases that hit the Go endpoint.
 
 ## Decisions
 
