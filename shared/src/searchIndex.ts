@@ -1,6 +1,9 @@
 import type { ConceptContextForMerge, SearchHit, SessionRecord } from "./storeTypes";
 
 const CJK_REGEX = /[㐀-鿿豈-﫿]/;
+const CANDIDATE_MULTIPLIER = 5;
+const MAX_HITS_PER_SESSION = 3;
+const MAX_HITS_PER_CONCEPT = 2;
 
 type WeightedTerm = {
   term: string;
@@ -110,6 +113,96 @@ function kindRank(kind: SearchHit["kind"]): number {
   return 1;
 }
 
+function phraseBoost(text: string, query: string): number {
+  const normalizedText = normalizeQuery(text);
+  const normalizedQuery = normalizeQuery(query);
+  if (!normalizedQuery || !normalizedText.includes(normalizedQuery)) {
+    return 0;
+  }
+  return Math.min(12, normalizedQuery.length);
+}
+
+function queryCoverage(text: string, terms: WeightedTerm[]): number {
+  const lower = text.toLowerCase();
+  const rawTerms = terms.filter((t) => t.weight >= 1);
+  if (!rawTerms.length) {
+    return 0;
+  }
+  const matched = rawTerms.filter(({ term }) => lower.includes(term)).length;
+  return matched / rawTerms.length;
+}
+
+function rerankHit(
+  hit: SearchHit,
+  query: string,
+  terms: WeightedTerm[],
+  newestAnalyzedAt: number
+): SearchHit {
+  const searchableText = [
+    hit.snippet,
+    ...hit.evidence,
+    hit.conceptKey,
+    hit.conceptLabel,
+    hit.sessionLabel,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const recencyBoost =
+    newestAnalyzedAt > 0 ? Math.max(0, hit.analyzedAt / newestAnalyzedAt) * 1.5 : 0;
+  const score =
+    hit.score +
+    kindRank(hit.kind) * 2 +
+    phraseBoost(searchableText, query) +
+    queryCoverage(searchableText, terms) * 6 +
+    recencyBoost;
+  return { ...hit, score };
+}
+
+function diversifyHits(hits: SearchHit[], limit: number): SearchHit[] {
+  const out: SearchHit[] = [];
+  const sessionCounts = new Map<string, number>();
+  const conceptCounts = new Map<string, number>();
+  const seenEvidence = new Set<string>();
+
+  for (const hit of hits) {
+    const sessionCount = sessionCounts.get(hit.sessionId) ?? 0;
+    if (sessionCount >= MAX_HITS_PER_SESSION) {
+      continue;
+    }
+    if (hit.conceptKey) {
+      const conceptKey = `${hit.sessionId}:${hit.conceptKey}`;
+      const conceptCount = conceptCounts.get(conceptKey) ?? 0;
+      if (conceptCount >= MAX_HITS_PER_CONCEPT) {
+        continue;
+      }
+      conceptCounts.set(conceptKey, conceptCount + 1);
+    }
+    if (hit.kind === "evidence") {
+      const evidenceKey = `${hit.sessionId}:${hit.conceptKey ?? ""}:${hit.evidenceIndex ?? -1}`;
+      if (seenEvidence.has(evidenceKey)) {
+        continue;
+      }
+      seenEvidence.add(evidenceKey);
+    }
+    sessionCounts.set(hit.sessionId, sessionCount + 1);
+    out.push(hit);
+    if (out.length >= limit) {
+      return out;
+    }
+  }
+
+  for (const hit of hits) {
+    if (out.includes(hit)) {
+      continue;
+    }
+    out.push(hit);
+    if (out.length >= limit) {
+      return out;
+    }
+  }
+  return out;
+}
+
 function collectOutlineText(record: SessionRecord): string {
   const parts: string[] = [];
   if (record.outline.title) {
@@ -157,6 +250,7 @@ export function searchProjectRecords(
         projectSlug: record.meta.projectSlug,
         sessionId: record.meta.sessionId,
         sessionLabel: record.meta.sessionLabel,
+        analyzedAt: record.meta.analyzedAt,
         score: outlineScore,
         snippet: truncateSnippet(outlineText || record.meta.sessionLabel),
         evidence: [],
@@ -181,6 +275,7 @@ export function searchProjectRecords(
           projectSlug: record.meta.projectSlug,
           sessionId: record.meta.sessionId,
           sessionLabel: record.meta.sessionLabel,
+          analyzedAt: record.meta.analyzedAt,
           conceptKey: ctx.key,
           conceptLabel: ctx.label,
           score: conceptScore + exactConceptBoost + 2,
@@ -199,6 +294,7 @@ export function searchProjectRecords(
           projectSlug: record.meta.projectSlug,
           sessionId: record.meta.sessionId,
           sessionLabel: record.meta.sessionLabel,
+          analyzedAt: record.meta.analyzedAt,
           conceptKey: ctx.key,
           conceptLabel: ctx.label,
           evidenceIndex,
@@ -210,13 +306,28 @@ export function searchProjectRecords(
     }
   }
 
-  hits.sort(
-    (a, b) =>
-      b.score - a.score ||
-      kindRank(b.kind) - kindRank(a.kind) ||
-      b.sessionId.localeCompare(a.sessionId)
+  const newestAnalyzedAt = records.reduce(
+    (max, record) => Math.max(max, record.meta.analyzedAt),
+    0
   );
-  return hits.slice(0, limit);
+  const candidateLimit = Math.max(limit, limit * CANDIDATE_MULTIPLIER);
+  const candidates = hits
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        kindRank(b.kind) - kindRank(a.kind) ||
+        b.sessionId.localeCompare(a.sessionId)
+    )
+    .slice(0, candidateLimit)
+    .map((hit) => rerankHit(hit, query, terms, newestAnalyzedAt))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        kindRank(b.kind) - kindRank(a.kind) ||
+        b.sessionId.localeCompare(a.sessionId)
+    );
+
+  return diversifyHits(candidates, limit);
 }
 
 export function collectConceptContexts(records: SessionRecord[]): ConceptContextForMerge[] {

@@ -11,6 +11,7 @@ import {
   readMcpIndex,
   readRecord,
   renderConceptDetail,
+  renderMemoryRetrieval,
   renderProjectBriefing,
   renderProjectList,
   renderProjectSessionsList,
@@ -165,6 +166,25 @@ async function main(): Promise<void> {
       const index = await ensureProjectIndex(slug);
       const hits = searchProjectRecords(index.records, query, limit);
       return textResult(renderSearchResults(query, hits, limit));
+    }
+  );
+
+  server.tool(
+    "retrieve_project_memory",
+    {
+      query: z.string().min(1),
+      projectPath: z.string().optional(),
+      projectSlug: z.string().optional(),
+      limit: z.number().int().min(1).max(20).optional(),
+    },
+    async ({ query, projectPath, projectSlug, limit = 8 }) => {
+      const slug = await resolveSlug({ projectPath, projectSlug });
+      if (!slug) {
+        return errorResult("provide projectPath or projectSlug.");
+      }
+      const index = await ensureProjectIndex(slug);
+      const hits = searchProjectRecords(index.records, query, limit);
+      return textResult(renderMemoryRetrieval(query, hits, limit));
     }
   );
 

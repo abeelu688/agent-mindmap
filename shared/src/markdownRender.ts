@@ -230,22 +230,75 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
     "",
   ];
   for (const hit of hits.slice(0, limit)) {
-    lines.push(`## ${hit.conceptLabel ?? hit.sessionLabel}`);
-    lines.push(`- **type**: ${hit.kind}`);
-    lines.push(`- **sessionId**: \`${hit.sessionId}\``);
-    if (hit.conceptKey) {
-      lines.push(`- **concept**: \`${hit.conceptKey}\``);
-    }
-    if (typeof hit.evidenceIndex === "number") {
-      lines.push(`- **evidenceIndex**: ${hit.evidenceIndex}`);
-    }
-    lines.push(`- ${hit.snippet}`);
-    for (const ev of hit.evidence.slice(0, 3)) {
-      lines.push(`  - ${truncate(ev, 160)}`);
-    }
-    lines.push("");
+    lines.push(...renderSearchHit(hit));
   }
   return lines.join("\n");
+}
+
+export function renderMemoryRetrieval(query: string, hits: SearchHit[], limit: number): string {
+  if (!hits.length) {
+    return `_No relevant project memory found for \`${query}\`._`;
+  }
+  const topHits = hits.slice(0, limit);
+  const sessions = [...new Map(topHits.map((hit) => [hit.sessionId, hit.sessionLabel])).entries()];
+  const concepts = [
+    ...new Map(
+      topHits
+        .filter((hit) => hit.conceptKey)
+        .map((hit) => [hit.conceptKey as string, hit.conceptLabel ?? hit.conceptKey ?? ""])
+    ).entries(),
+  ];
+  const evidenceHits = topHits.filter((hit) => hit.kind === "evidence");
+  const lines = [
+    `# Project memory for: ${query}`,
+    "",
+    `Use the following local, source-grounded context from analyzed agent history.`,
+    "",
+    `## Most relevant evidence`,
+    "",
+  ];
+
+  for (const hit of evidenceHits.length ? evidenceHits : topHits) {
+    lines.push(
+      `- [${hit.sessionId}] ${hit.conceptLabel ? `**${hit.conceptLabel}**: ` : ""}${hit.snippet}`
+    );
+  }
+
+  if (concepts.length) {
+    lines.push("", "## Related concepts", "");
+    for (const [key, label] of concepts.slice(0, 8)) {
+      lines.push(`- \`${key}\`${label && label !== key ? ` — ${label}` : ""}`);
+    }
+  }
+
+  lines.push("", "## Source sessions", "");
+  for (const [sessionId, label] of sessions.slice(0, 8)) {
+    lines.push(`- \`${sessionId}\` — ${label}`);
+  }
+
+  lines.push("", "## Ranked matches", "");
+  for (const hit of topHits) {
+    lines.push(...renderSearchHit(hit));
+  }
+  return lines.join("\n");
+}
+
+function renderSearchHit(hit: SearchHit): string[] {
+  const lines = [`## ${hit.conceptLabel ?? hit.sessionLabel}`];
+  lines.push(`- **type**: ${hit.kind}`);
+  lines.push(`- **sessionId**: \`${hit.sessionId}\``);
+  if (hit.conceptKey) {
+    lines.push(`- **concept**: \`${hit.conceptKey}\``);
+  }
+  if (typeof hit.evidenceIndex === "number") {
+    lines.push(`- **evidenceIndex**: ${hit.evidenceIndex}`);
+  }
+  lines.push(`- ${hit.snippet}`);
+  for (const ev of hit.evidence.slice(0, 3)) {
+    lines.push(`  - ${truncate(ev, 160)}`);
+  }
+  lines.push("");
+  return lines;
 }
 
 export function renderProjectList(

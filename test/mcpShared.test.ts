@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { bumpMcpProjectRevision, readMcpIndex } from "../shared/src/mcpIndex";
 import {
   renderConceptDetail,
+  renderMemoryRetrieval,
   renderProjectBriefing,
   renderSearchResults,
   renderSessionOutlineMarkdown,
@@ -79,6 +80,45 @@ describe("searchProjectRecords", () => {
     expect(hits[0].conceptKey).toBe("auth");
     expect(hits.some((hit) => hit.kind === "evidence")).toBe(true);
   });
+
+  it("keeps retrieval results diverse across sessions", () => {
+    const recordA = sampleRecord({ sessionId: "sess-a", analyzedAt: 1000 });
+    recordA.conceptContexts = [
+      {
+        key: "auth",
+        label: "Authentication",
+        domainKeys: ["backend"],
+        parentKeys: [],
+        childKeys: ["jwt"],
+        evidence: [
+          "retry token refresh failure during login",
+          "retry login refresh when jwt expires",
+          "retry auth request after skew correction",
+          "retry refresh endpoint after transient failure",
+        ],
+        sessionId: "sess-a",
+        projectSlug: "home-example-proj",
+      },
+    ];
+    const recordB = sampleRecord({ sessionId: "sess-b", analyzedAt: 2000 });
+    recordB.conceptContexts = [
+      {
+        key: "mcp",
+        label: "MCP retrieval",
+        domainKeys: ["agent-memory"],
+        parentKeys: [],
+        childKeys: [],
+        evidence: ["retry project memory retrieval when local index is refreshed"],
+        sessionId: "sess-b",
+        projectSlug: "home-example-proj",
+      },
+    ];
+
+    const hits = searchProjectRecords([recordA, recordB], "retry", 4);
+    expect(hits.some((hit) => hit.sessionId === "sess-a")).toBe(true);
+    expect(hits.some((hit) => hit.sessionId === "sess-b")).toBe(true);
+    expect(hits.filter((hit) => hit.sessionId === "sess-a").length).toBeLessThanOrEqual(3);
+  });
 });
 
 describe("markdown renderers", () => {
@@ -107,6 +147,15 @@ describe("markdown renderers", () => {
   it("renders empty search message", () => {
     const md = renderSearchResults("missing-term", [], 5);
     expect(md).toContain("missing-term");
+  });
+
+  it("renders retrieved memory as a context pack", () => {
+    const hits = searchProjectRecords([sampleRecord()], "clock skew", 5);
+    const md = renderMemoryRetrieval("clock skew", hits, 5);
+    expect(md).toContain("Project memory for: clock skew");
+    expect(md).toContain("Most relevant evidence");
+    expect(md).toContain("Source sessions");
+    expect(md).toContain("sess-1");
   });
 });
 

@@ -11,6 +11,7 @@ export {
   renderConceptDetail,
   renderConceptTrieTopLevel,
   renderProjectBriefing,
+  renderMemoryRetrieval,
   renderProjectList,
   renderProjectSessionsList,
   renderSearchResults,

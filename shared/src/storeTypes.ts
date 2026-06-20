@@ -101,6 +101,7 @@ export type SearchHit = {
   projectSlug: string;
   sessionId: string;
   sessionLabel: string;
+  analyzedAt: number;
   conceptKey?: string;
   conceptLabel?: string;
   evidenceIndex?: number;
