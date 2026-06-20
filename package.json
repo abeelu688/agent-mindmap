@@ -6,7 +6,7 @@
   "scripts": {
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
-    "build": "npm run version:sync && npm run build:shared && npm run build:mcp && npm run build:webview && npm run build:extension",
+    "build": "bash scripts/build.sh",
     "build:shared": "npm run build --prefix shared",
     "build:mcp": "node scripts/bundle-mcp-server.mjs",
     "build:extension": "npm run build --prefix extension",

@@ -28,7 +28,13 @@ export default tseslint.config(
 
   // ── TypeScript files (extension + webview + tests) ────────────────────────
   {
-    files: ["extension/src/**/*.ts", "webview/src/**/*.ts", "test/**/*.ts"],
+    files: [
+      "extension/src/**/*.ts",
+      "webview/src/**/*.ts",
+      "shared/src/**/*.ts",
+      "mcp-server/src/**/*.ts",
+      "test/**/*.ts",
+    ],
     plugins: {
       import: importPlugin,
     },
@@ -46,6 +52,8 @@ export default tseslint.config(
           project: [
             "extension/tsconfig.json",
             "webview/tsconfig.json",
+            "shared/tsconfig.json",
+            "mcp-server/tsconfig.json",
           ],
         },
         node: true,

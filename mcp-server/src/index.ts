@@ -38,9 +38,21 @@ function errorResult(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
-function withErrorHandler<TArgs extends Record<string, unknown>>(
-  fn: (args: TArgs) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>
-): (args: TArgs) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }> {
+type ToolHandlerResult = { content: { type: "text"; text: string }[]; isError?: boolean };
+
+/**
+ * Wrap a tool handler with a uniform try/catch that turns thrown errors into
+ * `isError: true` text results.
+ *
+ * Intentionally non-generic: a `TArgs`-parameterized return type forces TS to
+ * unify it against `ToolCallback<Args>`'s `ShapeOutput<Args>` at every call
+ * site, which trips TS2589 on tools with 4+ schema fields. Letting the args
+ * flow as `any` keeps inference shallow; the inner handler still gets field
+ * names from its destructuring pattern.
+ */
+function withErrorHandler(
+  fn: (args: any) => Promise<ToolHandlerResult>
+): (args: any) => Promise<ToolHandlerResult> {
   return async (args) => {
     try {
       return await fn(args);
