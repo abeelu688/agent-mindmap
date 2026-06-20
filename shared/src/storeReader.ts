@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { readMcpIndex } from "./mcpIndex";
 import { workspaceToSlug } from "./paths";
+import { validateAndBackfillRecord, looksLikeSessionRecord } from "./store/recordValidate";
 import { STORE_LAYOUT } from "./storeLayout";
 import type {
   MergeRecord,
@@ -33,28 +34,7 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
 }
 
 function isSessionRecord(value: unknown): value is SessionRecord {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const r = value as Record<string, unknown>;
-  if (r.schemaVersion !== SCHEMA_VERSION) {
-    return false;
-  }
-  if (!r.meta || typeof r.meta !== "object") {
-    return false;
-  }
-  const meta = r.meta as Record<string, unknown>;
-  if (typeof meta.sessionId !== "string" || typeof meta.projectSlug !== "string") {
-    return false;
-  }
-  if (!r.outline || typeof r.outline !== "object") {
-    return false;
-  }
-  const outline = r.outline as Record<string, unknown>;
-  if (!Array.isArray(outline.outline)) {
-    return false;
-  }
-  return true;
+  return looksLikeSessionRecord(value);
 }
 
 export function recordPath(storeDir: string, projectSlug: string, sessionId: string): string {
@@ -83,10 +63,10 @@ export async function readRecord(
   sessionId: string
 ): Promise<SessionRecord | undefined> {
   const parsed = await readJson<unknown>(recordPath(storeDir, projectSlug, sessionId));
-  if (!parsed || !isSessionRecord(parsed)) {
+  if (!parsed || !looksLikeSessionRecord(parsed)) {
     return undefined;
   }
-  return parsed;
+  return validateAndBackfillRecord(parsed);
 }
 
 export async function listRecords(storeDir: string): Promise<SessionRecord[]> {
@@ -112,8 +92,12 @@ export async function listRecords(storeDir: string): Promise<SessionRecord[]> {
         continue;
       }
       const parsed = await readJson<unknown>(path.join(slugDir, file));
-      if (parsed && isSessionRecord(parsed)) {
-        out.push(parsed);
+      if (!parsed || !looksLikeSessionRecord(parsed)) {
+        continue;
+      }
+      const validated = validateAndBackfillRecord(parsed);
+      if (validated) {
+        out.push(validated);
       }
     }
   }
@@ -140,8 +124,12 @@ export async function listRecordsForProject(
       continue;
     }
     const parsed = await readJson<unknown>(path.join(slugDir, file));
-    if (parsed && isSessionRecord(parsed)) {
-      out.push(parsed);
+    if (!parsed || !looksLikeSessionRecord(parsed)) {
+      continue;
+    }
+    const validated = validateAndBackfillRecord(parsed);
+    if (validated) {
+      out.push(validated);
     }
   }
   return out;

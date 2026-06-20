@@ -161,3 +161,112 @@ describe("JsonFsStore.readConceptTrieMerge / readLatestSegmentEquivalences", () 
     expect(await store.readLatestSegmentEquivalences("proj-a")).toEqual([]);
   });
 });
+
+describe("JsonFsStore record validation", () => {
+  it("skips records that fail schemaVersion check", async () => {
+    const tmp = await makeStoreDir();
+    const slugDir = path.join(tmp, STORE_LAYOUT.sessionsDir, "home-test-proj");
+    await fs.mkdir(slugDir, { recursive: true });
+    await writeJsonAtomic(path.join(slugDir, "bad.json"), {
+      schemaVersion: 999,
+      meta: { sessionId: "bad", projectSlug: "home-test-proj" },
+      outline: { outline: [] },
+    });
+    const store = new JsonFsStore(tmp);
+    expect(await store.getRecord("home-test-proj", "bad")).toBeUndefined();
+    expect(await store.listRecordsForProject("home-test-proj")).toEqual([]);
+  });
+
+  it("skips records with corrupt outline that fails validation", async () => {
+    const tmp = await makeStoreDir();
+    const slugDir = path.join(tmp, STORE_LAYOUT.sessionsDir, "home-test-proj");
+    await fs.mkdir(slugDir, { recursive: true });
+    await writeJsonAtomic(path.join(slugDir, "corrupt.json"), {
+      schemaVersion: 1,
+      meta: {
+        sessionId: "corrupt",
+        projectSlug: "home-test-proj",
+        transcriptPath: "/tmp/x.jsonl",
+        transcriptMtimeMs: 1,
+        analyzedAt: 1,
+        llm: { provider: "cursor-cli" },
+        promptParams: { maxTopics: 8, maxItemsPerTopic: 6 },
+        sessionLabel: "x",
+      },
+      outline: { outline: "not-an-array" },
+    });
+    const store = new JsonFsStore(tmp);
+    expect(await store.getRecord("home-test-proj", "corrupt")).toBeUndefined();
+    expect(await store.listRecordsForProject("home-test-proj")).toEqual([]);
+  });
+
+  it("backfills graph from outline when graph is missing", async () => {
+    const tmp = await makeStoreDir();
+    const slugDir = path.join(tmp, STORE_LAYOUT.sessionsDir, "home-test-proj");
+    await fs.mkdir(slugDir, { recursive: true });
+    const record = sampleRecord({ sessionId: "no-graph" });
+    // Strip graph — JsonFsStore should backfill it on read.
+    const { graph: _omit, ...withoutGraph } = record as typeof record & {
+      graph?: unknown;
+    };
+    void _omit;
+    await writeJsonAtomic(path.join(slugDir, "no-graph.json"), withoutGraph);
+    const store = new JsonFsStore(tmp);
+    const back = await store.getRecord("home-test-proj", "no-graph");
+    expect(back?.graph).toBeDefined();
+    expect(back?.graph?.topics.length).toBeGreaterThan(0);
+  });
+
+  it("backfills outline from graph when outline is missing (legacy v4)", async () => {
+    const tmp = await makeStoreDir();
+    const slugDir = path.join(tmp, STORE_LAYOUT.sessionsDir, "home-test-proj");
+    await fs.mkdir(slugDir, { recursive: true });
+    await writeJsonAtomic(path.join(slugDir, "legacy.json"), {
+      schemaVersion: 1,
+      meta: {
+        sessionId: "legacy",
+        projectSlug: "home-test-proj",
+        transcriptPath: "/tmp/x.jsonl",
+        transcriptMtimeMs: 1,
+        analyzedAt: 1,
+        llm: { provider: "cursor-cli" },
+        promptParams: { maxTopics: 8, maxItemsPerTopic: 6 },
+        sessionLabel: "Legacy",
+      },
+      graph: {
+        title: "Legacy graph",
+        topics: [
+          {
+            title: "Topic A",
+            items: [{ text: "Detail one" }],
+          },
+        ],
+      },
+    });
+    const store = new JsonFsStore(tmp);
+    const back = await store.getRecord("home-test-proj", "legacy");
+    expect(back?.outline).toBeDefined();
+    expect(back?.outline.outline).toHaveLength(1);
+    expect(back?.outline.outline[0].title).toBe("Topic A");
+  });
+
+  it("round-trips a valid record with both outline and graph", async () => {
+    const tmp = await makeStoreDir();
+    const store = new JsonFsStore(tmp);
+    const record = sampleRecord({ sessionId: "round-trip" });
+    record.graph = {
+      title: "Round trip",
+      topics: [
+        {
+          title: "Token refresh",
+          items: [{ text: "Adjusted leeway" }],
+        },
+      ],
+    };
+    await store.upsertRecord(record);
+    const back = await store.getRecord("home-test-proj", "round-trip");
+    expect(back?.meta.sessionId).toBe("round-trip");
+    expect(back?.outline.title).toBe("Authentication fix");
+    expect(back?.graph?.title).toBe("Round trip");
+  });
+});
