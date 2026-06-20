@@ -81,6 +81,37 @@ async function resolveSlug(opts: {
   return undefined;
 }
 
+async function runProjectSearch(opts: {
+  query: string;
+  projectPath?: string;
+  projectSlug?: string;
+  limit: number;
+}): Promise<
+  { kind: "ok"; hits: ReturnType<typeof searchProjectRecords> } | { kind: "error"; message: string }
+> {
+  const slug = await resolveSlug({ projectPath: opts.projectPath, projectSlug: opts.projectSlug });
+  if (!slug) {
+    return { kind: "error", message: "provide projectPath or projectSlug." };
+  }
+  const index = await ensureProjectIndex(slug);
+  if (!index.records.length) {
+    return {
+      kind: "error",
+      message: `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`,
+    };
+  }
+  const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
+  const hits = searchProjectRecords(
+    index.records,
+    opts.query,
+    opts.limit,
+    equivalences,
+    index.conceptTerms,
+    index.recordTokens
+  );
+  return { kind: "ok", hits };
+}
+
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
@@ -172,21 +203,11 @@ async function main(): Promise<void> {
       limit: z.number().int().min(1).max(30).optional(),
     },
     async ({ query, projectPath, projectSlug, limit = 10 }) => {
-      const slug = await resolveSlug({ projectPath, projectSlug });
-      if (!slug) {
-        return errorResult("provide projectPath or projectSlug.");
+      const result = await runProjectSearch({ query, projectPath, projectSlug, limit });
+      if (result.kind === "error") {
+        return errorResult(result.message);
       }
-      const index = await ensureProjectIndex(slug);
-      const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
-      const hits = searchProjectRecords(
-        index.records,
-        query,
-        limit,
-        equivalences,
-        index.conceptTerms,
-        index.recordTokens
-      );
-      return textResult(renderSearchResults(query, hits, limit));
+      return textResult(renderSearchResults(query, result.hits, limit));
     }
   );
 
@@ -199,21 +220,11 @@ async function main(): Promise<void> {
       limit: z.number().int().min(1).max(20).optional(),
     },
     async ({ query, projectPath, projectSlug, limit = 8 }) => {
-      const slug = await resolveSlug({ projectPath, projectSlug });
-      if (!slug) {
-        return errorResult("provide projectPath or projectSlug.");
+      const result = await runProjectSearch({ query, projectPath, projectSlug, limit });
+      if (result.kind === "error") {
+        return errorResult(result.message);
       }
-      const index = await ensureProjectIndex(slug);
-      const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
-      const hits = searchProjectRecords(
-        index.records,
-        query,
-        limit,
-        equivalences,
-        index.conceptTerms,
-        index.recordTokens
-      );
-      return textResult(renderMemoryRetrieval(query, hits, limit));
+      return textResult(renderMemoryRetrieval(query, result.hits, limit));
     }
   );
 
