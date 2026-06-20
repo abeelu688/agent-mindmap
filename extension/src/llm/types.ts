@@ -1,3 +1,7 @@
+import {
+  LlmProviderError as SharedLlmProviderError,
+  type LlmErrorCode,
+} from "@agent-mindmap/shared";
 import type { ChatEvent } from "../transcript/types";
 import type {
   AgentHostId,
@@ -143,24 +147,12 @@ export type LlmProvider = {
   summarize(input: SummarizeInput, signal: AbortSignal): Promise<LlmSummarizeResult>;
 };
 
-export type LlmErrorCode =
-  | "cli-missing"
-  | "cli-failed"
-  | "timeout"
-  | "cancelled"
-  | "bad-json"
-  | "bad-shape"
-  | "empty";
+export type { LlmErrorCode } from "@agent-mindmap/shared";
 
-export class LlmProviderError extends Error {
-  constructor(
-    public readonly code: LlmErrorCode,
-    message: string,
-    public readonly cause?: unknown,
-    /** Partial CLI stdout/stderr when the subprocess ran but failed. */
-    public readonly cliCapture?: { stdout: string; stderr: string }
-  ) {
-    super(message);
-    this.name = "LlmProviderError";
-  }
-}
+/**
+ * `LlmProviderError` is canonical in `@agent-mindmap/shared` (the validators
+ * throw the shared class). Re-export it so `instanceof LlmProviderError`
+ * checks against extension code and tests match the same class.
+ */
+export const LlmProviderError = SharedLlmProviderError;
+export type LlmProviderError = InstanceType<typeof SharedLlmProviderError>;

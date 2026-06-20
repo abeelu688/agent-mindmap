@@ -100,3 +100,21 @@ export type {
 } from "./llmTypes";
 export { type Store } from "./store/store";
 export { JsonFsStore } from "./store/jsonFsStore";
+export { LlmProviderError, type LlmErrorCode } from "./llmValidate/llmError";
+export { validateSessionOutline, validateMergedOutline } from "./llmValidate/outlineValidate";
+export {
+  validateTopicGraph,
+  parseConceptPath,
+  canonicalizeConceptSegment,
+  segmentKeyForMerge,
+} from "./llmValidate/topicGraphValidate";
+export {
+  normalizeConceptPath,
+  MAX_CONCEPT_PATH_SEGMENTS,
+} from "./llmValidate/normalizeConceptPath";
+export {
+  outlineToTopicGraph,
+  topicGraphToOutline,
+  countOutlineDetails,
+  type OutlineTranslation,
+} from "./llmValidate/outlineToTopicGraph";
