@@ -19,7 +19,7 @@ function truncate(text: string, max = MAX_SNIPPET): string {
 }
 
 function nodeText(node: MindMapNodeData): string {
-  return node.data?.text ?? node.nodeData?.text ?? "";
+  return node.data?.text ?? node.nodeData?.data?.text ?? "";
 }
 
 function renderMindMapChildren(nodes: MindMapNodeData[], depth: number, limit: number): string[] {

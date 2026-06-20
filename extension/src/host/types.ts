@@ -1,8 +1,8 @@
-import type { LlmProviderId } from "../llm/types";
+import type { AgentHostId, LlmProviderId } from "@agent-mindmap/shared";
 import type { ListSessionsContext } from "../transcript/listSessions";
 import type { ChatEvent, TranscriptSession } from "../transcript/types";
 
-export type AgentHostId = "cursor" | "claude-code";
+export type { AgentHostId };
 
 export type HostSetting = AgentHostId | "auto";
 
@@ -19,10 +19,7 @@ export interface AgentHost {
   getProjectDir(workspacePath: string): string | undefined;
   /** Directory to scan for session files, or undefined when the project dir is missing. */
   getSessionsScanDir(workspacePath: string): string | undefined;
-  listSessions(
-    scanDir: string,
-    ctx: ListSessionsContext
-  ): Promise<TranscriptSession[]>;
+  listSessions(scanDir: string, ctx: ListSessionsContext): Promise<TranscriptSession[]>;
   parseTranscript(content: string): ChatEvent[];
   /** Best-effort decode of project slug → filesystem path (lossy). */
   slugToWorkspacePath(slug: string): string;
