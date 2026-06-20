@@ -4,6 +4,7 @@ export {
   bumpMcpProjectRevision,
   emptyMcpIndex,
   mcpIndexPath,
+  projectRecordCount,
   projectRevision,
   readMcpIndex,
 } from "./mcpIndex";

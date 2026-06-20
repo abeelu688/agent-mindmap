@@ -5,6 +5,7 @@ import {
   listProjectSummaries,
   listRecordsForProject,
   McpSearchIndexCache,
+  projectRecordCount,
   projectRevision,
   projectSessionsLatestMtimeMs,
   readConceptTrieMerge,
@@ -38,8 +39,14 @@ async function ensureProjectIndex(projectSlug: string): Promise<ProjectSearchInd
   const cached = indexCache.get(projectSlug);
   const mcpIndex = await readMcpIndex(storeDir);
   const revision = projectRevision(mcpIndex, projectSlug);
+  const expectedRecordCount = projectRecordCount(mcpIndex, projectSlug);
   const latestMtime = await projectSessionsLatestMtimeMs(storeDir, projectSlug);
-  if (cached && cached.revision === revision && cached.sourceMtimeMs >= latestMtime) {
+  if (
+    cached &&
+    cached.revision === revision &&
+    cached.sourceMtimeMs >= latestMtime &&
+    (expectedRecordCount === undefined || cached.records.length === expectedRecordCount)
+  ) {
     return cached;
   }
   const records = await listRecordsForProject(storeDir, projectSlug);

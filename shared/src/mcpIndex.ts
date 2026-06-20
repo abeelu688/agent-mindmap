@@ -50,3 +50,7 @@ export async function bumpMcpProjectRevision(
 export function projectRevision(index: McpIndexFile, projectSlug: string): number {
   return index.projects[projectSlug]?.revision ?? 0;
 }
+
+export function projectRecordCount(index: McpIndexFile, projectSlug: string): number | undefined {
+  return index.projects[projectSlug]?.recordCount;
+}
