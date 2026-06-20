@@ -146,12 +146,12 @@ Goal: a standalone Go service with Postgres storage and the REST API. No MCP, no
 
 **Scope**
 
-- New directory `team-server/` at the repo root (sibling to `extension/`, `mcp-server/`, `shared/`). Go module `github.com/agent-mindmap/team-server` (`team-server/go.mod`).
+- **New separate repository** `agent-mindmap-team-service` (sibling to the `agent-mindmap` extension repo, not a subdirectory of it). Go module `github.com/agent-mindmap/agent-mindmap-team-service` (`agent-mindmap-team-service/go.mod`). Initialize its own git repo; version and release independently from the extension.
 - Layout: `cmd/server/main.go`, `internal/storage/` (Postgres access), `internal/api/` (HTTP handlers), `internal/worker/` (P5 merge worker), `internal/config/`, `migrations/` (SQL files).
 - `internal/storage/postgres.go` — `pgx`-backed (`database/sql` + `pgxstdlib`) storage layer. Schema mirrors the SQLite schema adapted to Postgres types: `projects(project_slug TEXT PK, project_path TEXT, revision BIGINT, record_count BIGINT, last_analyzed_at BIGINT, last_built_at BIGINT)`, `sessions(project_slug TEXT, session_id TEXT, transcript_sha256 TEXT, analyzed_at BIGINT, record_json JSONB, PK(project_slug, session_id))`, `kv(key TEXT PK, value_json JSONB, updated_at BIGINT)`.
 - Migrations via `golang-migrate` (or hand-rolled SQL files under `migrations/` applied at boot with `CREATE TABLE IF NOT EXISTS`).
 - `BumpProjectRevision` uses `INSERT ... ON CONFLICT (project_slug) DO UPDATE SET revision = projects.revision + 1 RETURNING revision` — no application-level lock.
-- Go unit tests in `team-server/internal/storage/postgres_test.go` run against a test Postgres instance (`docker-compose.yml` at the repo root or under `team-server/`).
+- Go unit tests in `agent-mindmap-team-service/internal/storage/postgres_test.go` run against a test Postgres instance (`docker-compose.yml` under `agent-mindmap-team-service/`).
 
 **Not in scope**: HTTP endpoints, auth, merge worker.
 
@@ -163,17 +163,17 @@ Goal: a standalone Go service with Postgres storage and the REST API. No MCP, no
 
 **Scope**
 
-- `team-server/internal/api/` — implement the endpoints from `TEAM_MODE.md` §HTTP API using `net/http` (or `chi` router — ❓ recommend `chi` for middleware ergonomics, stdlib-compatible):
+- `agent-mindmap-team-service/internal/api/` — implement the endpoints from `TEAM_MODE.md` §HTTP API using `net/http` (or `chi` router — ❓ recommend `chi` for middleware ergonomics, stdlib-compatible):
   - `GET /v1/projects`
   - `GET /v1/projects/:slug/revision`
   - `GET /v1/projects/:slug/sessions` (paged)
   - `GET /v1/projects/:slug/sessions/:id`
-  - `PUT /v1/projects/:slug/sessions/:id` (upsert, LWW on `analyzedAt`)
+  - `POST /v1/projects/:slug/sessions/:id` (upsert, LWW on `analyzedAt`)
   - `GET /v1/merges/concept-trie`
   - `GET /v1/merges/concept-trie/revision`
   - `GET /v1/projects/:slug/equivalences`
 - All handlers delegate to the storage layer. The Go service treats `record_json` as opaque JSON — it does not parse `SessionRecord` internals.
-- Integration tests in `team-server/internal/api/routes_test.go` — full HTTP request/response against a test DB using `httptest`.
+- Integration tests in `agent-mindmap-team-service/internal/api/routes_test.go` — full HTTP request/response against a test DB using `httptest`.
 
 **Not in scope**: auth middleware (next PR), merge worker (phase 5).
 
@@ -185,7 +185,7 @@ Goal: a standalone Go service with Postgres storage and the REST API. No MCP, no
 
 **Scope**
 
-- `team-server/internal/api/middleware.go` — Bearer token check on every request (decision 5: reads and writes both require key). Constant-time compare via `crypto/subtle`.
+- `agent-mindmap-team-service/internal/api/middleware.go` — Bearer token check on every request (decision 5: reads and writes both require key). Constant-time compare via `crypto/subtle`.
 - Server configured with one or more valid API keys via env var `AGENT_MINDMAP_API_KEYS` (comma-separated). v2: key-per-user with a `keys` table; v1 shared key only.
 - 401 on missing/invalid token. No anonymous read surface.
 - Tests: requests without token → 401; with valid token → 200; with wrong token → 401.
@@ -198,7 +198,7 @@ Goal: a standalone Go service with Postgres storage and the REST API. No MCP, no
 
 **Scope**
 
-- `team-server/Dockerfile` (multi-stage: `golang:1.22` build → `gcr.io/distroless/static` runtime), `team-server/docker-compose.yml` (Postgres + service), `team-server/README.md` with deploy instructions.
+- `agent-mindmap-team-service/Dockerfile` (multi-stage: `golang:1.22` build → `gcr.io/distroless/static` runtime), `agent-mindmap-team-service/docker-compose.yml` (Postgres + service), `agent-mindmap-team-service/README.md` with deploy instructions.
 - Health check endpoint `GET /v1/health` (no auth — returns 200 if DB reachable).
 - Structured logging via `log/slog` (stdlib, Go 1.21+).
 - ❓ Rate limiting — recommend a simple per-key token-bucket in `internal/api/middleware.go`. Out of scope for v1 if deploy is internal-only; add if exposed beyond LAN.
@@ -247,7 +247,7 @@ Goal: a user can set `agentMindmap.team.serverUrl` + apiKey and have their exten
 
 **Scope**
 
-- `extension/src/store/pushQueue.ts` — after each local `upsertRecord` (pipeline writes a session), if team mode is active, enqueue a `PUT /sessions/:id` to the team service.
+- `extension/src/store/pushQueue.ts` — after each local `upsertRecord` (pipeline writes a session), if team mode is active, enqueue a `POST /sessions/:id` to the team service.
 - `lastPushedWatermark` stored in `kv` (local SQLite) — the `analyzedAt` of the most recently pushed session per project.
 - Drain logic: on activation and after each local write, push any sessions with `analyzedAt > watermark`. Idempotent (`PUT` is upsert).
 - Failure: retry with backoff; never block local analysis on push success. Queue persists across restarts (stored in SQLite `kv`).
@@ -282,8 +282,8 @@ Goal: the concept trie and ontology equivalences work in team mode (currently si
 
 **Scope**
 
-- `team-server/internal/worker/merge_worker.go` — periodic Go job that recomputes the concept trie from all `sessions.record_json` for a project, writes the result to `kv` (key `concept-trie`). Per decision 7: cron on fixed interval + on project revision change.
-- Re-implements the existing TypeScript trie-merge algorithm (currently in `shared/src/` + `extension/src/store/`). The algorithm is deterministic; the Go port carries its own tests under `team-server/internal/worker/` using the same fixture inputs to assert byte-equivalent output to the TypeScript version.
+- `agent-mindmap-team-service/internal/worker/merge_worker.go` — periodic Go job that recomputes the concept trie from all `sessions.record_json` for a project, writes the result to `kv` (key `concept-trie`). Per decision 7: cron on fixed interval + on project revision change.
+- Re-implements the existing TypeScript trie-merge algorithm (currently in `shared/src/` + `extension/src/store/`). The algorithm is deterministic; the Go port carries its own tests under `agent-mindmap-team-service/internal/worker/` using the same fixture inputs to assert byte-equivalent output to the TypeScript version.
 - Trigger: Go `time.Ticker` (every N minutes) + a `projects.revision` polling check. ❓ Interval — recommend 10 min default, configurable via env `AGENT_MINDMAP_WORKER_INTERVAL`.
 - Writes new trie + bumps a `concept-trie-revision` in `kv` so clients can poll `GET /v1/merges/concept-trie/revision` cheaply.
 
@@ -327,7 +327,7 @@ Goal: production-ready for teams beyond the first internal deployment.
 
 - Structured request logs (via `log/slog`) with `request_id`, `project_slug`, `actor` (key id), latency.
 - Metrics endpoint (`GET /v1/metrics`, Prometheus format via `prometheus/client_golang`) — request count, error rate, push-queue depth, worker run time.
-- ❓ Dashboard — recommend a Grafana JSON in `team-server/grafana/` for the deploy docs, not a hosted dashboard.
+- ❓ Dashboard — recommend a Grafana JSON in `agent-mindmap-team-service/grafana/` for the deploy docs, not a hosted dashboard.
 
 **Test**: metrics endpoint returns expected counters after seeded requests.
 
@@ -335,8 +335,8 @@ Goal: production-ready for teams beyond the first internal deployment.
 
 **Scope**
 
-- Per-key token-bucket rate limit (e.g. 600 req/min, burst 50) in `team-server/internal/api/middleware.go` (or `golang.org/x/time/rate`).
-- Per-project PUT concurrency guard: if one client is pushing 10k sessions, don't starve others. ❓ Recommend a simple per-key fair queue, not per-project.
+- Per-key token-bucket rate limit (e.g. 600 req/min, burst 50) in `agent-mindmap-team-service/internal/api/middleware.go` (or `golang.org/x/time/rate`).
+- Per-project POST concurrency guard: if one client is pushing 10k sessions, don't starve others. ❓ Recommend a simple per-key fair queue, not per-project.
 
 **Test**: rate-limit test — exceed limit → 429.
 
@@ -344,7 +344,7 @@ Goal: production-ready for teams beyond the first internal deployment.
 
 **Scope**
 
-- `team-server/docs/backup.md` — `pg_dump` cron, restore procedure, point-in-time recovery via Postgres WAL if enabled.
+- `agent-mindmap-team-service/docs/backup.md` — `pg_dump` cron, restore procedure, point-in-time recovery via Postgres WAL if enabled.
 - ❓ Managed Postgres (RDS, Cloud SQL) guidance — add if a team asks for it.
 
 **Test**: docs review; dry-run backup/restore in docker-compose.
@@ -354,7 +354,7 @@ Goal: production-ready for teams beyond the first internal deployment.
 **Scope** (only if a real team asks for it; otherwise skip)
 
 - Append-only `session_history` table — `session_id, project_slug, actor, analyzed_at, pipeline_version, record_json_snapshot, written_at`.
-- `PUT /sessions/:id` writes to both `sessions` (LWW) and `session_history` (append).
+- `POST /sessions/:id` writes to both `sessions` (LWW) and `session_history` (append).
 - `GET /v1/projects/:slug/sessions/:id/history` endpoint.
 - Per decision 6, this is opt-in and does not change the main read path.
 
@@ -368,7 +368,7 @@ Goal: production-ready for teams beyond the first internal deployment.
 
 ### Test strategy
 
-- **Shared `Store` contract test**: one test suite (`test/store/storeContract.test.ts`) that runs against any TypeScript `Store` impl. Each impl (`JsonFsStore`, `SqliteStore`, `RemoteStore`) includes a thin adapter and runs the contract suite. The Go `PostgresStore` is not a TypeScript `Store`; its contract is enforced by Go tests under `team-server/` that assert the same behavior, plus a cross-language fixture-parity check for the trie-merge algorithm in P5.1.
+- **Shared `Store` contract test**: one test suite (`test/store/storeContract.test.ts`) that runs against any TypeScript `Store` impl. Each impl (`JsonFsStore`, `SqliteStore`, `RemoteStore`) includes a thin adapter and runs the contract suite. The Go `PostgresStore` is not a TypeScript `Store`; its contract is enforced by Go tests under `agent-mindmap-team-service/` that assert the same behavior, plus a cross-language fixture-parity check for the trie-merge algorithm in P5.1.
 - **Migration tests**: JSON→SQLite (P2.2) and bulk-push (P4.4) tested with fixture stores.
 - **No integration tests that require a real team service in CI** until phase 6 — `RemoteStore` tests mock the HTTP layer; Go route tests use `httptest` against a test DB.
 
@@ -376,7 +376,7 @@ Goal: production-ready for teams beyond the first internal deployment.
 
 - Phases 1–2 land on `main` and ship in normal extension releases. Users see SQLite migration (P2.2/P2.3) as a versioned upgrade.
 - Phases 3–6 develop on `main` but are feature-gated by `agentMindmap.team.serverUrl` being unset. No user sees team mode until they configure it.
-- The `team-server/` Go module is versioned independently (Git tag `team-server/v0.x.y`) and deployed separately from the extension. Its releases do not bump the extension version.
+- The `agent-mindmap-team-service/` Go module is versioned independently (Git tag `agent-mindmap-team-service/v0.x.y`) and deployed separately from the extension. Its releases do not bump the extension version.
 
 ### Open questions to resolve mid-flight
 
@@ -482,8 +482,8 @@ Scope (split into sub-PRs because of size):
 
 **P5.4 — Go port of `searchIndex.ts` token scorer**
 
-- `team-server/internal/search/token_scorer.go` — port of `buildRecordTokenSets`, `weightedTerms`, `scoreText`, `diversifyHits`, `rerankHit`, `collectOutlineText`, `buildConceptTermIndex`. Reads `SessionRecord` JSON from Postgres (same `record_json` column), runs entirely on the server. **Must include Q1's codeRef retrieval branch** — the `"code"` hit kind, path/description tokenization, reverse concept boost (`codeRefScore * 0.3 / linkedConceptCount`), and `MAX_HITS_PER_CODE = 2` cap — because fixture-parity tests compare against the TypeScript `searchIndex.ts` which has Q1 merged.
-- Fixture-parity tests under `team-server/internal/search/token_scorer_test.go`: same input records as `test/searchIndex.test.ts` (or equivalent fixtures), assert byte-identical `SearchHit[]` output (scores, kinds, ordering) to the TypeScript version. Fixtures must include codeRef-bearing records so the Q1 branch is exercised.
+- `agent-mindmap-team-service/internal/search/token_scorer.go` — port of `buildRecordTokenSets`, `weightedTerms`, `scoreText`, `diversifyHits`, `rerankHit`, `collectOutlineText`, `buildConceptTermIndex`. Reads `SessionRecord` JSON from Postgres (same `record_json` column), runs entirely on the server. **Must include Q1's codeRef retrieval branch** — the `"code"` hit kind, path/description tokenization, reverse concept boost (`codeRefScore * 0.3 / linkedConceptCount`), and `MAX_HITS_PER_CODE = 2` cap — because fixture-parity tests compare against the TypeScript `searchIndex.ts` which has Q1 merged.
+- Fixture-parity tests under `agent-mindmap-team-service/internal/search/token_scorer_test.go`: same input records as `test/searchIndex.test.ts` (or equivalent fixtures), assert byte-identical `SearchHit[]` output (scores, kinds, ordering) to the TypeScript version. Fixtures must include codeRef-bearing records so the Q1 branch is exercised.
 - New endpoint `POST /v1/projects/:slug/search` with `query`, `limit`, `verbose` params, returning `SearchHit[]` JSON. Text-only at this stage (no embedding yet).
 - `RemoteStore.search(projectSlug, query, limit, opts)` in `shared/src/store/remoteStore.ts` — calls the new endpoint.
 - MCP client `search_project_history` / `retrieve_project_memory` handlers: in team mode, delegate to `Store.search()`; in single-machine mode, keep calling `searchProjectRecords` directly.
@@ -491,15 +491,15 @@ Scope (split into sub-PRs because of size):
 
 **P5.5 — Embedding worker (Go) + bge-m3 client**
 
-- `team-server/internal/embedding/bge_client.go` — HTTP client for the bge-m3 endpoint (`POST /embed` with batched texts). Configurable via `AGENT_MINDMAP_EMBEDDING_ENDPOINT`, `AGENT_MINDMAP_EMBEDDING_MODEL`.
-- `team-server/internal/embedding/worker.go` — runs alongside the merge worker (P5.1), rebuilds the embedding index when a project's revision changes. Batches `ConceptContextForMerge` texts (label + aliases + evidence) per project, calls bge-m3, writes vectors to Postgres.
-- New Postgres table `embeddings(project_slug, concept_key, model, vector BYTEA, built_at, PK(project_slug, concept_key, model))`. Migration in `team-server/migrations/`.
+- `agent-mindmap-team-service/internal/embedding/bge_client.go` — HTTP client for the bge-m3 endpoint (`POST /embed` with batched texts). Configurable via `AGENT_MINDMAP_EMBEDDING_ENDPOINT`, `AGENT_MINDMAP_EMBEDDING_MODEL`.
+- `agent-mindmap-team-service/internal/embedding/worker.go` — runs alongside the merge worker (P5.1), rebuilds the embedding index when a project's revision changes. Batches `ConceptContextForMerge` texts (label + aliases + evidence) per project, calls bge-m3, writes vectors to Postgres.
+- New Postgres table `embeddings(project_slug, concept_key, model, vector BYTEA, built_at, PK(project_slug, concept_key, model))`. Migration in `agent-mindmap-team-service/migrations/`.
 - Health check: if `AGENT_MINDMAP_EMBEDDING_ENDPOINT` is unset, worker is a no-op; search endpoint falls back to text-only. Team mode still functions without the 3090.
 - **Test**: worker test — seed sessions, run worker, verify embeddings in Postgres with expected dimensions; bge-m3 client test against a mock HTTP server.
 
 **P5.6 — Hybrid scoring + eval validation**
 
-- `team-server/internal/search/hybrid_scorer.go` — combines token score (from P5.4) and embedding cosine similarity. `final = α * embedding_score + (1-α) * token_score`, with `α` from `AGENT_MINDMAP_EMBEDDING_ALPHA` (default 0.5). Embedding score = max cosine similarity between query embedding and the session's concept embeddings, normalized to `[0,1]`.
+- `agent-mindmap-team-service/internal/search/hybrid_scorer.go` — combines token score (from P5.4) and embedding cosine similarity. `final = α * embedding_score + (1-α) * token_score`, with `α` from `AGENT_MINDMAP_EMBEDDING_ALPHA` (default 0.5). Embedding score = max cosine similarity between query embedding and the session's concept embeddings, normalized to `[0,1]`.
 - Query embedding: the search endpoint embeds the query via bge-m3 at request time (one HTTP call per search), then joins against stored concept embeddings.
 - `diversifyHits` runs on the merged hybrid hits, unchanged caps (plus `MAX_HITS_PER_CODE` from Q1).
 - `shared/src/retrievalEval.ts` gains team-mode cases: run eval against the Go endpoint (via `RemoteStore.search`), assert hybrid beats text-only baseline on hit-rate / recall. Eval cases must include fuzzy conceptual queries (where embedding should help) and exact-keyword queries (where token must still dominate).

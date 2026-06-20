@@ -4,7 +4,7 @@
 >
 > **Audience**: contributors planning the team-shared knowledge base work. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first for the current single-machine data flow.
 >
-> **Server language**: Go (see §Team service implementation). The TypeScript client (`shared/`, `mcp-server`, `extension`) is unchanged in scope; the team service is a separate Go program living under `team-server/`.
+> **Server language**: Go (see §Team service implementation). The TypeScript client (`shared/`, `mcp-server`, `extension`) is unchanged in scope; the team service is a **separate Go repository** at `agent-mindmap-team-service` (sibling to this repo), not a subdirectory of the extension repo.
 
 ## Goal
 
@@ -56,7 +56,7 @@ Key invariant: the **MCP server binary is the same in both modes**. It speaks st
 
 ## Team service implementation
 
-The team HTTP service is **implemented in Go**, not TypeScript. It lives under `team-server/` as a separate Go module (`go.mod`, `main.go`, `internal/...`). It does **not** share code with `shared/` — the REST contract is the only coupling.
+The team HTTP service is **implemented in Go**, not TypeScript. It lives in a **separate repository**, `agent-mindmap-team-service` (a sibling of this repo, not a subdirectory). Its own `go.mod`, `main.go`, `internal/...`, `migrations/`, `Dockerfile`, `docker-compose.yml` — versioned and released independently from the extension. It does **not** share code with `shared/` — the REST contract is the only coupling.
 
 Scope of the Go service:
 
@@ -71,7 +71,7 @@ What stays on the TypeScript client:
 - **Markdown rendering and retrieval eval** — stays in `shared/`. The MCP server consumes `SearchHit[]` (returned by the store) and renders markdown in-process; the eval harness runs against whichever store is active.
 - **Search (single-machine mode)** — the TypeScript `searchIndex.ts` is the single-machine search implementation, used directly by the MCP client when `serverUrl` is unset.
 - **Search (team mode) — moves to the Go service.** See §Open design questions → Q3 (Route A). The Go service implements hybrid embedding+token retrieval; the MCP client's `RemoteStore.search()` delegates to a `POST /v1/projects/:slug/search` endpoint. The Go token scorer is a port of `searchIndex.ts` with fixture-parity tests. This supersedes the earlier "search stays on client" principle: in team mode, search is a server-side concern because hybrid scoring needs both signals over the same candidate set, and embedding lives on the server (cross-machine 3090 + bge-m3, owned by the team service per the boundary decision in Q3).
-- **Push queue** — client-side, drains local new analyses to the Go server via `PUT /sessions/:id`.
+- **Push queue** — client-side, drains local new analyses to the Go server via `POST /sessions/:id`.
 
 Rationale for Go: the server is intentionally thin (storage + one deterministic worker), so the language choice is driven by deployment ergonomics — single static binary, no Node runtime, native Postgres pool, straightforward Docker image. The cost is re-implementing the trie-merge algorithm in Go; that algorithm is deterministic and well-tested in TypeScript, and the Go port is bounded to that one worker.
 
@@ -147,18 +147,21 @@ The existing `.mcp-index.json`, `sessions/<slug>/<id>.json`, `merges/concept-tri
 
 Stateless, no LLM, no pipeline. REST over JSON. All endpoints (read and write) require an API key in `Authorization: Bearer`. No anonymous read surface — an in-network leak should not expose session history.
 
+**Methods: only `GET` and `POST` are used.** `PUT` and `DELETE` are not allowed on this API. Upserts (session record pushes) are `POST`; there is no delete surface in v1.
+
 ```
 GET    /v1/projects                              -> ProjectSummary[]
 GET    /v1/projects/:slug/revision               -> { revision, recordCount }
 GET    /v1/projects/:slug/sessions?limit&offset  -> SessionRecord[] (paged)
 GET    /v1/projects/:slug/sessions/:id           -> SessionRecord
-PUT    /v1/projects/:slug/sessions/:id           -> { revision }   (upsert, idempotent)
+POST   /v1/projects/:slug/sessions/:id           -> { revision }   (upsert, idempotent)
 GET    /v1/merges/concept-trie                   -> MergeRecord
 GET    /v1/projects/:slug/equivalences           -> SegmentEquivalence[]
 GET    /v1/merges/concept-trie/revision          -> { revision }   (cheap cache validation)
+POST   /v1/projects/:slug/search                 -> SearchHit[]    (hybrid retrieval, team mode only — Q3 Route A)
 ```
 
-`RemoteStore` is a thin fetch/PUT client over this API. It keeps an in-process LRU cache (the existing `McpSearchIndexCache`) and validates against `GET …/revision` before use — exactly the logic currently in `ensureProjectIndex`, just hitting HTTP instead of `fs.stat`. The Go server returns raw `SessionRecord` JSON; all search-index building, scoring, and markdown rendering stays on the TypeScript client (see §Team service implementation).
+`RemoteStore` is a thin fetch/POST client over this API. It keeps an in-process LRU cache (the existing `McpSearchIndexCache`) and validates against `GET …/revision` before use — exactly the logic currently in `ensureProjectIndex`, just hitting HTTP instead of `fs.stat`. The Go server returns raw `SessionRecord` JSON; all search-index building, scoring, and markdown rendering stays on the TypeScript client (see §Team service implementation).
 
 ## Sync: local → team
 
@@ -172,13 +175,13 @@ client SqliteStore                       team HTTP service
         │ ◄────── { revision: 47 }                │
         │ 3. for each local session with          │
         │    analyzedAt > lastPushedWatermark:    │
-        │    PUT /v1/projects/:slug/sessions/:id  │
+        │    POST /v1/projects/:slug/sessions/:id │
         │ ──────────────────────────────────────► │
         │ ◄────── { revision: 48 }                │
         │ 4. update lastPushedWatermark           │
 ```
 
-`lastPushedWatermark` is stored in `kv` on the client. A background timer (or a post-analyze hook in the extension) drains the queue. Failure retries with exponential backoff; the push is idempotent because `PUT /sessions/:id` is keyed by session id.
+`lastPushedWatermark` is stored in `kv` on the client. A background timer (or a post-analyze hook in the extension) drains the queue. Failure retries with exponential backoff; the push is idempotent because `POST /sessions/:id` is keyed by session id.
 
 ### Write semantics (no real conflicts)
 
@@ -188,7 +191,7 @@ The only case where the same `(project_slug, session_id)` gets pushed twice is *
 
 Policy: **pure upsert, last-write-wins on `analyzedAt`**.
 
-- `PUT /sessions/:id` always overwrites. No `transcriptSha256` guard, no 409.
+- `POST /sessions/:id` always overwrites. No `transcriptSha256` guard, no 409.
 - The client's `isRecordFresh` already guarantees it only pushes records newer than what it has locally — it won't push stale records over fresh ones.
 - Pipeline version bumps (`PIPELINE_VERSION` change) trigger client-side re-analysis; the resulting fresh record overwrites the old one upstream. Expected behavior.
 - `transcriptSha256` may differ across two pushes for the same session if the transcript file was appended to between analyses (Cursor appending turns). The newer analysis wins. Correct.
@@ -199,7 +202,7 @@ No audit history is kept. If audit becomes a requirement later, add an append-on
 
 The concept trie and ontology equivalences are produced by a **deterministic batch worker on the Go server**, not by client pushes. A Go cron job recomputes the trie from all `sessions.record_json` for a project on a fixed interval (and on project revision change), writes the result to the `kv` table, and exposes it via `GET /v1/merges/concept-trie`. Push-triggered recomputation was considered and rejected: the trie rebuild is deterministic and cheap relative to LLM analysis, so a periodic full rebuild is simpler and avoids high-frequency small rebuilds on every push. Clients poll `GET /v1/merges/concept-trie/revision` to know when to refresh their cached copy.
 
-The Go worker re-implements the existing TypeScript trie-merge algorithm. The algorithm is deterministic and already covered by `shared/` tests; the Go port carries its own tests under `team-server/` using the same fixture inputs to assert byte-equivalent output.
+The Go worker re-implements the existing TypeScript trie-merge algorithm. The algorithm is deterministic and already covered by `shared/` tests; the Go port carries its own tests under `agent-mindmap-team-service/internal/worker/` using the same fixture inputs to assert byte-equivalent output.
 
 ## Authentication
 
@@ -246,7 +249,7 @@ Migration safety:
 User sets `agentMindmap.team.serverUrl`. On next activation:
 
 1. Construct `RemoteStore`.
-2. Run a one-shot "bulk push": iterate all local sessions, `PUT` each. Server reconciles (upsert, last-write-wins).
+2. Run a one-shot "bulk push": iterate all local sessions, `POST` each. Server reconciles (upsert, last-write-wins).
 3. Local `SqliteStore` is kept as the working copy (client still analyzes locally). Push queue takes over for incremental updates from here.
 
 The client never deletes its local DB in team mode — it's the cache and offline buffer. Local-first with push is the default; a strict "server is source of truth" mode (no local writes) is out of scope for v1 — local-first is more robust to network blips and lets analysis proceed offline.
@@ -383,7 +386,7 @@ Today the MCP retrieval path (`shared/src/searchIndex.ts`) ignores `codeReferenc
 
 ## Decisions
 
-All six open questions resolved:
+All open questions resolved:
 
 1. **MCP transport** — stdio-only. The team client runs the same `mcp-server` binary as single-machine, speaking stdio to Cursor/Claude Code. The team service is plain REST, does not speak MCP. No direct HTTP-MCP endpoint on the team service.
 2. **SQLite migration timing** — before team mode. Migration 1 ships as a standalone phase (pure refactor, independent value), then team mode builds on the same schema. Bundling them would mix a schema migration with new HTTP surface area and make rollback harder.
@@ -393,6 +396,8 @@ All six open questions resolved:
 6. **Audit history** — deferred. Main path stores only the latest record. If audit becomes a requirement, add an append-only `session_history` table; it does not touch the read/write path.
 7. **Merge snapshot rebuild trigger** — Go server-side cron on fixed interval + project revision change. Not push-triggered. Trie rebuild is deterministic and cheap; periodic full rebuild beats high-frequency small rebuilds.
 8. **Team service language** — Go, not TypeScript. The server is intentionally thin (storage + one deterministic trie-merge worker), so Go's deployment ergonomics (single static binary, native Postgres pool via `pgx`, no Node runtime) outweigh the cost of re-implementing the trie-merge algorithm. The TypeScript client keeps all search/render/eval logic; the Go server treats `SessionRecord` JSON as opaque storage. Code is not shared across the language boundary — the REST contract is the only coupling.
+9. **Team service repository** — the Go service lives in a **separate repo**, `agent-mindmap-team-service` (sibling to `agent-mindmap`), not under `team-server/` inside the extension repo. It is versioned and released independently (Git tags `v0.x.y`); its releases do not bump the extension version. Rationale: the service has its own deploy cadence, runtime (Go vs Node), and ops surface (Postgres, bge-m3) — bundling it as a subdirectory couples extension releases to server releases and complicates CI. The REST contract documented in §HTTP API is the only cross-repo dependency.
+10. **HTTP methods** — only `GET` and `POST` are used on the team service API. `PUT` and `DELETE` are not allowed. Upserts (session record pushes) are `POST /v1/projects/:slug/sessions/:id`; there is no delete surface in v1. Rationale: a constrained method set simplifies proxies, firewalls, and middleware (some corporate proxies strip `PUT`/`DELETE`), and the API has no operation that genuinely requires `PUT` (idempotent upsert is expressible as `POST` keyed by session id) or `DELETE` (no deletion in v1).
 
 ## Impact on the released extension
 
