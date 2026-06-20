@@ -65,3 +65,5 @@ export type {
   SessionRecord,
   SessionRecordMeta,
 } from "./storeTypes";
+export { type Store } from "./store/store";
+export { JsonFsStore } from "./store/jsonFsStore";
