@@ -1,4 +1,9 @@
-import type { ConceptContextForMerge, SearchHit, SessionRecord } from "./storeTypes";
+import type {
+  ConceptContextForMerge,
+  SearchHit,
+  SegmentEquivalence,
+  SessionRecord,
+} from "./storeTypes";
 
 const CJK_REGEX = /[㐀-鿿豈-﫿]/;
 const CANDIDATE_MULTIPLIER = 5;
@@ -48,7 +53,11 @@ function tokenizeQuery(query: string): string[] {
   return [...out].filter(Boolean);
 }
 
-function weightedTerms(query: string, records: SessionRecord[]): WeightedTerm[] {
+function weightedTerms(
+  query: string,
+  records: SessionRecord[],
+  equivalences: SegmentEquivalence[] = []
+): WeightedTerm[] {
   const rawTerms = tokenizeQuery(query);
   const terms = new Map<string, number>();
   const add = (term: string, weight: number): void => {
@@ -75,6 +84,20 @@ function weightedTerms(query: string, records: SessionRecord[]): WeightedTerm[] 
         for (const token of tokenizeQuery(term)) {
           add(token, 0.55);
         }
+      }
+    }
+  }
+
+  for (const eq of equivalences) {
+    const eqTerms = [eq.canonical, ...(eq.aliases ?? [])];
+    const normalized = eqTerms.map(normalizeQuery);
+    if (!normalized.some((term) => rawTerms.some((q) => term.includes(q) || q.includes(term)))) {
+      continue;
+    }
+    for (const term of eqTerms) {
+      add(term, 0.65);
+      for (const token of tokenizeQuery(term)) {
+        add(token, 0.5);
       }
     }
   }
@@ -232,9 +255,10 @@ function collectOutlineText(record: SessionRecord): string {
 export function searchProjectRecords(
   records: SessionRecord[],
   query: string,
-  limit: number
+  limit: number,
+  equivalences: SegmentEquivalence[] = []
 ): SearchHit[] {
-  const terms = weightedTerms(query, records);
+  const terms = weightedTerms(query, records, equivalences);
   if (!terms.length) {
     return [];
   }

@@ -12,6 +12,11 @@ import {
 } from "../shared/src/markdownRender";
 import { workspaceToSlug } from "../shared/src/paths";
 import { searchProjectRecords } from "../shared/src/searchIndex";
+import {
+  ontologyCachePath,
+  ontologyIndexPath,
+  readLatestProjectSegmentEquivalences,
+} from "../shared/src/storeReader";
 import type { ConceptContextForMerge, SessionRecord } from "../shared/src/storeTypes";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
@@ -76,6 +81,20 @@ describe("searchProjectRecords", () => {
 
   it("expands queries through concept aliases", () => {
     const hits = searchProjectRecords([sampleRecord()], "login security", 5);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].conceptKey).toBe("auth");
+    expect(hits.some((hit) => hit.kind === "evidence")).toBe(true);
+  });
+
+  it("expands queries through segment equivalences", () => {
+    const hits = searchProjectRecords([sampleRecord()], "signin", 5, [
+      {
+        canonical: "auth",
+        aliases: ["signin"],
+        scope: { projectSlugs: ["home-example-proj"] },
+        confidence: 0.9,
+      },
+    ]);
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0].conceptKey).toBe("auth");
     expect(hits.some((hit) => hit.kind === "evidence")).toBe(true);
@@ -156,6 +175,55 @@ describe("markdown renderers", () => {
     expect(md).toContain("Most relevant evidence");
     expect(md).toContain("Source sessions");
     expect(md).toContain("sess-1");
+  });
+});
+
+describe("ontology equivalence reader", () => {
+  it("loads latest project segment equivalences from ontology cache", async () => {
+    const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-ontology-"));
+    try {
+      await fs.mkdir(path.dirname(ontologyCachePath(storeDir, "cache-a")), { recursive: true });
+      await fs.writeFile(
+        ontologyIndexPath(storeDir),
+        JSON.stringify({
+          schemaVersion: 1,
+          updatedAt: 2,
+          entries: [
+            {
+              cacheKey: "cache-a",
+              builtAt: 2,
+              sessionIds: ["sess-1"],
+              projectSlugs: ["home-example-proj"],
+            },
+          ],
+        }),
+        "utf8"
+      );
+      await fs.writeFile(
+        ontologyCachePath(storeDir, "cache-a"),
+        JSON.stringify({
+          schemaVersion: 1,
+          segmentEquivalences: [
+            {
+              canonical: "auth",
+              aliases: ["signin"],
+              scope: { projectSlugs: ["home-example-proj"] },
+              confidence: 0.9,
+            },
+          ],
+        }),
+        "utf8"
+      );
+
+      const equivalences = await readLatestProjectSegmentEquivalences(
+        storeDir,
+        "home-example-proj"
+      );
+      expect(equivalences).toHaveLength(1);
+      expect(equivalences[0].aliases).toContain("signin");
+    } finally {
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
   });
 });
 

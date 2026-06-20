@@ -2,7 +2,14 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { workspaceToSlug } from "./paths";
 import { STORE_LAYOUT } from "./storeLayout";
-import type { MergeRecord, ProjectSummary, SessionRecord } from "./storeTypes";
+import type {
+  MergeRecord,
+  OntologyIndex,
+  OntologyRecord,
+  ProjectSummary,
+  SegmentEquivalence,
+  SessionRecord,
+} from "./storeTypes";
 
 const SCHEMA_VERSION = 1;
 
@@ -59,6 +66,14 @@ export function conceptTrieMergePath(storeDir: string): string {
 
 export function mergeSnapshotPath(storeDir: string, projectSlug: string): string {
   return path.join(storeDir, STORE_LAYOUT.mergesDir, projectSlug, "merge-snapshot.json");
+}
+
+export function ontologyIndexPath(storeDir: string): string {
+  return path.join(storeDir, STORE_LAYOUT.ontologyIndexFile);
+}
+
+export function ontologyCachePath(storeDir: string, cacheKey: string): string {
+  return path.join(storeDir, STORE_LAYOUT.ontologyCacheDir, `${cacheKey}.json`);
 }
 
 export async function readRecord(
@@ -196,6 +211,45 @@ export async function readMergeRecord(filePath: string): Promise<MergeRecord | u
 
 export async function readConceptTrieMerge(storeDir: string): Promise<MergeRecord | undefined> {
   return readMergeRecord(conceptTrieMergePath(storeDir));
+}
+
+export async function readOntologyIndex(storeDir: string): Promise<OntologyIndex | undefined> {
+  const parsed = await readJson<OntologyIndex>(ontologyIndexPath(storeDir));
+  if (parsed?.schemaVersion !== SCHEMA_VERSION || !Array.isArray(parsed.entries)) {
+    return undefined;
+  }
+  return parsed;
+}
+
+export async function readOntologyRecord(
+  storeDir: string,
+  cacheKey: string
+): Promise<OntologyRecord | undefined> {
+  const parsed = await readJson<OntologyRecord>(ontologyCachePath(storeDir, cacheKey));
+  if (parsed?.schemaVersion !== SCHEMA_VERSION) {
+    return undefined;
+  }
+  return parsed;
+}
+
+export async function readLatestProjectSegmentEquivalences(
+  storeDir: string,
+  projectSlug: string
+): Promise<SegmentEquivalence[]> {
+  const index = await readOntologyIndex(storeDir);
+  if (!index?.entries.length) {
+    return [];
+  }
+  const candidates = index.entries
+    .filter((entry) => entry.projectSlugs.includes(projectSlug))
+    .sort((a, b) => b.builtAt - a.builtAt);
+  for (const entry of candidates) {
+    const record = await readOntologyRecord(storeDir, entry.cacheKey);
+    if (record?.segmentEquivalences?.length) {
+      return record.segmentEquivalences;
+    }
+  }
+  return [];
 }
 
 export function resolveProjectSlug(opts: {

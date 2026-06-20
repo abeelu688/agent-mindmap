@@ -94,6 +94,43 @@ export type McpIndexFile = {
   projects: Record<string, McpIndexProjectEntry>;
 };
 
+export type SegmentEquivalenceScope = {
+  pathPrefix?: string[];
+  downstreamPrefix?: string[];
+  downstreamFirst?: string[];
+  projectSlugs?: string[];
+  evidenceKeywords?: string[];
+};
+
+export type SegmentEquivalence = {
+  canonical: string;
+  aliases: string[];
+  scope: SegmentEquivalenceScope;
+  confidence?: number;
+  rationale?: string;
+};
+
+export type OntologyIndex = {
+  schemaVersion: 1;
+  updatedAt: number;
+  entries: {
+    cacheKey: string;
+    builtAt: number;
+    sessionIds: string[];
+    projectSlugs: string[];
+  }[];
+};
+
+export type OntologyRecord = {
+  schemaVersion: 1;
+  meta?: {
+    builtAt?: number;
+    sessionIds?: string[];
+    projectSlugs?: string[];
+  };
+  segmentEquivalences?: SegmentEquivalence[];
+};
+
 export type SearchHitKind = "session" | "concept" | "evidence";
 
 export type SearchHit = {

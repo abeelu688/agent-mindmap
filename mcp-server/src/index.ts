@@ -8,6 +8,7 @@ import {
   projectRevision,
   projectSessionsLatestMtimeMs,
   readConceptTrieMerge,
+  readLatestProjectSegmentEquivalences,
   readMcpIndex,
   readRecord,
   renderConceptDetail,
@@ -164,7 +165,8 @@ async function main(): Promise<void> {
         return errorResult("provide projectPath or projectSlug.");
       }
       const index = await ensureProjectIndex(slug);
-      const hits = searchProjectRecords(index.records, query, limit);
+      const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
+      const hits = searchProjectRecords(index.records, query, limit, equivalences);
       return textResult(renderSearchResults(query, hits, limit));
     }
   );
@@ -183,7 +185,8 @@ async function main(): Promise<void> {
         return errorResult("provide projectPath or projectSlug.");
       }
       const index = await ensureProjectIndex(slug);
-      const hits = searchProjectRecords(index.records, query, limit);
+      const equivalences = await readLatestProjectSegmentEquivalences(storeDir, slug);
+      const hits = searchProjectRecords(index.records, query, limit, equivalences);
       return textResult(renderMemoryRetrieval(query, hits, limit));
     }
   );
