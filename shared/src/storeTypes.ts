@@ -94,12 +94,16 @@ export type McpIndexFile = {
   projects: Record<string, McpIndexProjectEntry>;
 };
 
+export type SearchHitKind = "session" | "concept" | "evidence";
+
 export type SearchHit = {
+  kind: SearchHitKind;
   projectSlug: string;
   sessionId: string;
   sessionLabel: string;
   conceptKey?: string;
   conceptLabel?: string;
+  evidenceIndex?: number;
   score: number;
   snippet: string;
   evidence: string[];

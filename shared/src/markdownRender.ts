@@ -231,9 +231,13 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
   ];
   for (const hit of hits.slice(0, limit)) {
     lines.push(`## ${hit.conceptLabel ?? hit.sessionLabel}`);
+    lines.push(`- **type**: ${hit.kind}`);
     lines.push(`- **sessionId**: \`${hit.sessionId}\``);
     if (hit.conceptKey) {
       lines.push(`- **concept**: \`${hit.conceptKey}\``);
+    }
+    if (typeof hit.evidenceIndex === "number") {
+      lines.push(`- **evidenceIndex**: ${hit.evidenceIndex}`);
     }
     lines.push(`- ${hit.snippet}`);
     for (const ev of hit.evidence.slice(0, 3)) {

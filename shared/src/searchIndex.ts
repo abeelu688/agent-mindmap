@@ -2,6 +2,11 @@ import type { ConceptContextForMerge, SearchHit, SessionRecord } from "./storeTy
 
 const CJK_REGEX = /[㐀-鿿豈-﫿]/;
 
+type WeightedTerm = {
+  term: string;
+  weight: number;
+};
+
 function normalizeQuery(query: string): string {
   return query.toLowerCase().trim();
 }
@@ -27,12 +32,9 @@ function tokenizeQuery(query: string): string[] {
     return [];
   }
   const out = new Set<string>();
-  // Whitespace-separated tokens (good for English/numbers).
   for (const t of lower.split(/\s+/)) {
     if (!t) continue;
     out.add(t);
-    // For CJK chunks inside a token, also push 2-grams + 3-grams so we can
-    // match any of them inside the haystack.
     if (hasCjk(t) && t.length >= 2) {
       for (const g of ngrams(t, 2)) out.add(g);
       if (t.length >= 3) {
@@ -43,21 +45,69 @@ function tokenizeQuery(query: string): string[] {
   return [...out].filter(Boolean);
 }
 
-function scoreText(text: string, terms: string[]): number {
+function weightedTerms(query: string, records: SessionRecord[]): WeightedTerm[] {
+  const rawTerms = tokenizeQuery(query);
+  const terms = new Map<string, number>();
+  const add = (term: string, weight: number): void => {
+    const normalized = normalizeQuery(term);
+    if (!normalized) {
+      return;
+    }
+    terms.set(normalized, Math.max(terms.get(normalized) ?? 0, weight));
+  };
+
+  for (const term of rawTerms) {
+    add(term, 1);
+  }
+
+  for (const record of records) {
+    for (const ctx of record.conceptContexts ?? []) {
+      const conceptTerms = [ctx.key, ctx.label, ...(ctx.aliases ?? [])];
+      const searchableConcept = conceptTerms.map(normalizeQuery);
+      if (!searchableConcept.some((term) => rawTerms.some((q) => term.includes(q)))) {
+        continue;
+      }
+      for (const term of conceptTerms) {
+        add(term, 0.7);
+        for (const token of tokenizeQuery(term)) {
+          add(token, 0.55);
+        }
+      }
+    }
+  }
+
+  return [...terms.entries()].map(([term, weight]) => ({ term, weight }));
+}
+
+function scoreText(text: string, terms: WeightedTerm[]): number {
   const lower = text.toLowerCase();
   let score = 0;
-  for (const term of terms) {
+  for (const { term, weight } of terms) {
     if (!term) {
       continue;
     }
     if (lower === term) {
-      score += 10;
+      score += 10 * weight;
     } else if (lower.includes(term)) {
-      // Longer terms are more specific → weight more.
-      score += Math.max(2, Math.min(8, term.length));
+      score += Math.max(2, Math.min(8, term.length)) * weight;
     }
   }
   return score;
+}
+
+function exactConceptMatch(ctx: ConceptContextForMerge, terms: WeightedTerm[]): boolean {
+  const conceptTerms = [ctx.key, ctx.label, ...(ctx.aliases ?? [])].map(normalizeQuery);
+  return conceptTerms.some((conceptTerm) => terms.some(({ term }) => conceptTerm === term));
+}
+
+function kindRank(kind: SearchHit["kind"]): number {
+  if (kind === "evidence") {
+    return 3;
+  }
+  if (kind === "concept") {
+    return 2;
+  }
+  return 1;
 }
 
 function collectOutlineText(record: SessionRecord): string {
@@ -91,7 +141,7 @@ export function searchProjectRecords(
   query: string,
   limit: number
 ): SearchHit[] {
-  const terms = tokenizeQuery(query);
+  const terms = weightedTerms(query, records);
   if (!terms.length) {
     return [];
   }
@@ -103,6 +153,7 @@ export function searchProjectRecords(
 
     if (outlineScore > 0) {
       hits.push({
+        kind: "session",
         projectSlug: record.meta.projectSlug,
         sessionId: record.meta.sessionId,
         sessionLabel: record.meta.sessionLabel,
@@ -113,38 +164,58 @@ export function searchProjectRecords(
     }
 
     for (const ctx of record.conceptContexts ?? []) {
-      const ctxText = [
+      const conceptText = [
         ctx.key,
         ctx.label,
         ...(ctx.aliases ?? []),
         ...ctx.domainKeys,
-        ...ctx.evidence,
+        ...ctx.parentKeys,
+        ...ctx.childKeys,
       ].join("\n");
-      const ctxScore = scoreText(ctxText, terms);
-      // Aliases/key matches deserve a small extra boost.
-      const aliasBoost =
-        (ctx.aliases ?? []).some((a) => terms.includes(a.toLowerCase())) ||
-        terms.includes(ctx.key.toLowerCase()) ||
-        terms.includes(ctx.label.toLowerCase())
-          ? 4
-          : 0;
-      if (ctxScore <= 0 && aliasBoost <= 0) {
-        continue;
+      const conceptScore = scoreText(conceptText, terms);
+      const exactConceptBoost = exactConceptMatch(ctx, terms) ? 6 : 0;
+
+      if (conceptScore > 0 || exactConceptBoost > 0) {
+        hits.push({
+          kind: "concept",
+          projectSlug: record.meta.projectSlug,
+          sessionId: record.meta.sessionId,
+          sessionLabel: record.meta.sessionLabel,
+          conceptKey: ctx.key,
+          conceptLabel: ctx.label,
+          score: conceptScore + exactConceptBoost + 2,
+          snippet: truncateSnippet(ctx.evidence[0] ?? ctx.label),
+          evidence: ctx.evidence.slice(0, 5),
+        });
       }
-      hits.push({
-        projectSlug: record.meta.projectSlug,
-        sessionId: record.meta.sessionId,
-        sessionLabel: record.meta.sessionLabel,
-        conceptKey: ctx.key,
-        conceptLabel: ctx.label,
-        score: ctxScore + 2 + aliasBoost,
-        snippet: truncateSnippet(ctx.evidence[0] ?? ctx.label),
-        evidence: ctx.evidence.slice(0, 5),
+
+      ctx.evidence.forEach((evidence, evidenceIndex) => {
+        const evidenceScore = scoreText(evidence, terms);
+        if (evidenceScore <= 0 && conceptScore <= 0 && exactConceptBoost <= 0) {
+          return;
+        }
+        hits.push({
+          kind: "evidence",
+          projectSlug: record.meta.projectSlug,
+          sessionId: record.meta.sessionId,
+          sessionLabel: record.meta.sessionLabel,
+          conceptKey: ctx.key,
+          conceptLabel: ctx.label,
+          evidenceIndex,
+          score: evidenceScore * 1.4 + conceptScore * 0.35 + exactConceptBoost + 4,
+          snippet: truncateSnippet(evidence),
+          evidence: [evidence],
+        });
       });
     }
   }
 
-  hits.sort((a, b) => b.score - a.score || b.sessionId.localeCompare(a.sessionId));
+  hits.sort(
+    (a, b) =>
+      b.score - a.score ||
+      kindRank(b.kind) - kindRank(a.kind) ||
+      b.sessionId.localeCompare(a.sessionId)
+  );
   return hits.slice(0, limit);
 }
 

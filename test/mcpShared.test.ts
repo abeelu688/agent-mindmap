@@ -1,3 +1,6 @@
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { bumpMcpProjectRevision, readMcpIndex } from "../shared/src/mcpIndex";
 import {
@@ -9,9 +12,6 @@ import {
 import { workspaceToSlug } from "../shared/src/paths";
 import { searchProjectRecords } from "../shared/src/searchIndex";
 import type { ConceptContextForMerge, SessionRecord } from "../shared/src/storeTypes";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {
@@ -43,6 +43,7 @@ function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord
       {
         key: "auth",
         label: "Authentication",
+        aliases: ["login security"],
         domainKeys: ["backend"],
         parentKeys: [],
         childKeys: ["jwt"],
@@ -63,10 +64,20 @@ describe("workspaceToSlug (shared)", () => {
 });
 
 describe("searchProjectRecords", () => {
-  it("matches concept evidence and outline text", () => {
+  it("matches concept evidence and returns evidence hits first", () => {
     const hits = searchProjectRecords([sampleRecord()], "clock skew", 5);
     expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].kind).toBe("evidence");
     expect(hits[0].sessionId).toBe("sess-1");
+    expect(hits[0].evidenceIndex).toBe(0);
+    expect(hits[0].snippet).toContain("clock skew");
+  });
+
+  it("expands queries through concept aliases", () => {
+    const hits = searchProjectRecords([sampleRecord()], "login security", 5);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].conceptKey).toBe("auth");
+    expect(hits.some((hit) => hit.kind === "evidence")).toBe(true);
   });
 });
 
