@@ -81,6 +81,7 @@ export type {
 } from "./llmTypes";
 export { type Store } from "./store/store";
 export { JsonFsStore } from "./store/jsonFsStore";
+export { SqliteStore } from "./store/sqliteStore";
 export { LlmProviderError, type LlmErrorCode } from "./llmValidate/llmError";
 export { validateSessionOutline, validateMergedOutline } from "./llmValidate/outlineValidate";
 export {
