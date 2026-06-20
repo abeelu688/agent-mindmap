@@ -1,13 +1,12 @@
-export { workspaceToSlug, slugToWorkspacePath, expandHome, resolveStoreDir } from "./paths";
-export { STORE_LAYOUT, MCP_INDEX_SCHEMA_VERSION } from "./storeLayout";
 export {
-  bumpMcpProjectRevision,
-  emptyMcpIndex,
-  mcpIndexPath,
-  projectRecordCount,
-  projectRevision,
-  readMcpIndex,
-} from "./mcpIndex";
+  workspaceToSlug,
+  slugToWorkspacePath,
+  expandHome,
+  resolveStoreDir,
+  resolveProjectSlug,
+  findProjectSlugByPath,
+} from "./paths";
+export { STORE_LAYOUT, MCP_INDEX_SCHEMA_VERSION } from "./storeLayout";
 export {
   renderConceptDetail,
   renderConceptTrieTopLevel,
@@ -32,25 +31,6 @@ export {
   type RetrievalEvalCase,
   type RetrievalEvalReport,
 } from "./retrievalEval";
-export {
-  conceptTrieMergePath,
-  findProjectSlugByPath,
-  listProjectSummaries,
-  listRecords,
-  listRecordsForProject,
-  mergeSnapshotPath,
-  ontologyCachePath,
-  ontologyIndexPath,
-  projectSessionsLatestMtimeMs,
-  readConceptTrieMerge,
-  readLatestProjectSegmentEquivalences,
-  readMergeRecord,
-  readOntologyIndex,
-  readOntologyRecord,
-  readRecord,
-  recordPath,
-  resolveProjectSlug,
-} from "./storeReader";
 export { looksLikeSessionRecord, validateAndBackfillRecord } from "./store/recordValidate";
 export type {
   ConceptContextForMerge,

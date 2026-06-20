@@ -2,7 +2,8 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { bumpMcpProjectRevision, JsonFsStore } from "../shared/src";
+import { JsonFsStore } from "../shared/src";
+import { bumpMcpProjectRevision } from "../shared/src/mcpIndex";
 import { writeJsonAtomic } from "../shared/src/atomicWrite";
 import { STORE_LAYOUT } from "../shared/src/storeLayout";
 import {

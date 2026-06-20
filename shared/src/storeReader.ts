@@ -1,7 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { readMcpIndex } from "./mcpIndex";
-import { workspaceToSlug } from "./paths";
 import { validateAndBackfillRecord, looksLikeSessionRecord } from "./store/recordValidate";
 import { STORE_LAYOUT } from "./storeLayout";
 import type {
@@ -255,35 +254,6 @@ export async function readLatestProjectSegmentEquivalences(
     }
   }
   return [];
-}
-
-export function resolveProjectSlug(opts: {
-  projectPath?: string;
-  projectSlug?: string;
-}): string | undefined {
-  if (opts.projectSlug?.trim()) {
-    return opts.projectSlug.trim();
-  }
-  if (opts.projectPath?.trim()) {
-    return workspaceToSlug(opts.projectPath.trim());
-  }
-  return undefined;
-}
-
-export function findProjectSlugByPath(
-  summaries: ProjectSummary[],
-  projectPath: string
-): string | undefined {
-  const slug = workspaceToSlug(projectPath);
-  const exact = summaries.find((s) => s.projectSlug === slug);
-  if (exact) {
-    return exact.projectSlug;
-  }
-  const normalized = path.normalize(projectPath);
-  const byPath = summaries.find(
-    (s) => s.projectPath && path.normalize(s.projectPath) === normalized
-  );
-  return byPath?.projectSlug;
 }
 
 export const __testing = {
