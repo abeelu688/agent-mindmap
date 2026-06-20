@@ -235,6 +235,8 @@ export function renderSearchResults(query: string, hits: SearchHit[], limit: num
   return lines.join("\n");
 }
 
+const MEMORY_CHAR_BUDGET = 8000;
+
 export function renderMemoryRetrieval(query: string, hits: SearchHit[], limit: number): string {
   if (!hits.length) {
     return `_No relevant project memory found for \`${query}\`._`;
@@ -258,27 +260,46 @@ export function renderMemoryRetrieval(query: string, hits: SearchHit[], limit: n
     "",
   ];
 
-  for (const hit of evidenceHits.length ? evidenceHits : topHits) {
-    lines.push(
-      `- [${hit.sessionId}] ${hit.conceptLabel ? `**${hit.conceptLabel}**: ` : ""}${hit.snippet}`
-    );
+  const evidenceSource = evidenceHits.length ? evidenceHits : topHits;
+  let budget = MEMORY_CHAR_BUDGET;
+  for (const hit of evidenceSource) {
+    const line = `- [${hit.sessionId}] ${hit.conceptLabel ? `**${hit.conceptLabel}**: ` : ""}${hit.snippet}`;
+    if (budget - line.length < 0) {
+      lines.push("- …");
+      break;
+    }
+    lines.push(line);
+    budget -= line.length;
   }
 
   if (concepts.length) {
     lines.push("", "## Related concepts", "");
     for (const [key, label] of concepts.slice(0, 8)) {
-      lines.push(`- \`${key}\`${label && label !== key ? ` — ${label}` : ""}`);
+      const line = `- \`${key}\`${label && label !== key ? ` — ${label}` : ""}`;
+      if (budget - line.length < 0) break;
+      lines.push(line);
+      budget -= line.length;
     }
   }
 
   lines.push("", "## Source sessions", "");
   for (const [sessionId, label] of sessions.slice(0, 8)) {
-    lines.push(`- \`${sessionId}\` — ${label}`);
+    const line = `- \`${sessionId}\` — ${label}`;
+    if (budget - line.length < 0) break;
+    lines.push(line);
+    budget -= line.length;
   }
 
   lines.push("", "## Ranked matches", "");
   for (const hit of topHits) {
-    lines.push(...renderSearchHit(hit));
+    const rendered = renderSearchHit(hit);
+    const renderedLen = rendered.reduce((sum, l) => sum + l.length + 1, 0);
+    if (budget - renderedLen < 0) {
+      lines.push("- …");
+      break;
+    }
+    lines.push(...rendered);
+    budget -= renderedLen;
   }
   return lines.join("\n");
 }
