@@ -1,9 +1,12 @@
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import {
+  outlineToTopicGraph,
+  validateAndBackfillRecord,
+  looksLikeSessionRecord,
+} from "@agent-mindmap/shared";
 import { agentLog } from "../log";
-import { validateSessionOutline, validateTopicGraph } from "../llm/cursorCliProvider";
-import { outlineToTopicGraph, topicGraphToOutline } from "../llm/outlineToTopicGraph";
 import {
   currentPipelineVersions,
   pipelineVersionsMatch,
@@ -167,13 +170,6 @@ export function recordFreshnessToken(record: SessionRecord): string {
   return meta.transcriptFreshnessToken ?? meta.transcriptSha256 ?? "";
 }
 
-function ensureRecordGraph(record: SessionRecord): SessionRecord {
-  if (record.outline) {
-    return { ...record, graph: outlineToTopicGraph(record.outline) };
-  }
-  return record;
-}
-
 export async function readRecord(
   storeDir: string,
   projectSlug: string,
@@ -181,28 +177,10 @@ export async function readRecord(
 ): Promise<SessionRecord | undefined> {
   const file = recordPath(storeDir, projectSlug, sessionId);
   const parsed = await readJson<unknown>(file);
-  if (!parsed) {
+  if (!parsed || !looksLikeSessionRecord(parsed)) {
     return undefined;
   }
-  if (!isSessionRecord(parsed)) {
-    return undefined;
-  }
-  try {
-    const raw = parsed as SessionRecord;
-    if (raw.outline) {
-      raw.outline = validateSessionOutline(raw.outline);
-      raw.graph = raw.graph ? validateTopicGraph(raw.graph) : outlineToTopicGraph(raw.outline);
-    } else if (raw.graph) {
-      raw.graph = validateTopicGraph(raw.graph);
-      raw.outline = topicGraphToOutline(raw.graph);
-    } else {
-      return undefined;
-    }
-    return ensureRecordGraph(raw);
-  } catch (err) {
-    agentLog.warn(`Corrupt session record ${projectSlug}/${sessionId}`, { error: String(err) });
-    return undefined;
-  }
+  return validateAndBackfillRecord(parsed) as SessionRecord | undefined;
 }
 
 export async function writeRecord(storeDir: string, record: SessionRecord): Promise<void> {
@@ -273,23 +251,12 @@ export async function listRecords(storeDir: string): Promise<SessionRecord[]> {
       }
       const full = path.join(slugDir, file);
       const parsed = await readJson<unknown>(full);
-      if (!parsed || !isSessionRecord(parsed)) {
+      if (!parsed || !looksLikeSessionRecord(parsed)) {
         continue;
       }
-      try {
-        const raw = parsed as SessionRecord;
-        if (raw.outline) {
-          raw.outline = validateSessionOutline(raw.outline);
-          raw.graph = raw.graph ? validateTopicGraph(raw.graph) : outlineToTopicGraph(raw.outline);
-        } else if (raw.graph) {
-          raw.graph = validateTopicGraph(raw.graph);
-          raw.outline = topicGraphToOutline(raw.graph);
-        } else {
-          continue;
-        }
-        out.push(ensureRecordGraph(raw));
-      } catch {
-        continue;
+      const validated = validateAndBackfillRecord(parsed);
+      if (validated) {
+        out.push(validated as SessionRecord);
       }
     }
   }

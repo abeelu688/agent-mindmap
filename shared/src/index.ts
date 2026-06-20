@@ -51,6 +51,7 @@ export {
   recordPath,
   resolveProjectSlug,
 } from "./storeReader";
+export { looksLikeSessionRecord, validateAndBackfillRecord } from "./store/recordValidate";
 export type {
   ConceptContextForMerge,
   McpIndexFile,

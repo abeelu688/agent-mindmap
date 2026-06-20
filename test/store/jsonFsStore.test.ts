@@ -4,6 +4,12 @@ import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { JsonFsStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
 import { writeJsonAtomic } from "../../shared/src/atomicWrite";
+import {
+  buildRecordMeta,
+  buildSessionRecord,
+  writeRecord,
+} from "../../extension/src/store/sessionStore";
+import type { SessionOutline } from "../../extension/src/llm/types";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {
@@ -268,5 +274,43 @@ describe("JsonFsStore record validation", () => {
     expect(back?.meta.sessionId).toBe("round-trip");
     expect(back?.outline.title).toBe("Authentication fix");
     expect(back?.graph?.title).toBe("Round trip");
+  });
+});
+
+describe("extension ↔ JsonFsStore read agreement", () => {
+  it("reads back identically through JsonFsStore a record written by extension writeRecord", async () => {
+    const tmp = await makeStoreDir();
+    const outline: SessionOutline = {
+      title: "Cross-path agreement",
+      summary: "Extension-written record must read back through the shared store.",
+      outline: [
+        {
+          title: "Validation",
+          summary: "Both paths delegate to validateAndBackfillRecord.",
+          details: [{ text: "graph is backfilled from outline." }],
+        },
+      ],
+    };
+    const meta = buildRecordMeta({
+      sessionId: "agree-1",
+      projectSlug: "home-test-proj",
+      projectPath: "/home/test/proj",
+      transcriptPath: "/tmp/agree-1.jsonl",
+      transcriptMtimeMs: 1,
+      llm: { provider: "cursor-cli" },
+      promptParams: { maxTopics: 8, maxItemsPerTopic: 6 },
+      sessionLabel: "Agreement smoke",
+    });
+    const record = buildSessionRecord(meta, outline);
+    await writeRecord(tmp, record);
+
+    const store = new JsonFsStore(tmp);
+    const back = await store.getRecord("home-test-proj", "agree-1");
+    expect(back).toBeDefined();
+    expect(back?.meta.sessionId).toBe("agree-1");
+    expect(back?.outline.title).toBe("Cross-path agreement");
+    expect(back?.outline.outline).toHaveLength(1);
+    expect(back?.graph).toBeDefined();
+    expect(back?.graph?.topics.length).toBeGreaterThan(0);
   });
 });
