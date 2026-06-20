@@ -10,6 +10,10 @@ function record(input: {
   conceptLabel: string;
   aliases?: string[];
   evidence: string[];
+  /** Optional code reference; when provided, the record's outline/concept text
+   * is kept free of the codeRef's keywords so the codeRef is the sole signal. */
+  codeRef?: { path: string; lines: string; description: string; sourceTurnIndices?: number[] };
+  conceptPath?: string[];
 }): SessionRecord {
   return {
     schemaVersion: 1,
@@ -31,6 +35,14 @@ function record(input: {
         {
           title: input.conceptLabel,
           summary: input.evidence[0],
+          ...(input.conceptPath ? { conceptPath: input.conceptPath } : {}),
+          ...(input.codeRef?.sourceTurnIndices
+            ? {
+                details: [
+                  { text: input.evidence[0], sourceTurnIndices: input.codeRef.sourceTurnIndices },
+                ],
+              }
+            : {}),
         },
       ],
     },
@@ -47,6 +59,25 @@ function record(input: {
         projectSlug: "home-example-proj",
       },
     ],
+    ...(input.codeRef
+      ? {
+          sessionAnalysis: {
+            domains: ["software"],
+            nodes: [],
+            segmentEquivalences: [],
+            codeReferences: [
+              {
+                path: input.codeRef.path,
+                lines: input.codeRef.lines,
+                description: input.codeRef.description,
+                ...(input.codeRef.sourceTurnIndices
+                  ? { sourceTurnIndices: input.codeRef.sourceTurnIndices }
+                  : {}),
+              },
+            ],
+          },
+        }
+      : {}),
   };
 }
 
@@ -77,6 +108,25 @@ const records = [
     conceptLabel: "Code references",
     evidence: ["Code ref retry handles parsed output failures without external requests."],
   }),
+  record({
+    sessionId: "sess-jwt-code",
+    sessionLabel: "Token refresh tweak",
+    analyzedAt: 4000,
+    conceptKey: "auth",
+    conceptLabel: "Authentication",
+    aliases: ["login security"],
+    // Outline/evidence deliberately avoids "jwt"/"verify"/"leeway"/"clock skew"
+    // so the codeRef description below is the ONLY signal for those query terms,
+    // and so this record does not collide with the sess-auth "clock skew" case.
+    evidence: ["Refresh endpoint returned 401 under token expiry."],
+    conceptPath: ["backend", "auth"],
+    codeRef: {
+      path: "src/auth/jwt.ts",
+      lines: "42-57",
+      description: "JWT verify with clock-skew leeway adjustment for token refresh.",
+      sourceTurnIndices: [0],
+    },
+  }),
 ];
 
 const cases: RetrievalEvalCase[] = [
@@ -101,6 +151,21 @@ const cases: RetrievalEvalCase[] = [
     expectedConceptKeys: ["auth"],
     evidenceContains: ["401"],
   },
+  {
+    // Q1 semantic-complement: query terms appear only in codeRef description.
+    name: "codeRef description semantic complement",
+    query: "jwt verify leeway",
+    expectedSessionIds: ["sess-jwt-code"],
+    expectedConceptKeys: ["auth"],
+    evidenceContains: ["jwt verify"],
+  },
+  {
+    // Q1 filename-fragment: precise path hit.
+    name: "codeRef path filename hit",
+    query: "jwt.ts",
+    expectedSessionIds: ["sess-jwt-code"],
+    evidenceContains: ["jwt.ts"],
+  },
 ];
 
 const equivalences: SegmentEquivalence[] = [
@@ -115,11 +180,12 @@ const equivalences: SegmentEquivalence[] = [
 describe("retrieval eval", () => {
   it("computes deterministic retrieval quality metrics", () => {
     const report = evaluateRetrieval(records, cases, { k: 3, equivalences });
-    expect(report.totalCases).toBe(3);
+    expect(report.totalCases).toBe(5);
     expect(report.recallAtK).toBe(1);
     expect(report.mrr).toBeGreaterThanOrEqual(0.75);
     expect(report.evidenceHitRate).toBe(1);
     expect(report.results.map((result) => result.topHit?.sessionId)).toContain("sess-auth");
+    expect(report.results.map((result) => result.topHit?.sessionId)).toContain("sess-jwt-code");
   });
 
   it("reports misses without throwing", () => {

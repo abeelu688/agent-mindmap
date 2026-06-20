@@ -9,6 +9,10 @@ const CJK_REGEX = /[㐀-鿿豈-﫿]/;
 const CANDIDATE_MULTIPLIER = 5;
 const MAX_HITS_PER_SESSION = 3;
 const MAX_HITS_PER_CONCEPT = 2;
+const MAX_HITS_PER_CODE = 2;
+/** Reverse-boost factor: a codeRef hit distributes this fraction of its score
+ * across the concepts it links to via sourceTurnIndices. Tunable against eval. */
+const CODE_TO_CONCEPT_BOOST = 0.3;
 
 type WeightedTerm = {
   term: string;
@@ -142,6 +146,11 @@ function kindRank(kind: SearchHit["kind"]): number {
   if (kind === "evidence") {
     return 3;
   }
+  if (kind === "code") {
+    // A code-path/description match is precise (filename hit or LLM-generated
+    // purpose summary); rank alongside evidence, above concept.
+    return 3;
+  }
   if (kind === "concept") {
     return 2;
   }
@@ -207,42 +216,63 @@ function diversifyHits(hits: SearchHit[], limit: number): SearchHit[] {
   const out: SearchHit[] = [];
   const sessionCounts = new Map<string, number>();
   const conceptCounts = new Map<string, number>();
+  const codeCounts = new Map<string, number>();
   const seenEvidence = new Set<string>();
 
-  for (const hit of hits) {
+  /**
+   * Try to admit a hit under the per-session / per-concept / per-code caps.
+   * `sessionCap` lets the fallback pass relax the per-session limit (the
+   * primary pass uses MAX_HITS_PER_SESSION; the fallback uses Infinity so we
+   * can fill remaining slots once first-pass diversity is satisfied).
+   * Per-concept and per-code caps always apply — they exist to keep one
+   * concept/code-cluster from flooding results, which matters in the fallback
+   * too.
+   */
+  const tryAdmit = (hit: SearchHit, sessionCap: number): boolean => {
     const sessionCount = sessionCounts.get(hit.sessionId) ?? 0;
-    if (sessionCount >= MAX_HITS_PER_SESSION) {
-      continue;
+    if (sessionCount >= sessionCap) {
+      return false;
     }
     if (hit.conceptKey) {
       const conceptKey = `${hit.sessionId}:${hit.conceptKey}`;
       const conceptCount = conceptCounts.get(conceptKey) ?? 0;
       if (conceptCount >= MAX_HITS_PER_CONCEPT) {
-        continue;
+        return false;
       }
       conceptCounts.set(conceptKey, conceptCount + 1);
+    }
+    if (hit.kind === "code") {
+      const codeCount = codeCounts.get(hit.sessionId) ?? 0;
+      if (codeCount >= MAX_HITS_PER_CODE) {
+        return false;
+      }
+      codeCounts.set(hit.sessionId, codeCount + 1);
     }
     if (hit.kind === "evidence") {
       const evidenceKey = `${hit.sessionId}:${hit.conceptKey ?? ""}:${hit.evidenceIndex ?? -1}`;
       if (seenEvidence.has(evidenceKey)) {
-        continue;
+        return false;
       }
       seenEvidence.add(evidenceKey);
     }
     sessionCounts.set(hit.sessionId, sessionCount + 1);
     out.push(hit);
-    if (out.length >= limit) {
-      return out;
-    }
-  }
+    return true;
+  };
 
   for (const hit of hits) {
-    if (out.includes(hit)) {
-      continue;
-    }
-    out.push(hit);
-    if (out.length >= limit) {
-      return out;
+    if (out.length >= limit) break;
+    tryAdmit(hit, MAX_HITS_PER_SESSION);
+  }
+  // Fallback: relax the per-session cap to fill remaining slots once the
+  // primary diversity pass is satisfied. Per-concept and per-code caps still
+  // apply (via tryAdmit), so a single concept or code cluster still cannot
+  // dominate.
+  if (out.length < limit) {
+    for (const hit of hits) {
+      if (out.length >= limit) break;
+      if (out.includes(hit)) continue;
+      tryAdmit(hit, Number.POSITIVE_INFINITY);
     }
   }
   return out;
@@ -265,6 +295,46 @@ function buildRecordTokenSet(text: string): Set<string> {
   return tokens;
 }
 
+/**
+ * Split a file path into whole-word tokens for precise path matching.
+ * `src/auth/jwt.ts` → `src`, `auth`, `jwt`, `ts`. Whole words only — no ngrams,
+ * because path characters (`/`, `.`, `_`, `-`) produce noisy 2-grams like
+ * `sr` or `ut` that match unrelated text.
+ */
+function pathTokens(filePath: string): string[] {
+  const lower = filePath.toLowerCase();
+  const tokens = new Set<string>();
+  for (const part of lower.split(/[/._-]+/)) {
+    if (part) {
+      tokens.add(part);
+    }
+  }
+  return [...tokens];
+}
+
+/** Score a code reference's description + path against weighted query terms. */
+function scoreCodeRef(
+  description: string,
+  filePath: string,
+  terms: WeightedTerm[]
+): { descriptionScore: number; pathScore: number } {
+  const descriptionScore = scoreText(description, terms);
+  const lowerPath = filePath.toLowerCase();
+  let pathScore = 0;
+  for (const { term, weight } of terms) {
+    if (!term) continue;
+    // Whole-token match on path segments (e.g. query "jwt" matches segment "jwt").
+    const segments = lowerPath.split(/[/._-]+/);
+    if (segments.includes(term)) {
+      pathScore += 8 * weight;
+    } else if (lowerPath.includes(term)) {
+      // Substring fall-through (e.g. query "auth" matches "auth-helper.ts").
+      pathScore += Math.max(2, Math.min(6, term.length)) * weight;
+    }
+  }
+  return { descriptionScore, pathScore };
+}
+
 export function buildRecordTokenSets(records: SessionRecord[]): Set<string>[] {
   return records.map((record) => {
     const parts = [collectOutlineText(record), record.meta.sessionLabel];
@@ -273,7 +343,22 @@ export function buildRecordTokenSets(records: SessionRecord[]): Set<string>[] {
       parts.push(...ctx.domainKeys, ...ctx.parentKeys, ...ctx.childKeys);
       parts.push(...ctx.evidence);
     }
-    return buildRecordTokenSet(parts.join("\n"));
+    // codeReferences: description feeds ngram tokens (semantic), path feeds
+    // whole-word tokens (precise filename match). Without this, a record whose
+    // only matching signal is in a codeRef description fails the pre-filter.
+    for (const ref of record.sessionAnalysis?.codeReferences ?? []) {
+      parts.push(ref.description);
+      parts.push(ref.path);
+    }
+    const tokens = buildRecordTokenSet(parts.join("\n"));
+    // Add path whole-word tokens separately (buildRecordTokenSet would ngram
+    // the path and produce noise like "sr" / "ut").
+    for (const ref of record.sessionAnalysis?.codeReferences ?? []) {
+      for (const tok of pathTokens(ref.path)) {
+        tokens.add(tok);
+      }
+    }
+    return tokens;
   });
 }
 
@@ -334,6 +419,41 @@ function collectOutlineText(record: SessionRecord): string {
   return parts.join("\n");
 }
 
+/**
+ * Build a map from turn index → set of concept keys whose outline node has a
+ * `detail.sourceTurnIndices` entry pointing at that turn. Used by the codeRef
+ * reverse-boost: when a codeRef (linked to turns via its own sourceTurnIndices)
+ * matches the query, the concepts owning those turns get a share of the score.
+ *
+ * conceptPath is the source of concept keys; if a node has no conceptPath it
+ * contributes nothing (we can't link it back to a concept).
+ */
+function buildTurnToConceptKeys(record: SessionRecord): Map<number, Set<string>> {
+  const out = new Map<number, Set<string>>();
+  const walk = (nodes: SessionRecord["outline"]["outline"]): void => {
+    for (const node of nodes) {
+      const conceptKey = node.conceptPath?.[node.conceptPath.length - 1];
+      if (conceptKey) {
+        for (const detail of node.details ?? []) {
+          for (const turn of detail.sourceTurnIndices ?? []) {
+            let set = out.get(turn);
+            if (!set) {
+              set = new Set<string>();
+              out.set(turn, set);
+            }
+            set.add(conceptKey);
+          }
+        }
+      }
+      if (node.children) {
+        walk(node.children);
+      }
+    }
+  };
+  walk(record.outline.outline);
+  return out;
+}
+
 export function searchProjectRecords(
   records: SessionRecord[],
   query: string,
@@ -371,6 +491,9 @@ export function searchProjectRecords(
       });
     }
 
+    // Track this record's concept hits by key so codeRef reverse-boost can
+    // add score to the owning concept after the code branch runs.
+    const conceptHitsByKey = new Map<string, SearchHit>();
     for (const ctx of record.conceptContexts ?? []) {
       const conceptText = [
         ctx.key,
@@ -384,7 +507,7 @@ export function searchProjectRecords(
       const exactConceptBoost = exactConceptMatch(ctx, terms) ? 6 : 0;
 
       if (conceptScore > 0 || exactConceptBoost > 0) {
-        hits.push({
+        const hit: SearchHit = {
           kind: "concept",
           projectSlug: record.meta.projectSlug,
           sessionId: record.meta.sessionId,
@@ -395,7 +518,9 @@ export function searchProjectRecords(
           score: conceptScore + exactConceptBoost + 2,
           snippet: truncateSnippet(ctx.evidence[0] ?? ctx.label),
           evidence: ctx.evidence.slice(0, 5),
-        });
+        };
+        hits.push(hit);
+        conceptHitsByKey.set(ctx.key, hit);
       }
 
       ctx.evidence.forEach((evidence, evidenceIndex) => {
@@ -417,6 +542,77 @@ export function searchProjectRecords(
           evidence: [evidence],
         });
       });
+    }
+
+    // codeReferences: score each as a "code" hit. A codeRef is sparse (only
+    // sessions that touched code have it) and its description is an independent
+    // LLM-generated semantic view of the diff, so it often matches queries that
+    // outline/concept/evidence text misses.
+    const codeRefs = record.sessionAnalysis?.codeReferences ?? [];
+    if (codeRefs.length) {
+      const turnToConceptKeys = buildTurnToConceptKeys(record);
+      for (const ref of codeRefs) {
+        const { descriptionScore, pathScore } = scoreCodeRef(ref.description, ref.path, terms);
+        if (descriptionScore <= 0 && pathScore <= 0) {
+          continue;
+        }
+        const codeScore = descriptionScore * 1.2 + pathScore + 3;
+        hits.push({
+          kind: "code",
+          projectSlug: record.meta.projectSlug,
+          sessionId: record.meta.sessionId,
+          sessionLabel: record.meta.sessionLabel,
+          analyzedAt: record.meta.analyzedAt,
+          codePath: ref.path,
+          codeLines: ref.lines,
+          codeDescription: ref.description,
+          codeSourceTurnIndices: ref.sourceTurnIndices,
+          score: codeScore,
+          snippet: truncateSnippet(`${ref.path}:${ref.lines} — ${ref.description}`),
+          evidence: [ref.description],
+        });
+
+        // Reverse concept boost: distribute a fraction of the codeRef score
+        // across concepts linked via sourceTurnIndices → outline details.
+        // If a linked concept produced no hit of its own (its text did not
+        // match the query), synthesize a low-base concept hit so the codeRef's
+        // semantic link still surfaces the concept — otherwise codeRef →
+        // concept attribution is lost whenever the concept text is silent.
+        const linkedKeys = new Set<string>();
+        for (const turn of ref.sourceTurnIndices ?? []) {
+          const keys = turnToConceptKeys.get(turn);
+          if (keys) {
+            for (const k of keys) linkedKeys.add(k);
+          }
+        }
+        if (linkedKeys.size > 0) {
+          const boost = (codeScore * CODE_TO_CONCEPT_BOOST) / linkedKeys.size;
+          for (const key of linkedKeys) {
+            let conceptHit = conceptHitsByKey.get(key);
+            if (!conceptHit) {
+              const ctx = record.conceptContexts?.find((c) => c.key === key);
+              if (!ctx) continue;
+              conceptHit = {
+                kind: "concept",
+                projectSlug: record.meta.projectSlug,
+                sessionId: record.meta.sessionId,
+                sessionLabel: record.meta.sessionLabel,
+                analyzedAt: record.meta.analyzedAt,
+                conceptKey: ctx.key,
+                conceptLabel: ctx.label,
+                // Small base so the synthesized hit ranks below direct concept
+                // matches but is eligible for the boost and diversify caps.
+                score: 1,
+                snippet: truncateSnippet(ctx.evidence[0] ?? ctx.label),
+                evidence: ctx.evidence.slice(0, 5),
+              };
+              hits.push(conceptHit);
+              conceptHitsByKey.set(key, conceptHit);
+            }
+            conceptHit.score += boost;
+          }
+        }
+      }
     }
   }
 

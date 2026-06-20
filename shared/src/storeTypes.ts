@@ -221,7 +221,7 @@ export type OntologyRecord = {
   segmentEquivalences?: SegmentEquivalence[];
 };
 
-export type SearchHitKind = "session" | "concept" | "evidence";
+export type SearchHitKind = "session" | "concept" | "evidence" | "code";
 
 export type SearchHit = {
   kind: SearchHitKind;
@@ -232,6 +232,11 @@ export type SearchHit = {
   conceptKey?: string;
   conceptLabel?: string;
   evidenceIndex?: number;
+  /** Populated when `kind === "code"`: the matched code reference. */
+  codePath?: string;
+  codeLines?: string;
+  codeDescription?: string;
+  codeSourceTurnIndices?: number[];
   score: number;
   snippet: string;
   evidence: string[];
