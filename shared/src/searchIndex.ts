@@ -537,4 +537,8 @@ export class McpSearchIndexCache {
       this.cache.clear();
     }
   }
+
+  size(): number {
+    return this.cache.size;
+  }
 }

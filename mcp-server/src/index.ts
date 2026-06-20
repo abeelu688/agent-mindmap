@@ -151,6 +151,18 @@ async function main(): Promise<void> {
     }
   });
 
+  server.tool("server_info", {}, async () => {
+    const lines = [
+      "# agent-mindmap MCP server",
+      "",
+      `- **name**: \`agent-mindmap\``,
+      `- **version**: \`${SERVER_VERSION}\``,
+      `- **storeDir**: \`${storeDir}\``,
+      `- **cached projects**: ${indexCache.size()}`,
+    ];
+    return textResult(lines.join("\n"));
+  });
+
   server.tool(
     "get_project_briefing",
     {
