@@ -1,13 +1,11 @@
-import * as vscode from "vscode";
 import { createHeartbeat } from "../progress";
-import { format, t as safeT } from "../l10n/uiTranslate";
+import { t as safeT } from "../l10n/uiTranslate";
 import { ONTOLOGY_PROMPT_VERSION } from "../llm/promptOntology";
 import {
   buildOntologyRefinePrompt,
   buildRefineInputFromRecords,
-  ONTOLOGY_REFINE_PROMPT_VERSION,
 } from "../llm/promptOntologyRefine";
-import { TOPIC_PATHS_PROMPT_VERSION, type OntologyLite } from "../llm/promptTopicPaths";
+import { TOPIC_PATHS_PROMPT_VERSION } from "../llm/promptTopicPaths";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION, buildReattachPrompt } from "../llm/promptReattach";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
@@ -23,14 +21,8 @@ import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "../llm/segmentContext";
-import {
-  ensureStore,
-  ontologyCachePath,
-  recordFreshnessToken,
-  sha256Hex,
-  ontologyIndexPath,
-} from "./sessionStore";
-import { writeJsonAtomic } from "./atomicWrite";
+import { recordFreshnessToken, sha256Hex } from "./sessionStore";
+import { getStoreForDir } from "./storeClient";
 import type { OutputLanguage, PromptLanguage } from "../llm/promptLanguage";
 import type { SessionRecord } from "./storeTypes";
 import type { ConceptOntologyRecord, TopicConceptPathDecision } from "./ontologyTypes";
@@ -64,11 +56,8 @@ function sessionIdsSubsetOf(subset: string[], superset: string[]): boolean {
 }
 
 export async function readOntologyIndex(storeDir: string): Promise<OntologyIndex | undefined> {
-  const parsed = await readJson<OntologyIndex>(ontologyIndexPath(storeDir));
-  if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.entries)) {
-    return undefined;
-  }
-  return parsed;
+  const store = await getStoreForDir(storeDir);
+  return store.readOntologyIndex();
 }
 
 /**
@@ -149,50 +138,20 @@ export function computeOntologyCacheKey(
   return sha256Hex(payload);
 }
 
-function toOntologyLite(record: ConceptOntologyRecord): OntologyLite {
-  return {
-    nodes: record.nodes.map((n) => ({
-      key: n.key,
-      label: n.label,
-      aliases: n.aliases,
-      parentKeys: n.parentKeys,
-    })),
-    mappings: record.mappings.map((m) => ({ mention: m.mention, key: m.key })),
-    segmentEquivalences: record.segmentEquivalences,
-  };
-}
-
-async function readJson<T>(filePath: string): Promise<T | undefined> {
-  try {
-    const raw = await import("fs/promises").then((m) => m.readFile(filePath, "utf8"));
-    return JSON.parse(raw) as T;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function readOntologyRecord(
   storeDir: string,
   cacheKey: string
 ): Promise<ConceptOntologyRecord | undefined> {
-  const file = ontologyCachePath(storeDir, cacheKey);
-  const parsed = await readJson<unknown>(file);
-  if (!parsed || typeof parsed !== "object") {
-    return undefined;
-  }
-  const obj = parsed as ConceptOntologyRecord;
-  if (obj.schemaVersion !== 1 || !obj.nodes || !obj.mappings) {
-    return undefined;
-  }
-  return obj;
+  const store = await getStoreForDir(storeDir);
+  return store.readOntologyRecord(cacheKey);
 }
 
 async function writeOntologyIndex(
   storeDir: string,
   entry: OntologyIndex["entries"][number]
 ): Promise<void> {
-  const indexFile = ontologyIndexPath(storeDir);
-  const parsed = (await readJson<OntologyIndex>(indexFile)) ?? {
+  const store = await getStoreForDir(storeDir);
+  const parsed = (await store.readOntologyIndex()) ?? {
     schemaVersion: 1,
     updatedAt: Date.now(),
     entries: [],
@@ -202,34 +161,13 @@ async function writeOntologyIndex(
     updatedAt: Date.now(),
     entries: [entry, ...parsed.entries.filter((e) => e.cacheKey !== entry.cacheKey)].slice(0, 200),
   };
-  await writeJsonAtomic(indexFile, next);
+  await store.writeOntologyIndex(next);
 }
 
 /** Remove all cached ontology records (forces rebuild on next Concept merge). */
-export async function clearOntologyCache(storeDir: string): Promise<number> {
-  const fs = await import("fs/promises");
-  const path = await import("path");
-  const cacheDir = path.join(storeDir, "ontology", "cache");
-  let removed = 0;
-  try {
-    const files = await fs.readdir(cacheDir);
-    for (const file of files) {
-      if (!file.endsWith(".json")) {
-        continue;
-      }
-      await fs.unlink(path.join(cacheDir, file));
-      removed += 1;
-    }
-  } catch {
-    // ignore
-  }
-  const indexFile = ontologyIndexPath(storeDir);
-  try {
-    await fs.unlink(indexFile);
-  } catch {
-    // ignore
-  }
-  return removed;
+export async function clearOntologyCache(storeDir: string): Promise<void> {
+  const store = await getStoreForDir(storeDir);
+  await store.clearOntologyCache();
 }
 
 async function runOntologyRefine(
@@ -329,7 +267,7 @@ export async function writeOntologyRecord(
     segmentEquivalences: payload.segmentEquivalences,
     mergeSessionAnalysis: payload.mergeSessionAnalysis,
   };
-  await writeJsonAtomic(ontologyCachePath(storeDir, cacheKey), record);
+  await (await getStoreForDir(storeDir)).writeOntologyRecord(cacheKey, record);
   await writeOntologyIndex(storeDir, {
     cacheKey,
     builtAt: record.meta.builtAt,
@@ -356,7 +294,8 @@ export async function ensureOntologyMemory(
   progress?: MindMapProgress,
   flags: EnsureOntologyMemoryFlags = {}
 ): Promise<ConceptOntologyRecord> {
-  await ensureStore(storeDir);
+  // bootstrapStore() (via getStoreForDir) creates the DB + store dir on first
+  // access, so there is no need for an explicit ensureStore() call here.
   progress?.report(safeT("ui.ontology.cache.check", "Checking concept ontology cache…"));
   const cacheKey = computeOntologyCacheKey(records, opts, provider.id);
   const cached = await readOntologyRecord(storeDir, cacheKey);

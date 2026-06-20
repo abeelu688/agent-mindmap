@@ -1,22 +1,17 @@
-import type { ReparentChain } from "./trieReparentInput";
 import { segmentKeyForMerge } from "./topicGraphValidate";
+import type { ReparentChain } from "./trieReparentInput";
 import type { ReattachMove } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
 
 const DEFAULT_MIN_CONFIDENCE = 0.55;
 
 /** Domain-agnostic: drop consecutive segments that normalize to the same key. */
-export function collapseConsecutiveDuplicateSegments(
-  segments: string[]
-): string[] {
+export function collapseConsecutiveDuplicateSegments(segments: string[]): string[] {
   const trimmed = segments.map((s) => s.trim()).filter(Boolean);
   const out: string[] = [];
   for (const seg of trimmed) {
     const key = segmentKeyForMerge(seg);
-    if (
-      out.length &&
-      segmentKeyForMerge(out[out.length - 1]!) === key
-    ) {
+    if (out.length && segmentKeyForMerge(out[out.length - 1]!) === key) {
       continue;
     }
     out.push(seg);
@@ -56,10 +51,7 @@ function isSpecialistBranch(
   if (chain.topicCount >= hubChain.topicCount + 3) {
     return true;
   }
-  if (
-    chain.topicCount >= 4 &&
-    chain.childSegments.length >= 3
-  ) {
+  if (chain.topicCount >= 4 && chain.childSegments.length >= 3) {
     return true;
   }
   return false;
@@ -78,9 +70,7 @@ export function normalizeHubAttachMoves(
     return moves;
   }
 
-  const chainByKey = new Map(
-    chains.map((c) => [segmentKeyForMerge(c.from), c])
-  );
+  const chainByKey = new Map(chains.map((c) => [segmentKeyForMerge(c.from), c]));
   const hubGroups = new Map<string, HubAttachGroup>();
   const passthrough: ReattachMove[] = [];
 
@@ -199,10 +189,7 @@ export function resolveChainedReattachMoves(moves: ReattachMove[]): ReattachMove
     }
     const dest = redirect.toPath.map((s) => s.trim()).filter(Boolean);
     const resolvedDest = resolveSegments(dest);
-    return collapseConsecutiveDuplicateSegments([
-      ...resolvedDest,
-      ...trimmed.slice(1),
-    ]);
+    return collapseConsecutiveDuplicateSegments([...resolvedDest, ...trimmed.slice(1)]);
   };
 
   return consolidated.map((move) => ({
@@ -211,10 +198,7 @@ export function resolveChainedReattachMoves(moves: ReattachMove[]): ReattachMove
   }));
 }
 
-export function applyReattachMoveToPath(
-  path: string[],
-  move: ReattachMove
-): string[] | undefined {
+export function applyReattachMoveToPath(path: string[], move: ReattachMove): string[] | undefined {
   if (!path.length) {
     return undefined;
   }
@@ -271,15 +255,8 @@ export function applyReattachMovesToRecords(
         return topic;
       }
       const prev = topic.conceptPath;
-      const next = applyReattachMovesToPath(
-        prev,
-        consolidated,
-        minConfidence
-      );
-      if (
-        next.length !== prev.length ||
-        next.some((s, i) => s !== prev[i])
-      ) {
+      const next = applyReattachMovesToPath(prev, consolidated, minConfidence);
+      if (next.length !== prev.length || next.some((s, i) => s !== prev[i])) {
         changed = true;
         return { ...topic, conceptPath: next };
       }

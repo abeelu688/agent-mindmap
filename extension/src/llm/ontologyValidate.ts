@@ -1,4 +1,6 @@
 import { LlmProviderError } from "./types";
+import { reattachStepsToMoves } from "./reattachSteps";
+import { parseConceptPath } from "./topicGraphValidate";
 import type {
   ConceptOntology,
   ConceptOntologyMapping,
@@ -11,8 +13,6 @@ import type {
   SegmentEquivalence,
   TopicPathDecision,
 } from "./types";
-import { reattachStepsToMoves } from "./reattachSteps";
-import { parseConceptPath } from "./topicGraphValidate";
 
 const MAX_KEY = 48;
 const MAX_LABEL = 80;
@@ -55,11 +55,7 @@ function pickNumber01(obj: Record<string, unknown>, key: string): number | undef
   return v;
 }
 
-function parseStringArray(
-  value: unknown,
-  maxItems: number,
-  maxLen: number
-): string[] | undefined {
+function parseStringArray(value: unknown, maxItems: number, maxLen: number): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
@@ -142,14 +138,12 @@ function parseScope(value: unknown): SegmentEquivalence["scope"] | undefined {
   if (!obj) {
     return undefined;
   }
-  const pathPrefix = parseStringArray(obj.pathPrefix, 8, MAX_KEY)?.map((s) =>
+  const pathPrefix = parseStringArray(obj.pathPrefix, 8, MAX_KEY)?.map((s) => s.toLowerCase());
+  const downstreamPrefix = parseStringArray(obj.downstreamPrefix, 8, MAX_KEY)?.map((s) =>
     s.toLowerCase()
   );
-  const downstreamPrefix = parseStringArray(obj.downstreamPrefix, 8, MAX_KEY)?.map(
-    (s) => s.toLowerCase()
-  );
-  const downstreamFirst = parseStringArray(obj.downstreamFirst, 8, MAX_KEY)?.map(
-    (s) => s.toLowerCase()
+  const downstreamFirst = parseStringArray(obj.downstreamFirst, 8, MAX_KEY)?.map((s) =>
+    s.toLowerCase()
   );
   const projectSlugs = parseStringArray(obj.projectSlugs, 16, 200);
   const evidenceKeywords = parseStringArray(obj.evidenceKeywords, 24, 80);
@@ -249,9 +243,7 @@ export function validateConceptOntology(value: unknown): ConceptOntology {
   const mappingsRaw = Array.isArray(root.mappings) ? root.mappings : [];
   const topicPathsRaw = Array.isArray(root.topicPaths) ? root.topicPaths : [];
   const movesRaw = Array.isArray(root.reattachMoves) ? root.reattachMoves : [];
-  const equivRaw = Array.isArray(root.segmentEquivalences)
-    ? root.segmentEquivalences
-    : [];
+  const equivRaw = Array.isArray(root.segmentEquivalences) ? root.segmentEquivalences : [];
 
   const nodes: ConceptOntologyNode[] = [];
   const seenKeys = new Set<string>();
@@ -313,9 +305,7 @@ export function validateConceptOntology(value: unknown): ConceptOntology {
     mappings,
     topicPaths,
     reattachMoves: reattachMoves.length ? reattachMoves : undefined,
-    segmentEquivalences: segmentEquivalences.length
-      ? segmentEquivalences
-      : undefined,
+    segmentEquivalences: segmentEquivalences.length ? segmentEquivalences : undefined,
   };
 }
 
@@ -366,9 +356,7 @@ function parseReattachMovesList(raw: unknown[]): ReattachMove[] {
 }
 
 function parseReattachStepKind(value: unknown): ReattachStepKind | undefined {
-  const s = (
-    typeof value === "string" ? value.trim().toLowerCase() : ""
-  ).replace(/-/g, "_");
+  const s = (typeof value === "string" ? value.trim().toLowerCase() : "").replace(/-/g, "_");
   if (s === "merge_synonym" || s === "mergesynonym" || s === "merge") {
     return "merge_synonym";
   }
@@ -386,11 +374,10 @@ function parseReattachStep(value: unknown): ReattachStep | undefined {
   const step = typeof obj.step === "number" ? Math.floor(obj.step) : 0;
   const sourceNodeId = pickString(obj, "sourceNodeId", 12);
   const targetNodeId = pickString(obj, "targetNodeId", 12);
-  const targetNodeIds = parseStringArray(obj.targetNodeIds, 12, 12)?.filter(
-    (id) => /^N\d+$/i.test(id)
+  const targetNodeIds = parseStringArray(obj.targetNodeIds, 12, 12)?.filter((id) =>
+    /^N\d+$/i.test(id)
   );
-  const sourceFrom =
-    pickString(obj, "sourceFrom", 160) ?? pickString(obj, "from", 160);
+  const sourceFrom = pickString(obj, "sourceFrom", 160) ?? pickString(obj, "from", 160);
   const targetPath = parseConceptPath(obj.targetPath ?? obj.toPath);
   let kind = parseReattachStepKind(obj.kind);
   if (!kind && targetPath?.length === 1) {
@@ -399,15 +386,10 @@ function parseReattachStep(value: unknown): ReattachStep | undefined {
   if (!kind && targetPath && targetPath.length >= 2) {
     kind = "attach_under";
   }
-  const action =
-    pickString(obj, "action", 240) ??
-    pickString(obj, "description", 240) ??
-    "";
+  const action = pickString(obj, "action", 240) ?? pickString(obj, "description", 240) ?? "";
   const result = pickString(obj, "result", 240) ?? "";
   const hasNodeIds =
-    Boolean(sourceNodeId) ||
-    Boolean(targetNodeId) ||
-    Boolean(targetNodeIds?.length);
+    Boolean(sourceNodeId) || Boolean(targetNodeId) || Boolean(targetNodeIds?.length);
   if (!kind) {
     return undefined;
   }
@@ -467,9 +449,7 @@ export function tryParseReattachResponse(value: unknown): ReattachParseResult {
   if (steps.length) {
     return { steps, moves: reattachStepsToMoves(steps) };
   }
-  const moves = parseReattachMovesList(
-    Array.isArray(root.moves) ? root.moves : []
-  );
+  const moves = parseReattachMovesList(Array.isArray(root.moves) ? root.moves : []);
   return { steps: [], moves };
 }
 
@@ -481,11 +461,7 @@ export function tryParseReattachMoves(value: unknown): ReattachMove[] {
 export function validateReattachMoves(value: unknown): ReattachParseResult {
   const parsed = tryParseReattachResponse(value);
   if (!parsed.steps.length && !parsed.moves.length) {
-    throw new LlmProviderError(
-      "bad-shape",
-      "No usable steps[] or moves[] returned"
-    );
+    throw new LlmProviderError("bad-shape", "No usable steps[] or moves[] returned");
   }
   return parsed;
 }
-

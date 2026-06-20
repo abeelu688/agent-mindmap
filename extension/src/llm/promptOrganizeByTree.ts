@@ -1,7 +1,7 @@
+import { __testing as promptTesting } from "./prompt";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 import type { SessionTreeSnapshot } from "./types";
-import { __testing as promptTesting } from "./prompt";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -30,12 +30,10 @@ export function buildOrganizeByTreePrompt(
   const maxBranches = Math.max(1, options.maxBranches);
   const maxDetails = Math.max(1, options.maxDetailsPerNode);
 
-  const pathHints = tree.topicPathDecisions
-    .slice(0, 40)
-    .map((tp) => ({
-      conceptPath: tp.conceptPath,
-      evidence: tp.evidence?.slice(0, 4),
-    }));
+  const pathHints = tree.topicPathDecisions.slice(0, 40).map((tp) => ({
+    conceptPath: tp.conceptPath,
+    evidence: tp.evidence?.slice(0, 4),
+  }));
 
   return [
     `你是会话大纲整理助手。下面是 ${chatLabel} 聊天记录与已确定的**概念分级树**。`,

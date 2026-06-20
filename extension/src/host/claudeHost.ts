@@ -3,13 +3,10 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { parseClaudeJsonl } from "../transcript/parseClaudeJsonl";
-import {
-  listFlatJsonlSessions,
-  type ListSessionsContext,
-} from "../transcript/listSessions";
-import type { ChatEvent, TranscriptSession } from "../transcript/types";
-import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "./claudePath";
+import { listFlatJsonlSessions, type ListSessionsContext } from "../transcript/listSessions";
 import { cliMissingHintSummary } from "../llm/cliInstallGuide";
+import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "./claudePath";
+import type { ChatEvent, TranscriptSession } from "../transcript/types";
 import type { AgentHost } from "./types";
 
 const SUBAGENT_DIR = "subagents";
@@ -48,9 +45,7 @@ type SessionsIndex = {
   entries?: SessionsIndexEntry[];
 };
 
-async function loadClaudeSessionTitles(
-  projectDir: string
-): Promise<Map<string, string>> {
+async function loadClaudeSessionTitles(projectDir: string): Promise<Map<string, string>> {
   const indexPath = path.join(projectDir, "sessions-index.json");
   try {
     const raw = await fs.readFile(indexPath, "utf8");
@@ -101,10 +96,7 @@ export const claudeHost: AgentHost = {
     return this.getProjectDir(workspacePath);
   },
 
-  async listSessions(
-    projectDir: string,
-    ctx: ListSessionsContext
-  ): Promise<TranscriptSession[]> {
+  async listSessions(projectDir: string, ctx: ListSessionsContext): Promise<TranscriptSession[]> {
     const titles = await loadClaudeSessionTitles(projectDir);
     const sessions = await listFlatJsonlSessions(projectDir, {
       ...ctx,

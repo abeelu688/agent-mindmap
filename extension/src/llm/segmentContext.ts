@@ -1,8 +1,8 @@
+import { topicIdForTopic } from "./topicId";
+import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { OutlineNode } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
-import { topicIdForTopic } from "./topicId";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 
 export type {
   ChainSegmentOverlapHint,
@@ -116,11 +116,7 @@ type OutlineLeaf = {
   items: string[];
 };
 
-function collectOutlineLeaves(
-  nodes: OutlineNode[],
-  path: string[],
-  out: OutlineLeaf[]
-): void {
+function collectOutlineLeaves(nodes: OutlineNode[], path: string[], out: OutlineLeaf[]): void {
   for (const node of nodes) {
     const nextPath = [...path, node.title];
     if (node.details?.length) {
@@ -137,9 +133,7 @@ function collectOutlineLeaves(
   }
 }
 
-function indexOutlineLeavesForSession(
-  record: SessionRecord
-): Map<string, TopicOutlineContext> {
+function indexOutlineLeavesForSession(record: SessionRecord): Map<string, TopicOutlineContext> {
   const leaves: OutlineLeaf[] = [];
   collectOutlineLeaves(record.outline.outline, [], leaves);
 
@@ -176,9 +170,7 @@ function indexOutlineLeavesForSession(
 }
 
 /** Cross-session index keyed by `sessionId:topicId`. */
-export function buildTopicContextIndex(
-  records: SessionRecord[]
-): Map<string, TopicOutlineContext> {
+export function buildTopicContextIndex(records: SessionRecord[]): Map<string, TopicOutlineContext> {
   const merged = new Map<string, TopicOutlineContext>();
   for (const record of records) {
     for (const [k, v] of indexOutlineLeavesForSession(record)) {
@@ -237,9 +229,7 @@ export function buildRefineContextSamples(
       continue;
     }
     seen.add(key);
-    out.push(
-      topicSegmentContextFromDecision(tp, index.get(key))
-    );
+    out.push(topicSegmentContextFromDecision(tp, index.get(key)));
     if (out.length >= limit) {
       break;
     }

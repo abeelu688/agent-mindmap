@@ -1,7 +1,7 @@
+import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import type { SessionRecord } from "../store/storeTypes";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 
 /** Sibling segments at the same upstream depth with overlapping downstream. */
 export type SiblingSegmentOverlapHint = {
@@ -40,13 +40,13 @@ export type SegmentOverlapHint =
   | NodeSegmentRelationshipHint;
 
 function upstreamKey(prefix: string[]): string {
-  return prefix.map((s) => segmentKeyForMerge(s)).filter(Boolean).join("\0");
+  return prefix
+    .map((s) => segmentKeyForMerge(s))
+    .filter(Boolean)
+    .join("\0");
 }
 
-function labelForKey(
-  key: string,
-  topicPaths: TopicConceptPathDecision[]
-): string {
+function labelForKey(key: string, topicPaths: TopicConceptPathDecision[]): string {
   const counts = new Map<string, number>();
   for (const tp of topicPaths) {
     for (const raw of tp.conceptPath) {
@@ -68,9 +68,7 @@ function labelForKey(
 }
 
 function pickShorterCanonical(a: string, b: string): { canonical: string; alias: string } {
-  return a.length <= b.length
-    ? { canonical: a, alias: b }
-    : { canonical: b, alias: a };
+  return a.length <= b.length ? { canonical: a, alias: b } : { canonical: b, alias: a };
 }
 
 type SlotStats = {
@@ -94,9 +92,7 @@ export function buildSiblingSegmentOverlapHints(
   const byUpstream = new Map<string, Map<string, SlotStats>>();
 
   for (const tp of topicPaths) {
-    const keys = tp.conceptPath
-      .map((s) => segmentKeyForMerge(s))
-      .filter(Boolean);
+    const keys = tp.conceptPath.map((s) => segmentKeyForMerge(s)).filter(Boolean);
     for (let i = 0; i < keys.length; i++) {
       const prefix = keys.slice(0, i);
       const uKey = upstreamKey(prefix);
@@ -142,9 +138,7 @@ export function buildSiblingSegmentOverlapHints(
             sb.downstreamSuffixes.has(d)
           );
           sharedDownstreamFirst = [
-            ...new Set(
-              sharedSuffix.map((s) => s.split("/")[0]).filter(Boolean)
-            ),
+            ...new Set(sharedSuffix.map((s) => s.split("/")[0]).filter(Boolean)),
           ];
         }
         if (sharedDownstreamFirst.length < minShared) {
@@ -185,14 +179,15 @@ export function buildChainCollapseOverlapHints(
   const innerOnly = new Map<string, number>();
 
   for (const tp of topicPaths) {
-    const keys = tp.conceptPath
-      .map((s) => segmentKeyForMerge(s))
-      .filter(Boolean);
+    const keys = tp.conceptPath.map((s) => segmentKeyForMerge(s)).filter(Boolean);
     if (keys.length >= 2) {
       const outer = keys[0];
       const rest = keys.slice(1).join("/");
       const uKey = upstreamKey([]);
-      withOuter.set(`${uKey}|${outer}|${rest}`, (withOuter.get(`${uKey}|${outer}|${rest}`) ?? 0) + 1);
+      withOuter.set(
+        `${uKey}|${outer}|${rest}`,
+        (withOuter.get(`${uKey}|${outer}|${rest}`) ?? 0) + 1
+      );
       innerOnly.set(`${uKey}|${rest}`, (innerOnly.get(`${uKey}|${rest}`) ?? 0) + 1);
     }
     for (let i = 1; i < keys.length - 1; i++) {
@@ -200,7 +195,10 @@ export function buildChainCollapseOverlapHints(
       const outer = keys[i];
       const rest = keys.slice(i + 1).join("/");
       const uKey = upstreamKey(prefix);
-      withOuter.set(`${uKey}|${outer}|${rest}`, (withOuter.get(`${uKey}|${outer}|${rest}`) ?? 0) + 1);
+      withOuter.set(
+        `${uKey}|${outer}|${rest}`,
+        (withOuter.get(`${uKey}|${outer}|${rest}`) ?? 0) + 1
+      );
       innerOnly.set(`${uKey}|${rest}`, (innerOnly.get(`${uKey}|${rest}`) ?? 0) + 1);
     }
   }
@@ -284,19 +282,16 @@ export function buildNodeRelationshipHints(
           continue;
         }
         seen.add(dedupe);
-        const { canonical, alias: aliasLabel } = pickShorterCanonical(
-          node.key,
-          target.key
-        );
+        const { canonical, alias: aliasLabel } = pickShorterCanonical(node.key, target.key);
         hints.push({
           kind: "node-alias",
           canonical: canonical.toLowerCase(),
           aliases: [aliasLabel.toLowerCase()],
           pathPrefix: [],
-          evidenceKeywords: [
-            ...evidenceKeywords,
-            ...(target.evidence ?? []).slice(0, 2),
-          ].slice(0, 6),
+          evidenceKeywords: [...evidenceKeywords, ...(target.evidence ?? []).slice(0, 2)].slice(
+            0,
+            6
+          ),
           supportingNodeCount: 2,
         });
         continue;
@@ -308,18 +303,13 @@ export function buildNodeRelationshipHints(
         }
         seen.add(dedupe);
         const aliasRootLabel = labelForKey(aliasKey, topicPaths);
-        const { canonical, alias: aliasLabel } = pickShorterCanonical(
-          node.key,
-          aliasRootLabel
-        );
+        const { canonical, alias: aliasLabel } = pickShorterCanonical(node.key, aliasRootLabel);
         hints.push({
           kind: "node-alias",
           canonical: canonical.toLowerCase(),
           aliases: [aliasLabel.toLowerCase()],
           pathPrefix: [],
-          evidenceKeywords: evidenceKeywords.length
-            ? evidenceKeywords
-            : [node.key, aliasRootLabel],
+          evidenceKeywords: evidenceKeywords.length ? evidenceKeywords : [node.key, aliasRootLabel],
           supportingNodeCount: 1,
         });
       }
@@ -364,9 +354,7 @@ export function buildAllSegmentOverlapHints(
   ];
 }
 
-export function collectSessionSegmentEquivalences(
-  records: SessionRecord[]
-): SegmentEquivalence[] {
+export function collectSessionSegmentEquivalences(records: SessionRecord[]): SegmentEquivalence[] {
   const out: SegmentEquivalence[] = [];
   const seen = new Set<string>();
   for (const record of records) {
@@ -391,12 +379,8 @@ function equivalenceKey(eq: SegmentEquivalence): string {
     .map((a) => segmentKeyForMerge(a))
     .sort()
     .join(",");
-  const prefix = (eq.scope.pathPrefix ?? [])
-    .map((p) => segmentKeyForMerge(p))
-    .join("/");
-  const down = (eq.scope.downstreamFirst ?? [])
-    .map((d) => segmentKeyForMerge(d))
-    .join(",");
+  const prefix = (eq.scope.pathPrefix ?? []).map((p) => segmentKeyForMerge(p)).join("/");
+  const down = (eq.scope.downstreamFirst ?? []).map((d) => segmentKeyForMerge(d)).join(",");
   return `${segmentKeyForMerge(eq.canonical)}|${aliases}|${prefix}|${down}`;
 }
 
@@ -445,9 +429,7 @@ export function deriveEquivalencesFromOverlapHints(
         scope: {
           pathPrefix: hint.pathPrefix.map((k) => labelForKey(k, topicPaths)),
           downstreamFirst: downstreamFirst.length ? downstreamFirst : undefined,
-          evidenceKeywords: downstreamFirst.length
-            ? downstreamFirst
-            : [aLabel, bLabel],
+          evidenceKeywords: downstreamFirst.length ? downstreamFirst : [aLabel, bLabel],
         },
         confidence: Math.min(0.95, 0.75 + hint.supportingPathCount * 0.02),
         rationale: "DET sibling overlap hint",
@@ -456,10 +438,7 @@ export function deriveEquivalencesFromOverlapHints(
     }
 
     if (hint.kind === "chain") {
-      if (
-        hint.outerPathCount < minChain ||
-        hint.innerPathCount < minChain
-      ) {
+      if (hint.outerPathCount < minChain || hint.innerPathCount < minChain) {
         continue;
       }
       const innerLabel = labelForKey(hint.innerSegment, topicPaths);
@@ -472,10 +451,7 @@ export function deriveEquivalencesFromOverlapHints(
           downstreamFirst: [innerLabel],
           evidenceKeywords: [innerLabel, outerLabel],
         },
-        confidence: Math.min(
-          0.94,
-          0.78 + hint.sharedSuffixCount * 0.03
-        ),
+        confidence: Math.min(0.94, 0.78 + hint.sharedSuffixCount * 0.03),
         rationale: "DET chain collapse hint",
       });
       continue;

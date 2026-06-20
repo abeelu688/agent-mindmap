@@ -1,12 +1,12 @@
-import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import {
   buildChainCollapseOverlapHints,
   deriveEquivalencesFromOverlapHints,
   mergeSegmentEquivalencesLists,
 } from "./synonymHintDerive";
+import { segmentKeyForMerge } from "./topicGraphValidate";
+import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import type { CatalogChainInput } from "./reattachNodeCatalog";
 import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 
 export type DuplicateTopRootHint = {
   kind: "duplicate_top_root";
@@ -82,16 +82,11 @@ export function segmentsInSameEquivalenceGroup(
   return false;
 }
 
-function nodeMatchesSegmentKey(
-  node: ConceptOntologyNode,
-  segmentKey: string
-): boolean {
+function nodeMatchesSegmentKey(node: ConceptOntologyNode, segmentKey: string): boolean {
   if (segmentKeyForMerge(node.key) === segmentKey) {
     return true;
   }
-  return (node.aliases ?? []).some(
-    (a) => segmentKeyForMerge(a) === segmentKey
-  );
+  return (node.aliases ?? []).some((a) => segmentKeyForMerge(a) === segmentKey);
 }
 
 /** Ontology node aliases / parentKeys → scoped parent/child segment equivalences. */
@@ -122,16 +117,10 @@ export function deriveEquivalencesFromOntologyNodes(
 
       const childNode = nodes.find((n) => nodeMatchesSegmentKey(n, childKey));
       const aliasLink =
-        (rootNode.aliases ?? []).some(
-          (a) => segmentKeyForMerge(a) === childKey
-        ) ||
-        (childNode?.aliases ?? []).some(
-          (a) => segmentKeyForMerge(a) === rootKey
-        );
+        (rootNode.aliases ?? []).some((a) => segmentKeyForMerge(a) === childKey) ||
+        (childNode?.aliases ?? []).some((a) => segmentKeyForMerge(a) === rootKey);
       const parentLink =
-        childNode?.parentKeys?.some(
-          (pk) => segmentKeyForMerge(pk) === rootKey
-        ) ?? false;
+        childNode?.parentKeys?.some((pk) => segmentKeyForMerge(pk) === rootKey) ?? false;
 
       if (!aliasLink && !parentLink) {
         continue;
@@ -159,12 +148,8 @@ export function deriveEquivalencesFromOntologyNodes(
   return out;
 }
 
-export function buildDuplicateTopRootHints(
-  chains: CatalogChainInput[]
-): DuplicateTopRootHint[] {
-  const topByKey = new Map(
-    chains.map((c) => [segmentKeyForMerge(c.from), c] as const)
-  );
+export function buildDuplicateTopRootHints(chains: CatalogChainInput[]): DuplicateTopRootHint[] {
+  const topByKey = new Map(chains.map((c) => [segmentKeyForMerge(c.from), c] as const));
   const hints: DuplicateTopRootHint[] = [];
   const seen = new Set<string>();
 
@@ -243,9 +228,7 @@ export function buildListedChildCollapseHints(
 /**
  * Domain-agnostic: specialist top root merge key extends hub key (android-app → android).
  */
-export function buildPrefixSubordinateHints(
-  chains: CatalogChainInput[]
-): PrefixSubordinateHint[] {
+export function buildPrefixSubordinateHints(chains: CatalogChainInput[]): PrefixSubordinateHint[] {
   if (chains.length < 2) {
     return [];
   }
@@ -296,9 +279,7 @@ export function buildOntologySubordinateHints(
     return [];
   }
 
-  const chainByKey = new Map(
-    chains.map((c) => [segmentKeyForMerge(c.from), c] as const)
-  );
+  const chainByKey = new Map(chains.map((c) => [segmentKeyForMerge(c.from), c] as const));
   const hints: OntologySubordinateHint[] = [];
   const seen = new Set<string>();
 
@@ -349,8 +330,7 @@ export function enrichStructuralHintsWithNodeIds(
   hints: StructuralReattachHints,
   rootNodeIdByFrom: Map<string, string>
 ): StructuralReattachHints {
-  const rootId = (from: string) =>
-    rootNodeIdByFrom.get(segmentKeyForMerge(from));
+  const rootId = (from: string) => rootNodeIdByFrom.get(segmentKeyForMerge(from));
 
   return {
     duplicateTopRoots: hints.duplicateTopRoots.map((h) => ({
@@ -396,9 +376,7 @@ export function deriveSegmentEquivalencesFromReattachStructure(
     }
   }
 
-  groups.push(
-    deriveEquivalencesFromOntologyNodes(chains, nodes, existing)
-  );
+  groups.push(deriveEquivalencesFromOntologyNodes(chains, nodes, existing));
 
   return mergeSegmentEquivalencesLists(...groups);
 }

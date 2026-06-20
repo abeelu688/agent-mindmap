@@ -96,6 +96,9 @@ async function jsonSessionsExist(storeDir: string): Promise<boolean> {
  * migration on first launch when legacy JSON files are present.
  */
 export async function bootstrapStore(storeDir: string): Promise<BootstrapResult> {
+  // Ensure the store directory exists before SqliteStore tries to open
+  // store.db inside it — @vscode/sqlite3 returns SQLITE_CANTOPEN otherwise.
+  await fs.mkdir(storeDir, { recursive: true });
   const dbPath = path.join(storeDir, "store.db");
   const dbExists = await pathExists(dbPath);
 

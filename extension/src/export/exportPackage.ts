@@ -2,23 +2,18 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import { getHostById } from "../host/registry";
-import type { MindMapRoot, NodeOriginRef } from "../transcript/types";
 import { readMindMapUiConfig } from "../ui/mindMapUiConfig";
-import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import { collectOriginRefs, sanitizeSessionFileName } from "./collectOriginRefs";
-import {
-  anchorForTurnIndex,
-  renderTranscriptMarkdown,
-} from "./renderTranscriptMarkdown";
+import { anchorForTurnIndex, renderTranscriptMarkdown } from "./renderTranscriptMarkdown";
 import {
   buildTranscriptPageHtml,
   markdownToTranscriptHtmlBody,
   TRANSCRIPT_PAGE_STYLES,
 } from "./renderTranscriptHtml";
+import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
+import type { MindMapRoot, NodeOriginRef } from "../transcript/types";
 
-function hostForTranscriptPath(
-  transcriptPath: string
-): import("../host/types").AgentHost {
+function hostForTranscriptPath(transcriptPath: string): import("../host/types").AgentHost {
   if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {
     return getHostById("cursor");
   }
@@ -49,19 +44,13 @@ function cloneWithJumpHrefs(
       return ref;
     }
     const turnMap = turnMaps.get(ref.sessionId) ?? new Map();
-    const jumpHref = buildTranscriptJumpHref(
-      htmlRel,
-      ref.turnIndex,
-      turnMap
-    );
+    const jumpHref = buildTranscriptJumpHref(htmlRel, ref.turnIndex, turnMap);
     return { ...ref, jumpHref };
   };
 
   const walk = (node: MindMapRoot): MindMapRoot => {
     const origin = node.data.origin;
-    const nextOrigin = origin?.refs?.length
-      ? { refs: origin.refs.map(rewriteRef) }
-      : origin;
+    const nextOrigin = origin?.refs?.length ? { refs: origin.refs.map(rewriteRef) } : origin;
     return {
       data: {
         ...node.data,
@@ -296,25 +285,17 @@ export async function exportMindMapPackage(
       const rendered = renderTranscriptMarkdown(events, ref.sessionLabel);
       await fs.writeFile(mdAbs, rendered.markdown, "utf8");
       const bodyHtml = markdownToTranscriptHtmlBody(rendered.markdown);
-      await fs.writeFile(
-        htmlAbs,
-        buildTranscriptPageHtml(ref.sessionLabel, bodyHtml),
-        "utf8"
-      );
+      await fs.writeFile(htmlAbs, buildTranscriptPageHtml(ref.sessionLabel, bodyHtml), "utf8");
       sessionHtmlPath.set(ref.sessionId, htmlRel);
       turnMaps.set(ref.sessionId, rendered.turnIndexToDisplayQ);
     } catch (err) {
-      failures.push(
-        `${ref.sessionLabel}: ${err instanceof Error ? err.message : String(err)}`
-      );
+      failures.push(`${ref.sessionLabel}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   if (sessionRefs.length > 0 && sessionHtmlPath.size === 0) {
     throw new Error(
-      failures.length
-        ? `无法导出任何对话记录：\n${failures.join("\n")}`
-        : "无法导出任何对话记录。"
+      failures.length ? `无法导出任何对话记录：\n${failures.join("\n")}` : "无法导出任何对话记录。"
     );
   }
 

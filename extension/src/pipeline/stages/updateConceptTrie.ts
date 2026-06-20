@@ -2,14 +2,19 @@ import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,
 } from "../../store/mergeConceptTrie";
-import type { ReattachMove, ReattachStep, SegmentEquivalence, SessionAnalysis } from "../../llm/types";
-import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 import {
   enrichRecordsWithTopicPaths,
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology as PrepOntology,
 } from "../../store/prepareConceptMergeRecords";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../mergeSynonymPolicy";
+import type {
+  ReattachMove,
+  ReattachStep,
+  SegmentEquivalence,
+  SessionAnalysis,
+} from "../../llm/types";
+import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 
 export type { ConceptMergePrepOntology } from "../../store/prepareConceptMergeRecords";
 export {
@@ -48,8 +53,7 @@ export function prepareRecordsBeforeReattach(
 export function updateConceptTrie(opts: UpdateConceptTrieOpts): MergeRecord {
   return buildConceptMergeRecord(opts.records, {
     projectSlug: opts.projectSlug,
-    segmentEquivalences:
-      opts.segmentEquivalences ?? opts.ontology?.segmentEquivalences,
+    segmentEquivalences: opts.segmentEquivalences ?? opts.ontology?.segmentEquivalences,
     applySegmentEquivalences: MERGE_APPLY_SEGMENT_EQUIVALENCES,
     ontologyForPrep: opts.ontology,
     reattachMoves: opts.reattachMoves,
@@ -58,13 +62,10 @@ export function updateConceptTrie(opts: UpdateConceptTrieOpts): MergeRecord {
   });
 }
 
-export async function updateConceptTrieAsync(
-  opts: UpdateConceptTrieOpts
-): Promise<MergeRecord> {
+export async function updateConceptTrieAsync(opts: UpdateConceptTrieOpts): Promise<MergeRecord> {
   return buildConceptMergeRecordAsync(opts.records, {
     projectSlug: opts.projectSlug,
-    segmentEquivalences:
-      opts.segmentEquivalences ?? opts.ontology?.segmentEquivalences,
+    segmentEquivalences: opts.segmentEquivalences ?? opts.ontology?.segmentEquivalences,
     applySegmentEquivalences: MERGE_APPLY_SEGMENT_EQUIVALENCES,
     ontologyForPrep: opts.ontology,
     reattachMoves: opts.reattachMoves,

@@ -11,11 +11,10 @@ import { initLog } from "./log";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { MindMapHost } from "./webview/MindMapHost";
 import { getActiveHost, getWorkspaceSlug, resetHostCache, resolveHostId } from "./host";
-import { getStoreDir } from "./paths";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import { LlmProviderError } from "./llm/types";
-import { ensureStore, listRecords } from "./store/sessionStore";
+import { getStore } from "./store/storeClient";
 import { resolveLlmProviderId } from "./llmOptions";
 import { setActiveSession } from "./commands/openLatest";
 import { commandOpenLatest } from "./commands/openLatest";
@@ -96,6 +95,18 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void syncMcpLocaleFile();
 
+  // ── Bootstrap the store (opens / migrates store.db) at activation so the
+  //    first command invocation doesn't pay the open + migration cost. Fire
+  //    and forget: the first real `getStore()` call awaits the same promise.
+
+  void getStore().then(
+    () => mindMapLog("[activate] store bootstrap complete"),
+    (err) =>
+      mindMapLog(
+        `[activate] store bootstrap failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+  );
+
   // ── Document close listener (auto-reveal mind map) ────────────────────
 
   context.subscriptions.push(
@@ -114,9 +125,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void handleNodeClicked(payload, {
         context,
         listSessionRecords: async () => {
-          const storeDir = getStoreDir();
-          await ensureStore(storeDir);
-          return listRecords(storeDir);
+          return (await getStore()).listAllRecords();
         },
       })
   );

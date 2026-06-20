@@ -1,7 +1,7 @@
+import { topicIdForTopic } from "./topicId";
 import type { AgentHostId } from "../host/types";
 import type { SegmentEquivalence } from "../llm/types";
 import type { SessionRecord } from "../store/storeTypes";
-import { topicIdForTopic } from "./topicId";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -35,7 +35,7 @@ export function buildTopicPathsPrompt(
   const topics = record.graph.topics.slice(0, 64).map((t) => {
     const items = (t.items ?? []).map((i) => i.text);
     return {
-      topicId: topicIdForTopic(record.meta.sessionId, { title: t.title, items: (t.items ?? []) }),
+      topicId: topicIdForTopic(record.meta.sessionId, { title: t.title, items: t.items ?? [] }),
       title: t.title,
       items: items.slice(0, 12).map((x) => clip(x, 80)),
     };
@@ -71,4 +71,3 @@ export function buildTopicPathsPrompt(
 
   return { prompt, topics: topics.map((t) => ({ topicId: t.topicId, title: t.title })) };
 }
-

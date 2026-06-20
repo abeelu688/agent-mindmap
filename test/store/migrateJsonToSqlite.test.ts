@@ -166,6 +166,9 @@ describe("migrateJsonToSqlite — session records", () => {
     expect(result.sessionCount).toBe(0);
     expect(result.projectSlugs).toEqual([]);
     expect(result.migratedConceptTrie).toBe(false);
+    expect(result.migratedDeterministicMerge).toBe(false);
+    expect(result.migratedLlmRefinedMerge).toBe(false);
+    expect(result.llmMergeCacheCount).toBe(0);
     expect(result.snapshotFiles).toEqual([]);
   });
 });
@@ -202,6 +205,45 @@ describe("migrateJsonToSqlite — concept-trie and ontology", () => {
     expect(back?.mindMap.data.text).toBe("Root");
   });
 
+  it("migrates the deterministic + llm-refined + llm-cache merges", async () => {
+    const deterministic: MergeRecord = {
+      schemaVersion: 1,
+      meta: { kind: "deterministic", builtAt: 100, sessionIds: ["s1"], projectSlugs: ["proj-a"] },
+      mindMap: { data: { text: "Det Root" } },
+    };
+    const llmRefined: MergeRecord = {
+      schemaVersion: 1,
+      meta: { kind: "llm", builtAt: 200, sessionIds: ["s1"], projectSlugs: ["proj-a"] },
+      mindMap: { data: { text: "LLM Root" } },
+    };
+    const llmCache: MergeRecord = {
+      schemaVersion: 1,
+      meta: { kind: "llm", builtAt: 300, sessionIds: ["s1"], projectSlugs: ["proj-a"] },
+      mindMap: { data: { text: "Cache Root" } },
+    };
+    await fs.mkdir(path.join(env.storeDir, STORE_LAYOUT.mergesDir), { recursive: true });
+    await fs.mkdir(path.join(env.storeDir, STORE_LAYOUT.mergeCacheDir), { recursive: true });
+    await writeJsonAtomic(path.join(env.storeDir, STORE_LAYOUT.deterministicFile), deterministic);
+    await writeJsonAtomic(path.join(env.storeDir, STORE_LAYOUT.llmRefinedFile), llmRefined);
+    await writeJsonAtomic(
+      path.join(env.storeDir, STORE_LAYOUT.mergeCacheDir, "cachekey-1.json"),
+      llmCache
+    );
+
+    const result = await migrateJsonToSqlite(env.storeDir, sqlite);
+    expect(result.migratedDeterministicMerge).toBe(true);
+    expect(result.migratedLlmRefinedMerge).toBe(true);
+    expect(result.llmMergeCacheCount).toBe(1);
+
+    const det = await sqlite.readDeterministicMerge();
+    expect(det?.mindMap.data.text).toBe("Det Root");
+    const refined = await sqlite.readLlmRefinedMerge();
+    expect(refined?.mindMap.data.text).toBe("LLM Root");
+    const cached = await sqlite.readLlmMergeCache("cachekey-1");
+    expect(cached?.mindMap.data.text).toBe("Cache Root");
+    expect(await sqlite.readLlmMergeCache("missing")).toBeUndefined();
+  });
+
   it("migrates the ontology index and referenced cache records", async () => {
     const eq: SegmentEquivalence[] = [
       {
@@ -218,7 +260,25 @@ describe("migrateJsonToSqlite — concept-trie and ontology", () => {
     };
     const record: OntologyRecord = {
       schemaVersion: 1,
-      meta: { builtAt: 1000, sessionIds: ["s1"], projectSlugs: ["proj-a"] },
+      meta: {
+        builtAt: 1000,
+        cacheKey: "k1",
+        sessionIds: ["s1"],
+        projectSlugs: ["proj-a"],
+        llm: { provider: "cursor-cli" },
+        promptVersions: {
+          ontology: 1,
+          topicPaths: 1,
+          reattach: 1,
+          refine: 0,
+          outlineSchema: 1,
+        },
+      },
+      nodes: [{ key: "auth", label: "Authentication" }],
+      mappings: [{ mention: "signin", key: "auth" }],
+      topicPaths: [
+        { topicId: "t1", sessionId: "s1", projectSlug: "proj-a", conceptPath: ["backend", "auth"] },
+      ],
       segmentEquivalences: eq,
     };
     await fs.mkdir(path.join(env.storeDir, STORE_LAYOUT.ontologyCacheDir), { recursive: true });

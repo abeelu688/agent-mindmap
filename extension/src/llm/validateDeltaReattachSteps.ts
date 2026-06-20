@@ -1,6 +1,6 @@
+import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { ReattachStep } from "./types";
 import type { TrieReparentInput } from "./trieReparentInput";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 
 export class DeltaReattachValidationError extends Error {
   readonly issues: string[];
@@ -72,10 +72,7 @@ export function countReattachStepConflicts(steps: ReattachStep[] | undefined): n
  * Delta M-merge: reject changes that invent parallel hubs or move frozen tops.
  * Validates segment keys (changes[] format); node ids optional.
  */
-export function validateDeltaReattachSteps(
-  input: TrieReparentInput,
-  steps: ReattachStep[]
-): void {
+export function validateDeltaReattachSteps(input: TrieReparentInput, steps: ReattachStep[]): void {
   if (input.mergeMode !== "delta" || !input.frozenChainIndices?.length) {
     return;
   }
@@ -137,9 +134,6 @@ export function validateDeltaReattachSteps(
   }
 
   if (issues.length) {
-    throw new DeltaReattachValidationError(
-      `M-merge delta validation failed: ${issues[0]}`,
-      issues
-    );
+    throw new DeltaReattachValidationError(`M-merge delta validation failed: ${issues[0]}`, issues);
   }
 }

@@ -1,12 +1,10 @@
 import { normalizeConceptKey } from "./enrichNodeChildrenFromOutline";
 import { resolveConceptPathWithEquivalences } from "./resolveConceptPathWithEquivalences";
-import type { ConceptOntologyNode, SegmentEquivalence, SessionAnalysis } from "./types";
 import { segmentKeyForMerge } from "./topicGraphValidate";
+import type { ConceptOntologyNode, SegmentEquivalence, SessionAnalysis } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
 
-function buildCanonicalPathsFromNodes(
-  nodes: ConceptOntologyNode[]
-): Map<string, string[]> {
+function buildCanonicalPathsFromNodes(nodes: ConceptOntologyNode[]): Map<string, string[]> {
   const byKey = new Map<string, ConceptOntologyNode>();
   for (const node of nodes) {
     const k = normalizeConceptKey(node.key);
@@ -28,9 +26,7 @@ function buildCanonicalPathsFromNodes(
       visited.add(current);
       path.unshift(current);
       const n = byKey.get(current);
-      const parent = n?.parentKeys?.[0]
-        ? normalizeConceptKey(n.parentKeys[0])
-        : "";
+      const parent = n?.parentKeys?.[0] ? normalizeConceptKey(n.parentKeys[0]) : "";
       if (!parent || parent === current) {
         break;
       }
@@ -83,11 +79,7 @@ export function snapRecordsToVirtualSession(
       }
       return {
         ...topic,
-        conceptPath: snapConceptPathToVirtualSession(
-          topic.conceptPath,
-          virtual,
-          eq
-        ),
+        conceptPath: snapConceptPathToVirtualSession(topic.conceptPath, virtual, eq),
       };
     });
     return {

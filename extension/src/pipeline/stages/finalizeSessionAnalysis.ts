@@ -1,5 +1,8 @@
 import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { sanitizeSessionOutline } from "../../llm/sanitizeOutline";
+import { buildConceptContextsFromAnalysis } from "../../llm/buildConceptContexts";
+import { enrichAnalysisNodesFromOutline } from "../../llm/enrichNodeChildrenFromOutline";
+import { buildSessionTree } from "./buildSessionTree";
 import type {
   SessionAnalysis,
   SessionConceptExtract,
@@ -8,9 +11,6 @@ import type {
   SessionTreeSnapshot,
   TopicGraph,
 } from "../../llm/types";
-import { buildConceptContextsFromAnalysis } from "../../llm/buildConceptContexts";
-import { enrichAnalysisNodesFromOutline } from "../../llm/enrichNodeChildrenFromOutline";
-import { buildSessionTree } from "./buildSessionTree";
 import type { ConceptContextForMerge } from "../../store/storeTypes";
 
 export type FinalizeSessionAnalysisMeta = {
@@ -29,13 +29,10 @@ export type FinalizedSessionAnalysis = {
   conceptContexts: ConceptContextForMerge[];
 };
 
-export function analysisToConceptExtract(
-  analysis: SessionAnalysis
-): SessionConceptExtract {
+export function analysisToConceptExtract(analysis: SessionAnalysis): SessionConceptExtract {
   const terms: SessionConceptExtract["terms"] = [];
   for (const node of analysis.nodes) {
-    const evidence =
-      node.evidence?.length ? node.evidence : [node.label || node.key];
+    const evidence = node.evidence?.length ? node.evidence : [node.label || node.key];
     terms.push({
       key: node.key,
       label: node.label,
@@ -47,9 +44,7 @@ export function analysisToConceptExtract(
   return { domains: analysis.domains, terms };
 }
 
-export function analysisToSessionSynonyms(
-  analysis: SessionAnalysis
-): SessionSynonymRefine {
+export function analysisToSessionSynonyms(analysis: SessionAnalysis): SessionSynonymRefine {
   return {
     segmentEquivalences: analysis.segmentEquivalences ?? [],
     termAliases: analysis.termAliases ?? [],
@@ -76,10 +71,7 @@ export function finalizeSessionAnalysis(
     sessionId: meta.sessionId,
     projectSlug: meta.projectSlug,
   });
-  const conceptContexts = buildConceptContextsFromAnalysis(
-    enrichedAnalysis,
-    meta
-  );
+  const conceptContexts = buildConceptContextsFromAnalysis(enrichedAnalysis, meta);
   const graph = outlineToTopicGraph(outline);
 
   return {

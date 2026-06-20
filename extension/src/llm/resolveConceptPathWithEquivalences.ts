@@ -1,6 +1,6 @@
 import { normalizeConceptPath } from "./normalizeConceptPath";
-import type { SegmentEquivalence } from "./types";
 import { segmentKeyForMerge } from "./topicGraphValidate";
+import type { SegmentEquivalence } from "./types";
 
 export type TopicPathContext = {
   title?: string;
@@ -36,10 +36,7 @@ function evidenceMatches(ctx: TopicPathContext, keywords?: string[]): boolean {
   return keywords.some((k) => blob.includes(k.toLowerCase()));
 }
 
-function downstreamFirstMatches(
-  afterKeys: string[],
-  allowed?: string[]
-): boolean {
+function downstreamFirstMatches(afterKeys: string[], allowed?: string[]): boolean {
   if (!allowed?.length) {
     return true;
   }
@@ -99,11 +96,7 @@ function aliasKeysFor(eq: SegmentEquivalence): string[] {
   return [...keys];
 }
 
-function indexOfContiguous(
-  haystack: string[],
-  needle: string[],
-  fromIndex: number
-): number {
+function indexOfContiguous(haystack: string[], needle: string[], fromIndex: number): number {
   if (!needle.length || haystack.length < needle.length) {
     return -1;
   }
@@ -130,9 +123,7 @@ function reorderPathForScopedEquivalences(
   path: string[],
   equivalences: SegmentEquivalence[]
 ): { path: string[]; reordered: boolean } {
-  let labels = path
-    .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+  let labels = path.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
   let reordered = false;
 
   let changed = true;
@@ -140,9 +131,7 @@ function reorderPathForScopedEquivalences(
     changed = false;
     const keys = labels.map((s) => segmentKeyForMerge(s));
     for (const eq of equivalences) {
-      const prefix = (eq.scope.pathPrefix ?? [])
-        .map((s) => segmentKeyForMerge(s))
-        .filter(Boolean);
+      const prefix = (eq.scope.pathPrefix ?? []).map((s) => segmentKeyForMerge(s)).filter(Boolean);
       if (!prefix.length) {
         continue;
       }
@@ -194,10 +183,7 @@ export function resolveConceptPathWithEquivalences(
     return normalizeConceptPath(path);
   }
 
-  const { path: orderedPath } = reorderPathForScopedEquivalences(
-    path,
-    equivalences
-  );
+  const { path: orderedPath } = reorderPathForScopedEquivalences(path, equivalences);
 
   const pathKeys = orderedPath.map((s) => segmentKeyForMerge(s));
   const out: string[] = [];

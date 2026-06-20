@@ -1,5 +1,10 @@
 import { LlmProviderError } from "./types";
 import { validateSessionOutline } from "./outlineValidate";
+import {
+  parseSegmentEquivalences,
+  validateConceptOntology,
+  validateOntologyRefine,
+} from "./ontologyValidate";
 import type {
   CodeReference,
   SessionAnalysis,
@@ -8,11 +13,6 @@ import type {
   SessionTermAlias,
   TermWithContext,
 } from "./types";
-import {
-  parseSegmentEquivalences,
-  validateConceptOntology,
-  validateOntologyRefine,
-} from "./ontologyValidate";
 
 const MAX_DOMAINS = 16;
 const MAX_TERMS = 80;
@@ -41,11 +41,7 @@ function pickString(obj: Record<string, unknown>, key: string, max: number): str
   return t.length > max ? t.slice(0, max - 3) + "..." : t;
 }
 
-function parseStringArray(
-  value: unknown,
-  maxItems: number,
-  maxLen: number
-): string[] {
+function parseStringArray(value: unknown, maxItems: number, maxLen: number): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -136,9 +132,7 @@ export function validateSessionConceptExtract(value: unknown): SessionConceptExt
   if (!root) {
     throw new LlmProviderError("bad-shape", "Expected session concept extract object");
   }
-  const domains = parseStringArray(root.domains, MAX_DOMAINS, MAX_KEY).map((s) =>
-    s.toLowerCase()
-  );
+  const domains = parseStringArray(root.domains, MAX_DOMAINS, MAX_KEY).map((s) => s.toLowerCase());
   const termsRaw = Array.isArray(root.terms) ? root.terms : [];
   const terms: TermWithContext[] = [];
   const seenKeys = new Set<string>();
@@ -211,7 +205,12 @@ function parseCodeReferences(raw: unknown): CodeReference[] {
       continue;
     }
     const sourceTurnIndices = pickNumberArray(obj, "sourceTurnIndices");
-    out.push({ path, lines, description, sourceTurnIndices: sourceTurnIndices.length ? sourceTurnIndices : undefined });
+    out.push({
+      path,
+      lines,
+      description,
+      sourceTurnIndices: sourceTurnIndices.length ? sourceTurnIndices : undefined,
+    });
     if (out.length >= MAX_CODE_REFS) {
       break;
     }
@@ -232,9 +231,7 @@ export function validateSessionAnalysis(
   if (!root) {
     throw new LlmProviderError("bad-shape", "Expected session analysis object");
   }
-  const domains = parseStringArray(root.domains, MAX_DOMAINS, MAX_KEY).map((s) =>
-    s.toLowerCase()
-  );
+  const domains = parseStringArray(root.domains, MAX_DOMAINS, MAX_KEY).map((s) => s.toLowerCase());
   const ontologyPartial = validateConceptOntology({
     nodes: root.nodes,
     mappings: root.mappings ?? [],
@@ -248,12 +245,8 @@ export function validateSessionAnalysis(
       );
     }
   }
-  const outline = opts?.requireOutline !== false
-    ? validateSessionOutline(root.outline)
-    : undefined;
-  const equivRaw = Array.isArray(root.segmentEquivalences)
-    ? root.segmentEquivalences
-    : [];
+  const outline = opts?.requireOutline !== false ? validateSessionOutline(root.outline) : undefined;
+  const equivRaw = Array.isArray(root.segmentEquivalences) ? root.segmentEquivalences : [];
   const segmentEquivalences = parseSegmentEquivalences(equivRaw);
   const aliasesRaw = Array.isArray(root.termAliases) ? root.termAliases : [];
   const termAliases: SessionTermAlias[] = [];
@@ -266,15 +259,12 @@ export function validateSessionAnalysis(
       break;
     }
   }
-  const codeReferences = opts?.requireCodeReferences !== false
-    ? parseCodeReferences(root.codeReferences)
-    : [];
+  const codeReferences =
+    opts?.requireCodeReferences !== false ? parseCodeReferences(root.codeReferences) : [];
   return {
     domains,
     nodes: ontologyPartial.nodes,
-    mappings: ontologyPartial.mappings.length
-      ? ontologyPartial.mappings
-      : undefined,
+    mappings: ontologyPartial.mappings.length ? ontologyPartial.mappings : undefined,
     segmentEquivalences,
     termAliases: termAliases.length ? termAliases : undefined,
     outline,

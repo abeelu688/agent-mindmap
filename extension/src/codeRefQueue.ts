@@ -1,12 +1,7 @@
 import { mindMapLog } from "./webview/MindMapLog";
 import { agentLog } from "./log";
 import { MindMapPanel } from "./webview/MindMapPanel";
-import {
-  conceptTrieMergePath,
-  readRecord,
-  writeMergeRecord,
-  writeRecord,
-} from "./store/sessionStore";
+import { getStoreForDir } from "./store/storeClient";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { rebuildProjectMergeFromStore } from "./mindmap/rebuildMindMapFromStore";
 import { extractCodeReferencesFromEvents } from "./llm/extractCodeReferences";
@@ -207,7 +202,7 @@ async function publishMergedCodeRefRefresh(
   if (!merge) {
     return false;
   }
-  await writeMergeRecord(conceptTrieMergePath(item.storeDir), merge);
+  await (await getStoreForDir(item.storeDir)).writeConceptTrieMerge(merge);
   const labels = mindMapLabelsForOutputLanguage(item.outputLanguage);
   notifyPanelPendingCodeRefUpdate(panel, merge.mindMap, labels.relatedCode);
   return true;
@@ -413,7 +408,7 @@ async function notifyCodeRefMapUpdate(
   } else {
     const merge = await rebuildProjectMergeFromRecords(item);
     if (merge) {
-      await writeMergeRecord(conceptTrieMergePath(item.storeDir), merge);
+      await (await getStoreForDir(item.storeDir)).writeConceptTrieMerge(merge);
       pendingMap = merge.mindMap;
     }
   }
@@ -430,12 +425,13 @@ async function persistAndNotifyPartialCodeRefs(
   codeRefs: CodeReference[],
   outline: SessionOutline
 ): Promise<void> {
-  const latest = await readRecord(item.storeDir, item.projectSlug, item.sessionId);
+  const store = await getStoreForDir(item.storeDir);
+  const latest = await store.getRecord(item.projectSlug, item.sessionId);
   if (!latest?.sessionAnalysis) {
     return;
   }
   latest.sessionAnalysis.codeReferences = codeRefs;
-  await writeRecord(item.storeDir, latest);
+  await store.upsertRecord(latest);
   const doneCount = codeRefs.filter((ref) => ref.llmStatus === "done").length;
   const pendingCount = codeRefs.filter((ref) => ref.llmStatus === "pending").length;
   mindMapLog(
@@ -525,11 +521,12 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
     }
     // Persist failed status so next load can retry on a later session open
     try {
-      const latest = await readRecord(item.storeDir, item.projectSlug, item.sessionId);
+      const store = await getStoreForDir(item.storeDir);
+      const latest = await store.getRecord(item.projectSlug, item.sessionId);
       if (latest?.sessionAnalysis) {
         const failed = markCodeRefsFailed(latest.sessionAnalysis.codeReferences, err);
         latest.sessionAnalysis.codeReferences = failed?.length ? failed : undefined;
-        await writeRecord(item.storeDir, latest);
+        await store.upsertRecord(latest);
       }
     } catch (writeErr) {
       agentLog.error("[codeRefQueue] failed to persist failure status", writeErr);
@@ -543,13 +540,14 @@ async function runItem(item: CodeRefQueueItem): Promise<void> {
 
   // Persist done refs (final snapshot; last batch already notified incrementally)
   try {
-    const latest = await readRecord(item.storeDir, item.projectSlug, item.sessionId);
+    const store = await getStoreForDir(item.storeDir);
+    const latest = await store.getRecord(item.projectSlug, item.sessionId);
     if (!latest?.sessionAnalysis) {
       finishCodeRefPanelStatus();
       return;
     }
     latest.sessionAnalysis.codeReferences = doneRefs;
-    await writeRecord(item.storeDir, latest);
+    await store.upsertRecord(latest);
 
     mindMapLog(`[codeRefQueue] done session=${item.sessionId.slice(0, 8)} refs=${doneRefs.length}`);
 

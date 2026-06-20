@@ -1,8 +1,9 @@
-import * as fs from "fs/promises";
 import * as path from "path";
+import * as fs from "fs/promises";
 import { clearOntologyCache } from "./ontologyStore";
 import { deleteSnapshotHierarchy } from "./mergeSnapshot";
-import { listRecords, rebuildIndex, STORE_LAYOUT } from "./sessionStore";
+import { STORE_LAYOUT } from "./sessionStore";
+import { getStoreForDir } from "./storeClient";
 
 /**
  * Remove all persisted analysis artifacts for one project so the next batch
@@ -12,27 +13,23 @@ export async function clearProjectAnalysisCache(
   storeDir: string,
   projectSlug: string
 ): Promise<{ removedSessionRecords: number }> {
-  const projectSessionsDir = path.join(storeDir, STORE_LAYOUT.sessionsDir, projectSlug);
-  let removedSessionRecords = 0;
-  try {
-    const files = await fs.readdir(projectSessionsDir);
-    for (const file of files) {
-      if (!file.endsWith(".json")) {
-        continue;
-      }
-      await fs.unlink(path.join(projectSessionsDir, file));
-      removedSessionRecords += 1;
-    }
-    await fs.rm(projectSessionsDir, { recursive: true, force: true });
-  } catch {
-    // missing project dir is fine
-  }
+  // Count existing records before deletion so we can report how many were
+  // removed (SQLite's deleteProjectRecords does not return a count).
+  const store = await getStoreForDir(storeDir);
+  const existing = await store.listRecordsForProject(projectSlug);
+  const removedSessionRecords = existing.length;
 
+  // Delete any residual on-disk JSON files from the pre-P2.3 era (downgrade
+  // safety + the bootstrap fallback path). The authoritative deletion is the
+  // Store call below.
+  const projectSessionsDir = path.join(storeDir, STORE_LAYOUT.sessionsDir, projectSlug);
+  await fs.rm(projectSessionsDir, { recursive: true, force: true }).catch(() => {
+    // missing project dir is fine
+  });
+
+  await store.deleteProjectRecords(projectSlug);
   await deleteSnapshotHierarchy(storeDir, projectSlug);
   await clearOntologyCache(storeDir);
-
-  const remaining = await listRecords(storeDir);
-  await rebuildIndex(storeDir, remaining);
 
   return { removedSessionRecords };
 }

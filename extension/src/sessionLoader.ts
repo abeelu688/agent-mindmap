@@ -26,7 +26,7 @@ import {
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import { getStoreDir } from "./paths";
-import { getStore } from "./store/storeClient";
+import { getStore, getStoreForDir } from "./store/storeClient";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
 import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
 import { runBatchSnapshotPipeline, refreshSnapshotForSession } from "./pipeline/snapshotHierarchy";
@@ -34,14 +34,8 @@ import { readSnapshotManifest } from "./store/mergeSnapshot";
 import {
   buildRecordMeta,
   buildSessionRecord,
-  conceptTrieMergePath,
-  deterministicMergePath,
   isRecordFresh,
-  listRecords,
-  rebuildIndex,
   recordFreshnessToken,
-  writeMergeRecord,
-  writeRecord,
 } from "./store/sessionStore";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { t } from "./l10n/uiTranslate";
@@ -329,7 +323,7 @@ export async function loadSession(
   if (settings.library.enabled && !options.forceRefresh) {
     progress?.report(t("ui.progress.checkLibraryCache", "Checking library cache…"));
     try {
-      const existing = await getStore().getRecord(ctx.projectSlug, session.id);
+      const existing = await (await getStore()).getRecord(ctx.projectSlug, session.id);
       // Debug: surface freshness inputs so we can diagnose "why did this
       // session re-analyze even though I didn't change anything?"
       if (existing) {
@@ -572,7 +566,7 @@ export async function loadSession(
         conceptContexts: pipelineResult.conceptContexts,
       });
       const storeDir = getStoreDir();
-      await writeRecord(storeDir, record);
+      await (await getStoreForDir(storeDir)).upsertRecord(record);
       if (pipelineResult.initialCodeReferences?.length) {
         enqueueCodeRefUpdate({
           sessionId: session.id,
@@ -595,10 +589,10 @@ export async function loadSession(
       if (settings.library.autoRebuildDeterministic && !options.skipAutoMerge) {
         const runMerge = async () => {
           try {
-            const all = await listRecords(storeDir);
-            await rebuildIndex(storeDir, all);
+            const store = await getStoreForDir(storeDir);
+            const all = await store.listAllRecords();
             const merge = await buildDeterministicMergeRecordAsync(all);
-            await writeMergeRecord(deterministicMergePath(storeDir), merge);
+            await store.writeDeterministicMerge(merge);
             const provider = getProvider(settings.llm);
             const config = vscode.workspace.getConfiguration("agentMindmap");
             const incrementalOntology =
@@ -641,7 +635,7 @@ export async function loadSession(
                   });
                 })()
               : await resolveAndBuildConceptMergeAsync(storeDir, all, {}, conceptLlm);
-            await writeMergeRecord(conceptTrieMergePath(storeDir), concept);
+            await store.writeConceptTrieMerge(concept);
           } catch (err) {
             const detail = err instanceof Error ? err.message : String(err);
             agentLog.error("Background merge rebuild failed", err);

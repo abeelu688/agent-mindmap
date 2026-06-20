@@ -1,19 +1,13 @@
-import {
-  buildConceptTrieStructure,
-  type ConceptTrieNode,
-} from "../store/mergeConceptTrie";
+import { buildConceptTrieStructure, type ConceptTrieNode } from "../store/mergeConceptTrie";
 import { collectConceptContextsForMerge } from "./buildConceptContexts";
-import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import { segmentKeyForMerge } from "./topicGraphValidate";
-import {
-  buildReattachNodeCatalog,
-  type ReattachNodeCatalog,
-} from "./reattachNodeCatalog";
+import { buildReattachNodeCatalog, type ReattachNodeCatalog } from "./reattachNodeCatalog";
 import {
   buildStructuralReattachHints,
   enrichStructuralHintsWithNodeIds,
   type StructuralReattachHints,
 } from "./reattachStructuralHints";
+import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
@@ -89,18 +83,14 @@ export function buildRootChildSynonymHints(
       }
       for (const eq of equivalences) {
         const aliasKeys = aliasKeysForEquivalence(eq);
-        const prefix = (eq.scope.pathPrefix ?? []).map((s) =>
-          segmentKeyForMerge(s)
-        );
+        const prefix = (eq.scope.pathPrefix ?? []).map((s) => segmentKeyForMerge(s));
         if (prefix.length && !prefix.includes(branchKey)) {
           continue;
         }
         const branchIn =
-          aliasKeys.includes(branchKey) ||
-          segmentKeyForMerge(eq.canonical) === branchKey;
+          aliasKeys.includes(branchKey) || segmentKeyForMerge(eq.canonical) === branchKey;
         const childIn =
-          aliasKeys.includes(childKey) ||
-          segmentKeyForMerge(eq.canonical) === childKey;
+          aliasKeys.includes(childKey) || segmentKeyForMerge(eq.canonical) === childKey;
         if (!branchIn || !childIn) {
           continue;
         }
@@ -140,9 +130,7 @@ export function buildTopBranchSynonymHints(
     const aliasKeys = aliasKeysForEquivalence(eq);
     const matched = branches.filter((b) => {
       const k = segmentKeyForMerge(b.from);
-      return (
-        aliasKeys.includes(k) || segmentKeyForMerge(eq.canonical) === k
-      );
+      return aliasKeys.includes(k) || segmentKeyForMerge(eq.canonical) === k;
     });
     if (matched.length < 2) {
       continue;
@@ -195,11 +183,7 @@ export type TrieReparentInput = {
 const MAX_KEYWORDS = 24;
 const MAX_PATH_SAMPLES = 12;
 
-function collectBranchPaths(
-  node: ConceptTrieNode,
-  prefix: string[],
-  out: string[][]
-): void {
+function collectBranchPaths(node: ConceptTrieNode, prefix: string[], out: string[][]): void {
   if (prefix.length && out.length >= MAX_PATH_SAMPLES) {
     return;
   }
@@ -242,10 +226,7 @@ function collectKeywords(node: ConceptTrieNode, out: Set<string>): void {
 const SUBTREE_MAX_DEPTH = 4;
 const SUBTREE_MAX_CHILDREN = 12;
 
-function summarizeSubtreeNode(
-  node: ConceptTrieNode,
-  depth: number
-): ChainSubtreeNode {
+function summarizeSubtreeNode(node: ConceptTrieNode, depth: number): ChainSubtreeNode {
   const sorted = [...node.children.values()]
     .sort((a, b) => b.occurrences - a.occurrences || a.label.localeCompare(b.label))
     .slice(0, SUBTREE_MAX_CHILDREN);
@@ -255,16 +236,11 @@ function summarizeSubtreeNode(
     topicCount: node.topics.length,
     childSegments: sorted.map((c) => c.key),
     children:
-      depth < SUBTREE_MAX_DEPTH
-        ? sorted.map((c) => summarizeSubtreeNode(c, depth + 1))
-        : [],
+      depth < SUBTREE_MAX_DEPTH ? sorted.map((c) => summarizeSubtreeNode(c, depth + 1)) : [],
   };
 }
 
-function summarizeTopBranch(
-  node: ConceptTrieNode,
-  chainIndex: number
-): ReparentChain {
+function summarizeTopBranch(node: ConceptTrieNode, chainIndex: number): ReparentChain {
   const pathSamples: string[][] = [];
   collectBranchPaths(node, [node.label], pathSamples);
 
@@ -318,9 +294,7 @@ function collectOntologyNodes(
     });
   }
   for (const record of records) {
-    for (const node of record.sessionAnalysis?.nodes ??
-      record.treeSnapshot?.nodes ??
-      []) {
+    for (const node of record.sessionAnalysis?.nodes ?? record.treeSnapshot?.nodes ?? []) {
       const k = segmentKeyForMerge(node.key);
       if (!byKey.has(k)) {
         byKey.set(k, {
@@ -379,10 +353,7 @@ export function buildTrieReparentInput(
   if (opts.mergeMode === "delta" && snapshotId) {
     frozenChainIndices = chains
       .map((c, i) =>
-        c.sessionIds.length > 0 &&
-        c.sessionIds.every((id) => id === snapshotId)
-          ? i
-          : -1
+        c.sessionIds.length > 0 && c.sessionIds.every((id) => id === snapshotId) ? i : -1
       )
       .filter((i) => i >= 0);
   }
@@ -395,9 +366,7 @@ export function buildTrieReparentInput(
     snapshotSessionId: opts.snapshotSessionId,
   });
   const rootNodeIdByFrom = new Map(
-    nodeCatalog.numberedChains.map(
-      (c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const
-    )
+    nodeCatalog.numberedChains.map((c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const)
   );
   const structuralHints = enrichStructuralHintsWithNodeIds(
     buildStructuralReattachHints(
@@ -419,14 +388,8 @@ export function buildTrieReparentInput(
     topBranches: chains,
     nodeCatalog,
     segmentEquivalences,
-    rootChildSynonymHints: buildRootChildSynonymHints(
-      chains,
-      opts.segmentEquivalences
-    ),
-    topBranchSynonymHints: buildTopBranchSynonymHints(
-      chains,
-      opts.segmentEquivalences
-    ),
+    rootChildSynonymHints: buildRootChildSynonymHints(chains, opts.segmentEquivalences),
+    topBranchSynonymHints: buildTopBranchSynonymHints(chains, opts.segmentEquivalences),
     structuralHints,
     nodes: collectOntologyNodes(records, opts.ontologyNodes),
   };

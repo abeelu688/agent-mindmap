@@ -2,8 +2,8 @@ import {
   resolveConceptPathWithEquivalences,
   type TopicPathContext,
 } from "../llm/resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence, Topic } from "../llm/types";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import type { SegmentEquivalence, Topic } from "../llm/types";
 import type { SessionRecord } from "./storeTypes";
 
 type TopicLocation = {
@@ -65,10 +65,7 @@ function resolvedSegmentKey(
   child: TrieNodeLike,
   equivalences: SegmentEquivalence[] | undefined
 ): string {
-  const pathLabels = [
-    ...parentPathKeys.map((k) => k),
-    child.label,
-  ];
+  const pathLabels = [...parentPathKeys.map((k) => k), child.label];
   const resolved = resolveConceptPathWithEquivalences(
     pathLabels,
     equivalences,
@@ -88,11 +85,7 @@ export function mergeTrieSiblingsByEquivalences<T extends TrieNodeLike>(
 ): void {
   if (!equivalences?.length || !node.children.size) {
     for (const child of node.children.values()) {
-      mergeTrieSiblingsByEquivalences(
-        child,
-        [...parentPathKeys, child.key],
-        equivalences
-      );
+      mergeTrieSiblingsByEquivalences(child, [...parentPathKeys, child.key], equivalences);
     }
     return;
   }
@@ -111,10 +104,6 @@ export function mergeTrieSiblingsByEquivalences<T extends TrieNodeLike>(
   node.children = new Map(groups.entries());
 
   for (const child of node.children.values()) {
-    mergeTrieSiblingsByEquivalences(
-      child,
-      [...parentPathKeys, child.key],
-      equivalences
-    );
+    mergeTrieSiblingsByEquivalences(child, [...parentPathKeys, child.key], equivalences);
   }
 }

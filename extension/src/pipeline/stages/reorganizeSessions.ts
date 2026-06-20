@@ -1,18 +1,18 @@
-import type { AgentHostId } from "../../host/types";
 import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { sanitizeSessionOutline } from "../../llm/sanitizeOutline";
 import { countUserQueries } from "../../llm/sanitizeTopicGraph";
-import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "../../llm/types";
-import type { MindMapProgress } from "../../progress";
 import { readSessionFile } from "../../transcript/listSessions";
 import { getHostById } from "../../host/registry";
-import type { SessionRecord } from "../../store/storeTypes";
-import { writeRecord } from "../../store/sessionStore";
-import { organizeByTree } from "./organizeByTree";
+import { getStoreForDir } from "../../store/storeClient";
 import { resolveConceptPathWithEquivalences } from "../../llm/resolveConceptPathWithEquivalences";
 import { normalizeConceptPath } from "../../llm/normalizeConceptPath";
-import type { CollectedMergeTerms } from "./collectMergeTerms";
 import { logPipelineStageTiming } from "../pipelineTiming";
+import { organizeByTree } from "./organizeByTree";
+import type { CollectedMergeTerms } from "./collectMergeTerms";
+import type { SessionRecord } from "../../store/storeTypes";
+import type { MindMapProgress } from "../../progress";
+import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "../../llm/types";
+import type { AgentHostId } from "../../host/types";
 
 export type ReorganizeSessionsOpts = {
   storeDir: string;
@@ -52,14 +52,10 @@ function mergedTreeForSession(
   const topicPathDecisions = base.topicPathDecisions.map((tp) => ({
     ...tp,
     conceptPath: normalizeConceptPath(
-      resolveConceptPathWithEquivalences(
-        tp.conceptPath,
-        segmentEquivalences,
-        {
-          projectSlug: tp.projectSlug,
-          items: tp.evidence,
-        }
-      )
+      resolveConceptPathWithEquivalences(tp.conceptPath, segmentEquivalences, {
+        projectSlug: tp.projectSlug,
+        items: tp.evidence,
+      })
     ),
   }));
 
@@ -80,11 +76,7 @@ async function reorganizeOneSession(
   const host = getHostById(record.meta.hostId ?? opts.hostId ?? "cursor");
   const content = await readSessionFile(record.meta.transcriptPath);
   const events = host.parseTranscript(content);
-  const tree = mergedTreeForSession(
-    record,
-    opts.collected,
-    opts.segmentEquivalences
-  );
+  const tree = mergedTreeForSession(record, opts.collected, opts.segmentEquivalences);
 
   const s4Timing: { cacheHit?: boolean } = {};
   const organizeStarted = performance.now();
@@ -104,18 +96,13 @@ async function reorganizeOneSession(
     signal,
     progress
   );
-  logPipelineStageTiming(
-    "merge",
-    `M4 S4 organize`,
-    performance.now() - organizeStarted,
-    {
-      runId: opts.timingRunId,
-      sessionId: record.meta.sessionId,
-      cacheHit: s4Timing.cacheHit,
-      kind: "llm",
-      storeDir: opts.storeDir,
-    }
-  );
+  logPipelineStageTiming("merge", `M4 S4 organize`, performance.now() - organizeStarted, {
+    runId: opts.timingRunId,
+    sessionId: record.meta.sessionId,
+    cacheHit: s4Timing.cacheHit,
+    kind: "llm",
+    storeDir: opts.storeDir,
+  });
 
   const userQueryCount = countUserQueries(events);
   const sanitized = sanitizeSessionOutline(outline, userQueryCount);
@@ -130,7 +117,7 @@ async function reorganizeOneSession(
     sessionSynonyms: record.sessionSynonyms,
   };
 
-  await writeRecord(opts.storeDir, updated);
+  await (await getStoreForDir(opts.storeDir)).upsertRecord(updated);
   return updated;
 }
 
@@ -155,9 +142,7 @@ export async function reorganizeSessions(
     const batch = targets.slice(i, i + maxConcurrent);
     const results = await Promise.all(
       batch.map((record, idx) => {
-        progress?.report(
-          `Reorganizing session ${i + idx + 1}/${targets.length}…`
-        );
+        progress?.report(`Reorganizing session ${i + idx + 1}/${targets.length}…`);
         return reorganizeOneSession(record, opts, provider, signal, progress);
       })
     );

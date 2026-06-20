@@ -1,8 +1,8 @@
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../store/mergeSnapshot";
+import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
 import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
 import { buildConceptContextsFromAnalysis } from "./buildConceptContexts";
 import { enrichAnalysisNodesFromOutline } from "./enrichNodeChildrenFromOutline";
-import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../store/mergeSnapshot";
-import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import type { MergeInputMode } from "./trieReparentInput";
 import type { OutlineNode, SessionAnalysis } from "./types";
@@ -70,9 +70,7 @@ function truncate(text: string, max: number): string {
 }
 
 function truncateEvidence(list: string[] | undefined): string[] {
-  return (list ?? [])
-    .slice(0, MAX_EVIDENCE_PER_NODE)
-    .map((e) => truncate(e, MAX_EVIDENCE_CHARS));
+  return (list ?? []).slice(0, MAX_EVIDENCE_PER_NODE).map((e) => truncate(e, MAX_EVIDENCE_CHARS));
 }
 
 function nodeRowFromContext(ctx: ConceptContextForMerge): MergeSessionInputNode {
@@ -137,12 +135,7 @@ export function prioritizeNodesForMergeInput(
     s += Math.min(n.evidence?.length ?? 0, 3);
     return s;
   };
-  return [...nodes]
-    .sort(
-      (a, b) =>
-        score(b) - score(a) || a.key.localeCompare(b.key)
-    )
-    .slice(0, cap);
+  return [...nodes].sort((a, b) => score(b) - score(a) || a.key.localeCompare(b.key)).slice(0, cap);
 }
 
 type SerializeOutlineOpts = {
@@ -248,8 +241,7 @@ function buildNodesForRecord(
 ): MergeSessionInputNode[] {
   const analysis = record.sessionAnalysis;
   const outline = record.outline;
-  const cap =
-    role === "snapshot" ? MAX_SNAPSHOT_NODES : MAX_CONTEXTS_PER_SESSION;
+  const cap = role === "snapshot" ? MAX_SNAPSHOT_NODES : MAX_CONTEXTS_PER_SESSION;
 
   let nodes: MergeSessionInputNode[];
   if (record.conceptContexts?.length) {
@@ -267,9 +259,7 @@ function buildNodesForRecord(
     if (!nodes.length) {
       nodes = (enriched.nodes ?? [])
         .slice(0, MAX_NODES_PER_SESSION)
-        .map((n) =>
-          nodeRowFromAnalysisNode(n, analysis.domains?.slice(0, 1) ?? [])
-        );
+        .map((n) => nodeRowFromAnalysisNode(n, analysis.domains?.slice(0, 1) ?? []));
     }
   } else {
     nodes = [];
@@ -325,8 +315,7 @@ export function buildMergeSessionAnalysisInput(
     const isSnapshot =
       record.meta.sessionId === snapshotSessionId ||
       record.meta.sessionId === MERGE_SNAPSHOT_SESSION_ID ||
-      (mergeMode === "delta" &&
-        isMergeSnapshotSessionId(record.meta.sessionId));
+      (mergeMode === "delta" && isMergeSnapshotSessionId(record.meta.sessionId));
     sessions.push(
       sessionFromRecord(
         record,
@@ -341,9 +330,7 @@ export function buildMergeSessionAnalysisInput(
   };
 }
 
-export function formatMergeSessionAnalysisInput(
-  input: MergeSessionAnalysisInput
-): string {
+export function formatMergeSessionAnalysisInput(input: MergeSessionAnalysisInput): string {
   return buildMergeSessionAnalysisTabularInput(input);
 }
 

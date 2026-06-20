@@ -40,9 +40,26 @@ vi.mock("../extension/src/progressHelpers", () => ({
 vi.mock("../extension/src/store/sessionStore", () => ({
   conceptTrieMergePath: vi.fn(() => "/tmp/merge.json"),
   listRecords: vi.fn().mockResolvedValue([]),
-  readRecord: mocks.readRecordMock,
-  writeRecord: mocks.writeRecordMock,
+  readRecord: vi.fn(),
+  writeRecord: vi.fn(),
   writeMergeRecord: vi.fn(),
+}));
+
+vi.mock("../extension/src/store/storeClient", () => ({
+  getStoreForDir: vi.fn(async () => ({
+    getRecord: mocks.readRecordMock,
+    upsertRecord: mocks.writeRecordMock,
+    writeConceptTrieMerge: vi.fn(),
+    listRecordsForProject: vi.fn().mockResolvedValue([]),
+    listAllRecords: vi.fn().mockResolvedValue([]),
+  })),
+  getStore: vi.fn(async () => ({
+    getRecord: mocks.readRecordMock,
+    upsertRecord: mocks.writeRecordMock,
+    writeConceptTrieMerge: vi.fn(),
+    listRecordsForProject: vi.fn().mockResolvedValue([]),
+    listAllRecords: vi.fn().mockResolvedValue([]),
+  })),
 }));
 
 vi.mock("../extension/src/webview/MindMapPanel", () => ({
@@ -255,7 +272,7 @@ describe("codeRefQueue runItem retries", () => {
 
     expect(mocks.extractMock).toHaveBeenCalledTimes(2);
     expect(mocks.writeRecordMock).toHaveBeenCalledTimes(1);
-    const written = mocks.writeRecordMock.mock.calls[0]?.[1];
+    const written = mocks.writeRecordMock.mock.calls[0]?.[0];
     expect(written.sessionAnalysis.codeReferences[0]?.llmStatus).toBe("done");
   });
 
@@ -272,7 +289,7 @@ describe("codeRefQueue runItem retries", () => {
 
     expect(mocks.extractMock).toHaveBeenCalledTimes(CODE_REF_MAX_ATTEMPTS);
     expect(mocks.writeRecordMock).toHaveBeenCalledTimes(1);
-    const written = mocks.writeRecordMock.mock.calls[0]?.[1];
+    const written = mocks.writeRecordMock.mock.calls[0]?.[0];
     expect(written.sessionAnalysis.codeReferences[0]?.llmStatus).toBe("failed");
   });
 
@@ -298,7 +315,7 @@ describe("codeRefQueue runItem retries", () => {
 
     expect(mocks.extractMock).toHaveBeenCalledTimes(1);
     expect(mocks.writeRecordMock).toHaveBeenCalledTimes(1);
-    const written = mocks.writeRecordMock.mock.calls[0]?.[1];
+    const written = mocks.writeRecordMock.mock.calls[0]?.[0];
     expect(written.sessionAnalysis.codeReferences[0]?.llmStatus).toBe("failed");
   });
 

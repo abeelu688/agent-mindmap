@@ -1,6 +1,6 @@
-import { isCompleteOntologyRecord, readOntologyRecord } from "../store/ontologyStore";
+import { isCompleteOntologyRecord } from "../store/ontologyStore";
 import { conceptTrieMergePath, recordFreshnessToken } from "../store/sessionStore";
-import { getStore } from "../store/storeClient";
+import { getStoreForDir } from "../store/storeClient";
 import { mindMapLog } from "../webview/MindMapLog";
 import { computeBatchMergeCacheKey } from "./mergePipeline";
 import type { AgentHostId } from "../host/types";
@@ -67,7 +67,8 @@ export async function tryReuseBatchMerge(
   const cacheKey = computeBatchMergeCacheKey(opts.allRecords, opts.llm);
   mindMapLog(`[tryReuseBatchMerge] computed cacheKey=${cacheKey}`);
 
-  const ontology = await readOntologyRecord(opts.storeDir, cacheKey);
+  const store = await getStoreForDir(opts.storeDir);
+  const ontology = await store.readOntologyRecord(cacheKey);
   if (!ontology) {
     mindMapLog(`[tryReuseBatchMerge] MISS: ontology cache file not found at key=${cacheKey}`);
     return { hit: false, reason: "ontology cache key not found" };
@@ -87,7 +88,7 @@ export async function tryReuseBatchMerge(
     return { hit: false, reason: "ontology missing mergeSessionAnalysis" };
   }
 
-  const merge = await getStore().readConceptTrieMerge();
+  const merge = await store.readConceptTrieMerge();
   if (!merge) {
     const mergePath = conceptTrieMergePath(opts.storeDir);
     mindMapLog(`[tryReuseBatchMerge] MISS: concept-trie.json not found at ${mergePath}`);

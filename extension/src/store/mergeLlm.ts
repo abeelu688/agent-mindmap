@@ -1,17 +1,11 @@
-import * as vscode from "vscode";
 import { createHeartbeat } from "../progress";
 import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
 import { PROMPT_VERSION } from "../llm/promptOutline";
 import { LlmProviderError, type LlmProvider, type MergedOutline } from "../llm/types";
 import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
-import { format, t as safeT } from "../l10n/uiTranslate";
-import {
-  llmMergeCachePath,
-  llmRefinedMergePath,
-  readMergeRecord,
-  sha256Hex,
-  writeMergeRecord,
-} from "./sessionStore";
+import { t as safeT } from "../l10n/uiTranslate";
+import { sha256Hex } from "./sessionStore";
+import { getStoreForDir } from "./storeClient";
 import type { PromptLanguage } from "../llm/promptLanguage";
 import type { MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
@@ -85,11 +79,11 @@ export async function mergeWithLlm(
 
   progress?.report(safeT("ui.merge.cache.check", "Checking merge cache…"));
   const cacheKey = computeMergeCacheKey(records, opts, provider.id);
-  const cacheFile = llmMergeCachePath(storeDir, cacheKey);
-  const cached = await readMergeRecord(cacheFile);
+  const store = await getStoreForDir(storeDir);
+  const cached = await store.readLlmMergeCache(cacheKey);
   if (cached) {
     progress?.report(safeT("ui.merge.cache.hitRender", "Merge cache hit, generating mind map…"));
-    await writeMergeRecord(llmRefinedMergePath(storeDir), cached);
+    await store.writeLlmRefinedMerge(cached);
     return cached;
   }
 
@@ -153,7 +147,7 @@ export async function mergeWithLlm(
   };
 
   progress?.report(safeT("ui.merge.cache.write", "Writing merge cache…"));
-  await writeMergeRecord(cacheFile, record);
-  await writeMergeRecord(llmRefinedMergePath(storeDir), record);
+  await store.writeLlmMergeCache(cacheKey, record);
+  await store.writeLlmRefinedMerge(record);
   return record;
 }

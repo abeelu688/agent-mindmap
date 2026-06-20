@@ -1,10 +1,9 @@
 import * as fs from "fs/promises";
 import * as vscode from "vscode";
+import { mindMapLog } from "../webview/MindMapLog";
 import { claudeHost } from "./claudeHost";
 import { cursorHost } from "./cursorHost";
 import type { AgentHost, AgentHostId, HostSetting } from "./types";
-
-import { mindMapLog } from "../webview/MindMapLog";
 
 const HOSTS: Record<AgentHostId, AgentHost> = {
   cursor: cursorHost,
@@ -17,9 +16,7 @@ let cachedHost: AgentHost | undefined;
 let cacheKey: string | undefined;
 
 function readHostSetting(): HostSetting {
-  const raw = vscode.workspace
-    .getConfiguration("agentMindmap")
-    .get<string>("host", "auto");
+  const raw = vscode.workspace.getConfiguration("agentMindmap").get<string>("host", "auto");
   if (raw === "cursor" || raw === "claude-code" || raw === "auto") {
     return raw;
   }
@@ -44,10 +41,7 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-async function latestSessionMtime(
-  host: AgentHost,
-  workspacePath: string
-): Promise<number> {
+async function latestSessionMtime(host: AgentHost, workspacePath: string): Promise<number> {
   const scanDir = host.getSessionsScanDir(workspacePath);
   if (!scanDir || !(await pathExists(scanDir))) {
     return 0;
@@ -107,9 +101,7 @@ async function resolveAutoHost(
   return pickHostWhenAmbiguous(workspacePath, context);
 }
 
-export async function resolveHostId(
-  context?: vscode.ExtensionContext
-): Promise<AgentHostId> {
+export async function resolveHostId(context?: vscode.ExtensionContext): Promise<AgentHostId> {
   const setting = readHostSetting();
   if (setting !== "auto") {
     return setting;
@@ -118,9 +110,7 @@ export async function resolveHostId(
   return resolveAutoHost(workspacePath, context);
 }
 
-export async function getActiveHost(
-  context?: vscode.ExtensionContext
-): Promise<AgentHost> {
+export async function getActiveHost(context?: vscode.ExtensionContext): Promise<AgentHost> {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
   const setting = readHostSetting();
   const key = `${setting}:${workspacePath}`;

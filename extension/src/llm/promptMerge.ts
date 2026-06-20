@@ -1,7 +1,7 @@
+import { PROMPT_VERSION } from "./promptOutline";
 import type { AgentHostId } from "../host/types";
 import type { OutlineDetail, OutlineNode } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
-import { PROMPT_VERSION } from "./promptOutline";
 
 const HOST_MERGE_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -29,10 +29,9 @@ function clip(text: string, max: number): string {
 }
 
 function formatDetail(detail: OutlineDetail, indent: string): string {
-  const q =
-    detail.sourceTurnIndices?.length
-      ? ` @Q${detail.sourceTurnIndices.map((n) => n + 1).join("/Q")}`
-      : "";
+  const q = detail.sourceTurnIndices?.length
+    ? ` @Q${detail.sourceTurnIndices.map((n) => n + 1).join("/Q")}`
+    : "";
   return `${indent}· ${clip(detail.text, MAX_DETAIL_TEXT)}${q}`;
 }
 

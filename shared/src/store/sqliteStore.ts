@@ -38,11 +38,18 @@ type Sqlite3Static = {
 type SqlBindValue = string | number | bigint | Buffer | null;
 
 const KV_CONCEPT_TRIE = "concept-trie";
+const KV_DETERMINISTIC_MERGE = "deterministic-merge";
+const KV_LLM_REFINED_MERGE = "llm-refined-merge";
+const KV_LLM_MERGE_CACHE_PREFIX = "llm-merge-cache:";
 const KV_ONTOLOGY_INDEX = "ontology-index";
 const KV_ONTOLOGY_CACHE_PREFIX = "ontology-cache:";
 
 function ontologyCacheKey(cacheKey: string): string {
   return `${KV_ONTOLOGY_CACHE_PREFIX}${cacheKey}`;
+}
+
+function llmMergeCacheKey(cacheKey: string): string {
+  return `${KV_LLM_MERGE_CACHE_PREFIX}${cacheKey}`;
 }
 
 /**
@@ -286,34 +293,64 @@ export class SqliteStore implements Store {
     return { revision };
   }
 
-  async readConceptTrieMerge(): Promise<MergeRecord | undefined> {
+  /** Read + JSON-parse a `kv` value, returning `undefined` on miss/parse error. */
+  private async readKv<T>(key: string): Promise<T | undefined> {
     const row = await this.get<{ value_json: string }>(`SELECT value_json FROM kv WHERE key = ?`, [
-      KV_CONCEPT_TRIE,
+      key,
     ]);
     if (!row) {
       return undefined;
     }
     try {
-      return JSON.parse(row.value_json) as MergeRecord;
+      return JSON.parse(row.value_json) as T;
     } catch {
       return undefined;
     }
   }
 
-  async readLatestSegmentEquivalences(projectSlug: string): Promise<SegmentEquivalence[]> {
-    const indexRow = await this.get<{ value_json: string }>(
-      `SELECT value_json FROM kv WHERE key = ?`,
-      [KV_ONTOLOGY_INDEX]
+  /** Upsert a `kv` value as JSON. */
+  private async writeKv(key: string, value: unknown): Promise<void> {
+    await this.run(
+      `INSERT INTO kv (key, value_json, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
+      [key, JSON.stringify(value), Date.now()]
     );
-    if (!indexRow) {
-      return [];
+  }
+
+  async readConceptTrieMerge(): Promise<MergeRecord | undefined> {
+    return this.readKv<MergeRecord>(KV_CONCEPT_TRIE);
+  }
+
+  async readDeterministicMerge(): Promise<MergeRecord | undefined> {
+    return this.readKv<MergeRecord>(KV_DETERMINISTIC_MERGE);
+  }
+
+  async readLlmRefinedMerge(): Promise<MergeRecord | undefined> {
+    return this.readKv<MergeRecord>(KV_LLM_REFINED_MERGE);
+  }
+
+  async readLlmMergeCache(cacheKey: string): Promise<MergeRecord | undefined> {
+    return this.readKv<MergeRecord>(llmMergeCacheKey(cacheKey));
+  }
+
+  async readOntologyIndex(): Promise<OntologyIndex | undefined> {
+    const index = await this.readKv<OntologyIndex>(KV_ONTOLOGY_INDEX);
+    if (!index || index.schemaVersion !== 1 || !Array.isArray(index.entries)) {
+      return undefined;
     }
-    let index: OntologyIndex;
-    try {
-      index = JSON.parse(indexRow.value_json) as OntologyIndex;
-    } catch {
-      return [];
+    return index;
+  }
+
+  async readOntologyRecord(cacheKey: string): Promise<OntologyRecord | undefined> {
+    const record = await this.readKv<OntologyRecord>(ontologyCacheKey(cacheKey));
+    if (!record || record.schemaVersion !== 1) {
+      return undefined;
     }
+    return record;
+  }
+
+  async readLatestSegmentEquivalences(projectSlug: string): Promise<SegmentEquivalence[]> {
+    const index = await this.readOntologyIndex();
     if (!index?.entries?.length) {
       return [];
     }
@@ -321,20 +358,9 @@ export class SqliteStore implements Store {
       .filter((entry) => entry.projectSlugs.includes(projectSlug))
       .sort((a, b) => b.builtAt - a.builtAt);
     for (const entry of candidates) {
-      const cacheRow = await this.get<{ value_json: string }>(
-        `SELECT value_json FROM kv WHERE key = ?`,
-        [ontologyCacheKey(entry.cacheKey)]
-      );
-      if (!cacheRow) {
-        continue;
-      }
-      try {
-        const record = JSON.parse(cacheRow.value_json) as OntologyRecord;
-        if (record?.segmentEquivalences?.length) {
-          return record.segmentEquivalences;
-        }
-      } catch {
-        continue;
+      const record = await this.readOntologyRecord(entry.cacheKey);
+      if (record?.segmentEquivalences?.length) {
+        return record.segmentEquivalences;
       }
     }
     return [];
@@ -391,31 +417,83 @@ export class SqliteStore implements Store {
     };
   }
 
-  // ─── Non-interface writer methods (used by the deterministic worker and
-  //     the JSON→SQLite migration in P2.2). Not on `Store` because clients
-  //     never write these through the interface. ─────────────────────────
+  // ─── Merge + ontology writes (promoted to the `Store` interface in P2.3).
+  //     The deterministic worker, the extension's merge pipelines, and the
+  //     JSON→SQLite migration all write through these. ─────────────────────
 
   async writeConceptTrieMerge(merge: MergeRecord): Promise<void> {
-    await this.run(
-      `INSERT INTO kv (key, value_json, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [KV_CONCEPT_TRIE, JSON.stringify(merge), Date.now()]
-    );
+    await this.writeKv(KV_CONCEPT_TRIE, merge);
+  }
+
+  async writeDeterministicMerge(merge: MergeRecord): Promise<void> {
+    await this.writeKv(KV_DETERMINISTIC_MERGE, merge);
+  }
+
+  async writeLlmRefinedMerge(merge: MergeRecord): Promise<void> {
+    await this.writeKv(KV_LLM_REFINED_MERGE, merge);
+  }
+
+  async writeLlmMergeCache(cacheKey: string, merge: MergeRecord): Promise<void> {
+    await this.writeKv(llmMergeCacheKey(cacheKey), merge);
   }
 
   async writeOntologyIndex(index: OntologyIndex): Promise<void> {
-    await this.run(
-      `INSERT INTO kv (key, value_json, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [KV_ONTOLOGY_INDEX, JSON.stringify(index), Date.now()]
-    );
+    await this.writeKv(KV_ONTOLOGY_INDEX, index);
   }
 
   async writeOntologyRecord(cacheKey: string, record: OntologyRecord): Promise<void> {
-    await this.run(
-      `INSERT INTO kv (key, value_json, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [ontologyCacheKey(cacheKey), JSON.stringify(record), Date.now()]
-    );
+    await this.writeKv(ontologyCacheKey(cacheKey), record);
+  }
+
+  async clearOntologyCache(): Promise<void> {
+    // Two deletes: the index singleton + every cache entry (prefix match).
+    // SQLite `LIKE` with a pattern is parameterized; the prefix contains no
+    // wildcard metacharacters so this is safe.
+    await this.run(`DELETE FROM kv WHERE key = ?`, [KV_ONTOLOGY_INDEX]);
+    await this.run(`DELETE FROM kv WHERE key LIKE ?`, [`${KV_ONTOLOGY_CACHE_PREFIX}%`]);
+  }
+
+  async listAllRecords(): Promise<SessionRecord[]> {
+    const rows = await this.all<{ record_json: string }>(`SELECT record_json FROM sessions`);
+    const out: SessionRecord[] = [];
+    for (const row of rows) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(row.record_json);
+      } catch {
+        continue;
+      }
+      if (!looksLikeSessionRecord(parsed)) {
+        continue;
+      }
+      const validated = validateAndBackfillRecord(parsed);
+      if (validated) {
+        out.push(validated);
+      }
+    }
+    return out;
+  }
+
+  async deleteProjectRecords(projectSlug: string): Promise<void> {
+    const db = await this.db;
+    await db.run(`BEGIN`);
+    try {
+      await db.run(`DELETE FROM sessions WHERE project_slug = ?`, [projectSlug]);
+      // Keep the project row so revision stays monotonic (team-mode push-queue
+      // correctness); reset its count + last-analyzed so listings reflect the
+      // deletion. Bump revision so MCP caches invalidate.
+      await db.run(
+        `UPDATE projects SET
+           revision = revision + 1,
+           record_count = 0,
+           last_analyzed_at = NULL
+         WHERE project_slug = ?`,
+        [projectSlug]
+      );
+      await db.run(`COMMIT`);
+    } catch (err) {
+      await db.run(`ROLLBACK`).catch(() => {});
+      throw err;
+    }
   }
 }

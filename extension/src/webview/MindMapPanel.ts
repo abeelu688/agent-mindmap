@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import type { MindMapRoot } from "../transcript/types";
 import {
   MindMapHost,
   type DownloadRequestedListener,
@@ -8,6 +7,7 @@ import {
   type SelectModelRequestedListener,
   type ModelUpdatedListener,
 } from "./MindMapHost";
+import type { MindMapRoot } from "../transcript/types";
 
 /**
  * Mind map as an editor-area {@link vscode.WebviewPanel} (code editor strip),
@@ -37,9 +37,7 @@ export class MindMapPanel {
       return MindMapPanel.current;
     }
 
-    void vscode.commands.executeCommand(
-      "workbench.action.focusFirstEditorGroup"
-    );
+    void vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
 
     const panel = vscode.window.createWebviewPanel(
       MindMapPanel.viewType,
@@ -65,9 +63,7 @@ export class MindMapPanel {
     MindMapHost.onNodeClicked(listener);
   }
 
-  public static onDownloadRequested(
-    listener: DownloadRequestedListener | undefined
-  ): void {
+  public static onDownloadRequested(listener: DownloadRequestedListener | undefined): void {
     MindMapHost.onDownloadRequested(listener);
   }
 
@@ -77,9 +73,7 @@ export class MindMapPanel {
     MindMapHost.onApplyPendingUpdateRequested(listener);
   }
 
-  public static onSelectModelRequested(
-    listener: SelectModelRequestedListener | undefined
-  ): void {
+  public static onSelectModelRequested(listener: SelectModelRequestedListener | undefined): void {
     MindMapHost.onSelectModelRequested(listener);
   }
 
@@ -108,9 +102,7 @@ export class MindMapPanel {
     this.host.setLoading(active, message);
   }
 
-  public setBatchStatus(
-    status: Parameters<MindMapHost["setBatchStatus"]>[0]
-  ): void {
+  public setBatchStatus(status: Parameters<MindMapHost["setBatchStatus"]>[0]): void {
     this.host.setBatchStatus(status);
   }
 

@@ -1,3 +1,4 @@
+import { buildTopicContextIndex } from "../../llm/segmentContext";
 import type { ConceptOntologyRecord } from "../../store/ontologyTypes";
 import type { SessionRecord } from "../../store/storeTypes";
 import type {
@@ -5,7 +6,6 @@ import type {
   ConceptOntologyNode,
   TopicPathDecision,
 } from "../../llm/types";
-import { buildTopicContextIndex } from "../../llm/segmentContext";
 import type { TopicConceptPathDecision } from "../../store/ontologyTypes";
 
 export type CollectedMergeTerms = {
@@ -29,14 +29,8 @@ function mergeNodes(
       ...(existing.aliases ?? []).map((a) => a.toLowerCase()),
       ...(node.aliases ?? []).map((a) => a.toLowerCase()),
     ]);
-    const parentSet = new Set([
-      ...(existing.parentKeys ?? []),
-      ...(node.parentKeys ?? []),
-    ]);
-    const evidenceSet = new Set([
-      ...(existing.evidence ?? []),
-      ...(node.evidence ?? []),
-    ]);
+    const parentSet = new Set([...(existing.parentKeys ?? []), ...(node.parentKeys ?? [])]);
+    const evidenceSet = new Set([...(existing.evidence ?? []), ...(node.evidence ?? [])]);
     target.set(node.key, {
       ...existing,
       label: existing.label || node.label,

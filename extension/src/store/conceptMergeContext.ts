@@ -24,10 +24,9 @@ import {
 import {
   computeOntologyCacheKey,
   isCompleteOntologyRecord,
-  readOntologyIndex,
-  readOntologyRecord,
   type EnsureOntologyMemoryFlags,
 } from "./ontologyStore";
+import { getStoreForDir } from "./storeClient";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { MindMapProgress } from "../progress";
 import type { LlmProvider, SegmentEquivalence } from "../llm/types";
@@ -123,7 +122,8 @@ export async function loadSegmentEquivalencesForRecords(
     { model: llmOpts.model, hostId: llmOpts.hostId },
     llmOpts.providerId
   );
-  const exact = await readOntologyRecord(storeDir, cacheKey);
+  const store = await getStoreForDir(storeDir);
+  const exact = await store.readOntologyRecord(cacheKey);
   if (exact && isCompleteOntologyRecord(exact)) {
     return {
       segmentEquivalences: exact.segmentEquivalences,
@@ -133,7 +133,7 @@ export async function loadSegmentEquivalencesForRecords(
 
   const currentSessionIds = records.map((r) => r.meta.sessionId);
   const projectSlugs = new Set(records.map((r) => r.meta.projectSlug));
-  const index = await readOntologyIndex(storeDir);
+  const index = await store.readOntologyIndex();
   if (!index?.entries.length) {
     const fallback = fallbackSegmentEquivalences(records);
     if (fallback.length) {
@@ -151,7 +151,7 @@ export async function loadSegmentEquivalencesForRecords(
     .sort((a, b) => b.builtAt - a.builtAt);
 
   for (const entry of candidates) {
-    const cached = await readOntologyRecord(storeDir, entry.cacheKey);
+    const cached = await store.readOntologyRecord(entry.cacheKey);
     if (!cached || !isCompleteOntologyRecord(cached)) {
       continue;
     }

@@ -1,10 +1,10 @@
-import type { AgentHostId } from "../host/types";
-import type { PromptLanguage } from "./promptLanguage";
 import {
   buildReattachDataTables,
   buildReattachHintTables,
   formatInputSchema,
 } from "./promptReattachTabular";
+import type { AgentHostId } from "../host/types";
+import type { PromptLanguage } from "./promptLanguage";
 import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -51,12 +51,9 @@ export function buildReattachPrompt(
         ].join("\n")
       : "";
 
-  const frozenLabels =
-    input.frozenChainIndices?.length
-      ? input.frozenChainIndices
-          .map((i) => input.chains[i]?.from)
-          .filter(Boolean)
-      : [];
+  const frozenLabels = input.frozenChainIndices?.length
+    ? input.frozenChainIndices.map((i) => input.chains[i]?.from).filter(Boolean)
+    : [];
   const frozenTopRoots =
     mergeMode === "delta" && input.frozenChainIndices?.length
       ? input.frozenChainIndices

@@ -1,27 +1,19 @@
 import { applySegmentEquivalencesToRecords } from "../llm/applySegmentEquivalencesToRecords";
 import { snapRecordsToVirtualSession } from "../llm/applyVirtualSessionToRecords";
-import {
-  applyReattachMovesSequentially,
-  applyReattachStepsToRecords,
-} from "../llm/reattachSteps";
-import type { SessionAnalysis } from "../llm/types";
+import { applyReattachMovesSequentially, applyReattachStepsToRecords } from "../llm/reattachSteps";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
-import type { ReattachMove, ReattachStep } from "../llm/types";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { mindMapLog } from "../webview/MindMapLog";
 import { applyTopicPathsFromOntology } from "./applyOntology";
+import type { SessionAnalysis } from "../llm/types";
+import type { ReattachMove, ReattachStep } from "../llm/types";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { SessionRecord } from "./storeTypes";
-import { mindMapLog } from "../webview/MindMapLog";
 
 export type ConceptMergePrepOntology = Pick<
   ConceptOntologyRecord,
-  | "nodes"
-  | "mappings"
-  | "topicPaths"
-  | "segmentEquivalences"
-  | "reattachMoves"
-  | "reattachSteps"
+  "nodes" | "mappings" | "topicPaths" | "segmentEquivalences" | "reattachMoves" | "reattachSteps"
 >;
 
 /** Current records' session ids are covered by a (possibly larger) ontology build. */
@@ -44,9 +36,7 @@ export function ontologySliceForPrep(
   return {
     nodes: ontology.nodes,
     mappings: ontology.mappings,
-    topicPaths: ontology.topicPaths.filter((p) =>
-      sessionIds.has(p.sessionId)
-    ),
+    topicPaths: ontology.topicPaths.filter((p) => sessionIds.has(p.sessionId)),
     segmentEquivalences: ontology.segmentEquivalences,
     reattachMoves: ontology.reattachMoves,
     reattachSteps: ontology.reattachSteps,
@@ -181,11 +171,7 @@ export function prepareRecordsForFinalTrie(
         0.55,
         reparentInput.nodeCatalog
       )
-    : applyReattachMovesSequentially(
-        afterTopicPaths,
-        moves,
-        reparentInput.chains
-      );
+    : applyReattachMovesSequentially(afterTopicPaths, moves, reparentInput.chains);
 
   warnIfStaleReattachTopRoots(afterReattach, steps);
 

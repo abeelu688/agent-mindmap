@@ -1,37 +1,59 @@
-import { JsonFsStore, type Store } from "@agent-mindmap/shared";
+import { bootstrapStore, type Store } from "@agent-mindmap/shared";
 import { getStoreDir } from "../paths";
 
 /**
  * Process-wide accessor for the extension's `Store`.
  *
- * Memoizes a `JsonFsStore` keyed on the current `getStoreDir()` string, so a
- * `agentMindmap.storeDir` config change picks up a fresh store on the next
- * call. Call sites that used to do `readRecord(getStoreDir(), slug, id)` swap
- * to `getStore().getRecord(slug, id)`.
+ * `getStore()` bootstraps the store for the current `getStoreDir()` (creating +
+ * migrating `store.db` on first launch, falling back to `JsonFsStore` if the DB
+ * is corrupt) and memoizes the result keyed on the dir string. A
+ * `agentMindmap.projectsDir` config change picks up a fresh store on the next
+ * call. All session/merge/ontology read AND write paths route through here.
  *
- * Only the *read* paths route through here (P1.3). Session-record writes stay
- * on the raw `writeRecord` helper: routing them through `Store.upsertRecord`
- * would bump `.mcp-index.json` on every write, which is a behavior change
- * reserved for a follow-up PR alongside the P4.3 push queue.
+ * `getStoreForDir(storeDir)` is the variant for callers that captured a
+ * `storeDir` at enqueue time (notably `codeRefQueue`) and must process against
+ * THAT store, not the current `getStoreDir()` — the user may change
+ * `projectsDir` between enqueue and process.
  *
- * Forward-compatible: when `bootstrapStore()` (P2.3) or `RemoteStore` (P4.2)
- * land, only this function's implementation changes — every call site stays
- * the same.
+ * Forward-compatible: when `RemoteStore` (P4.2) lands, only these functions'
+ * implementation changes — every call site stays the same.
  */
-let cachedStoreDir: string | undefined;
-let cachedStore: Store | undefined;
+const cache = new Map<string, Promise<Store>>();
 
-export function getStore(): Store {
-  const dir = getStoreDir();
-  if (dir !== cachedStoreDir) {
-    cachedStoreDir = dir;
-    cachedStore = new JsonFsStore(dir);
+async function bootstrapForDir(storeDir: string): Promise<Store> {
+  const existing = cache.get(storeDir);
+  if (existing) {
+    return existing;
   }
-  return cachedStore;
+  const promise = (async () => {
+    const result = await bootstrapStore(storeDir);
+    if (result.warning) {
+      // Surface to the extension log; the fallback store is still functional.
+
+      console.warn(`[agent-mindmap] store bootstrap: ${result.warning}`);
+    }
+    return result.store;
+  })();
+  cache.set(storeDir, promise);
+  return promise;
 }
 
-/** For tests: drop the memoized store so the next `getStore()` rebuilds it. */
-export function __resetStoreForTest(): void {
-  cachedStoreDir = undefined;
-  cachedStore = undefined;
+export async function getStore(): Promise<Store> {
+  return bootstrapForDir(getStoreDir());
+}
+
+export async function getStoreForDir(storeDir: string): Promise<Store> {
+  return bootstrapForDir(storeDir);
+}
+
+/**
+ * For tests: drop the memoized stores so the next call rebuilds. Pass a dir to
+ * invalidate just one entry, or omit to clear all.
+ */
+export function __resetStoreForTest(storeDir?: string): void {
+  if (storeDir) {
+    cache.delete(storeDir);
+  } else {
+    cache.clear();
+  }
 }

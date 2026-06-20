@@ -181,7 +181,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
         panel.setBatchStatus(getLastBatchStatus()!);
 
         for (const session of sessions) {
-          const rec = await getStore().getRecord(slug, session.id);
+          const rec = await (await getStore()).getRecord(slug, session.id);
           if (!rec) {
             continue;
           }
@@ -238,7 +238,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
               if (signal.aborted) {
                 return;
               }
-              const rec = await getStore().getRecord(slug, sessionId);
+              const rec = await (await getStore()).getRecord(slug, sessionId);
               if (!rec) {
                 continue;
               }
@@ -301,7 +301,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
                 );
                 // Lazy-load existing merge for first cache-only batch only.
                 if (!panel.getMindMapData()) {
-                  const existingMerge = await getStore().readConceptTrieMerge();
+                  const existingMerge = await (await getStore()).readConceptTrieMerge();
                   if (existingMerge) {
                     conceptMerge = existingMerge;
                   }

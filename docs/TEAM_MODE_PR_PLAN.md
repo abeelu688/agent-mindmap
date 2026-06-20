@@ -101,15 +101,89 @@ Goal: replace JSON files with `store.db` (SQLite). One schema, shared with the f
 
 ### P2.3 — Switch extension to `SqliteStore` by default
 
+**Status**: landed. `SqliteStore` is the single-machine default; `JsonFsStore`
+remains as the migration source and the corrupt-DB fallback.
+
 **Scope**
 
-- `extension/src/extension.ts`: construct `SqliteStore` (after migration if needed) instead of `JsonFsStore`.
-- MCP server (`mcp-server/src/index.ts`): same switch.
-- `JsonFsStore` kept in tree (used by P2.2 migration and as fallback); no longer the default.
+- `extension/src/extension.ts` `activate()`: eagerly fires `getStore()` so the
+  DB opens + JSON→SQLite migration runs at startup (first command does not pay
+  the cost). Logs the bootstrap result via `mindMapLog`.
+- MCP server (`mcp-server/src/index.ts` `main()`): `await bootstrapStore(storeDir)`
+  → `createMcpHandlerContext(bootstrap.store, storeDir)`. Warnings go to stderr
+  (MCP stdio reserves stdout for protocol traffic).
+- `getStore()` is now `async` and memoizes `bootstrapStore(getStoreDir())`
+  keyed on the dir string; `getStoreForDir(storeDir)` is the captured-at-enqueue
+  variant for `codeRefQueue` (user may change `projectsDir` between enqueue and
+  process).
+- ALL extension store writes route through the `Store` interface (D1 widened it
+  with 14 methods; D4 added them to `JsonFsStore`, D5 to `SqliteStore`, D6
+  extended `migrateJsonToSqlite` to import the deterministic/llm-refined/llm-cache
+  merges). Specifically: session upserts, concept-trie / deterministic /
+  llm-refined / llm-cache merge writes, ontology index + record writes, project
+  record deletion, and ontology cache clearing.
+- Corresponding reads (P1.3 left some raw) route through `Store` too: cross-
+  project `listAllRecords`, deterministic/llm-refined/llm-cache merge reads,
+  ontology index + record reads.
+- `ConceptOntologyRecord` (full type with nodes/mappings/topicPaths/reattach\*)
+  moved from `extension/src/store/ontologyTypes.ts` to
+  `shared/src/storeTypes.ts` (replacing the lite `OntologyRecord`). The
+  extension file re-exports the shared type under the old names so existing
+  import paths keep working.
+- `bootstrapStore()` now `mkdir -p storeDir` before opening `store.db` —
+  `@vscode/sqlite3` returns `SQLITE_CANTOPEN` if the parent dir is missing.
 
-**Test**: end-to-end — analyze a session, verify it lands in `store.db` not JSON; restart extension, verify session is read back.
+**Behavior shifts to note**
 
-**Rollback**: revert the default switch; `JsonFsStore` is default again. `store.db` from the reverted version is ignored (JSON files were never deleted).
+- `autoRefreshOnAnalyze` flag is now mostly redundant: `SqliteStore.upsertRecord`
+  bumps revision in-transaction on every write, so per-write MCP-cache
+  invalidation happens regardless. The flag still gates the explicit
+  post-batch `refreshMcpIndexForProject` call; keep it for now, retire in a
+  follow-up once SQLite bump-on-write is validated in the field.
+- `index.json` (`readIndex`/`rebuildIndex`) is dead extension-local state and
+  is no longer written. `readIndex` had zero callers; `rebuildIndex`'s output
+  was read by neither `SqliteStore` nor the MCP server. Both functions stay
+  defined in `sessionStore.ts` (P2.5 deletes them with `JsonFsStore`).
+- `clearProjectAnalysisCache` deletes SQLite rows + `deleteSnapshotHierarchy`
+  - `Store.clearOntologyCache()`. Pre-P2.3 it unlinked on-disk JSON files; the
+    JSON unlink is now redundant (migration leaves them stale; P2.4 deletes
+    them) but kept as belt-and-suspenders for downgrade-safety windows.
+- On-disk JSON files go stale immediately after the first post-migration
+  write. P2.4 deletes them later. Downgrade safety holds as long as the JSON
+  files remain on disk (P2.4 is the no-downgrade commit point).
+
+**Out of scope (follow-up PRs)**
+
+- Merge-snapshot subsystem port (`mergeSnapshot.ts`:
+  `writeMergeSnapshot`/`readMergeSnapshot`/manifests/`deleteSnapshotHierarchy`)
+  → SQLite. Self-contained per-project FS blobs today; never read through
+  `Store`. A proper port needs snapshot-table or kv-schema design and warrants
+  its own PR. `clearProjectAnalysisCache` keeps calling `deleteSnapshotHierarchy`
+  directly.
+- `test/store/storeContract.test.ts` (parameterized contract over `JsonFsStore`
+  - `SqliteStore` for all 14+ methods) and `test/store/bootstrapDefault.test.ts`
+    (seed legacy JSON → bootstrap → assert `kind === "sqlite-migrated"` + writes
+    land in `store.db` not JSON). The per-impl suites
+    (`jsonFsStore.test.ts`, `sqliteStore.test.ts`, `migrateJsonToSqlite.test.ts`,
+    `storeBootstrap.test.ts`, `extensionStoreRouting.test.ts`) cover the same
+    behavior; the contract suite is a nice-to-have, not a blocker.
+
+**Test**: all 478 vitest tests green. Manual smoke (Extension Development Host):
+fresh test project → Analyze All Sessions → confirm `store.db` is created and
+no new `sessions/<slug>/<id>.json` is written; pre-existing JSON store → first
+activation runs migration (Output panel log shows `sqlite-migrated`) →
+subsequent reads come from SQLite; MCP `search_project_history` returns
+results from SQLite (verify by deleting a JSON file post-migration and
+confirming the MCP search still finds the session);
+`clearProjectAnalysisCache` command deletes SQLite rows.
+
+**Rollback**: clean revert in three phases (C: `extension.ts` +
+`mcp-server/index.ts` go back to `new JsonFsStore(storeDir)`; B: call sites go
+back to raw `writeRecord`/`writeMergeRecord`/`readOntology*`; A: `Store`
+interface shrinks, `JsonFsStore`/`SqliteStore` lose the new methods,
+`ConceptOntologyRecord` moves back to extension). On-disk: `store.db` from the
+P2.3 period is ignored by reverted code; JSON files are stale but present. No
+data migration needed. P1.x stays intact.
 
 ### P2.4 — Deprecate `JsonFsStore` write path
 

@@ -5,7 +5,7 @@ import type { MergeRecord } from "../extension/src/store/storeTypes";
 const mocks = vi.hoisted(() => ({
   rebuildProjectMergeMock: vi.fn(),
   rebuildSingleSessionMock: vi.fn(),
-  writeMergeRecordMock: vi.fn(),
+  writeConceptTrieMergeMock: vi.fn(),
   getStoreDirMock: vi.fn(() => "/tmp/store"),
 }));
 
@@ -17,8 +17,10 @@ vi.mock("../extension/src/mindmap/rebuildMindMapFromStore", () => ({
     mindMap?.data.origin?.refs?.[0]?.projectSlug,
 }));
 
-vi.mock("../extension/src/store/sessionStore", () => ({
-  writeMergeRecord: mocks.writeMergeRecordMock,
+vi.mock("../extension/src/store/storeClient", () => ({
+  getStoreForDir: vi.fn(async () => ({
+    writeConceptTrieMerge: mocks.writeConceptTrieMergeMock,
+  })),
 }));
 
 vi.mock("../extension/src/paths", () => ({
@@ -86,7 +88,7 @@ describe("applyPendingUpdatesToPanel", () => {
     });
     mocks.rebuildProjectMergeMock.mockReset();
     mocks.rebuildSingleSessionMock.mockReset();
-    mocks.writeMergeRecordMock.mockReset();
+    mocks.writeConceptTrieMergeMock.mockReset();
   });
 
   afterEach(() => {
@@ -120,7 +122,7 @@ describe("applyPendingUpdatesToPanel", () => {
     await expect(applyPendingUpdatesToPanel(panel)).resolves.toBe(true);
 
     expect(mocks.rebuildProjectMergeMock).toHaveBeenCalledWith("/tmp/store", "proj");
-    expect(mocks.writeMergeRecordMock).toHaveBeenCalled();
+    expect(mocks.writeConceptTrieMergeMock).toHaveBeenCalled();
     expect(panel.getMindMapData()).toBe(freshMap);
     expect(getLastBatchStatus()?.pendingUpdateBatchNo).toBeUndefined();
     expect(getLastBatchStatus()?.pendingUpdateLabel).toBeUndefined();

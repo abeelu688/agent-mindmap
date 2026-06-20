@@ -1,6 +1,8 @@
 import type {
   AgentHostId,
   PipelineVersions,
+  ReattachMove,
+  ReattachStep,
   SegmentEquivalence,
   SessionAnalysis,
   SessionConceptExtract,
@@ -211,14 +213,103 @@ export type OntologyIndex = {
   }[];
 };
 
+/**
+ * A persistent, cross-session concept memory used to reduce future LLM calls.
+ *
+ * Intentionally decoupled from `SessionRecord` so the ontology schema can
+ * evolve without rewriting every session file. The extension writes the full
+ * record via `Store.writeOntologyRecord`; `SqliteStore` stores it as opaque
+ * JSON in the `kv` table; `JsonFsStore` writes it to `ontology/cache/<key>.json`.
+ *
+ * `schemaVersion === 1` is the only field validated on read — callers that
+ * need a complete record (nodes/mappings/topicPaths populated) apply their
+ * own `isCompleteOntologyRecord` check on top.
+ */
 export type OntologyRecord = {
   schemaVersion: 1;
-  meta?: {
-    builtAt?: number;
-    sessionIds?: string[];
-    projectSlugs?: string[];
+  meta: {
+    builtAt: number;
+    /** Hash key of the selection/prompt/provider inputs. */
+    cacheKey: string;
+    /** Session ids participating in the build input. */
+    sessionIds: string[];
+    /** Distinct project slugs covered. */
+    projectSlugs: string[];
+    /** LLM details used to produce this record. */
+    llm: { provider: string; model?: string };
+    /** Prompt schema versions folded into cacheKey (for debugging). */
+    promptVersions: {
+      ontology: number;
+      topicPaths: number;
+      reattach: number;
+      refine: number;
+      outlineSchema: number;
+      sessionAnalysis?: number;
+      /** M-merge virtual combined session prompt version. */
+      mergeSessionAnalysis?: number;
+      /** @deprecated legacy session pipeline */
+      extract?: number;
+      /** @deprecated legacy session pipeline */
+      sessionSynonyms?: number;
+      /** @deprecated legacy session pipeline */
+      organize?: number;
+    };
+    hostId?: AgentHostId;
   };
+  /**
+   * Canonical concepts + lightweight relationships. Treat as a DAG:
+   * - nodes are unique by `key`
+   * - edges are stored as parentKeys on each node
+   */
+  nodes: OntologyRecordNode[];
+  /**
+   * Mention/alias map. Consumers should canonicalize mentions before lookup.
+   */
+  mappings: OntologyRecordMapping[];
+  /**
+   * Per-topic conceptPath decisions (the most important "memory" to reduce
+   * LLM pressure). Applied to SessionRecords on-demand.
+   */
+  topicPaths: OntologyRecordTopicPath[];
+  /** Optional patch-style tree reattachments (post-merge structural fixes). */
+  reattachMoves?: ReattachMove[];
+  /** Ordered M2.5 plan (preferred over reattachMoves when applying M3). */
+  reattachSteps?: ReattachStep[];
+  /**
+   * Contextual segment aliases produced by the refine pass (e.g. reactjs →
+   * react under frontend + React evidence).
+   */
   segmentEquivalences?: SegmentEquivalence[];
+  /** M-merge LLM2 output — one virtual combined session (Part I schema). */
+  mergeSessionAnalysis?: SessionAnalysis;
+};
+
+export type OntologyRecordNode = {
+  /** Canonical key used for merging across sessions (lowercase). */
+  key: string;
+  /** Human-friendly label (can be non-English). */
+  label: string;
+  aliases?: string[];
+  parentKeys?: string[];
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type OntologyRecordMapping = {
+  mention: string;
+  key: string;
+  confidence?: number;
+};
+
+export type OntologyRecordTopicPath = {
+  /** Stable identifier for the topic/leaf being classified. */
+  topicId: string;
+  sessionId: string;
+  projectSlug: string;
+  /** The inferred/normalized concept path. */
+  conceptPath: string[];
+  confidence?: number;
+  evidence?: string[];
 };
 
 export type SearchHitKind = "session" | "concept" | "evidence" | "code";

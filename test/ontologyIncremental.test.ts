@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import type { LlmProvider } from "../extension/src/llm/types";
+import { describe, expect, it } from "vitest";
 import {
   computeOntologyCacheKey,
   ensureOntologyMemory,
@@ -12,13 +11,14 @@ import {
 import {
   buildRecordMeta,
   buildSessionRecord,
-  ensureStore,
   sha256Hex,
 } from "../extension/src/store/sessionStore";
+import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
+import type { LlmProvider } from "../extension/src/llm/types";
+import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {
   return buildSessionRecord(
@@ -87,17 +87,14 @@ function baseOntology(sessionIds: string[]): ConceptOntologyRecord {
 describe("findReusableOntologyBase", () => {
   it("returns latest subset cache with nodes", async () => {
     const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-onto-"));
-    await ensureStore(storeDir);
-    const subset = baseOntology(["s1", "s2"]);
-    const subsetKey = "subset-key";
-    subset.meta.cacheKey = subsetKey;
-    const cacheFile = path.join(storeDir, "ontology", "cache", `${subsetKey}.json`);
-    await fs.mkdir(path.dirname(cacheFile), { recursive: true });
-    await fs.writeFile(cacheFile, JSON.stringify(subset), "utf8");
-    const indexFile = path.join(storeDir, "ontology", "index.json");
-    await fs.writeFile(
-      indexFile,
-      JSON.stringify({
+    __resetStoreForTest();
+    try {
+      const store = await getStoreForDir(storeDir);
+      const subset = baseOntology(["s1", "s2"]);
+      const subsetKey = "subset-key";
+      subset.meta.cacheKey = subsetKey;
+      await store.writeOntologyRecord(subsetKey, subset);
+      await store.writeOntologyIndex({
         schemaVersion: 1,
         updatedAt: Date.now(),
         entries: [
@@ -108,14 +105,16 @@ describe("findReusableOntologyBase", () => {
             projectSlugs: ["proj-a"],
           },
         ],
-      }),
-      "utf8"
-    );
+      });
 
-    const records = [sessionRecord("s1"), sessionRecord("s2"), sessionRecord("s3")];
-    const found = await findReusableOntologyBase(storeDir, records);
-    expect(found?.nodes.length).toBe(1);
-    expect(found?.meta.sessionIds).toEqual(["s1", "s2"]);
+      const records = [sessionRecord("s1"), sessionRecord("s2"), sessionRecord("s3")];
+      const found = await findReusableOntologyBase(storeDir, records);
+      expect(found?.nodes.length).toBe(1);
+      expect(found?.meta.sessionIds).toEqual(["s1", "s2"]);
+    } finally {
+      __resetStoreForTest();
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -123,40 +122,40 @@ describe("ensureOntologyMemory incremental", () => {
   it("forceRefine refresh segmentEquivalences from sessions without ontology-refine LLM", async () => {
     const records = [sessionRecord("s1")];
     const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-onto-"));
-    await ensureStore(storeDir);
-    const cacheKey = computeOntologyCacheKey(
-      records,
-      { hostId: "cursor" },
-      "fake"
-    );
-    const complete = baseOntology(["s1"]);
-    complete.meta.cacheKey = cacheKey;
-    expect(isCompleteOntologyRecord(complete)).toBe(true);
-    const cacheFile = path.join(storeDir, "ontology", "cache", `${cacheKey}.json`);
-    await fs.mkdir(path.dirname(cacheFile), { recursive: true });
-    await fs.writeFile(cacheFile, JSON.stringify(complete), "utf8");
+    __resetStoreForTest();
+    try {
+      const store = await getStoreForDir(storeDir);
+      const cacheKey = computeOntologyCacheKey(records, { hostId: "cursor" }, "fake");
+      const complete = baseOntology(["s1"]);
+      complete.meta.cacheKey = cacheKey;
+      expect(isCompleteOntologyRecord(complete)).toBe(true);
+      await store.writeOntologyRecord(cacheKey, complete);
 
-    let refineCalls = 0;
-    const provider: LlmProvider = {
-      id: "fake",
-      async summarize(input) {
-        if (input.responseSchema === "ontology-refine") {
-          refineCalls += 1;
-        }
-        throw new Error(`unexpected schema ${input.responseSchema}`);
-      },
-    };
+      let refineCalls = 0;
+      const provider: LlmProvider = {
+        id: "fake",
+        async summarize(input) {
+          if (input.responseSchema === "ontology-refine") {
+            refineCalls += 1;
+          }
+          throw new Error(`unexpected schema ${input.responseSchema}`);
+        },
+      };
 
-    const out = await ensureOntologyMemory(
-      records,
-      { hostId: "cursor" },
-      provider,
-      storeDir,
-      new AbortController().signal,
-      undefined,
-      { forceRefine: true, refineOnly: true }
-    );
-    expect(refineCalls).toBe(0);
-    expect(out.segmentEquivalences).toBeDefined();
+      const out = await ensureOntologyMemory(
+        records,
+        { hostId: "cursor" },
+        provider,
+        storeDir,
+        new AbortController().signal,
+        undefined,
+        { forceRefine: true, refineOnly: true }
+      );
+      expect(refineCalls).toBe(0);
+      expect(out.segmentEquivalences).toBeDefined();
+    } finally {
+      __resetStoreForTest();
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
   });
 });

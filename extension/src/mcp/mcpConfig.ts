@@ -33,7 +33,7 @@ export async function resolveExistingMcpServerEntry(extensionPath: string): Prom
 }
 
 export async function refreshMcpIndexForProject(projectSlug: string): Promise<void> {
-  const store = getStore();
+  const store = await getStore();
   const records = await store.listRecordsForProject(projectSlug);
   const lastAnalyzedAt = records.length
     ? Math.max(...records.map((r) => r.meta.analyzedAt))
@@ -53,7 +53,7 @@ export async function refreshMcpIndexForWorkspace(): Promise<
     return undefined;
   }
   const projectSlug = workspaceToSlug(projectPath);
-  const store = getStore();
+  const store = await getStore();
   const records = await store.listRecordsForProject(projectSlug);
   if (!records.length) {
     return undefined;

@@ -2,19 +2,15 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
+import { createHeartbeat } from "../progress";
+import { format, t as safeT } from "../l10n/uiTranslate";
 import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
 import { validateSessionOutline } from "./outlineValidate";
+import { LlmProviderError, type LlmProvider, type SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
-import { createHeartbeat } from "../progress";
-import {
-  LlmProviderError,
-  type LlmProvider,
-  type SessionOutline,
-} from "./types";
 import type { AgentHostId } from "../host/types";
 import type { ChatEvent } from "../transcript/types";
 import type { PromptLanguage } from "./promptLanguage";
-import { format, t as safeT } from "../l10n/uiTranslate";
 
 export type SummarizeOptions = {
   prompt: OutlinePromptOptions;
@@ -47,10 +43,7 @@ function computeCacheKey(
   return hash.digest("hex");
 }
 
-async function readCache(
-  cacheDir: string,
-  key: string
-): Promise<SessionOutline | undefined> {
+async function readCache(cacheDir: string, key: string): Promise<SessionOutline | undefined> {
   const file = path.join(cacheDir, `${key}.json`);
   try {
     const raw = await fs.readFile(file, "utf8");
@@ -61,11 +54,7 @@ async function readCache(
   }
 }
 
-async function writeCache(
-  cacheDir: string,
-  key: string,
-  outline: SessionOutline
-): Promise<void> {
+async function writeCache(cacheDir: string, key: string, outline: SessionOutline): Promise<void> {
   try {
     await fs.mkdir(cacheDir, { recursive: true });
     const file = path.join(cacheDir, `${key}.json`);
@@ -118,9 +107,7 @@ export async function summarizeSession(
         responseSchema: "session-outline",
         onAttempt: (attempt, maxAttempts) => {
           if (attempt > 1) {
-            progress?.report(
-              safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts)
-            );
+            progress?.report(safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts));
           }
         },
       },
@@ -128,10 +115,7 @@ export async function summarizeSession(
     );
 
     if (!result || typeof result !== "object" || !("outline" in result)) {
-      throw new LlmProviderError(
-        "bad-shape",
-        "Provider did not return SessionOutline"
-      );
+      throw new LlmProviderError("bad-shape", "Provider did not return SessionOutline");
     }
     const outline = result as SessionOutline;
 

@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { AgentHostId } from "../host/types";
 import { extractUserQuery } from "./parseJsonl";
+import type { AgentHostId } from "../host/types";
 import type { TranscriptSession } from "./types";
 
 async function exists(dir: string): Promise<boolean> {
@@ -68,10 +68,7 @@ export async function readFirstUserQueryPreview(
       if (row.type === "ai-title" && row.aiTitle?.trim()) {
         return shortenPreview(row.aiTitle.trim(), maxLen);
       }
-      const isUser =
-        row.role === "user" ||
-        row.type === "user" ||
-        row.message?.role === "user";
+      const isUser = row.role === "user" || row.type === "user" || row.message?.role === "user";
       if (!isUser) {
         continue;
       }
@@ -142,9 +139,7 @@ export async function listCursorSessions(
       const mtime = stat.mtimeMs;
       const date = new Date(mtime).toLocaleString();
       const title =
-        titles.get(id) ??
-        (await readFirstUserQueryPreview(filePath)) ??
-        `${id.slice(0, 8)}…`;
+        titles.get(id) ?? (await readFirstUserQueryPreview(filePath)) ?? `${id.slice(0, 8)}…`;
       sessions.push({
         id,
         filePath,
@@ -198,9 +193,7 @@ export async function listFlatJsonlSessions(
       const mtime = stat.mtimeMs;
       const date = new Date(mtime).toLocaleString();
       const title =
-        titles.get(id) ??
-        (await readFirstUserQueryPreview(filePath)) ??
-        `${id.slice(0, 8)}…`;
+        titles.get(id) ?? (await readFirstUserQueryPreview(filePath)) ?? `${id.slice(0, 8)}…`;
       sessions.push({
         id,
         filePath,

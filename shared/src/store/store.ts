@@ -1,6 +1,8 @@
 import type {
   McpIndexFile,
   MergeRecord,
+  OntologyIndex,
+  OntologyRecord,
   ProjectSummary,
   SegmentEquivalence,
   SessionRecord,
@@ -13,17 +15,21 @@ import type {
  *   - `JsonFsStore` (single-machine, file-based JSON layout)
  *   - `RemoteStore` (team mode, HTTP client to a Postgres-backed service; TBD)
  *
- * Single-machine code constructs a `JsonFsStore` directly. The MCP server
- * receives a `Store` via its handler context and never touches the filesystem
- * itself, so the same binary runs unchanged in both modes.
+ * Single-machine code constructs a store via `bootstrapStore()`. The MCP
+ * server receives a `Store` via its handler context and never touches the
+ * filesystem itself, so the same binary runs unchanged in both modes.
  *
  * Write semantics:
- *   - `upsertRecord` is idempotent on `(projectSlug, sessionId)`. Returns the
- *     new project revision.
+ *   - `upsertRecord` is idempotent on `(projectSlug, sessionId)` and bumps the
+ *     project revision inside its transaction. Returns the new revision.
  *   - `bumpProjectRevision` is atomic and monotonic. SQLite/Postgres use
  *     native transactions; the JSON file impl uses a lock file.
- *   - Clients never write merge snapshots or ontology records through this
- *     interface. Those are produced by a deterministic worker.
+ *   - Merge records (concept-trie / deterministic / llm-refined / llm-cache)
+ *     and ontology records are written through this interface by the
+ *     extension's analysis + merge pipelines. `SqliteStore` stores them as
+ *     opaque JSON in the `kv` table; `JsonFsStore` writes them to the legacy
+ *     JSON layout. `deleteProjectRecords` + `clearOntologyCache` back the
+ *     "clear analysis cache" maintenance command.
  */
 export interface Store {
   listProjectSummaries(): Promise<ProjectSummary[]>;
@@ -33,9 +39,31 @@ export interface Store {
 
   getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined>;
   listRecordsForProject(projectSlug: string): Promise<SessionRecord[]>;
+  /** All records across all projects. Used by cross-project lookup (jump-to-
+   * origin) and the deterministic merge worker. */
+  listAllRecords(): Promise<SessionRecord[]>;
   upsertRecord(record: SessionRecord): Promise<{ revision: number }>;
+  /** Delete every session row for a project; reset the project's count + last
+   * analyzed at. Keeps the project row (revision monotonicity for team-mode
+   * push-queue correctness). Used by `clearProjectAnalysisCache`. */
+  deleteProjectRecords(projectSlug: string): Promise<void>;
 
   readConceptTrieMerge(): Promise<MergeRecord | undefined>;
+  writeConceptTrieMerge(merge: MergeRecord): Promise<void>;
+  readDeterministicMerge(): Promise<MergeRecord | undefined>;
+  writeDeterministicMerge(merge: MergeRecord): Promise<void>;
+  readLlmRefinedMerge(): Promise<MergeRecord | undefined>;
+  writeLlmRefinedMerge(merge: MergeRecord): Promise<void>;
+  readLlmMergeCache(cacheKey: string): Promise<MergeRecord | undefined>;
+  writeLlmMergeCache(cacheKey: string, merge: MergeRecord): Promise<void>;
+
+  readOntologyIndex(): Promise<OntologyIndex | undefined>;
+  writeOntologyIndex(index: OntologyIndex): Promise<void>;
+  readOntologyRecord(cacheKey: string): Promise<OntologyRecord | undefined>;
+  writeOntologyRecord(cacheKey: string, record: OntologyRecord): Promise<void>;
+  /** Drop every `ontology-cache:*` kv entry + the `ontology-index` entry. */
+  clearOntologyCache(): Promise<void>;
+
   readLatestSegmentEquivalences(projectSlug: string): Promise<SegmentEquivalence[]>;
 
   bumpProjectRevision(

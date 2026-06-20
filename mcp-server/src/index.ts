@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
+  bootstrapStore,
   collectConceptContexts,
-  JsonFsStore,
   renderConceptDetail,
   renderMemoryRetrieval,
   renderProjectBriefing,
@@ -27,10 +27,6 @@ import { resolveAllToolDescriptions } from "./toolDescriptions";
 declare const __MCP_SERVER_VERSION__: string;
 const SERVER_VERSION =
   typeof __MCP_SERVER_VERSION__ !== "undefined" ? __MCP_SERVER_VERSION__ : "0.0.0-dev";
-
-const storeDir = resolveStoreDir();
-const store = new JsonFsStore(storeDir);
-const ctx = createMcpHandlerContext(store, storeDir);
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -66,6 +62,14 @@ function withErrorHandler(
 }
 
 async function main(): Promise<void> {
+  const storeDir = resolveStoreDir();
+  const bootstrap = await bootstrapStore(storeDir);
+  if (bootstrap.warning) {
+    // MCP stdio reserves stdout for protocol traffic; warnings go to stderr.
+    console.error(`[agent-mindmap] store bootstrap: ${bootstrap.warning}`);
+  }
+  const ctx = createMcpHandlerContext(bootstrap.store, storeDir);
+
   const server = new McpServer({
     name: "agent-mindmap",
     version: SERVER_VERSION,

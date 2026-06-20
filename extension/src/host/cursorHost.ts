@@ -2,20 +2,15 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { loadComposerTitles } from "../transcript/composerTitles";
-import {
-  listCursorSessions,
-  type ListSessionsContext,
-} from "../transcript/listSessions";
+import { listCursorSessions, type ListSessionsContext } from "../transcript/listSessions";
 import { parseJsonl } from "../transcript/parseJsonl";
-import type { ChatEvent, TranscriptSession } from "../transcript/types";
 import { cliMissingHintSummary } from "../llm/cliInstallGuide";
 import { workspaceToSlug, slugToWorkspacePath } from "../paths";
+import type { ChatEvent, TranscriptSession } from "../transcript/types";
 import type { AgentHost } from "./types";
 
 export function getCursorProjectsRoot(): string {
-  const override = vscode.workspace
-    .getConfiguration("agentMindmap")
-    .get<string>("projectsDir");
+  const override = vscode.workspace.getConfiguration("agentMindmap").get<string>("projectsDir");
   if (override && override.trim()) {
     return expandHome(override.trim());
   }

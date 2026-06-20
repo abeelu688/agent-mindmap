@@ -1,19 +1,16 @@
-import {
-  applyReattachMovesToRecords,
-  normalizeHubAttachMoves,
-} from "./applyReattachMoves";
+import { mindMapLog } from "../webview/MindMapLog";
+import { applyReattachMovesToRecords, normalizeHubAttachMoves } from "./applyReattachMoves";
 import { resolveReattachStepsWithCatalog } from "./reattachNodeCatalog";
-import type { ReattachNodeCatalog } from "./reattachNodeCatalog";
 import {
   buildPrefixSubordinateHints,
   segmentsInSameEquivalenceGroup,
   type PrefixSubordinateHint,
 } from "./reattachStructuralHints";
+import { segmentKeyForMerge } from "./topicGraphValidate";
+import type { ReattachNodeCatalog } from "./reattachNodeCatalog";
 import type { ReparentChain, TopBranchSynonymHint } from "./trieReparentInput";
-import { mindMapLog } from "../webview/MindMapLog";
 import type { ReattachMove, ReattachStep, ReattachStepKind } from "./types";
 import type { SegmentEquivalence } from "./types";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { SessionRecord } from "../store/storeTypes";
 
 export function reattachStepToMove(step: ReattachStep): ReattachMove {
@@ -53,19 +50,13 @@ function shouldPromoteParallelTopSynonym(
     return false;
   }
   const inHint = topBranchSynonymHints.some((hint) => {
-    const branchKeys = new Set(
-      hint.branches.map((b) => segmentKeyForMerge(b))
-    );
+    const branchKeys = new Set(hint.branches.map((b) => segmentKeyForMerge(b)));
     return branchKeys.has(hubKey) && branchKeys.has(srcKey);
   });
   if (inHint) {
     return true;
   }
-  return segmentsInSameEquivalenceGroup(
-    hubKey,
-    srcKey,
-    segmentEquivalences
-  );
+  return segmentsInSameEquivalenceGroup(hubKey, srcKey, segmentEquivalences);
 }
 
 /**
@@ -110,9 +101,7 @@ export function normalizeSynonymAttachSteps(
     promoted.push({
       from: step.sourceFrom,
       to: step.targetPath[0]!,
-      reason: topBranchSynonymHints.length
-        ? "topBranchSynonymHint"
-        : "segmentEquivalences",
+      reason: topBranchSynonymHints.length ? "topBranchSynonymHint" : "segmentEquivalences",
     });
     return {
       ...step,
@@ -141,17 +130,12 @@ export function inferPrefixSubordinateSteps(
   }
 
   const covered = new Set(
-    existingSteps
-      .map((s) => segmentKeyForMerge(s.sourceFrom))
-      .filter(Boolean)
+    existingSteps.map((s) => segmentKeyForMerge(s.sourceFrom)).filter(Boolean)
   );
   const hints = buildPrefixSubordinateHints(chains);
   const out: ReattachStep[] = [];
   let stepNum =
-    existingSteps.reduce(
-      (m, s) => Math.max(m, typeof s.step === "number" ? s.step : 0),
-      0
-    ) + 1;
+    existingSteps.reduce((m, s) => Math.max(m, typeof s.step === "number" ? s.step : 0), 0) + 1;
 
   for (const hint of hints) {
     const specKey = segmentKeyForMerge(hint.specialistFrom);
@@ -165,10 +149,7 @@ export function inferPrefixSubordinateSteps(
   return out;
 }
 
-function prefixHintToAttachStep(
-  hint: PrefixSubordinateHint,
-  step: number
-): ReattachStep {
+function prefixHintToAttachStep(hint: PrefixSubordinateHint, step: number): ReattachStep {
   return {
     step,
     kind: "attach_under",
@@ -235,8 +216,6 @@ export function applyReattachMovesSequentially(
   });
 
   const normalized =
-    chains?.length && sorted.length >= 2
-      ? normalizeHubAttachMoves(sorted, chains)
-      : sorted;
+    chains?.length && sorted.length >= 2 ? normalizeHubAttachMoves(sorted, chains) : sorted;
   return applyReattachMovesToRecords(records, normalized, minConfidence);
 }

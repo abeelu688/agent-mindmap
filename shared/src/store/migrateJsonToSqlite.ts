@@ -1,7 +1,12 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { STORE_LAYOUT } from "../storeLayout";
-import { readConceptTrieMerge, readOntologyIndex, readOntologyRecord } from "../storeReader";
+import {
+  readConceptTrieMerge,
+  readMergeRecord,
+  readOntologyIndex,
+  readOntologyRecord,
+} from "../storeReader";
 import { looksLikeSessionRecord, validateAndBackfillRecord } from "./recordValidate";
 import type { SqliteStore } from "./sqliteStore";
 import type { SessionRecord } from "../storeTypes";
@@ -36,6 +41,9 @@ export interface MigrationResult {
   skippedSessionCount: number;
   projectSlugs: string[];
   migratedConceptTrie: boolean;
+  migratedDeterministicMerge: boolean;
+  migratedLlmRefinedMerge: boolean;
+  llmMergeCacheCount: number;
   migratedOntologyIndex: boolean;
   ontologyRecordCount: number;
   /** Snapshotted JSON file paths (relative to storeDir, sorted) — for verification. */
@@ -45,6 +53,9 @@ export interface MigrationResult {
 interface FileSnapshot {
   sessions: string[];
   conceptTrie: boolean;
+  deterministic: boolean;
+  llmRefined: boolean;
+  llmMergeCacheKeys: string[];
   ontologyIndex: boolean;
   ontologyCacheKeys: string[];
 }
@@ -104,8 +115,25 @@ async function snapshotJsonFiles(storeDir: string): Promise<FileSnapshot> {
   }
 
   const conceptTriePath = path.join(storeDir, STORE_LAYOUT.conceptTrieFile);
+  const deterministicPath = path.join(storeDir, STORE_LAYOUT.deterministicFile);
+  const llmRefinedPath = path.join(storeDir, STORE_LAYOUT.llmRefinedFile);
+  const llmMergeCacheRoot = path.join(storeDir, STORE_LAYOUT.mergeCacheDir);
   const ontologyIndexPath = path.join(storeDir, STORE_LAYOUT.ontologyIndexFile);
   const ontologyCacheRoot = path.join(storeDir, STORE_LAYOUT.ontologyCacheDir);
+
+  const llmMergeCacheKeys: string[] = [];
+  if (await pathExists(llmMergeCacheRoot)) {
+    try {
+      const entries = await fs.readdir(llmMergeCacheRoot);
+      for (const entry of entries.sort()) {
+        if (entry.endsWith(".json")) {
+          llmMergeCacheKeys.push(entry.slice(0, -".json".length));
+        }
+      }
+    } catch {
+      // ignore unreadable cache dir
+    }
+  }
 
   const ontologyCacheKeys: string[] = [];
   if (await pathExists(ontologyCacheRoot)) {
@@ -124,6 +152,9 @@ async function snapshotJsonFiles(storeDir: string): Promise<FileSnapshot> {
   return {
     sessions,
     conceptTrie: await pathExists(conceptTriePath),
+    deterministic: await pathExists(deterministicPath),
+    llmRefined: await pathExists(llmRefinedPath),
+    llmMergeCacheKeys,
     ontologyIndex: await pathExists(ontologyIndexPath),
     ontologyCacheKeys,
   };
@@ -183,6 +214,35 @@ export async function migrateJsonToSqlite(
     }
   }
 
+  let migratedDeterministicMerge = false;
+  if (snapshot.deterministic) {
+    const det = await readMergeRecord(path.join(storeDir, STORE_LAYOUT.deterministicFile));
+    if (det) {
+      await sqlite.writeDeterministicMerge(det);
+      migratedDeterministicMerge = true;
+    }
+  }
+
+  let migratedLlmRefinedMerge = false;
+  if (snapshot.llmRefined) {
+    const refined = await readMergeRecord(path.join(storeDir, STORE_LAYOUT.llmRefinedFile));
+    if (refined) {
+      await sqlite.writeLlmRefinedMerge(refined);
+      migratedLlmRefinedMerge = true;
+    }
+  }
+
+  let llmMergeCacheCount = 0;
+  for (const cacheKey of snapshot.llmMergeCacheKeys) {
+    const cached = await readMergeRecord(
+      path.join(storeDir, STORE_LAYOUT.mergeCacheDir, `${cacheKey}.json`)
+    );
+    if (cached) {
+      await sqlite.writeLlmMergeCache(cacheKey, cached);
+      llmMergeCacheCount++;
+    }
+  }
+
   let migratedOntologyIndex = false;
   let ontologyRecordCount = 0;
   if (snapshot.ontologyIndex) {
@@ -206,6 +266,9 @@ export async function migrateJsonToSqlite(
   const snapshotFiles = [
     ...snapshot.sessions,
     ...(snapshot.conceptTrie ? [STORE_LAYOUT.conceptTrieFile] : []),
+    ...(snapshot.deterministic ? [STORE_LAYOUT.deterministicFile] : []),
+    ...(snapshot.llmRefined ? [STORE_LAYOUT.llmRefinedFile] : []),
+    ...snapshot.llmMergeCacheKeys.map((k) => path.join(STORE_LAYOUT.mergeCacheDir, `${k}.json`)),
     ...(snapshot.ontologyIndex ? [STORE_LAYOUT.ontologyIndexFile] : []),
     ...snapshot.ontologyCacheKeys.map((k) => path.join(STORE_LAYOUT.ontologyCacheDir, `${k}.json`)),
   ].sort();
@@ -215,6 +278,9 @@ export async function migrateJsonToSqlite(
     skippedSessionCount,
     projectSlugs: [...projectSlugs].sort(),
     migratedConceptTrie,
+    migratedDeterministicMerge,
+    migratedLlmRefinedMerge,
+    llmMergeCacheCount,
     migratedOntologyIndex,
     ontologyRecordCount,
     snapshotFiles,

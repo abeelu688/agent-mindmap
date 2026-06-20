@@ -1,12 +1,11 @@
-import { writeMergeRecord } from "../store/sessionStore";
 import { getStoreDir } from "../paths";
 import { getProjectSessionIdsOnMap } from "../codeRefQueue";
 import {
-  conceptTrieMergePath,
   rebuildProjectMergeFromStore,
   rebuildSingleSessionMindMapFromStore,
   resolveProjectSlugFromMindMap,
 } from "../mindmap/rebuildMindMapFromStore";
+import { getStoreForDir } from "../store/storeClient";
 import {
   applyPendingMergeToPanel,
   clearPendingPanelUpdateFlags,
@@ -54,7 +53,7 @@ export async function applyPendingUpdatesToPanel(panel: MindMapPanel): Promise<b
   } else {
     const merge = await rebuildProjectMergeFromStore(storeDir, projectSlug);
     if (merge) {
-      await writeMergeRecord(conceptTrieMergePath(storeDir), merge);
+      await (await getStoreForDir(storeDir)).writeConceptTrieMerge(merge);
       mindMap = merge.mindMap;
     }
   }

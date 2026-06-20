@@ -3,14 +3,9 @@ import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { clearProjectAnalysisCache } from "../extension/src/store/clearProjectAnalysisCache";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  ensureStore,
-  readRecord,
-  listRecords,
-  writeRecord,
-} from "../extension/src/store/sessionStore";
+import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
+import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
+import type { OntologyRecord } from "../shared/src";
 import type { SessionOutline } from "../extension/src/llm/types";
 
 const sampleOutline: SessionOutline = {
@@ -38,31 +33,77 @@ function recordFor(projectSlug: string, sessionId: string) {
 describe("clearProjectAnalysisCache", () => {
   it("removes project session records and leaves other projects intact", async () => {
     const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "agent-mindmap-clear-"));
-    await ensureStore(storeDir);
-    await writeRecord(storeDir, recordFor("proj-a", "s1"));
-    await writeRecord(storeDir, recordFor("proj-a", "s2"));
-    await writeRecord(storeDir, recordFor("proj-b", "s3"));
+    __resetStoreForTest();
+    try {
+      const store = await getStoreForDir(storeDir);
+      await store.upsertRecord(recordFor("proj-a", "s1"));
+      await store.upsertRecord(recordFor("proj-a", "s2"));
+      await store.upsertRecord(recordFor("proj-b", "s3"));
 
-    const cleared = await clearProjectAnalysisCache(storeDir, "proj-a");
-    expect(cleared.removedSessionRecords).toBe(2);
-    expect(await readRecord(storeDir, "proj-a", "s1")).toBeUndefined();
-    expect(await readRecord(storeDir, "proj-b", "s3")).toBeDefined();
+      const cleared = await clearProjectAnalysisCache(storeDir, "proj-a");
+      expect(cleared.removedSessionRecords).toBe(2);
+      expect(await store.getRecord("proj-a", "s1")).toBeUndefined();
+      expect(await store.getRecord("proj-b", "s3")).toBeDefined();
 
-    const remaining = await listRecords(storeDir);
-    expect(remaining.map((r) => r.meta.sessionId)).toEqual(["s3"]);
+      const remaining = await store.listAllRecords();
+      expect(remaining.map((r) => r.meta.sessionId)).toEqual(["s3"]);
+    } finally {
+      __resetStoreForTest();
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
   });
 
-  it("clears ontology cache files", async () => {
+  it("clears ontology cache entries from the store", async () => {
     const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "agent-mindmap-clear-"));
-    await ensureStore(storeDir);
-    await writeRecord(storeDir, recordFor("proj-a", "s1"));
-    const ontologyCacheDir = path.join(storeDir, "ontology", "cache");
-    await fs.mkdir(ontologyCacheDir, { recursive: true });
-    await fs.writeFile(path.join(ontologyCacheDir, "sample.json"), "{}", "utf8");
+    __resetStoreForTest();
+    try {
+      const store = await getStoreForDir(storeDir);
+      await store.upsertRecord(recordFor("proj-a", "s1"));
+      const ontology: OntologyRecord = {
+        schemaVersion: 1,
+        meta: {
+          builtAt: Date.now(),
+          cacheKey: "sample",
+          sessionIds: ["s1"],
+          projectSlugs: ["proj-a"],
+          llm: { provider: "cursor-cli" },
+          promptVersions: {
+            ontology: 1,
+            topicPaths: 1,
+            reattach: 1,
+            refine: 0,
+            outlineSchema: 1,
+            sessionAnalysis: 1,
+            mergeSessionAnalysis: 1,
+          },
+        },
+        nodes: [],
+        mappings: [],
+        topicPaths: [],
+        segmentEquivalences: [],
+      };
+      await store.writeOntologyIndex({
+        schemaVersion: 1,
+        updatedAt: Date.now(),
+        entries: [
+          {
+            cacheKey: "sample",
+            builtAt: ontology.meta.builtAt,
+            sessionIds: ["s1"],
+            projectSlugs: ["proj-a"],
+          },
+        ],
+      });
+      await store.writeOntologyRecord("sample", ontology);
+      expect(await store.readOntologyRecord("sample")).toBeDefined();
 
-    await clearProjectAnalysisCache(storeDir, "proj-a");
+      await clearProjectAnalysisCache(storeDir, "proj-a");
 
-    const files = await fs.readdir(ontologyCacheDir);
-    expect(files.filter((f) => f.endsWith(".json"))).toEqual([]);
+      expect(await store.readOntologyRecord("sample")).toBeUndefined();
+      expect(await store.readOntologyIndex()).toBeUndefined();
+    } finally {
+      __resetStoreForTest();
+      await fs.rm(storeDir, { recursive: true, force: true });
+    }
   });
 });

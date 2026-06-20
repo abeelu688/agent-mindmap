@@ -1,6 +1,6 @@
+import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { ConceptOntologyNode } from "./types";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
-import { segmentKeyForMerge } from "./topicGraphValidate";
 
 /** Reparent root paths [S, …] → [parent, S, …] when nested paths exist. */
 export type OrphanRootReparentRule = {
@@ -12,10 +12,7 @@ export type OrphanRootReparentRule = {
   sharedSuffixCount: number;
 };
 
-function labelForSegmentKey(
-  key: string,
-  topicPaths: TopicConceptPathDecision[]
-): string {
+function labelForSegmentKey(key: string, topicPaths: TopicConceptPathDecision[]): string {
   const counts = new Map<string, number>();
   for (const tp of topicPaths) {
     for (const raw of tp.conceptPath) {
@@ -73,9 +70,7 @@ function ontologyParentBoost(
       }
     }
   }
-  const parentNode = nodes.find(
-    (n) => segmentKeyForMerge(n.key) === parentKey
-  );
+  const parentNode = nodes.find((n) => segmentKeyForMerge(n.key) === parentKey);
   if (parentNode) {
     for (const pk of parentNode.parentKeys ?? []) {
       if (segmentKeyForMerge(pk) === segmentKey) {
@@ -111,9 +106,7 @@ export function buildOrphanRootReparentRules(
   const nestedByParent = new Map<string, ParentsForSegment>();
 
   for (const tp of topicPaths) {
-    const keys = tp.conceptPath
-      .map((s) => segmentKeyForMerge(s))
-      .filter(Boolean);
+    const keys = tp.conceptPath.map((s) => segmentKeyForMerge(s)).filter(Boolean);
     if (!keys.length) {
       continue;
     }
@@ -158,10 +151,7 @@ export function buildOrphanRootReparentRules(
     let best: OrphanRootReparentRule | undefined;
 
     for (const [parentKey, nestedSuffixes] of parentMap) {
-      const nestedPathCount = [...nestedSuffixes.values()].reduce(
-        (a, b) => a + b,
-        0
-      );
+      const nestedPathCount = [...nestedSuffixes.values()].reduce((a, b) => a + b, 0);
       if (nestedPathCount < minNested) {
         continue;
       }
@@ -179,9 +169,7 @@ export function buildOrphanRootReparentRules(
       }
 
       const score =
-        sharedSuffixCount * 3 +
-        nestedPathCount +
-        ontologyParentBoost(nodes, segmentKey, parentKey);
+        sharedSuffixCount * 3 + nestedPathCount + ontologyParentBoost(nodes, segmentKey, parentKey);
 
       const candidate: OrphanRootReparentRule = {
         segmentKey,
@@ -213,9 +201,7 @@ export function buildOrphanRootReparentRules(
   }
 
   rules.sort(
-    (a, b) =>
-      b.sharedSuffixCount - a.sharedSuffixCount ||
-      b.nestedPathCount - a.nestedPathCount
+    (a, b) => b.sharedSuffixCount - a.sharedSuffixCount || b.nestedPathCount - a.nestedPathCount
   );
   return rules;
 }

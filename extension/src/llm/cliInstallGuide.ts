@@ -1,16 +1,14 @@
 import * as vscode from "vscode";
-import type { AgentHostId } from "../host/types";
 import { uiTranslate } from "../l10n/uiTranslate";
+import type { AgentHostId } from "../host/types";
 
 export const CLI_SETTINGS_KEY = "agentMindmap.llm.cliPath";
 
 export const CURSOR_CLI_DOCS_URL = "https://cursor.com/docs/cli/overview";
 export const CLAUDE_CLI_DOCS_URL = "https://code.claude.com/docs/en/headless";
 
-export const CURSOR_INSTALL_UNIX =
-  "curl https://cursor.com/install -fsS | bash";
-export const CURSOR_INSTALL_WIN32 =
-  "irm 'https://cursor.com/install?win32=true' | iex";
+export const CURSOR_INSTALL_UNIX = "curl https://cursor.com/install -fsS | bash";
+export const CURSOR_INSTALL_WIN32 = "irm 'https://cursor.com/install?win32=true' | iex";
 
 export type CliInstallGuide = {
   summary: string;
@@ -56,11 +54,7 @@ export function buildCliInstallGuide(
         "   Follow the official guide: {0}",
         CLAUDE_CLI_DOCS_URL
       ),
-      t(
-        "ui.cliInstall.step.verify",
-        "2. Verify in a terminal: {0}",
-        verifyCommand
-      ),
+      t("ui.cliInstall.step.verify", "2. Verify in a terminal: {0}", verifyCommand),
       t(
         "ui.cliInstall.step.auth",
         "3. Sign in if prompted (see the install guide for headless / CI auth)."
@@ -91,24 +85,12 @@ export function buildCliInstallGuide(
     "Agent Mind Map: cursor-agent CLI not found — sessions cannot be saved to the library."
   );
   const installStep = isWin
-    ? t(
-        "ui.cliInstall.cursor.installWin",
-        "   In PowerShell: {0}",
-        installCommand
-      )
-    : t(
-        "ui.cliInstall.cursor.installUnix",
-        "   In a terminal: {0}",
-        installCommand
-      );
+    ? t("ui.cliInstall.cursor.installWin", "   In PowerShell: {0}", installCommand)
+    : t("ui.cliInstall.cursor.installUnix", "   In a terminal: {0}", installCommand);
   const detail = [
     t("ui.cliInstall.step.install", "1. Install the Cursor CLI (agent)"),
     installStep,
-    t(
-      "ui.cliInstall.step.verify",
-      "2. Verify in a terminal: {0}",
-      verifyCommand
-    ),
+    t("ui.cliInstall.step.verify", "2. Verify in a terminal: {0}", verifyCommand),
     t(
       "ui.cliInstall.cursor.auth",
       "3. First run may require sign-in: agent login (or follow the browser link)."
@@ -149,10 +131,7 @@ export async function showCliInstallGuide(
   const guide = buildCliInstallGuide(hostId, process.platform, t);
   const modal = options.modal ?? true;
 
-  const openSettingsLabel = t(
-    "ui.cliInstall.action.openSettings",
-    "Open CLI settings"
-  );
+  const openSettingsLabel = t("ui.cliInstall.action.openSettings", "Open CLI settings");
   const copyLabel = t("ui.cliInstall.action.copyCommand", "Copy install command");
   const docsLabel = t("ui.cliInstall.action.openDocs", "Open install docs");
 
@@ -168,19 +147,13 @@ export async function showCliInstallGuide(
   );
 
   if (choice === openSettingsLabel) {
-    await vscode.commands.executeCommand(
-      "workbench.action.openSettings",
-      guide.settingsKey
-    );
+    await vscode.commands.executeCommand("workbench.action.openSettings", guide.settingsKey);
     return;
   }
   if (choice === copyLabel && guide.installCommand) {
     await vscode.env.clipboard.writeText(guide.installCommand);
     void vscode.window.showInformationMessage(
-      t(
-        "ui.cliInstall.copied",
-        "Agent Mind Map: Install command copied to clipboard."
-      )
+      t("ui.cliInstall.copied", "Agent Mind Map: Install command copied to clipboard.")
     );
     return;
   }

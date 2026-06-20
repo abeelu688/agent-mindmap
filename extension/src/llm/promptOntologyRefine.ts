@@ -1,8 +1,3 @@
-import type { AgentHostId } from "../host/types";
-import type { PromptLanguage } from "./promptLanguage";
-import type { SessionRecord } from "../store/storeTypes";
-import type { ConceptOntology } from "./types";
-import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import {
   buildAllSegmentOverlapHints,
   buildRefineContextSamples,
@@ -10,6 +5,11 @@ import {
   type SegmentOverlapHint,
   type TopicSegmentContext,
 } from "./segmentContext";
+import type { AgentHostId } from "../host/types";
+import type { PromptLanguage } from "./promptLanguage";
+import type { SessionRecord } from "../store/storeTypes";
+import type { ConceptOntology } from "./types";
+import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
