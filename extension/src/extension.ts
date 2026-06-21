@@ -24,6 +24,7 @@ import { commandPickSession } from "./commands/pickSession";
 import { commandDownloadPackage } from "./commands/downloadPackage";
 import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
+import { commandConfigureTeamService } from "./commands/configureTeamService";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
@@ -32,11 +33,13 @@ import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
 import { isStoreRekeyedToRepo, runRekeyMigration } from "./store/rekeyMigration";
+import { setExtensionContext } from "./store/storeClient";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
   initLog(context);
+  setExtensionContext(context);
   agentDebugLog(
     "extension.ts:activate",
     "extension activated",
@@ -226,7 +229,11 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(
         t("ui.info.repoPathsRefreshed", "Agent Mind Map: Refreshed repo/workspace paths map.")
       );
-    })
+    }),
+    vscode.commands.registerCommand(
+      "agent-mindmap.configureTeamService",
+      wrapCommand(() => commandConfigureTeamService(context))
+    )
   );
 
   // ── Post-activation setup ──────────────────────────────────────────────
