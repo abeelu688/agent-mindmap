@@ -187,5 +187,6 @@
   "team.config.apiKey.title": "Agent Mind Map: Team Service API Key",
   "team.config.applied": "Agent Mind Map: Team service configured. Reload the window to switch stores.",
   "team.config.cleared": "Agent Mind Map: Team service disabled. Reload the window to switch back to the local store.",
-  "team.config.invalid": "Agent Mind Map: Invalid team service configuration: {0}"
+  "team.config.invalid": "Agent Mind Map: Invalid team service configuration: {0}",
+  "team.bulkPush.title": "Agent Mind Map: Bulk pushing sessions to team service…"
 }

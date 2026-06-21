@@ -9,6 +9,7 @@ import {
 import { getStoreDir } from "../paths";
 import { getRemoteStoreIfEnabled } from "./storeFactory";
 import { PushQueue } from "./pushQueue";
+import { runBulkPushIfNeeded } from "./bulkPush";
 
 /**
  * Process-wide accessor for the extension's `Store`.
@@ -143,6 +144,41 @@ export async function drainAllPushQueues(): Promise<void> {
   for (const q of pushQueues) {
     await q.drain();
   }
+}
+
+/**
+ * Returns true when team mode is enabled (URL + key both configured and a
+ * `RemoteStore` was successfully constructed).
+ */
+export async function isTeamModeEnabled(): Promise<boolean> {
+  const remote = await getRemoteStore();
+  return remote !== undefined;
+}
+
+/**
+ * Returns the local `SqliteStore` for the active `storeDir`, or `undefined`
+ * if the local store isn't a `SqliteStore` (e.g. JsonFs fallback). Used by
+ * the bulk-push path (P4.4) to enumerate records + set pending flags.
+ */
+export async function getLocalSqliteStore(): Promise<SqliteStore | undefined> {
+  const store = await bootstrapForDir(getStoreDir());
+  return store instanceof SqliteStore ? store : undefined;
+}
+
+/**
+ * One-shot bulk push on first team-mode activation (P4.4). Delegates to
+ * `runBulkPushIfNeeded` with the storeClient's deps. Safe to call on every
+ * activation — skips immediately when the bulk-push flag is already set or
+ * team mode is off.
+ */
+export async function runBulkPushIfNeededNow(
+  context: import("vscode").ExtensionContext
+): Promise<void> {
+  await runBulkPushIfNeeded(context, {
+    isTeamModeEnabled,
+    getLocalStore: getLocalSqliteStore,
+    drainAllPushQueues,
+  });
 }
 
 /** Dispose all push queues (clear retry timers). Called on deactivate. */

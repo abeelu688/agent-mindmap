@@ -187,5 +187,6 @@
   "team.config.apiKey.title": "Agent Mind Map: 团队服务 API 密钥",
   "team.config.applied": "Agent Mind Map: 团队服务已配置。请重新加载窗口以切换存储。",
   "team.config.cleared": "Agent Mind Map: 团队服务已停用。请重新加载窗口以切回本地存储。",
-  "team.config.invalid": "Agent Mind Map: 团队服务配置无效：{0}"
+  "team.config.invalid": "Agent Mind Map: 团队服务配置无效：{0}",
+  "team.bulkPush.title": "Agent Mind Map: 正在批量推送会话到团队服务…"
 }

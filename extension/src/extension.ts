@@ -33,7 +33,12 @@ import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
 import { isStoreRekeyedToRepo, runRekeyMigration } from "./store/rekeyMigration";
-import { setExtensionContext, drainAllPushQueues, disposePushQueues } from "./store/storeClient";
+import {
+  setExtensionContext,
+  drainAllPushQueues,
+  disposePushQueues,
+  runBulkPushIfNeededNow,
+} from "./store/storeClient";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -249,6 +254,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // team mode is off (pushQueues is empty).
   void drainAllPushQueues().catch((err) => {
     console.warn(`[agent-mindmap] push queue drain failed: ${(err as Error).message}`);
+  });
+
+  // Team mode: on first activation with team mode enabled, run a one-shot
+  // bulk push of all local sessions to the team service (P4.4). Skips
+  // immediately if already done or team mode is off.
+  void runBulkPushIfNeededNow(context).catch((err) => {
+    console.warn(`[agent-mindmap] bulk push failed: ${(err as Error).message}`);
   });
 
   void resolveHostId(context).then((hostId) => {

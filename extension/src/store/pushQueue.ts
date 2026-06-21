@@ -25,8 +25,8 @@ import type { SqliteStore } from "@agent-mindmap/shared";
  * from the last confirmed push.
  */
 
-const WATERMARK_PREFIX = "push-watermark:";
-const PENDING_PREFIX = "push-pending:";
+export const WATERMARK_PREFIX = "push-watermark:";
+export const PENDING_PREFIX = "push-pending:";
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 5 * 60 * 1000;
 const MAX_RETRIES_PER_DRAIN = 3;
