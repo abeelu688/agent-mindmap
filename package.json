@@ -12,7 +12,7 @@
     "build:extension": "npm run build --prefix extension",
     "build:webview": "npm run build --prefix webview",
     "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
-    "test": "npm run build --prefix extension && npm run test --prefix extension",
+    "test": "npm run build --prefix extension && vitest run",
     "test:vitest": "vitest run",
     "test:mcp": "vitest run test/mcpShared.test.ts test/mcpInstallConfig.test.ts test/workspaceToSlug.test.ts",
     "test:retrieval": "vitest run test/retrievalEval.test.ts",

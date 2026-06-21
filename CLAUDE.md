@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (and any AI coding assistant) working
 - **License**: MIT
 - **Languages**: TypeScript (extension + webview), CSS
 - **Build**: esbuild (extension) + Vite (webview)
-- **Test**: vitest (root) + node test runner (extension)
+- **Test**: vitest
 - **Mind map library**: [mind-elixir](https://github.com/SShooter/mind-elixir-core)
 
 ## Repository Structure
@@ -57,7 +57,7 @@ npm install                    # Root dependencies
 npm install --prefix extension # Extension dependencies (includes @vscode/sqlite3)
 npm install --prefix webview   # WebView dependencies
 npm run build                  # Build both extension + webview
-npm test                       # Run extension tests (after build)
+npm test                       # Run all vitest tests (after build)
 npm run test:vitest            # Run vitest tests (no build needed)
 ```
 
@@ -71,7 +71,7 @@ Press **F5** in VS Code to launch the Extension Development Host.
 | `npm run build:extension`     | Build extension only                          |
 | `npm run build:webview`       | Build webview only                            |
 | `npm run watch`               | Watch mode for both                           |
-| `npm test`                    | Build + run extension node tests              |
+| `npm test`                    | Build + run vitest tests                      |
 | `npm run test:vitest`         | Run vitest (no build needed)                  |
 | `npm run check:concept-nodes` | Verify no hardcoded concept segment literals  |
 | `npm run package`             | Build + package as VSIX                       |
@@ -171,7 +171,7 @@ Batch 1 gets a full M-merge on milestone sessions. Batch 2+ uses snapshot delta 
 
 - Test files live in `test/` at the repo root, not alongside source files.
 - Test files use the same name as the source module (e.g., `test/reattachChanges.test.ts` tests `extension/src/llm/reattachChanges.ts`).
-- VS Code API is stubbed via `test/vscode-stub.cjs`.
+- VS Code API is stubbed via `test/mocks/vscode.ts` (vitest resolve.alias).
 - Use `__testing` exports for unit-testing internal functions.
 
 ### L10n / i18n

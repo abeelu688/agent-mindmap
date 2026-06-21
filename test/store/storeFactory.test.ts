@@ -10,8 +10,8 @@ import {
   __testing,
 } from "../../extension/src/store/storeFactory";
 
-// `vscode` resolves to the stub in test/vscode-stub.cjs (via esbuild alias
-// in extension/package.json). We cast to any to inject secrets + config.
+// `vscode` resolves to the mock in test/mocks/vscode.ts (via vitest resolve.alias
+// in vitest.config.ts). We cast to any to inject secrets + config.
 const vscodeAny = vscode as unknown as {
   workspace: {
     getConfiguration: (scope: string) => {

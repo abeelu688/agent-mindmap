@@ -78,9 +78,9 @@ chore: update dependencies
 
 - Test files go in `test/` at the repo root
 - Name the test file after the source module: `reattachChanges.test.ts` → `reattachChanges.ts`
-- VS Code API is stubbed via `test/vscode-stub.cjs`
+- VS Code API is stubbed via `test/mocks/vscode.ts` (vitest resolve.alias)
 - Use `__testing` exports for testing internal functions
-- Run tests before submitting: `npm run test:vitest && npm test`
+- Run tests before submitting: `npm run test:vitest`
 
 ### L10n / i18n
 

@@ -78,9 +78,9 @@ chore: 升级依赖
 
 - 测试文件放在仓库根目录的 `test/`
 - 测试文件名与源文件保持一致：`reattachChanges.test.ts` ↔ `reattachChanges.ts`
-- VS Code API 通过 `test/vscode-stub.cjs` mock
+- VS Code API 通过 `test/mocks/vscode.ts` mock（vitest resolve.alias）
 - 使用 `__testing` 导出来测试内部函数
-- 提交前运行 `npm run test:vitest && npm test`
+- 提交前运行 `npm run test:vitest`
 
 ### L10n / i18n
 
