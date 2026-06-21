@@ -194,7 +194,11 @@ async function readFileForCodeRef(
     return { kind: "unknown" };
   }
   const resolved = ctx.pathsResolver.resolvePath(projectSlug, codePath);
-  if (resolved.kind === "empty-rel-path" || resolved.kind === "miss") {
+  if (
+    resolved.kind === "empty-rel-path" ||
+    resolved.kind === "miss" ||
+    resolved.kind === "path-escape"
+  ) {
     return { kind: "unknown" };
   }
   try {

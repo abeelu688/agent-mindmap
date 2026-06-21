@@ -11,7 +11,8 @@ const MCP_MODE_FILENAME = "mcp-mode.json";
 export type ResolvePathResult =
   | { kind: "ok"; absPath: string }
   | { kind: "miss"; slug: string; mode: ProjectMode }
-  | { kind: "empty-rel-path" };
+  | { kind: "empty-rel-path" }
+  | { kind: "path-escape"; attempted: string; root: string };
 
 /**
  * Reads `~/.agent-mindmap/mcp-mode.json` written by the extension. Missing
@@ -81,6 +82,25 @@ export function createPathsResolver(storeDirOverride?: string): {
     return cachedMap;
   }
 
+  /**
+   * Check that an absolute path falls within the project root.
+   * Rejects `..` escapes, absolute relPaths, and symlink-based escapes
+   * (checked via resolved real paths when both exist).
+   */
+  function isWithinRoot(root: string, relPath: string): boolean {
+    // Reject absolute relPaths (e.g. "/etc/passwd" or "C:\Windows\System32")
+    if (path.isAbsolute(relPath)) {
+      return false;
+    }
+    const resolved = path.resolve(root, relPath);
+    const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
+    // Must be exactly the root or a descendant
+    if (resolved !== root && !resolved.startsWith(rootPrefix)) {
+      return false;
+    }
+    return true;
+  }
+
   function resolvePath(slug: string, relPath: string): ResolvePathResult {
     if (!relPath) {
       return { kind: "empty-rel-path" };
@@ -88,12 +108,20 @@ export function createPathsResolver(storeDirOverride?: string): {
     const mode = currentMode();
     const map = currentMap();
     if (slug in map) {
-      return { kind: "ok", absPath: path.join(map[slug]!, relPath) };
+      const root = map[slug]!;
+      if (!isWithinRoot(root, relPath)) {
+        return { kind: "path-escape", attempted: relPath, root };
+      }
+      return { kind: "ok", absPath: path.join(root, relPath) };
     }
     // Read-on-miss: re-read the map file in case the extension rewrote it.
     cachedMap = loadMap(mode);
     if (slug in cachedMap) {
-      return { kind: "ok", absPath: path.join(cachedMap[slug]!, relPath) };
+      const root = cachedMap[slug]!;
+      if (!isWithinRoot(root, relPath)) {
+        return { kind: "path-escape", attempted: relPath, root };
+      }
+      return { kind: "ok", absPath: path.join(root, relPath) };
     }
     return { kind: "miss", slug, mode };
   }

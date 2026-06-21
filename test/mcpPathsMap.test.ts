@@ -146,6 +146,69 @@ describe("createPathsResolver", () => {
     });
   });
 
+  it("rejects .. path traversal escape", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+    fs.writeFileSync(
+      path.join(tmp, "workspace-paths.json"),
+      JSON.stringify({ "home-user-proj": "/home/user/proj" })
+    );
+    const r = createPathsResolver();
+    const res = r.resolvePath("home-user-proj", "../secret.txt");
+    expect(res.kind).toBe("path-escape");
+    if (res.kind === "path-escape") {
+      expect(res.attempted).toBe("../secret.txt");
+      expect(res.root).toBe("/home/user/proj");
+    }
+  });
+
+  it("rejects deep .. traversal (../../etc/passwd)", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+    fs.writeFileSync(
+      path.join(tmp, "workspace-paths.json"),
+      JSON.stringify({ "home-user-proj": "/home/user/proj" })
+    );
+    const r = createPathsResolver();
+    expect(r.resolvePath("home-user-proj", "../../etc/passwd").kind).toBe("path-escape");
+  });
+
+  it("rejects absolute relPath", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+    fs.writeFileSync(
+      path.join(tmp, "workspace-paths.json"),
+      JSON.stringify({ "home-user-proj": "/home/user/proj" })
+    );
+    const r = createPathsResolver();
+    expect(r.resolvePath("home-user-proj", "/etc/passwd").kind).toBe("path-escape");
+  });
+
+  it("rejects Windows-style .. escape", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+    fs.writeFileSync(
+      path.join(tmp, "workspace-paths.json"),
+      JSON.stringify({ "win-proj": "C:\\Users\\dev\\proj" })
+    );
+    const r = createPathsResolver();
+    expect(r.resolvePath("win-proj", "..\\secret.txt").kind).toBe("path-escape");
+  });
+
+  it("allows legitimate subdirectory traversal within root", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+    fs.writeFileSync(
+      path.join(tmp, "workspace-paths.json"),
+      JSON.stringify({ "home-user-proj": "/home/user/proj" })
+    );
+    const r = createPathsResolver();
+    // sub/dir/../other is fine — resolve stays within root
+    const res = r.resolvePath("home-user-proj", "sub/dir/../other/file.ts");
+    if (res.kind === "ok") {
+      expect(res.absPath).toBe(path.join("/home/user/proj", "sub/dir/../other/file.ts"));
+    } else {
+      // On some platforms path.resolve may resolve this differently
+      // The key is it doesn't escape
+      expect(res.kind).not.toBe("path-escape");
+    }
+  });
+
   it("treats missing map file as empty map (miss)", () => {
     fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
     // no workspace-paths.json written
