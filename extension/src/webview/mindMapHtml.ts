@@ -1,17 +1,15 @@
 import * as vscode from "vscode";
 
-export function buildMindMapHtml(
-  webview: vscode.Webview,
-  extensionUri: vscode.Uri
-): string {
-  const scriptUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, "media", "webview.js")
-  );
-  const styleUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, "media", "webview.css")
-  );
+export function buildMindMapHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview.js"));
+  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview.css"));
   const cspSource = webview.cspSource;
 
+  // NOTE: style-src requires 'unsafe-inline' because mind-elixir (the mind map
+  // rendering library) sets inline styles on nodes via `.style.*` during
+  // rendering (57+ references). Removing 'unsafe-inline' would break all
+  // mind map rendering. If mind-elixir is replaced or patched to use
+  // CSS classes instead, this can be tightened to nonce/hash-based CSP.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
