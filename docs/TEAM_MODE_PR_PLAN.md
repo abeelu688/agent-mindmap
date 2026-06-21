@@ -355,14 +355,57 @@ Goal: the concept trie and ontology equivalences work in team mode (currently si
 
 ### P5.1 — Go merge worker (cron)
 
+**Status**: landed. The deterministic merge worker rebuilds the global
+concept trie on a fixed interval + on project-revision change and serves it
+via the existing `GET /v1/merges/concept-trie` endpoint.
+
 **Scope**
 
-- `agent-mindmap-team-service/internal/worker/merge_worker.go` — periodic Go job that recomputes the concept trie from all `sessions.record_json` for a project, writes the result to `kv` (key `concept-trie`). Per decision 7: cron on fixed interval + on project revision change.
+- `agent-mindmap-team-service/internal/worker/merge_worker.go` — periodic Go job that recomputes the concept trie from all `sessions.record_json` across every project, writes the result to `kv` (key `concept-trie`). Per decision 7: cron on fixed interval + on project revision change.
 - Re-implements the existing TypeScript trie-merge algorithm (currently in `shared/src/` + `extension/src/store/`). The algorithm is deterministic; the Go port carries its own tests under `agent-mindmap-team-service/internal/worker/` using the same fixture inputs to assert byte-equivalent output to the TypeScript version.
 - Trigger: Go `time.Ticker` (every N minutes) + a `projects.revision` polling check. ❓ Interval — recommend 10 min default, configurable via env `AGENT_MINDMAP_WORKER_INTERVAL`.
 - Writes new trie + bumps a `concept-trie-revision` in `kv` so clients can poll `GET /v1/merges/concept-trie/revision` cheaply.
 
-**Test**: worker test — seed sessions, run worker, verify trie in `kv`; verify revision bumped. Fixture-parity test against TypeScript output for the same input records.
+**Implementation notes**
+
+- The worker ports the **mechanical-trie path** of `buildConceptMergeRecord`
+  only: `normalizeConceptPath` + `segmentKeyForMerge`, trie insertion, and
+  the mind-map render (incl. origin refs + per-topic code-ref subtrees). It
+  does NOT port equivalence resolution
+  (`resolveConceptPathWithEquivalences` / `mergeTrieSiblingsByEquivalences`)
+  or ontology prep (`prepareRecordsForFinalTrie`): the worker runs with the
+  TypeScript default `MERGE_APPLY_SEGMENT_EQUIVALENCES = false`, and team
+  mode v1 has no ontology cache (`readLatestSegmentEquivalences` → 404 →
+  empty), so both are no-ops on the worker's path. P5.2 extends this when
+  the worker begins producing equivalences.
+- Records pushed by clients are already sanitized + ontology-prepared
+  (conceptPath is the LLM-decided final path), so the worker skips
+  `sanitizeSessionRecord` / `prepareRecordsForFinalTrie` (single-machine-only
+  steps that re-read the transcript file from disk, which the server lacks).
+  This mirrors the TypeScript sync `buildConceptMergeRecord`, not the
+  `_Async` variant.
+- The trie is **global** (across all projects), matching the single
+  `GET /v1/merges/concept-trie` endpoint. The worker rebuilds when ANY
+  project's revision changes (or a project disappears). Records are paged
+  via `ListRecordsForProject` (page size 1000); unparseable rows are skipped
+  (logged) so one corrupt row never aborts a rebuild.
+- The `concept-trie-revision` counter is read-bumped-written on each
+  rebuild (single-goroutine worker, no compare-and-swap needed).
+- `cmd/teamd/main.go` starts the worker in its own goroutine at boot
+  (fires once immediately, then on the configured interval); cancelled on
+  shutdown before the HTTP server / DB pool. Interval env var is
+  `AGENT_MINDMAP_MERGE_INTERVAL` (Go duration string, default `5m`).
+
+**Test**: `internal/worker/trie_test.go` ports the fixtures + assertions from
+the TypeScript `test/mergeConceptTrie.test.ts` (same inputs, same invariants —
+the parity contract). `internal/worker/merge_worker_test.go` exercises the
+worker's `buildAll` pass against an in-memory fake store: first-build writes,
+revision-change trigger (no rebuild when unchanged; rebuild on revision bump),
+corrupt-row skipping, empty-store empty-state trie, and deterministic
+`builtAt`. The equivalence test cases from the TS suite are intentionally
+not ported (worker has no equivalences in v1). `go test ./...` green; no
+Postgres needed (the storage layer's integration tests stay gated on
+`AGENT_MINDMAP_TEST_POSTGRES_DSN`).
 
 **Rollback**: revert; trie endpoint returns stale or empty data. Reads still work; cross-session concepts unavailable until re-deployed.
 
