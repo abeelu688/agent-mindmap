@@ -14,7 +14,8 @@ export type LlmErrorCode =
   | "cancelled"
   | "bad-json"
   | "bad-shape"
-  | "empty";
+  | "empty"
+  | "output-too-large";
 
 export class LlmProviderError extends Error {
   constructor(

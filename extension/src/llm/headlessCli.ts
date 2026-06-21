@@ -36,6 +36,9 @@ export type HeadlessCliConfig = {
 
 const MAX_PROMPT_BYTES = 96 * 1024;
 const MAX_BACKOFF_MS = 10_000;
+const MAX_STDOUT_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_STDERR_BYTES = 1 * 1024 * 1024; // 1 MB
+const STDERR_TAIL_BYTES = 32 * 1024; // keep last 32 KB for error messages
 
 type RunResult = { stdout: string; stderr: string };
 
@@ -87,6 +90,8 @@ export function runCli(
 
     let stdout = "";
     let stderr = "";
+    let stdoutOverflow = false;
+    let stderrOverflow = false;
     let settled = false;
     let timer: NodeJS.Timeout | undefined;
 
@@ -138,10 +143,34 @@ export function runCli(
     proc.stdout.setEncoding("utf8");
     proc.stderr.setEncoding("utf8");
     proc.stdout.on("data", (chunk: string) => {
+      if (stdoutOverflow) return;
       stdout += chunk;
+      if (Buffer.byteLength(stdout, "utf8") > MAX_STDOUT_BYTES) {
+        stdoutOverflow = true;
+        stdout = stdout.slice(0, MAX_STDOUT_BYTES);
+        if (!settled) {
+          settled = true;
+          killProc();
+          reject(
+            new LlmProviderError(
+              "output-too-large",
+              `${providerLabel} stdout exceeded ${MAX_STDOUT_BYTES} bytes`,
+              undefined,
+              { stdout, stderr }
+            )
+          );
+        }
+      }
     });
     proc.stderr.on("data", (chunk: string) => {
+      if (stderrOverflow) return;
       stderr += chunk;
+      if (Buffer.byteLength(stderr, "utf8") > MAX_STDERR_BYTES) {
+        stderrOverflow = true;
+        // Keep only the tail for diagnostics
+        const bytes = Buffer.from(stderr, "utf8");
+        stderr = bytes.slice(bytes.length - STDERR_TAIL_BYTES).toString("utf8");
+      }
     });
 
     proc.on("error", (err: NodeJS.ErrnoException) => {
@@ -485,6 +514,7 @@ function isRetryableError(err: LlmProviderError): boolean {
     case "cli-missing":
     case "cancelled":
     case "empty":
+    case "output-too-large":
       return false;
     default:
       return false;
