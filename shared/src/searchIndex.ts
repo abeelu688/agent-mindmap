@@ -5,7 +5,11 @@ import type {
   SessionRecord,
 } from "./storeTypes";
 
-const CJK_REGEX = /[㐀-鿿豈-﫿]/;
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Search constants
+// ────────────────────────────────────────────────────────────────────────────
+
+const CJK_REGEX = /[㐀-鿿鿿豈-﫿]/;
 const CANDIDATE_MULTIPLIER = 5;
 const MAX_HITS_PER_SESSION = 3;
 const MAX_HITS_PER_CONCEPT = 2;
@@ -13,6 +17,10 @@ const MAX_HITS_PER_CODE = 2;
 /** Reverse-boost factor: a codeRef hit distributes this fraction of its score
  * across the concepts it links to via sourceTurnIndices. Tunable against eval. */
 const CODE_TO_CONCEPT_BOOST = 0.3;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Tokenization & query parsing
+// ────────────────────────────────────────────────────────────────────────────
 
 type WeightedTerm = {
   term: string;
@@ -120,6 +128,10 @@ function weightedTerms(
 
   return [...terms.entries()].map(([term, weight]) => ({ term, weight }));
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Scoring & ranking
+// ────────────────────────────────────────────────────────────────────────────
 
 function scoreText(text: string, terms: WeightedTerm[]): number {
   const lower = text.toLowerCase();
@@ -278,6 +290,10 @@ function diversifyHits(hits: SearchHit[], limit: number): SearchHit[] {
   return out;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Record tokenization (pre-computed for fast candidate filtering)
+// ────────────────────────────────────────────────────────────────────────────
+
 function buildRecordTokenSet(text: string): Set<string> {
   const lower = text.toLowerCase();
   const tokens = new Set<string>();
@@ -361,6 +377,10 @@ export function buildRecordTokenSets(records: SessionRecord[]): Set<string>[] {
     return tokens;
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Search orchestration
+// ────────────────────────────────────────────────────────────────────────────
 
 function queryTermNgrams(term: string): string[] {
   if (term.length >= 3) {
@@ -640,6 +660,10 @@ export function searchProjectRecords(
 
   return diversifyHits(candidates, limit);
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Concept context & merge support
+// ────────────────────────────────────────────────────────────────────────────
 
 export function collectConceptContexts(records: SessionRecord[]): ConceptContextForMerge[] {
   const out: ConceptContextForMerge[] = [];

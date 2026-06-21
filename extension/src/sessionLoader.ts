@@ -45,6 +45,10 @@ import type { AgentHost } from "./host/types";
 import type { SessionRecord } from "./store/storeTypes";
 import type { BuildOptions, MindMapRoot, TranscriptSession } from "./transcript/types";
 
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Types & settings resolution
+// ────────────────────────────────────────────────────────────────────────────
+
 export type LoadedSession = {
   session: TranscriptSession;
   mindMap: MindMapRoot;
@@ -149,6 +153,10 @@ function isCancellation(err: unknown): boolean {
 function needsCodeRefRetry(refs: { llmStatus?: string }[] | undefined): boolean {
   return Boolean(refs?.some((ref) => ref.llmStatus === "pending" || ref.llmStatus === "failed"));
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Session discovery & selection
+// ────────────────────────────────────────────────────────────────────────────
 
 async function listWorkspaceSessions(
   host: AgentHost
@@ -285,6 +293,10 @@ export type AnalyzeProjectBatchInfo = AnalyzeProjectResult & {
    */
   freshlyAnalyzedSessionIds: string[];
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Single-session load & LLM pipeline
+// ────────────────────────────────────────────────────────────────────────────
 
 export async function loadSession(
   session: TranscriptSession,
@@ -668,6 +680,10 @@ export async function loadSession(
     source: "topic",
   };
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Batch processing & project analysis
+// ────────────────────────────────────────────────────────────────────────────
 
 async function tryStatMtime(filePath: string, fallback: number): Promise<number> {
   try {

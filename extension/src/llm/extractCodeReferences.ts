@@ -8,6 +8,10 @@ import type { ChatEvent } from "../transcript/types";
 import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
 
+// ────────────────────────────────────────────────────────────────────────────
+// Section: File path extraction & mark-code building
+// ────────────────────────────────────────────────────────────────────────────
+
 /** A file path with the surrounding turn context for description generation. */
 export type FileEntry = {
   path: string;
@@ -258,6 +262,10 @@ function buildFallbackReferences(entries: FileEntry[]): CodeReference[] {
     markCode: buildMarkCode(g.snippet),
   }));
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Description prompt & LLM generation
+// ────────────────────────────────────────────────────────────────────────────
 
 /** Build local placeholder references while the description LLM runs in the background. */
 export function buildPendingCodeReferencesFromEvents(
