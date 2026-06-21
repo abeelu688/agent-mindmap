@@ -164,8 +164,8 @@ Batch 1 gets a full M-merge on milestone sessions. Batch 2+ uses snapshot delta 
 ### LLM prompt files
 
 - Each pipeline stage has its own `prompt*.ts` file.
-- Prompt text is currently hardcoded in Chinese. A migration to i18n-aware prompts is in progress — see `CONTRIBUTING.md` → "Translating LLM Prompts".
-- When changing a prompt's JSON output schema, bump `PIPELINE_VERSION` so caches invalidate.
+- Prompt text is written in English. The `OutputLanguage` parameter (controlled by `agentMindmap.llm.promptLanguage`, defaulting to `"auto"`) determines the language of user-visible output fields (labels, evidence, titles). When `"auto"`, it detects the workspace locale.
+- When changing a prompt's JSON output schema, bump `PIPELINE_VERSION` in `pipeline/pipelineVersions.ts` so caches invalidate.
 
 ### Tests
 
