@@ -178,6 +178,12 @@ export async function readSessionRecord(
   return ctx.store.getRecord(projectSlug, sessionId);
 }
 
+/** Maximum file size for staleness reads (2 MB). Larger files → staleness "unknown". */
+const MAX_STALENESS_FILE_BYTES = 2 * 1024 * 1024;
+
+/** Maximum concurrency for staleness file reads. */
+const STALENESS_READ_CONCURRENCY = 4;
+
 /**
  * Resolve a `CodeReference.path` against the local clone via the paths map
  * (P2.7) and read the file content. Returns `undefined` when the path does
@@ -202,6 +208,11 @@ async function readFileForCodeRef(
     return { kind: "unknown" };
   }
   try {
+    // Check file size first to avoid reading oversized files
+    const stat = await fs.stat(resolved.absPath);
+    if (stat.size > MAX_STALENESS_FILE_BYTES) {
+      return { kind: "unknown" };
+    }
     const text = await fs.readFile(resolved.absPath, "utf8");
     return { kind: "content", text };
   } catch {
@@ -262,16 +273,24 @@ export async function backFillStaleness(
     string,
     { kind: "unknown" } | { kind: "stale" } | { kind: "content"; text: string }
   >();
-  for (const hit of hits) {
-    if (hit.kind !== "code" || !hit.codePath) {
-      continue;
+  // Process hits with bounded concurrency to avoid overwhelming the filesystem
+  const codeHits = hits.filter((h) => h.kind === "code" && h.codePath);
+  let nextIdx = 0;
+  const worker = async () => {
+    while (nextIdx < codeHits.length) {
+      const hit = codeHits[nextIdx++]!;
+      hit.staleness = await computeCodeRefStaleness(
+        ctx,
+        hit.projectSlug,
+        hit.codePath!,
+        hit.codeMarkCode,
+        fileCache
+      );
     }
-    hit.staleness = await computeCodeRefStaleness(
-      ctx,
-      hit.projectSlug,
-      hit.codePath,
-      hit.codeMarkCode,
-      fileCache
-    );
-  }
+  };
+  const workers = Array.from(
+    { length: Math.min(STALENESS_READ_CONCURRENCY, codeHits.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
 }
