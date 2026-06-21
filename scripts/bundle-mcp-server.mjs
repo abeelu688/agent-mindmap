@@ -23,6 +23,7 @@ await esbuild.build({
   define: {
     __MCP_SERVER_VERSION__: JSON.stringify(version),
   },
+  external: ["@vscode/sqlite3"],
   alias: {
     "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
   },
