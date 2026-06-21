@@ -567,6 +567,7 @@ export function searchProjectRecords(
           codeLines: ref.lines,
           codeDescription: ref.description,
           codeSourceTurnIndices: ref.sourceTurnIndices,
+          codeMarkCode: ref.markCode,
           score: codeScore,
           snippet: truncateSnippet(`${ref.path}:${ref.lines} — ${ref.description}`),
           evidence: [ref.description],

@@ -202,7 +202,30 @@ export type CodeReference = {
   llmUpdatedAt?: number;
   /** Short diagnostic for failed background enrichment. */
   llmError?: string;
+  /**
+   * Verbatim code snippet (effective lines) captured from the raw transcript
+   * write-op (`Write.contents` / `StrReplace.new_string`) BEFORE the
+   * whitespace-collapse the LLM prompt applies to its own input. Used by the
+   * MCP server / extension for on-read staleness verification (Q4). Each entry
+   * is a trimmed, effective line (length >= 3, contains at least one Unicode
+   * letter or digit). Empty array or missing → staleness is `unknown`.
+   */
+  markCode?: string[];
 };
+
+/**
+ * On-read staleness verdict for a `CodeReference` (Q4 §Decided design item 3).
+ * Computed at response time by the MCP server (and the extension's mind-map
+ * builder for the webview); NOT persisted to the store.
+ *
+ * - `fresh`: local path resolves AND file exists AND every effective
+ *   `markCode` line is a substring of the file content.
+ * - `stale`: local path resolves AND (file missing OR at least one effective
+ *   `markCode` line is not a substring).
+ * - `unknown`: local path does not resolve (slug missing from paths map) OR
+ *   `markCode` is empty/missing (cannot judge).
+ */
+export type Staleness = "fresh" | "stale" | "unknown";
 
 /** Single LLM response: domain + terms + hierarchy + content outline + session synonyms. */
 export type SessionAnalysis = {

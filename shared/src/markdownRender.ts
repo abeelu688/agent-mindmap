@@ -319,6 +319,21 @@ function renderSearchHit(hit: SearchHit, verbose = false): string[] {
   if (typeof hit.evidenceIndex === "number") {
     lines.push(`- **evidenceIndex**: ${hit.evidenceIndex}`);
   }
+  if (hit.kind === "code" && hit.codePath) {
+    lines.push(`- **codePath**: \`${hit.codePath}\`${hit.codeLines ? `:${hit.codeLines}` : ""}`);
+    if (hit.codeDescription) {
+      lines.push(`- **codeDescription**: ${hit.codeDescription}`);
+    }
+    if (hit.staleness) {
+      const marker =
+        hit.staleness === "fresh"
+          ? "✅ fresh"
+          : hit.staleness === "stale"
+            ? "⚠️ stale"
+            : "❓ unknown";
+      lines.push(`- **staleness**: ${marker}`);
+    }
+  }
   lines.push(`- ${hit.snippet}`);
   for (const ev of hit.evidence.slice(0, 3)) {
     lines.push(`  - ${truncate(ev, 160)}`);

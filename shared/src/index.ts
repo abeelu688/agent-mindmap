@@ -76,6 +76,7 @@ export type {
   SessionSynonymRefine,
   SessionTermAlias,
   SessionTreeSnapshot,
+  Staleness,
   TermWithContext,
   Topic,
   TopicGraph,
@@ -87,6 +88,7 @@ export { JsonFsStore } from "./store/jsonFsStore";
 export { SqliteStore } from "./store/sqliteStore";
 export { migrateJsonToSqlite, type MigrationResult } from "./store/migrateJsonToSqlite";
 export { bootstrapStore, type BootstrapResult, type StoreKind } from "./store/storeBootstrap";
+export { computeStaleness } from "./staleness";
 export { LlmProviderError, type LlmErrorCode } from "./llmValidate/llmError";
 export { validateSessionOutline, validateMergedOutline } from "./llmValidate/outlineValidate";
 export {

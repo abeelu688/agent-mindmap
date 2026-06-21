@@ -8,6 +8,7 @@ import type {
   SessionConceptExtract,
   SessionSynonymRefine,
   SessionTreeSnapshot,
+  Staleness,
   TopicGraph,
 } from "./llmTypes";
 
@@ -40,6 +41,7 @@ export type {
   TopicGraph,
   TopicItem,
   TopicPathDecision,
+  Staleness,
 } from "./llmTypes";
 
 export type ConceptContextForMerge = {
@@ -328,6 +330,14 @@ export type SearchHit = {
   codeLines?: string;
   codeDescription?: string;
   codeSourceTurnIndices?: number[];
+  /** Populated when `kind === "code"`: verbatim effective lines for staleness verification. */
+  codeMarkCode?: string[];
+  /**
+   * On-read staleness verdict for code hits (Q4). Computed by the MCP server
+   * on its response path in BOTH modes; the team service does NOT populate
+   * this field. Missing on non-code hits.
+   */
+  staleness?: Staleness;
   score: number;
   snippet: string;
   evidence: string[];

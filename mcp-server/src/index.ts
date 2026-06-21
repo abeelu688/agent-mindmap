@@ -16,6 +16,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  backFillStaleness,
   createMcpHandlerContext,
   ensureProjectIndex,
   resolveSlug,
@@ -202,6 +203,7 @@ async function main(): Promise<void> {
       if (result.kind === "error") {
         return errorResult(result.message);
       }
+      await backFillStaleness(ctx, result.hits);
       return textResult(renderSearchResults(query, result.hits, limit, verbose));
     })
   );
@@ -220,6 +222,7 @@ async function main(): Promise<void> {
       if (result.kind === "error") {
         return errorResult(result.message);
       }
+      await backFillStaleness(ctx, result.hits);
       return textResult(renderMemoryRetrieval(query, result.hits, limit));
     })
   );

@@ -3,12 +3,14 @@ import * as path from "path";
 import {
   buildConceptTermIndex,
   buildRecordTokenSets,
+  computeStaleness,
   findProjectSlugByPath,
   McpSearchIndexCache,
   resolveProjectSlug,
   searchProjectRecords,
   STORE_LAYOUT,
   type ProjectSearchIndex,
+  type Staleness,
   type Store,
 } from "@agent-mindmap/shared";
 
@@ -163,4 +165,98 @@ export async function readSessionRecord(
   sessionId: string
 ) {
   return ctx.store.getRecord(projectSlug, sessionId);
+}
+
+/**
+ * Resolve a `CodeReference.path` against the local clone via the paths map
+ * (P2.7) and read the file content. Returns `undefined` when the path does
+ * not resolve (slug miss → `unknown` staleness) or the file cannot be read
+ * (missing/unreadable → `stale` staleness). The caller distinguishes the two
+ * via the `ResolvePathResult` from `pathsResolver`.
+ */
+async function readFileForCodeRef(
+  ctx: McpHandlerContext,
+  projectSlug: string,
+  codePath: string
+): Promise<{ kind: "unknown" } | { kind: "stale" } | { kind: "content"; text: string }> {
+  if (!ctx.pathsResolver) {
+    return { kind: "unknown" };
+  }
+  const resolved = ctx.pathsResolver.resolvePath(projectSlug, codePath);
+  if (resolved.kind === "empty-rel-path" || resolved.kind === "miss") {
+    return { kind: "unknown" };
+  }
+  try {
+    const text = await fs.readFile(resolved.absPath, "utf8");
+    return { kind: "content", text };
+  } catch {
+    return { kind: "stale" };
+  }
+}
+
+/**
+ * Compute staleness for a single `CodeReference` (Q4 §Decided design item 3).
+ * Uses a per-response file-content cache so multiple refs to the same file
+ * share one read.
+ */
+async function computeCodeRefStaleness(
+  ctx: McpHandlerContext,
+  projectSlug: string,
+  codePath: string,
+  markCode: string[] | undefined,
+  fileCache: Map<
+    string,
+    { kind: "unknown" } | { kind: "stale" } | { kind: "content"; text: string }
+  >
+): Promise<Staleness> {
+  const cacheKey = `${projectSlug}\0${codePath}`;
+  let entry = fileCache.get(cacheKey);
+  if (!entry) {
+    entry = await readFileForCodeRef(ctx, projectSlug, codePath);
+    fileCache.set(cacheKey, entry);
+  }
+  if (entry.kind === "unknown") {
+    return "unknown";
+  }
+  if (entry.kind === "stale") {
+    return "stale";
+  }
+  return computeStaleness(markCode, entry.text);
+}
+
+/**
+ * Back-fill `staleness` on every code `SearchHit` in-place (Q4.4 — MCP server
+ * is the single place where staleness is computed in both modes; team service
+ * hits arrive without staleness). One file read per distinct `(slug, path)`
+ * pair per call (same-path dedup via `fileCache`).
+ */
+export async function backFillStaleness(
+  ctx: McpHandlerContext,
+  hits: {
+    kind: string;
+    projectSlug: string;
+    codePath?: string;
+    codeMarkCode?: string[];
+    staleness?: Staleness;
+  }[]
+): Promise<void> {
+  if (!ctx.pathsResolver) {
+    return;
+  }
+  const fileCache = new Map<
+    string,
+    { kind: "unknown" } | { kind: "stale" } | { kind: "content"; text: string }
+  >();
+  for (const hit of hits) {
+    if (hit.kind !== "code" || !hit.codePath) {
+      continue;
+    }
+    hit.staleness = await computeCodeRefStaleness(
+      ctx,
+      hit.projectSlug,
+      hit.codePath,
+      hit.codeMarkCode,
+      fileCache
+    );
+  }
 }

@@ -29,6 +29,72 @@ function truncateContext(text: string, max = 180): string {
   return t.length > max ? t.slice(0, max - 3) + "..." : t;
 }
 
+/**
+ * Max chars of the raw snippet captured into `markCode` (Q4 §Decided design
+ * item 5). Truncation happens on a complete-line boundary — if the 2000-char
+ * cut falls mid-line, extend to the end of that line.
+ */
+const MARK_CODE_MAX_CHARS = 2000;
+
+/**
+ * Minimum effective line length. Lines shorter than this (after trim) are
+ * discarded as ineffective (Q4 §Decided design item 6).
+ */
+const MARK_CODE_MIN_LINE_LEN = 3;
+
+const hasLetterOrDigit = new RegExp("\\p{L}|\\p{N}", "u");
+
+/**
+ * Build the `markCode` array from a raw content snippet (Q4 §Decided design
+ * item 6). Steps:
+ *   1. Cap at 2000 chars on a complete-line boundary (extend to end of the
+ *      line the cut falls in).
+ *   2. Split on newlines.
+ *   3. Trim each line.
+ *   4. Discard ineffective lines: empty / length < 3 / no Unicode letter or
+ *      digit.
+ *
+ * Returns `[]` when the snippet is empty or all lines are discarded — the
+ * caller (MCP server / extension staleness check) treats empty `markCode` as
+ * `unknown` staleness.
+ */
+export function buildMarkCode(rawSnippet: string | undefined): string[] {
+  if (!rawSnippet) {
+    return [];
+  }
+  let capped = rawSnippet;
+  if (capped.length > MARK_CODE_MAX_CHARS) {
+    const cut = capped.slice(0, MARK_CODE_MAX_CHARS);
+    const lastNewline = cut.lastIndexOf("\n");
+    // If the char right after the cut is a newline, the cut is already on a
+    // line boundary — use as-is. Otherwise extend to the end of the current
+    // line (find the next newline after the cut point).
+    if (capped[MARK_CODE_MAX_CHARS] === "\n") {
+      capped = cut;
+    } else if (lastNewline >= 0 && MARK_CODE_MAX_CHARS - lastNewline > 1) {
+      // Trim back to the previous newline (don't leave a half-line).
+      capped = cut.slice(0, lastNewline);
+    } else {
+      // The first line itself exceeds the cap — extend to its end.
+      const nextNewline = rawSnippet.indexOf("\n", MARK_CODE_MAX_CHARS);
+      capped = nextNewline >= 0 ? rawSnippet.slice(0, nextNewline) : rawSnippet;
+    }
+  }
+  const lines = capped.split("\n");
+  const effective: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (trimmed.length < MARK_CODE_MIN_LINE_LEN) {
+      continue;
+    }
+    if (!hasLetterOrDigit.test(trimmed)) {
+      continue;
+    }
+    effective.push(trimmed);
+  }
+  return effective;
+}
+
 function buildTopicContextByTurn(outline?: SessionOutline): Map<number, string[]> {
   const byTurn = new Map<number, string[]>();
   if (!outline?.outline?.length) {
@@ -170,13 +236,16 @@ export function extractFilePathsFromEvents(
 }
 
 function buildFallbackReferences(entries: FileEntry[]): CodeReference[] {
-  const groups = new Map<string, { path: string; desc: string; turns: number[] }>();
+  const groups = new Map<
+    string,
+    { path: string; desc: string; turns: number[]; snippet?: string }
+  >();
   for (const e of entries) {
     const fb = fallbackDescription(e);
     const key = `${e.path}\0${fb}`;
     let g = groups.get(key);
     if (!g) {
-      g = { path: e.path, desc: fb, turns: [] };
+      g = { path: e.path, desc: fb, turns: [], snippet: e.contentSnippet };
       groups.set(key, g);
     }
     g.turns.push(e.turnIndex);
@@ -186,6 +255,7 @@ function buildFallbackReferences(entries: FileEntry[]): CodeReference[] {
     lines: "-",
     description: g.desc,
     sourceTurnIndices: g.turns,
+    markCode: buildMarkCode(g.snippet),
   }));
 }
 
@@ -379,7 +449,7 @@ function matchEntriesToDescriptions(
     arr.push(d.description);
   }
 
-  const acc = new Map<string, { path: string; desc: string; turns: number[] }>();
+  const acc = new Map<string, { path: string; desc: string; turns: number[]; snippet?: string }>();
   const usedDescs = new Map<string, number>();
   let unmatchedPathCount = 0;
   for (const entry of entries) {
@@ -396,7 +466,7 @@ function matchEntriesToDescriptions(
     const key = `${entry.path}\0${desc}`;
     let g = acc.get(key);
     if (!g) {
-      g = { path: entry.path, desc, turns: [] };
+      g = { path: entry.path, desc, turns: [], snippet: entry.contentSnippet };
       acc.set(key, g);
     }
     g.turns.push(entry.turnIndex);
@@ -414,6 +484,7 @@ function matchEntriesToDescriptions(
     lines: "-",
     description: g.desc,
     sourceTurnIndices: g.turns,
+    markCode: buildMarkCode(g.snippet),
   }));
 }
 
@@ -706,4 +777,5 @@ export const __testing = {
   matchEntriesToDescriptions,
   normalizeCodeRefDescPath,
   formatCodeRefBatchLabel,
+  buildMarkCode,
 };
