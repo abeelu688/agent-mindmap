@@ -11,7 +11,7 @@
     "build:mcp": "node scripts/bundle-mcp-server.mjs",
     "build:extension": "npm run build --prefix extension",
     "build:webview": "npm run build --prefix webview",
-    "watch": "npm run watch --prefix extension & npm run watch --prefix webview",
+    "watch": "concurrently --kill-others \"npm run watch --prefix extension\" \"npm run watch --prefix webview\"",
     "test": "npm run build --prefix extension && vitest run",
     "test:vitest": "vitest run",
     "test:mcp": "vitest run test/mcpShared.test.ts test/mcpInstallConfig.test.ts test/workspaceToSlug.test.ts",
@@ -49,6 +49,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "concurrently": "^9.2.3",
     "eslint": "9.39.4",
     "eslint-config-prettier": "9.1.2",
     "eslint-import-resolver-typescript": "3.10.1",
