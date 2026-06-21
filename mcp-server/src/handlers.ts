@@ -22,10 +22,23 @@ export type McpHandlerContext = {
    */
   storeDir?: string;
   indexCache: McpSearchIndexCache;
+  /**
+   * Resolves `CodeReference.path` against the local clone for a project slug
+   * via the paths map the extension writes. Used by Q4 staleness verification.
+   * Optional — absent when paths-map resolution is not wired (pre-Q4).
+   */
+  pathsResolver?: {
+    resolvePath: (slug: string, relPath: string) => import("./pathsMap").ResolvePathResult;
+    resetCache: () => void;
+  };
 };
 
-export function createMcpHandlerContext(store: Store, storeDir?: string): McpHandlerContext {
-  return { store, storeDir, indexCache: new McpSearchIndexCache() };
+export function createMcpHandlerContext(
+  store: Store,
+  storeDir?: string,
+  pathsResolver?: McpHandlerContext["pathsResolver"]
+): McpHandlerContext {
+  return { store, storeDir, indexCache: new McpSearchIndexCache(), pathsResolver };
 }
 
 async function getLatestSourceMtime(ctx: McpHandlerContext, projectSlug: string): Promise<number> {

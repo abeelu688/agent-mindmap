@@ -22,6 +22,7 @@ import {
   runProjectSearch,
 } from "./handlers";
 import { resolveMcpLocale } from "./mcpLocale";
+import { createPathsResolver } from "./pathsMap";
 import { resolveAllToolDescriptions } from "./toolDescriptions";
 
 declare const __MCP_SERVER_VERSION__: string;
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
     // MCP stdio reserves stdout for protocol traffic; warnings go to stderr.
     console.error(`[agent-mindmap] store bootstrap: ${bootstrap.warning}`);
   }
-  const ctx = createMcpHandlerContext(bootstrap.store, storeDir);
+  const ctx = createMcpHandlerContext(bootstrap.store, storeDir, createPathsResolver(storeDir));
 
   const server = new McpServer({
     name: "agent-mindmap",

@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { mindMapLog } from "../webview/MindMapLog";
 import { claudeHost } from "./claudeHost";
 import { cursorHost } from "./cursorHost";
+import { getCachedRepoSlug, getProjectMode } from "./slugDerivation";
 import type { AgentHost, AgentHostId, HostSetting } from "./types";
 
 const HOSTS: Record<AgentHostId, AgentHost> = {
@@ -132,5 +133,13 @@ export function getWorkspaceSlug(host: AgentHost): string | undefined {
   if (!folder) {
     return undefined;
   }
-  return host.encodeWorkspacePath(folder.uri.fsPath);
+  const fsPath = folder.uri.fsPath;
+  if (getProjectMode() === "repo") {
+    // Sync cache lookup — the gate at activation populates this. `undefined`
+    // when the gate hasn't run, the folder failed prerequisites, or the folder
+    // isn't in the cache; callers bail and the activation notification has
+    // already surfaced the real reason.
+    return getCachedRepoSlug(fsPath);
+  }
+  return host.encodeWorkspacePath(fsPath);
 }

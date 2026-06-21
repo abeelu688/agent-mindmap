@@ -68,6 +68,11 @@
         "command": "agent-mindmap.selectModel",
         "title": "Agent Mind Map: Select Model",
         "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.refreshRepoPaths",
+        "title": "Agent Mind Map: Refresh Repo Paths",
+        "category": "Agent Mind Map"
       }
     ],
     "configuration": {
@@ -82,6 +87,15 @@
           ],
           "default": "auto",
           "description": "Which AI product's on-disk transcripts to read. auto = detect from app name and existing transcript folders."
+        },
+        "agentMindmap.project.mode": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "repo"
+          ],
+          "default": "workspace",
+          "description": "How the project slug (the store key for sessions) is derived. workspace = from the workspace folder path (default, backward-compatible). repo = from the normalized git origin remote URI, so the same repo cloned to different paths aggregates under one slug. repo mode requires every workspace folder to be a git repo with origin at the repo root; otherwise a hard error is shown."
         },
         "agentMindmap.projectsDir": {
           "type": "string",

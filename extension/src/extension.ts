@@ -11,6 +11,8 @@ import { initLog } from "./log";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { MindMapHost } from "./webview/MindMapHost";
 import { getActiveHost, getWorkspaceSlug, resetHostCache, resolveHostId } from "./host";
+import { checkRepoModeGate, getProjectMode, type RepoGateFailure } from "./host/slugDerivation";
+import { t } from "./l10n/uiTranslate";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import { LlmProviderError } from "./llm/types";
@@ -28,6 +30,7 @@ import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
+import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -66,6 +69,13 @@ export function activate(context: vscode.ExtensionContext): void {
         const providerId = resolveLlmProviderId(providerSetting, host.defaultLlmProvider);
         MindMapHost.setProviderId(providerId);
       }
+      if (e.affectsConfiguration("agentMindmap.project.mode")) {
+        resetHostCache();
+        void runRepoModeGate();
+      }
+      if (affectsPathsMap(e)) {
+        void writePathsMaps();
+      }
       if (affectsMcpLocale(e)) {
         void syncMcpLocaleFile();
       }
@@ -75,6 +85,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       resetHostCache();
+      void runRepoModeGate();
+      void writePathsMaps();
     })
   );
 
@@ -106,6 +118,21 @@ export function activate(context: vscode.ExtensionContext): void {
         `[activate] store bootstrap failed: ${err instanceof Error ? err.message : String(err)}`
       )
   );
+
+  // ── Repo-mode prerequisite gate ─────────────────────────────────────────
+  //  In repo mode every workspace folder must be a git repo with `origin` and
+  //  be the repo root. On any failure, surface an error notification naming
+  //  the failing folders; `getWorkspaceSlug` then returns `undefined` for
+  //  those folders and analysis bails. Best-effort: never blocks activation.
+
+  void runRepoModeGate();
+
+  // ── Paths map files (workspace-paths.json / repo-paths.json / mcp-mode.json)
+  //  Written at activation + on workspace-folder / mode change so the MCP
+  //  server can resolve CodeReference.path against the local clone. Mirrors
+  //  the Q2 locale-file pattern. Best-effort.
+
+  void writePathsMaps();
 
   // ── Document close listener (auto-reveal mind map) ────────────────────
 
@@ -182,7 +209,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.selectModel",
       wrapCommand(() => commandSelectModel(context))
-    )
+    ),
+    vscode.commands.registerCommand("agent-mindmap.refreshRepoPaths", async () => {
+      await writePathsMaps();
+      void vscode.window.showInformationMessage(
+        t("ui.info.repoPathsRefreshed", "Agent Mind Map: Refreshed repo/workspace paths map.")
+      );
+    })
   );
 
   // ── Post-activation setup ──────────────────────────────────────────────
@@ -212,6 +245,32 @@ export function deactivate(): void {
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
+
+/** Run the repo-mode gate; in workspace mode it's a no-op. Surfaces a localized error notification on failure. */
+async function runRepoModeGate(): Promise<void> {
+  if (getProjectMode() !== "repo") {
+    return;
+  }
+  try {
+    const result = await checkRepoModeGate();
+    if (result.broken) {
+      void vscode.window.showErrorMessage(formatRepoGateError(result.failures));
+    }
+  } catch (err) {
+    mindMapLog(
+      `[activate] repo mode gate failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+function formatRepoGateError(failures: RepoGateFailure[]): string {
+  const lines = failures.map((f) => `• ${f.folder} — ${f.reason}`);
+  return t(
+    "ui.warning.repoModeGateBroken",
+    "Agent Mind Map: repo mode requires every workspace folder to be a git repo with origin at the repo root. Fix or switch to workspace mode.",
+    lines.join("\n")
+  );
+}
 
 async function maybeWarnEmptyClaudeTranscripts(context: vscode.ExtensionContext): Promise<void> {
   const host = await getActiveHost(context);

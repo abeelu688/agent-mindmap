@@ -6,6 +6,8 @@
   "ui.command.refresh.done": "Agent Mind Map refreshed.",
   "ui.warning.openMindMapFirst": "Agent Mind Map: Open a mind map first.",
   "ui.warning.openWorkspaceFolderFirst": "Agent Mind Map: Open a workspace folder first.",
+  "ui.warning.repoModeGateBroken": "Agent Mind Map: repo mode requires every workspace folder to be a git repo with origin at the repo root. Fix or switch to workspace mode.\n{0}",
+  "ui.info.repoPathsRefreshed": "Agent Mind Map: Refreshed repo/workspace paths map.",
   "ui.download.pickFolderLabel": "Select download folder",
   "ui.download.exporting.title": "Agent Mind Map: Exporting…",
   "ui.download.choice.openInBrowser": "Open in browser",
