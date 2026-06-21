@@ -527,6 +527,36 @@ export class SqliteStore implements Store {
   }
 
   /**
+   * Read + JSON-parse an arbitrary `kv` value by raw key. Returns `undefined`
+   * on miss / parse error. Exposed for the team-mode push queue (P4.3) which
+   * stores per-project push watermarks under keys like
+   * `push-watermark:<projectSlug>`. Not on the `Store` interface —
+   * single-machine-only metadata.
+   */
+  async readKvJson<T>(key: string): Promise<T | undefined> {
+    return this.readKv<T>(key);
+  }
+
+  /** Upsert an arbitrary `kv` value as JSON. Exposed for the push queue. */
+  async writeKvJson(key: string, value: unknown): Promise<void> {
+    await this.writeKv(key, value);
+  }
+
+  /** Delete a `kv` row by key. Exposed for the push queue / cleanup. */
+  async deleteKv(key: string): Promise<void> {
+    await this.run(`DELETE FROM kv WHERE key = ?`, [key]);
+  }
+
+  /** List all `kv` keys matching a prefix. Exposed for the push queue. */
+  async listKvKeys(prefix: string): Promise<string[]> {
+    const rows = await this.all<{ key: string }>(
+      `SELECT key FROM kv WHERE key LIKE ? ORDER BY key`,
+      [`${prefix}%`]
+    );
+    return rows.map((r) => r.key);
+  }
+
+  /**
    * One-way re-key of every session under `oldSlug` to `newSlug`
    * (TEAM_MODE.md §Q5 rule 11). Runs in a single transaction: copies the
    * project row under the new slug (preserving revision / record_count /

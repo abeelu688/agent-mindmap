@@ -92,6 +92,7 @@ export {
   RemoteStoreNotSupported,
   type RemoteStoreOptions,
 } from "./store/remoteStore";
+export { TeamStore, type PushQueueLike } from "./store/teamStore";
 export { migrateJsonToSqlite, type MigrationResult } from "./store/migrateJsonToSqlite";
 export { bootstrapStore, type BootstrapResult, type StoreKind } from "./store/storeBootstrap";
 export { computeStaleness } from "./staleness";

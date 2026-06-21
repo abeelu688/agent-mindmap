@@ -34,6 +34,7 @@ function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord
       projectPath: "/home/test/proj",
       transcriptPath: "/tmp/s1.jsonl",
       transcriptMtimeMs: 1,
+      transcriptFreshnessToken: "1",
       analyzedAt: 1000,
       llm: { provider: "cursor-cli" },
       promptParams: { maxTopics: 8, maxItemsPerTopic: 6 },
