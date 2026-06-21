@@ -46,12 +46,32 @@ const platform = process.platform;
 const arch = process.arch;
 const libc = platform === "linux" && fs.existsSync("/etc/alpine-release") ? "musl" : "glibc";
 
+function prebuildCandidates() {
+  const out = [];
+  if (platform === "linux") {
+    if (libc === "musl") {
+      out.push(\`napi-v6-linuxmusl-\${arch}\`);
+    }
+    // TryGhost / download-sqlite3-prebuilds.sh layout (no libc segment).
+    out.push(\`napi-v6-linux-\${arch}\`);
+    // node-pre-gyp style path (glibc explicitly in the triplet).
+    out.push(\`napi-v6-linux-glibc-\${arch}\`);
+    return out;
+  }
+  out.push(\`napi-v6-\${platform}-\${arch}\`);
+  out.push(\`napi-v6-\${platform}-\${libc}-\${arch}\`);
+  return out;
+}
+
 let binding = null;
 
 for (const napi of napiVersions) {
-  const prebuildDir = path.join(__dirname, "binding", \`napi-v\${napi}-\${platform}-\${libc}-\${arch}\`);
-  const prebuildPath = path.join(prebuildDir, "node_sqlite3.node");
-  binding = tryLoad(prebuildPath);
+  for (const triplet of prebuildCandidates()) {
+    const prebuildDir = path.join(__dirname, "binding", \`\${triplet}\`);
+    const prebuildPath = path.join(prebuildDir, "node_sqlite3.node");
+    binding = tryLoad(prebuildPath);
+    if (binding) break;
+  }
   if (binding) break;
 }
 
