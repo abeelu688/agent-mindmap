@@ -463,6 +463,7 @@ These don't block the plan but need answers when the relevant PR is in flight:
 - **P4.3**: Push-queue backoff upper bound (recommend 5 min).
 - **P5.1**: Worker interval default (recommend 10 min).
 - **P6.1**: Grafana dashboard in tree or hosted (recommend in tree).
+- **Q4**: fully resolved 2026-06-21 (all 6 sub-questions closed; see `TEAM_MODE.md` §Q4 Decided design). Resolved decisions: `markCode` size + source — raw `Write.contents` / `StrReplace.new_string` captured before the prompt's whitespace-collapse + 300-char truncation, capped at 2000 chars with complete-line truncation, codeRef LLM prompt unchanged, no `PIPELINE_VERSION` bump for the prompt's sake; snippet-match normalization — `markCode` stored as `string[]` of effective lines, per-line substring match, no global normalization, lines < 3 chars or with no letter/digit discarded; verification timing — on-read, `staleness` is a response-time derived field, not persisted to store, no sweep/migration; local-clone-absent — three-state `fresh`/`stale`/`unknown`, path-resolves+file-missing→stale, slug-missing/empty-markCode→unknown; SearchHit surfacing — stale/unknown hits always surface as `kind: "code"` with `staleness` tag, never filtered/demoted, staleness computed/back-filled by MCP server in both modes, team service returns hits without `staleness`; back-fill — not needed, not yet shipped, missing `markCode` → `unknown` naturally.
 
 ### Dependency graph
 
@@ -471,6 +472,10 @@ P1.1 → P1.2 → P1.3 → P1.4
                           ↓
                     P2.1 → P2.2 → P2.3 → (release) → P2.4 → P2.5
                                               ↓
+                                         P2.6 → P2.7 → P2.8
+                                                    ↓
+                                                    Q4 (after Q4 sub-questions resolve)
+                                                    ↓
                                          P3.1 → P3.2 → P3.3 → P3.4
                                                                        ↓
                                                                   P4.1 → P4.2 → P4.3 → P4.4
@@ -487,26 +492,106 @@ Q2 (tool descriptions)   ──┘  (independent, lands anytime)
 
 P2.4 (deprecate JSON write path) and P2.5 (remove `JsonFsStore`) can land after P3.x starts — they're independent of the service work. P5 and P6 require P4 complete (clients connected) to be meaningful, but P5.1 (worker) can start in parallel with P4 since it only depends on P3.
 
+**Q5 (project mode) ordering rationale**: P2.6 (slug derivation) → P2.7 (paths.json map) → P2.8 (re-key). P2.6 must land before P2.7 because the map is derived from slugs. P2.7 must land before P2.8 because re-key needs the repo-slug → path mapping to validate targets. P2.8 must land before P3/P4 because team mode implies repo mode and the team-enable prompt triggers re-key. Q4 lands after P2.7 (its MCP-server file-read needs the paths map).
+
 **Q1 / Q2 / Q3 placement notes**:
 
 - **Q1 (codeRef retrieval signal)**: standalone PR, no phase dependency. Touches `shared/src/searchIndex.ts` + `SearchHit` type + `retrievalEval.ts`. Recommended to land before P2.1 so the SQLite migration and later Go port (P5.4) pick up the codeRef retrieval branch from the start. Q1 is a prerequisite of P5.4: the Go token-scorer port must include the `"code"` hit kind, the `MAX_HITS_PER_CODE` cap, and the reverse concept boost — otherwise the Go port diverges from the TypeScript reference and fixture-parity tests fail.
 - **Q2 (tool descriptions)**: standalone PR, no phase dependency, no code dependency on Q1 or Q3. Lands anytime; recommended before the MCP server's first real release.
 - **Q3 (embedding hybrid retrieval)**: lands as P5.4 → P5.5 → P5.6, after P5.1 (merge worker exists, embedding worker runs alongside it). P5.4 depends on Q1 being landed (the Go token-scorer port must mirror the TypeScript scorer _including_ Q1's codeRef branch — fixture-parity tests assert identical output, so Q1 must be in the TypeScript reference first). P5.4 also depends on P3.2 (REST API exists, so the new `/search` endpoint has a router to plug into). P5.5 and P5.6 depend on P5.4.
 
+### Q5 — Project mode (workspace/repo) + repo-URI slugs + re-key
+
+**Placement decision**: Q5 spans the extension + MCP server and is **independent of the team-mode phases** (P3–P6) — it ships value in single-machine mode (stable slugs across directory renames; Q4 staleness needs repo-relative paths). It lands as a sub-series `P2.6 → P2.7 → P2.8` after P2.3 (SQLite store is the foundation the re-key migration writes to) and before P3 (team mode consumes repo slugs). Design finalized in `TEAM_MODE.md` §Q5. Q4 (CodeReference `markCode` + staleness) depends on Q5: Q4's MCP-server file-read needs the repo-slug → local-clone mapping from P2.7, so Q4 lands after P2.7.
+
+Why this placement exposes implementation-order issues:
+
+- **P2.6 (mode setting + slug derivation) before P2.7 (paths.json)**: the slug derivation is the source of truth; the paths map is derived from it. Building the map first would require mocking slugs.
+- **P2.7 (paths.json) before P2.8 (re-key)**: re-key rewrites `projectSlug` primary keys in the SQLite store and needs the repo-slug → path mapping to validate that each re-keyed folder has a resolvable target. Re-key also needs the hard-error prerequisite check (rule 10), which lives in P2.6's slug-derivation module.
+- **P2.8 (re-key) before P3 (team mode)**: team mode implies repo mode (rule 3) and the team-enable guidance prompt triggers re-key. If re-key doesn't exist, team enablement can't offer the switch.
+- **Q4 after P2.7**: Q4's MCP-server staleness verification reads `repo-paths.json` / `workspace-paths.json` (written by P2.7) to resolve `CodeReference.path` against the local clone. Without the map, Q4 can't locate files.
+
+**P2.6 — `agentMindmap.project.mode` setting + slug derivation + prerequisite hard-error**
+
+**Scope**
+
+- New VS Code setting `agentMindmap.project.mode` (`"workspace"` default | `"repo"`), added to `extension/package.json` settings schema.
+- `extension/src/host/slugDerivation.ts` (new): a unified `deriveProjectSlug(workspaceFolder, mode): { slug, root, error }` function. `workspace` branch: current `workspaceToSlug`/`path.basename` behavior. `repo` branch: run `git -C <folder> config --get remote.origin.url` + `git -C <folder> rev-parse --show-toplevel`; if both succeed AND `show-toplevel` == folder path → normalize URI to slug (rule 2, `normalizeRepoUriToSlug` helper); else return an `error` describing the failure (非 git 仓库 / 无 origin / 非 repo 根 / git 不可用).
+- `normalizeRepoUriToSlug(uri: string): string` — strip scheme, host:port, `user@` scp prefix; keep `org/repo.git` with trailing `.git`. Unit tests covering the 4 worked examples in rule 2 + edge cases (no `.git`, trailing slash, port-only host).
+- Replace the existing slug derivation call sites (`cursorHost.ts:53`, `claudeHost.ts:131`, `paths.ts`) to route through `deriveProjectSlug` with the configured mode. **Backward-compat**: when mode = `workspace` (default), behavior is byte-identical to today — no existing user's slug changes.
+- **Hard-error enforcement (rule 10)**: at activation and on `onDidChangeWorkspaceFolders`, if mode = `repo` and ANY folder returns an error from `deriveProjectSlug`, surface a VS Code error notification naming failing folders + reasons; do NOT analyze sessions / write to store / push for those folders. The `agentMindmap.project.mode` setting is not rewritten. Existing sessions in the store remain renderable from `record_json`. Git binary unavailable (`git --version` fails) → every folder errors, same notification.
+- Unit tests: `slugDerivation.test.ts` covering workspace branch (parity with current), repo branch (all 4 normalization examples), and every error case (non-git, no origin, not repo root, git missing). Activation test: repo mode + one failing folder → error notification fires, no analysis.
+
+**Not in scope**: `repo-paths.json` / `workspace-paths.json` map files (P2.7); re-key migration (P2.8); MCP server changes (P2.7).
+
+**Test**: `slugDerivation.test.ts` + activation hard-error test pass; existing host tests unchanged (workspace mode parity).
+
+**Rollback**: revert; slug derivation returns to path-based. `agentMindmap.project.mode` setting ignored. No on-disk change.
+
+**P2.7 — `paths.json` map files + MCP server path resolution**
+
+**Scope**
+
+- `extension/src/store/pathsMap.ts` (new): writes `~/.agent-mindmap/workspace-paths.json` (`{workspaceSlug → folderPath}`) and `~/.agent-mindmap/repo-paths.json` (`{repoSlug → folderPath}`) at activation and on `onDidChangeWorkspaceFolders`. Workspace map: one entry per workspace folder, slug from `deriveProjectSlug(mode=workspace)`. Repo map: one entry per workspace folder that passes repo prerequisites, slug from `deriveProjectSlug(mode=repo)`; first-seen wins on slug collision (rule 9), losers logged at info. Atomic write via `writeJsonAtomic`.
+- Manual refresh command `agentMindmap.refreshRepoPaths` ("Agent Mind Map: Refresh Repo Paths") rewrites both maps on demand.
+- `mcp-server/src/handlers.ts` + `mcp-server/src/pathsMap.ts` (new): on startup, load the relevant map (based on a mode hint passed from the extension, or probe both) into memory. **On every slug-lookup miss, re-read the map file from disk and retry** (rule 8). If re-read still misses → signal the extension to surface a VS Code notification naming the missing slug + suggesting Refresh Repo Paths (repo mode) or checking workspace folder (workspace mode). No `fs.watch`.
+- Mode propagation: extension writes `~/.agent-mindmap/mcp-mode.json` (`{"mode":"repo"|"workspace"}`) alongside the existing `mcp-locale.json` (Q2 pattern) so the MCP server knows which map to read. Missing file → assume `workspace` (backward-compat).
+
+**Not in scope**: Q4 staleness verification (the file-read + snippet-match — that's Q4, lands after P2.7); re-key (P2.8).
+
+**Test**: `pathsMap.test.ts` — workspace map correctness, repo map with first-seen tie-break, atomic write, refresh command rewrites. MCP server test: slug hit → cached; slug miss → re-read → hit; slug miss → re-read → miss → notification signaled.
+
+**Rollback**: revert; maps not written, MCP server falls back to current path-resolution (none — Q4 not yet landed, so no behavior change visible).
+
+**P2.8 — One-way re-key migration (workspace → repo)**
+
+**Scope**
+
+- `extension/src/store/rekeyMigration.ts` (new): triggered when `project.mode` switches `workspace → repo` (manually via setting change, or via the team-enable guidance prompt in P4.2). Steps per rule 11:
+  1. Run prerequisite check (rule 10) — if any folder fails, abort re-key with the hard-error notification (re-key doesn't start; no backup written).
+  2. Backup `store.db` → `store.db.pre-rekey-<timestamp>` (overwrite previous backup). Backup failure → abort.
+  3. For each workspace folder (one SQLite transaction per folder): rewrite `SessionRecord` primary key `(projectSlug, sessionId)` from workspace slug to repo slug. **`CodeReference.path` NOT rewritten** (folder == repo root ⇒ bases identical). Idempotent: folder with no sessions under old slug = no-op.
+  4. Progress notification per folder + summary ("已迁移 N 个工作区").
+- After re-key, mark the store as re-keyed (a `kv` flag `rekeyed-to-repo`); `workspace` mode is no longer offered for that store (rule 5, one-way). Setting `agentMindmap.project.mode` back to `workspace` on a re-keyed store surfaces a warning ("此 store 已迁移到仓库模式，无法回退到工作区模式") and is refused.
+- `SqliteStore` gains a `rekeyProjectSlug(oldSlug, newSlug, sessionIds?)` method (transactional PK rewrite). The `sessions` table PK is `(project_slug, session_id)`, so rewriting means INSERT new row + DELETE old row within the transaction (SQLite doesn't support ALTER on PK directly).
+- Interruption recovery: per-folder transactions guarantee folder-internal consistency; re-running re-key completes remaining folders (idempotent).
+
+**Not in scope**: team-mode bulk push (that's P4.4, re-keys on the server side); the team-enable guidance prompt itself (P4.2).
+
+**Test**: `rekeyMigration.test.ts` — per-folder transaction rollback on injected failure; backup correctness + backup-failure abort; path byte-identical before/after; prerequisite-gate (failing folder → re-key doesn't start); idempotency (run twice = no-op); interruption recovery (interrupt after folder A, re-run, folder B completes). One-way enforcement: re-keyed store refuses `workspace` mode.
+
+**Rollback**: revert; re-key command not registered. A store that was re-keyed under this PR and then downgraded would have repo-slugged records that the downgraded (pre-P2.8) code reads fine (it doesn't care about slug shape) — but `workspace` mode would treat them as workspace slugs, which is incorrect. Mitigation: the `store.db.pre-rekey-<ts>` backup is the recovery path; document that downgrade after re-key requires restoring the backup.
+
+**Q4 — CodeReference `markCode` + staleness (lands after P2.7)**
+
+**Placement**: Q4 depends on P2.7 (MCP server path resolution via `paths.json`). All Q4 sub-questions resolved 2026-06-21 (see `TEAM_MODE.md` §Q4 Decided design). Q4 is implemented as a single PR (per effort table) covering: schema change, capture-site change, MCP-server on-read staleness computation, and `SearchHit.staleness` back-fill.
+
+**Scope (single PR)**:
+
+1. **Schema** (`shared/src/llmTypes.ts`): add `markCode: string[]` to `CodeReference` (array of effective lines, see Decided design item 6). Do NOT add `staleness` to the stored `CodeReference` — it is a response-time derived field. Add `staleness?: "fresh" | "stale" | "unknown"` to the MCP-server response shapes that carry `CodeReference` (`get_session_outline` response, `SearchHit` when `kind === "code"`). The team service's `SearchHit` schema does NOT include `staleness` — the MCP server's response schema is the superset.
+2. **Capture site** (`extension/src/llm/extractCodeReferences.ts`): in `buildWriteInfoMap` (or alongside), capture the raw `Write.contents` / `StrReplace.new_string` **before** the existing `snippet.replace(/\s+/g, " ").slice(0, 300)` collapse. Apply the 2000-char cap with complete-line truncation, split on newlines, trim each line, discard ineffective lines (empty / length < 3 / no Unicode letter or digit), store the resulting array as `markCode`. The LLM prompt is unchanged.
+3. **MCP server** (`mcp-server/src/handlers.ts`): add a file-read + per-line-substring-match capability. In `get_session_outline` and `search_project_history` (and any other handler returning `CodeReference`s), compute `staleness` inline per the three-state rule (Q4.3): read `workspace-paths.json` / `repo-paths.json` (read-on-miss, from P2.7) → resolve `CodeReference.path` → stat + read file → per-line substring match → `fresh` / `stale` / `unknown`. Apply in-response same-path dedup (one file read per distinct path per response). In team mode, the MCP server receives `SearchHit`s from the team service without `staleness` and back-fills it before returning to the caller.
+4. **Frontend** (webview): render `staleness !== "fresh"` code refs with a warning marker (strikethrough / color). On click, do NOT auto-jump to the file if `staleness !== "fresh"` — surface a notice instead (or offer best-effort jump).
+5. **No `PIPELINE_VERSION` bump, no migration, no back-fill command** (per Q4.5 + Q4.6 resolved decisions).
+
+**Rollback**: revert; `markCode` field absent on new analyses, staleness feature absent. Existing `CodeReference`s render without staleness (as today). No store-schema migration was added, so nothing to undo on the store side.
+
 ### Estimated effort
 
 Rough, for planning not commitment:
 
-| Phase | PRs | Effort                                                                                                                  |
-| ----- | --- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1     | 4   | Small — pure refactor, mechanics                                                                                        |
-| 2     | 5   | Medium — SQLite migration is the risky part                                                                             |
-| 3     | 4   | Medium — new Go service, no `shared/` reuse; storage + REST + auth                                                      |
-| 4     | 4   | Medium — push queue and bulk migration are fiddly                                                                       |
-| 5     | 6   | Medium-large — trie-merge port (P5.1-3) + search/embedding port (P5.4-6), both cross-language with fixture-parity tests |
-| 6     | 4   | Small-to-medium — depends on which PRs are needed                                                                       |
-| Q1    | 1   | Small — retrieval-layer change in `searchIndex.ts`, no schema bump                                                      |
-| Q2    | 1   | Small — copy + locale file, no logic change                                                                             |
+| Phase | PRs | Effort                                                                                                                                                                                               |
+| ----- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | 4   | Small — pure refactor, mechanics                                                                                                                                                                     |
+| 2     | 5   | Medium — SQLite migration is the risky part                                                                                                                                                          |
+| 3     | 4   | Medium — new Go service, no `shared/` reuse; storage + REST + auth                                                                                                                                   |
+| 4     | 4   | Medium — push queue and bulk migration are fiddly                                                                                                                                                    |
+| 5     | 6   | Medium-large — trie-merge port (P5.1-3) + search/embedding port (P5.4-6), both cross-language with fixture-parity tests                                                                              |
+| 6     | 4   | Small-to-medium — depends on which PRs are needed                                                                                                                                                    |
+| Q1    | 1   | Small — retrieval-layer change in `searchIndex.ts`, no schema bump                                                                                                                                   |
+| Q2    | 1   | Small — copy + locale file, no logic change                                                                                                                                                          |
+| Q4    | 1   | Medium — `CodeReference.markCode` schema (sourced from raw transcript write-ops, no LLM prompt change) + MCP-server file-read/staleness; PR breakdown finalized after its open sub-questions resolve |
+| Q5    | 3   | Medium — P2.6 (slug derivation + hard-error) + P2.7 (paths.json + MCP path resolution) + P2.8 (re-key migration)                                                                                     |
 
 ---
 
