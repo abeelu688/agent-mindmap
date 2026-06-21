@@ -411,6 +411,12 @@ Postgres needed (the storage layer's integration tests stay gated on
 
 ### P5.2 — Equivalences endpoint
 
+**Status**: landed. The merge worker collects per-project segment equivalences
+from LLM-produced `sessionAnalysis.segmentEquivalences` (preferred) /
+`sessionSynonyms.segmentEquivalences` (fallback) and writes them to kv under
+`equivalences:<slug>`. The endpoint reads from this key (falling back to the
+legacy ontology-cache path).
+
 **Scope**
 
 - `GET /v1/projects/:slug/equivalences` — already stubbed in P3.2; wire to actual ontology data produced by the merge worker.
@@ -421,6 +427,11 @@ Postgres needed (the storage layer's integration tests stay gated on
 **Rollback**: endpoint returns empty; MCP concept detail still works without equivalences.
 
 ### P5.3 — Client polls trie revision
+
+**Status**: landed. `RemoteStore.readConceptTrieMerge` now polls
+`GET /v1/merges/concept-trie/revision` before fetching the full trie; if the
+revision matches a cached merge, it returns the cached value without a full
+fetch.
 
 **Scope**
 

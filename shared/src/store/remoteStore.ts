@@ -105,6 +105,8 @@ export class RemoteStore implements Store {
   private readonly backoffBaseMs: number;
   private readonly backoffMaxMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  /** Cached concept-trie merge + its revision, for cheap polling (P5.3). */
+  private cachedConceptTrie: { revision: number; merge: MergeRecord } | undefined;
 
   constructor(serverUrl: string, apiKey: string, opts: RemoteStoreOptions = {}) {
     if (!serverUrl) {
@@ -227,8 +229,18 @@ export class RemoteStore implements Store {
   // ─── Merge / ontology (read paths hit REST; writes are server-side) ─────────
 
   async readConceptTrieMerge(): Promise<MergeRecord | undefined> {
+    // P5.3: poll the cheap revision endpoint first. If the revision matches the
+    // cached merge, return it without fetching the full trie. This mirrors the
+    // pattern in ensureProjectIndex (revision-gated cache) and avoids pulling
+    // the potentially large MergeRecord payload on every call.
+    const revision = await this.readConceptTrieRevision();
+    if (this.cachedConceptTrie && this.cachedConceptTrie.revision === revision) {
+      return this.cachedConceptTrie.merge;
+    }
     try {
-      return await this.getJson<MergeRecord>("/v1/merges/concept-trie");
+      const merge = await this.getJson<MergeRecord>("/v1/merges/concept-trie");
+      this.cachedConceptTrie = { revision, merge };
+      return merge;
     } catch (err) {
       if (err instanceof RemoteStoreHttpError && err.status === 404) {
         return undefined;

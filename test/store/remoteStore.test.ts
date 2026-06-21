@@ -229,16 +229,55 @@ describe("RemoteStore — concept-trie + equivalences", () => {
   it("readConceptTrieMerge returns undefined on 404", async () => {
     const f = vi
       .fn()
-      .mockResolvedValue(mockResponse({ status: 404, body: '{"error":"not built"}' }));
+      // P5.3: readConceptTrieMerge polls revision first, then fetches the trie.
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 1 } }))
+      .mockResolvedValueOnce(mockResponse({ status: 404, body: '{"error":"not built"}' }));
     const store = makeStore(f);
     expect(await store.readConceptTrieMerge()).toBeUndefined();
   });
 
   it("readConceptTrieMerge returns the parsed MergeRecord on 200", async () => {
-    const merge = { schemaVersion: 1, meta: { projectSlug: "p", builtAt: 1 }, root: {} };
-    const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "", json: merge }));
+    const merge = { schemaVersion: 1, meta: { projectSlug: "p", builtAt: 1 }, mindMap: {} };
+    const f = vi.fn()
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge }));
     const store = makeStore(f);
     expect(await store.readConceptTrieMerge()).toEqual(merge);
+  });
+
+  it("readConceptTrieMerge uses cached merge when revision unchanged (P5.3)", async () => {
+    const merge = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] }, mindMap: {} };
+    const f = vi.fn()
+      // First call: revision=5 → fetch trie
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge }))
+      // Second call: revision=5 (unchanged) → return cached, no trie fetch
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }));
+    const store = makeStore(f);
+    const first = await store.readConceptTrieMerge();
+    expect(first).toEqual(merge);
+    expect(f).toHaveBeenCalledTimes(2); // revision + trie
+    const second = await store.readConceptTrieMerge();
+    expect(second).toEqual(merge);
+    expect(f).toHaveBeenCalledTimes(3); // only revision poll, no trie fetch
+  });
+
+  it("readConceptTrieMerge re-fetches when revision changes (P5.3)", async () => {
+    const merge1 = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] }, mindMap: {} };
+    const merge2 = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 2, sessionIds: ["s1"], projectSlugs: ["p"] }, mindMap: {} };
+    const f = vi.fn()
+      // First call: revision=5 → fetch trie1
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge1 }))
+      // Second call: revision=6 (changed) → re-fetch trie2
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 6 } }))
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge2 }));
+    const store = makeStore(f);
+    const first = await store.readConceptTrieMerge();
+    expect(first).toEqual(merge1);
+    const second = await store.readConceptTrieMerge();
+    expect(second).toEqual(merge2);
+    expect(f).toHaveBeenCalledTimes(4); // revision + trie × 2
   });
 
   it("readConceptTrieRevision reads the revision counter", async () => {
