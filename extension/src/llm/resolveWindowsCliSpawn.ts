@@ -9,8 +9,7 @@ export type CliSpawnTarget = {
   mode: "node-direct" | "shell-shim";
 };
 
-const CURSOR_AGENT_BIN =
-  /^(agent|cursor-agent)(\.exe|\.cmd)?$/i;
+const CURSOR_AGENT_BIN = /^(agent|cursor-agent)(\.exe|\.cmd)?$/i;
 
 type NodeIndexPair = { nodePath: string; indexPath: string };
 
@@ -111,11 +110,22 @@ function tryResolveCursorAgentNode(bin: string): NodeIndexPair | undefined {
   return undefined;
 }
 
-/** Escape an argument for cmd.exe when shell: true on Windows. */
+/**
+ * Escape an argument for cmd.exe when shell: true on Windows.
+ * Covers cmd.exe metacharacters: %, !, ^, &, |, <, >, and double-quotes.
+ * The approach: wrap in double-quotes, escape internal double-quotes with \",
+ * and caret-escape special characters that cmd.exe interprets even inside quotes.
+ */
 function escapeCmdArg(arg: string): string {
-  // Double-quote and escape internal double-quotes with backslash.
-  // This prevents cmd.exe from interpreting shell metacharacters in the arg.
-  return `"${arg.replace(/"/g, '\\"')}"`;
+  // Escape double-quotes with backslash first (before caret-escaping)
+  let escaped = arg.replace(/"/g, '\\"');
+  // Caret-escape cmd.exe special characters that are interpreted even inside
+  // double-quotes: ^ & | < > and the % variable-expansion marker.
+  // ! (delayed expansion) is also escaped though it's only active when
+  // delayed expansion is enabled (cmd /v:on).
+  escaped = escaped.replace(/%/g, "%%").replace(/([\^&|<>!])/g, "^$1");
+  // Double-quote the result
+  return `"${escaped}"`;
 }
 
 /**
@@ -123,10 +133,7 @@ function escapeCmdArg(arg: string): string {
  * multiline prompts. Prefer `node.exe index.js` when we can locate Cursor Agent.
  * When falling back to shell mode, escape args to prevent cmd.exe injection.
  */
-export function resolveCliSpawnTarget(
-  bin: string,
-  args: string[]
-): CliSpawnTarget {
+export function resolveCliSpawnTarget(bin: string, args: string[]): CliSpawnTarget {
   if (process.platform === "win32") {
     const nodePlan = tryResolveCursorAgentNode(bin);
     if (nodePlan) {
@@ -158,4 +165,5 @@ export const __testing = {
   findNodeIndexUnderRoot,
   tryResolveCursorAgentNode,
   parseVersionKey,
+  escapeCmdArg,
 };
