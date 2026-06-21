@@ -12,25 +12,26 @@ import type {
 /**
  * Unified storage surface for agent-mindmap.
  *
- * Two implementations ship from day one:
- *   - `JsonFsStore` (single-machine, file-based JSON layout)
- *   - `RemoteStore` (team mode, HTTP client to a Postgres-backed service; TBD)
+ * Implementations:
+ *   - `SqliteStore` (single-machine, SQLite-backed via `@vscode/sqlite3`)
+ *   - `RemoteStore` (team mode, HTTP client to a Go team service)
+ *   - `TeamStore` (team mode, write-through wrapper combining local
+ *     SqliteStore + RemoteStore + PushQueue)
  *
  * Single-machine code constructs a store via `bootstrapStore()`. The MCP
  * server receives a `Store` via its handler context and never touches the
- * filesystem itself, so the same binary runs unchanged in both modes.
+ * filesystem directly, so the same binary runs unchanged in both modes.
  *
  * Write semantics:
  *   - `upsertRecord` is idempotent on `(projectSlug, sessionId)` and bumps the
  *     project revision inside its transaction. Returns the new revision.
- *   - `bumpProjectRevision` is atomic and monotonic. SQLite/Postgres use
- *     native transactions; the JSON file impl uses a lock file.
+ *   - `bumpProjectRevision` is atomic and monotonic. SQLite uses native
+ *     transactions.
  *   - Merge records (concept-trie / deterministic / llm-refined / llm-cache)
  *     and ontology records are written through this interface by the
  *     extension's analysis + merge pipelines. `SqliteStore` stores them as
- *     opaque JSON in the `kv` table; `JsonFsStore` writes them to the legacy
- *     JSON layout. `deleteProjectRecords` + `clearOntologyCache` back the
- *     "clear analysis cache" maintenance command.
+ *     opaque JSON in the `kv` table. `deleteProjectRecords` +
+ *     `clearOntologyCache` back the "clear analysis cache" maintenance command.
  */
 export interface Store {
   listProjectSummaries(): Promise<ProjectSummary[]>;

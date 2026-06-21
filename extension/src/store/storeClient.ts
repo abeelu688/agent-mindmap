@@ -22,7 +22,7 @@ import { runBulkPushIfNeeded } from "./bulkPush";
  *   - Writes locally to `SqliteStore` (working copy) + enqueues an async
  *     push to the team service via `PushQueue` (with retry + watermark).
  * When team mode is off (or partially configured), `getStore()` falls back to
- * the per-`storeDir` local `SqliteStore` / `JsonFsStore` via `bootstrapStore`.
+ * the per-`storeDir` local `SqliteStore` via `bootstrapStore`.
  */
 const cache = new Map<string, Promise<Store>>();
 const teamCache = new Map<string, Promise<Store>>();
@@ -60,9 +60,10 @@ async function resolveTeamStoreForDir(storeDir: string): Promise<Store> {
     }
     const local = await bootstrapForDir(storeDir);
     // The push queue needs the local SqliteStore specifically (for kv
-    // watermarks). If the local store isn't a SqliteStore (e.g. JsonFs
-    // fallback), skip the queue — pushes will go through RemoteStore
-    // directly via TeamStore.upsertRecord's no-queue path.
+    // watermarks). If the local store isn't a SqliteStore (unlikely after
+    // P2.4 removed the JsonFs fallback), skip the queue — pushes will go
+    // through RemoteStore directly via TeamStore.upsertRecord's no-queue
+    // path.
     if (!(local instanceof SqliteStore)) {
       console.warn(
         `[agent-mindmap] team mode: local store is not SqliteStore (${local.constructor.name}); push queue disabled`
@@ -94,7 +95,7 @@ async function getRemoteStore(): Promise<RemoteStore | undefined> {
 }
 
 // A no-op queue used when the local store can't persist watermarks (e.g.
-// JsonFsStore fallback). TeamStore.upsertRecord still writes locally; pushes
+// non-SqliteStore local). TeamStore.upsertRecord still writes locally; pushes
 // just don't happen until the next activation drain.
 const noopQueue: PushQueueLike = {
   enqueue: async () => {},
@@ -157,7 +158,7 @@ export async function isTeamModeEnabled(): Promise<boolean> {
 
 /**
  * Returns the local `SqliteStore` for the active `storeDir`, or `undefined`
- * if the local store isn't a `SqliteStore` (e.g. JsonFs fallback). Used by
+ * if the local store isn't a `SqliteStore` (unlikely). Used by
  * the bulk-push path (P4.4) to enumerate records + set pending flags.
  */
 export async function getLocalSqliteStore(): Promise<SqliteStore | undefined> {

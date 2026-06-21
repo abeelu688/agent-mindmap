@@ -2,8 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bootstrapStore, JsonFsStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
-import { writeJsonAtomic } from "../../shared/src/atomicWrite";
+import { bootstrapStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {
@@ -52,17 +51,6 @@ async function makeTmp(): Promise<{ storeDir: string; cleanup: () => Promise<voi
   return { storeDir, cleanup: async () => fs.rm(storeDir, { recursive: true, force: true }) };
 }
 
-async function writeSession(storeDir: string, record: SessionRecord): Promise<void> {
-  const file = path.join(
-    storeDir,
-    STORE_LAYOUT.sessionsDir,
-    record.meta.projectSlug,
-    `${record.meta.sessionId}.json`
-  );
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await writeJsonAtomic(file, record);
-}
-
 describe("bootstrapStore", () => {
   let env: Awaited<ReturnType<typeof makeTmp>>;
   let current: { store: { close?: () => Promise<void> } } | undefined;
@@ -78,7 +66,7 @@ describe("bootstrapStore", () => {
     try {
       await current?.store?.close?.();
     } catch {
-      // ignore — already closed or JsonFsStore (no close)
+      // ignore — already closed
     }
     await env.cleanup();
   });
@@ -92,36 +80,16 @@ describe("bootstrapStore", () => {
     expect(await fs.access(path.join(env.storeDir, "store.db"))).toBeUndefined();
   });
 
-  it("migrates legacy JSON into a new SqliteStore when no DB exists", async () => {
-    await writeSession(env.storeDir, sampleRecord({ projectSlug: "proj-a", sessionId: "s1" }));
-    await writeSession(
-      env.storeDir,
-      sampleRecord({ projectSlug: "proj-a", sessionId: "s2", analyzedAt: 2000 })
-    );
-
-    const result = await bootstrapStore(env.storeDir);
-    current = result;
-    expect(result.kind).toBe("sqlite-migrated");
-    expect(result.migrated).toBe(true);
-    expect(result.migration?.sessionCount).toBe(2);
-
-    const records = await result.store.listRecordsForProject("proj-a");
-    expect(records.map((r) => r.meta.sessionId).sort()).toEqual(["s1", "s2"]);
-  });
-
   it("reuses an existing store.db without migrating", async () => {
-    // First launch creates + migrates.
-    await writeSession(env.storeDir, sampleRecord({ sessionId: "s1" }));
+    // First launch creates a DB.
     const first = await bootstrapStore(env.storeDir);
     current = first;
-    expect(first.kind).toBe("sqlite-migrated");
+    // Write a record to the DB.
+    await first.store.upsertRecord(sampleRecord({ sessionId: "s1" }));
 
-    // Add a second JSON record after the DB exists. Second launch should NOT
-    // migrate (DB already exists) — the late JSON file is ignored by bootstrap.
-    await writeSession(env.storeDir, sampleRecord({ sessionId: "s2", analyzedAt: 2000 }));
+    // Second launch should reuse the existing DB.
     const second = await bootstrapStore(env.storeDir);
-    // Close the first store before superseding it (two handles on one DB is fine
-    // for reads, but be tidy).
+    // Close the first store before superseding it.
     try {
       await (first.store as { close?: () => Promise<void> }).close?.();
     } catch {
@@ -135,19 +103,70 @@ describe("bootstrapStore", () => {
     expect(records.map((r) => r.meta.sessionId)).toEqual(["s1"]);
   });
 
-  it("falls back to JsonFsStore when store.db exists but is corrupt", async () => {
-    // Legacy JSON the fallback can read.
-    await writeSession(env.storeDir, sampleRecord({ sessionId: "s1" }));
+  it("throws when store.db exists but is corrupt (no JsonFsStore fallback)", async () => {
     // Poison store.db with non-SQLite content.
     await fs.writeFile(path.join(env.storeDir, "store.db"), "NOT A DATABASE\n");
+    await expect(bootstrapStore(env.storeDir)).rejects.toThrow(/not a valid SQLite database/);
+  });
 
-    const result = await bootstrapStore(env.storeDir);
-    current = result;
-    expect(result.kind).toBe("sqlite-fallback-json");
-    expect(result.warning).toMatch(/not a valid SQLite database/i);
-    expect(result.store).toBeInstanceOf(JsonFsStore);
+  it("deletes legacy JSON session dirs on first launch when DB is healthy", async () => {
+    // Create a healthy DB first.
+    const first = await bootstrapStore(env.storeDir);
+    current = first;
+    await first.store.upsertRecord(sampleRecord({ sessionId: "s1" }));
 
-    const back = await result.store.getRecord("home-test-proj", "s1");
-    expect(back?.meta.sessionId).toBe("s1");
+    // Create legacy JSON sessions dir (simulating pre-P2.4 data).
+    const sessionsDir = path.join(env.storeDir, STORE_LAYOUT.sessionsDir, "proj-a");
+    await fs.mkdir(sessionsDir, { recursive: true });
+    await fs.writeFile(path.join(sessionsDir, "old.json"), "{}");
+
+    // Second bootstrap should delete the legacy JSON dir.
+    const second = await bootstrapStore(env.storeDir);
+    try {
+      await (first.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
+    current = second;
+
+    // Legacy JSON dir should be gone.
+    await expect(fs.access(path.join(env.storeDir, STORE_LAYOUT.sessionsDir))).rejects.toThrow();
+  });
+
+  it("only deletes legacy JSON dirs once (idempotent across launches)", async () => {
+    // Create a healthy DB first.
+    const first = await bootstrapStore(env.storeDir);
+    current = first;
+
+    // Create legacy JSON sessions dir.
+    const sessionsDir = path.join(env.storeDir, STORE_LAYOUT.sessionsDir, "proj-a");
+    await fs.mkdir(sessionsDir, { recursive: true });
+
+    // First bootstrap with legacy dir present → deletion + flag set.
+    const second = await bootstrapStore(env.storeDir);
+    try {
+      await (first.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
+    current = second;
+
+    // Create the dir again manually. Third bootstrap should NOT delete it
+    // (flag already set).
+    await fs.mkdir(path.join(env.storeDir, STORE_LAYOUT.sessionsDir, "proj-b"), {
+      recursive: true,
+    });
+    const third = await bootstrapStore(env.storeDir);
+    try {
+      await (second.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
+    current = third;
+
+    // The re-created dir should still exist (flag prevented re-deletion).
+    await expect(
+      fs.access(path.join(env.storeDir, STORE_LAYOUT.sessionsDir))
+    ).resolves.toBeUndefined();
   });
 });

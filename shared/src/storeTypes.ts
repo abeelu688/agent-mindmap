@@ -221,7 +221,7 @@ export type OntologyIndex = {
  * Intentionally decoupled from `SessionRecord` so the ontology schema can
  * evolve without rewriting every session file. The extension writes the full
  * record via `Store.writeOntologyRecord`; `SqliteStore` stores it as opaque
- * JSON in the `kv` table; `JsonFsStore` writes it to `ontology/cache/<key>.json`.
+ * JSON in the `kv` table.
  *
  * `schemaVersion === 1` is the only field validated on read — callers that
  * need a complete record (nodes/mappings/topicPaths populated) apply their

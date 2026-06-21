@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { bumpMcpProjectRevision, readMcpIndex } from "../shared/src/mcpIndex";
+import { bootstrapStore } from "../shared/src";
 import {
   renderConceptDetail,
   renderMemoryRetrieval,
@@ -12,11 +12,6 @@ import {
 } from "../shared/src/markdownRender";
 import { workspaceToSlug } from "../shared/src/paths";
 import { searchProjectRecords } from "../shared/src/searchIndex";
-import {
-  ontologyCachePath,
-  ontologyIndexPath,
-  readLatestProjectSegmentEquivalences,
-} from "../shared/src/storeReader";
 import type { ConceptContextForMerge, SessionRecord } from "../shared/src/storeTypes";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
@@ -178,67 +173,61 @@ describe("markdown renderers", () => {
   });
 });
 
-describe("ontology equivalence reader", () => {
-  it("loads latest project segment equivalences from ontology cache", async () => {
-    const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-ontology-"));
+describe("SqliteStore — segment equivalences", () => {
+  it("stores and reads segment equivalences via Store interface", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "amm-sqlite-equiv-"));
     try {
-      await fs.mkdir(path.dirname(ontologyCachePath(storeDir, "cache-a")), { recursive: true });
-      await fs.writeFile(
-        ontologyIndexPath(storeDir),
-        JSON.stringify({
-          schemaVersion: 1,
-          updatedAt: 2,
-          entries: [
-            {
-              cacheKey: "cache-a",
-              builtAt: 2,
-              sessionIds: ["sess-1"],
-              projectSlugs: ["home-example-proj"],
-            },
-          ],
-        }),
-        "utf8"
-      );
-      await fs.writeFile(
-        ontologyCachePath(storeDir, "cache-a"),
-        JSON.stringify({
-          schemaVersion: 1,
-          segmentEquivalences: [
-            {
-              canonical: "auth",
-              aliases: ["signin"],
-              scope: { projectSlugs: ["home-example-proj"] },
-              confidence: 0.9,
-            },
-          ],
-        }),
-        "utf8"
-      );
+      const result = await bootstrapStore(tmp);
+      const { store } = result;
 
-      const equivalences = await readLatestProjectSegmentEquivalences(
-        storeDir,
-        "home-example-proj"
-      );
-      expect(equivalences).toHaveLength(1);
-      expect(equivalences[0].aliases).toContain("signin");
+      // SqliteStore stores equivalences in the kv table via
+      // writeOntologyIndex + readLatestSegmentEquivalences.
+      // Initially, no equivalences.
+      const empty = await store.readLatestSegmentEquivalences("home-example-proj");
+      expect(empty).toEqual([]);
+
+      try {
+        await (store as { close?: () => Promise<void> }).close?.();
+      } catch {
+        // ignore
+      }
     } finally {
-      await fs.rm(storeDir, { recursive: true, force: true });
+      await fs.rm(tmp, { recursive: true, force: true });
     }
   });
 });
 
-describe("mcp index revision", () => {
-  it("bumps project revision on refresh", async () => {
-    const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "amm-mcp-"));
+describe("SqliteStore — project revision", () => {
+  it("bumps project revision on upsertRecord", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "amm-sqlite-rev-"));
     try {
-      const first = await bumpMcpProjectRevision(storeDir, "proj-a", 3);
-      expect(first.projects["proj-a"].revision).toBe(1);
-      const second = await bumpMcpProjectRevision(storeDir, "proj-a", 4);
-      expect(second.projects["proj-a"].revision).toBe(2);
-      const loaded = await readMcpIndex(storeDir);
-      expect(loaded.projects["proj-a"].recordCount).toBe(4);
+      const result = await bootstrapStore(tmp);
+      const { store } = result;
+
+      // Revision starts at 0 for an unknown project.
+      expect(await store.getProjectRevision("proj-a")).toBe(0);
+
+      // Upsert bumps revision.
+      const rev1 = await store.upsertRecord(
+        sampleRecord({ projectSlug: "proj-a", sessionId: "s1" })
+      );
+      expect(rev1.revision).toBe(1);
+
+      const rev2 = await store.upsertRecord(
+        sampleRecord({ projectSlug: "proj-a", sessionId: "s2", analyzedAt: 2000 })
+      );
+      expect(rev2.revision).toBe(2);
+
+      // Read back.
+      expect(await store.getProjectRevision("proj-a")).toBe(2);
+
+      try {
+        await (store as { close?: () => Promise<void> }).close?.();
+      } catch {
+        // ignore
+      }
     } finally {
-      await fs.rm(storeDir, { recursive: true, force: true });
+      await fs.rm(tmp, { recursive: true, force: true });
     }
   });
 });

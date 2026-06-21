@@ -2,7 +2,6 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { writeJsonAtomic } from "../shared/src/atomicWrite";
 import { resolveMcpLocale, MCP_LOCALES } from "../mcp-server/src/mcpLocale";
 import type { UiLocale } from "../extension/src/l10n/uiTranslate";
 
@@ -39,15 +38,15 @@ describe("resolveMcpLocale", () => {
   });
 
   it("returns 'en' when locale field is missing or unknown", async () => {
-    await writeJsonAtomic(path.join(tmp, "mcp-locale.json"), { locale: "klingon" });
+    await fs.writeFile(path.join(tmp, "mcp-locale.json"), JSON.stringify({ locale: "klingon" }));
     expect(resolveMcpLocale()).toBe("en");
-    await writeJsonAtomic(path.join(tmp, "mcp-locale.json"), {});
+    await fs.writeFile(path.join(tmp, "mcp-locale.json"), JSON.stringify({}));
     expect(resolveMcpLocale()).toBe("en");
   });
 
   it("returns the locale written by the extension for every supported UiLocale", async () => {
     for (const locale of MCP_LOCALES) {
-      await writeJsonAtomic(path.join(tmp, "mcp-locale.json"), { locale });
+      await fs.writeFile(path.join(tmp, "mcp-locale.json"), JSON.stringify({ locale }));
       expect(resolveMcpLocale()).toBe(locale);
     }
   });

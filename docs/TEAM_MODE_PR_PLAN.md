@@ -58,21 +58,25 @@
 - `ConceptOntologyRecord` moved to `shared/src/storeTypes.ts`.
 - Tests in `test/store/extensionStoreRouting.test.ts`.
 
-### P2.4 — Deprecate `JsonFsStore` write path ⬜
+### P2.4 — Deprecate `JsonFsStore` write path ✅
 
 **Scope** (ships one release after P2.3 is confirmed stable)
 
-- Remove the read-only fallback to `JsonFsStore` from `extension.ts`.
+- Remove the read-only fallback to `JsonFsStore` from `storeBootstrap.ts` — corrupt `store.db` now throws instead of falling back.
 - Remove `migrateJsonToSqlite.ts` (migration window closed).
-- Delete original JSON files on first launch of this version (after confirming `store.db` is healthy).
+- Delete original JSON files on first launch of this version (after confirming `store.db` is healthy), gated by a kv meta flag (`json-cleanup-done`) so it only runs once.
 - `JsonFsStore` class stays in tree for one more release, then removed in P2.5.
+- Tests (`mcpHandlers.test.ts`, `extensionStoreRouting.test.ts`, `storeBootstrap.test.ts`) switched from `JsonFsStore` to `SqliteStore` via `bootstrapStore`.
 
 **Rollback**: this is the commit point. After this, downgrade to pre-SQLite is no longer supported.
 
-### P2.5 — Remove `JsonFsStore` ⬜
+### P2.5 — Remove `JsonFsStore` ✅
 
-- Delete `jsonFsStore.ts`, `storeReader.ts`, `mcpIndex.ts` raw functions, `atomicWrite.ts`.
-- Tests that used `JsonFsStore` switch to `SqliteStore` only or an in-memory `MemoryStore` test double.
+- Deleted `jsonFsStore.ts`, `storeReader.ts`, `mcpIndex.ts`, `shared/src/atomicWrite.ts`.
+- Removed `JsonFsStore` export from `shared/src/index.ts`.
+- Tests (`mcpShared.test.ts`, `mcpHandlers.test.ts`, `extensionStoreRouting.test.ts`, `storeBootstrap.test.ts`) switched from `JsonFsStore` to `SqliteStore` via `bootstrapStore`.
+- Deleted `jsonFsStore.test.ts` and `migrateJsonToSqlite.test.ts`.
+- Updated comments referencing `JsonFsStore` in `store.ts`, `storeTypes.ts`, `storeClient.ts`, `outlineToTopicGraph.ts`.
 
 ---
 
@@ -208,8 +212,8 @@
 
 | PR                                                | Status | Depends on                          |
 | ------------------------------------------------- | ------ | ----------------------------------- |
-| P2.4 — Deprecate JsonFsStore write path           | ⬜     | P2.3 confirmed stable in release    |
-| P2.5 — Remove JsonFsStore                         | ⬜     | P2.4                                |
+| P2.4 — Deprecate JsonFsStore write path           | ✅     | P2.3 confirmed stable in release    |
+| P2.5 — Remove JsonFsStore                         | ✅     | P2.4                                |
 | P5.4 client — RemoteStore.search + MCP delegation | ✅     | Team-service P5.4 (search endpoint) |
 
 All other PRs in this repo are landed.

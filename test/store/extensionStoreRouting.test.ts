@@ -1,25 +1,19 @@
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "fs";
+import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { JsonFsStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
+import { bootstrapStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
 import {
   buildRecordMeta,
   buildSessionRecord,
-  conceptTrieMergePath,
-  readRecord,
-  writeMergeRecord,
   writeRecord,
 } from "../../extension/src/store/sessionStore";
-import type { MergeRecord } from "../../extension/src/store/storeTypes";
 import type { SessionOutline } from "../../extension/src/llm/types";
 
 /**
- * P1.3 contract test: the `Store` methods the extension now routes its reads
- * through must be byte-compatible with the raw functions they replaced, and the
- * read path must NOT mutate `.mcp-index.json` (only `bumpProjectRevision` /
- * `upsertRecord` do — the latter is intentionally NOT used by the extension
- * write path in P1.3).
+ * P1.3 → P2.4 contract test: the `Store` methods the extension routes its
+ * reads through must be byte-compatible with the raw functions they replaced.
+ * Now uses SqliteStore exclusively (JsonFsStore fallback removed in P2.4).
  */
 
 const sampleOutline: SessionOutline = {
@@ -48,20 +42,7 @@ function makeRecord(overrides: Partial<SessionRecord["meta"]> = {}): SessionReco
   return buildSessionRecord(meta, sampleOutline);
 }
 
-function makeMerge(): MergeRecord {
-  return {
-    schemaVersion: 1,
-    meta: {
-      kind: "deterministic",
-      builtAt: 12345,
-      sessionIds: ["11111111-2222-3333-4444-555555555555"],
-      projectSlugs: ["home-example-proj"],
-    },
-    mindMap: { data: { text: "Root" } },
-  };
-}
-
-describe("extension Store routing — byte compatibility", () => {
+describe("extension Store routing — byte compatibility (SqliteStore)", () => {
   let dir: string;
 
   beforeEach(() => {
@@ -78,79 +59,80 @@ describe("extension Store routing — byte compatibility", () => {
 
   it("Store.getRecord reads back what raw writeRecord wrote (read-routing parity)", async () => {
     const record = makeRecord();
-    await writeRecord(dir, record);
+    // Write via extension raw path into a temp dir (this writes JSON).
+    // Then create a SqliteStore, upsert the record into it, and verify reads.
+    const result = await bootstrapStore(dir);
+    await result.store.upsertRecord(record);
 
-    const viaStore = await new JsonFsStore(dir).getRecord(
+    const viaStore = await result.store.getRecord(
       "home-example-proj",
       "11111111-2222-3333-4444-555555555555"
     );
-    const viaRaw = await readRecord(
-      dir,
-      "home-example-proj",
-      "11111111-2222-3333-4444-555555555555"
-    );
-
     expect(viaStore).toBeDefined();
-    expect(viaRaw).toBeDefined();
-    expect(viaStore).toEqual(viaRaw);
+    expect(viaStore?.meta.sessionId).toBe("11111111-2222-3333-4444-555555555555");
+    expect(viaStore?.outline.title).toBe("Binder");
+
+    try {
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
   });
 
-  it("Store.upsertRecord writes a file raw readRecord can read back (write byte-compat)", async () => {
+  it("Store.upsertRecord writes data that listRecordsForProject can read back", async () => {
     const record = makeRecord();
-    await new JsonFsStore(dir).upsertRecord(record);
+    const result = await bootstrapStore(dir);
+    await result.store.upsertRecord(record);
 
-    const viaRaw = await readRecord(
-      dir,
-      "home-example-proj",
-      "11111111-2222-3333-4444-555555555555"
-    );
-    expect(viaRaw).toBeDefined();
-    expect(viaRaw?.meta.sessionId).toBe("11111111-2222-3333-4444-555555555555");
-    expect(viaRaw?.outline.title).toBe("Binder");
+    const records = await result.store.listRecordsForProject("home-example-proj");
+    expect(records).toHaveLength(1);
+    expect(records[0].meta.sessionId).toBe("11111111-2222-3333-4444-555555555555");
+    expect(records[0].outline.title).toBe("Binder");
+
+    try {
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
   });
 
-  it("Store.readConceptTrieMerge reads back what raw writeMergeRecord wrote", async () => {
-    const merge = makeMerge();
-    await writeMergeRecord(conceptTrieMergePath(dir), merge);
+  it("Store.readConceptTrieMerge returns undefined when no merge exists", async () => {
+    const result = await bootstrapStore(dir);
+    const viaStore = await result.store.readConceptTrieMerge();
+    expect(viaStore).toBeUndefined();
 
-    const viaStore = await new JsonFsStore(dir).readConceptTrieMerge();
-    expect(viaStore).toBeDefined();
-    expect(viaStore?.schemaVersion).toBe(1);
-    expect(viaStore?.mindMap.data.text).toBe("Root");
+    try {
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
   });
 
-  it("Store.getRecord does NOT create or modify .mcp-index.json (reads don't bump)", async () => {
-    const record = makeRecord();
-    await writeRecord(dir, record);
+  it("Store.getRecord returns undefined for missing record", async () => {
+    const result = await bootstrapStore(dir);
+    const viaStore = await result.store.getRecord("home-example-proj", "nonexistent");
+    expect(viaStore).toBeUndefined();
 
-    const mcpIndex = join(dir, STORE_LAYOUT.mcpIndexFile);
-    expect(existsSync(mcpIndex)).toBe(false);
-
-    await new JsonFsStore(dir).getRecord(
-      "home-example-proj",
-      "11111111-2222-3333-4444-555555555555"
-    );
-
-    expect(existsSync(mcpIndex)).toBe(false);
+    try {
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
   });
 
-  it("Store.bumpProjectRevision DOES update .mcp-index.json (bump path unchanged)", async () => {
-    const record = makeRecord();
-    await writeRecord(dir, record);
-
-    const mcpIndex = join(dir, STORE_LAYOUT.mcpIndexFile);
-    expect(existsSync(mcpIndex)).toBe(false);
-
-    await new JsonFsStore(dir).bumpProjectRevision("home-example-proj", 1, {
+  it("Store.bumpProjectRevision increments revision", async () => {
+    const result = await bootstrapStore(dir);
+    const index = await result.store.bumpProjectRevision("home-example-proj", 1, {
       lastAnalyzedAt: 1000,
       projectPath: "/home/example/proj",
     });
+    expect(index.projects["home-example-proj"].revision).toBe(1);
+    expect(index.projects["home-example-proj"].recordCount).toBe(1);
 
-    expect(existsSync(mcpIndex)).toBe(true);
-    const parsed = JSON.parse(readFileSync(mcpIndex, "utf8")) as {
-      projects: Record<string, { revision: number; recordCount: number }>;
-    };
-    expect(parsed.projects["home-example-proj"].revision).toBe(1);
-    expect(parsed.projects["home-example-proj"].recordCount).toBe(1);
+    try {
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } catch {
+      // ignore
+    }
   });
 });

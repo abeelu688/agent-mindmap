@@ -11,7 +11,7 @@ import type { SessionOutline, TopicGraph } from "./types";
  * Extension-local wrapper that injects the localized placeholder strings
  * into the shared `outlineToTopicGraph`. Callers in the extension keep
  * using the same signature; the shared version (no translation) is what
- * the MCP server and `JsonFsStore` use.
+ * the MCP server and `SqliteStore` use.
  */
 export function outlineToTopicGraph(outline: SessionOutline): TopicGraph {
   const translate: OutlineTranslation = {

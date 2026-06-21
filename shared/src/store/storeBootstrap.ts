@@ -1,36 +1,32 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { STORE_LAYOUT } from "../storeLayout";
-import { JsonFsStore } from "./jsonFsStore";
-import { migrateJsonToSqlite, type MigrationResult } from "./migrateJsonToSqlite";
 import { SqliteStore } from "./sqliteStore";
 import type { Store } from "./store";
 
 /**
- * Pick the right `Store` for a given store directory (P2.2).
+ * Pick the right `Store` for a given store directory (P2.2 → P2.4).
  *
  * Resolution order:
- *   1. `store.db` exists → open `SqliteStore`. If it fails to open, fall back
- *      to `JsonFsStore` (read-only over the still-present JSON files) and
- *      surface a warning. The user can downgrade or fix the DB.
- *   2. No `store.db`, but legacy JSON sessions exist → open a fresh
- *      `SqliteStore`, run {@link migrateJsonToSqlite}, return it. Original
- *      JSON files are left on disk for downgrade safety.
- *   3. No `store.db`, no JSON (fresh install) → open a fresh empty
- *      `SqliteStore`.
+ *   1. `store.db` exists → open `SqliteStore`. If it fails to open, throw —
+ *      the user must repair or delete the corrupt DB.
+ *      fallback (removed in P2.4).
+ *   2. No `store.db` → open a fresh empty `SqliteStore`.
+ *   3. On first launch after P2.4, if legacy JSON session directories are
+ *      present and `store.db` is healthy, delete them (the SQLite DB is now
+ *      the sole source of truth). A kv flag prevents re-deletion.
  *
  * Not in scope (per P2.2): calling this from `extension.ts` / `mcp-server`.
  * The extension's write path is still JSON-based (P1.3 unfinished), so wiring
  * bootstrap now would split the store. This helper is testable in isolation
  * and ready to call once P1.3 lands.
  */
-export type StoreKind = "sqlite" | "sqlite-migrated" | "sqlite-fallback-json" | "json";
+export type StoreKind = "sqlite" | "sqlite-migrated";
 
 export interface BootstrapResult {
   store: Store;
   kind: StoreKind;
   migrated?: boolean;
-  migration?: MigrationResult;
   warning?: string;
 }
 
@@ -72,28 +68,63 @@ async function looksLikeSqliteFile(dbPath: string): Promise<boolean> {
   }
 }
 
-async function jsonSessionsExist(storeDir: string): Promise<boolean> {
+/**
+ * Check whether legacy JSON session directories exist under `storeDir`.
+ * Used to decide whether to clean up legacy files after confirming store.db
+ * is healthy.
+ */
+async function legacyJsonSessionsExist(storeDir: string): Promise<boolean> {
   const sessionsRoot = path.join(storeDir, STORE_LAYOUT.sessionsDir);
   if (!(await pathExists(sessionsRoot))) {
     return false;
   }
   try {
     const stat = await fs.stat(sessionsRoot);
-    if (!stat.isDirectory()) {
-      return false;
-    }
+    return stat.isDirectory();
   } catch {
     return false;
   }
-  // Treat an existing sessions dir (even if empty) as "legacy layout present".
-  // Migration of an empty dir is a no-op (0 sessions), which is harmless and
-  // lets the DB become the source of truth from the first launch.
-  return true;
 }
 
 /**
- * Construct the appropriate `Store` for `storeDir`, running the JSON→SQLite
- * migration on first launch when legacy JSON files are present.
+ * Delete legacy JSON session directories and the `.mcp-index.json` file under
+ * `storeDir`. Safe to call only after confirming the SqliteStore is healthy
+ * (has data). Sets a meta flag to avoid re-deletion on subsequent launches.
+ */
+async function deleteLegacyJsonFiles(storeDir: string, store: SqliteStore): Promise<void> {
+  // Check the meta flag — only delete once.
+  const alreadyDone = await store.readMetaFlag("json-cleanup-done");
+  if (alreadyDone) {
+    return;
+  }
+
+  // Delete the sessions directory (contains per-project subdirs with JSON files).
+  const sessionsRoot = path.join(storeDir, STORE_LAYOUT.sessionsDir);
+  try {
+    await fs.rm(sessionsRoot, { recursive: true, force: true });
+  } catch {
+    // Best-effort — log but don't fail the bootstrap.
+    console.warn(`[agent-mindmap] failed to delete legacy JSON sessions dir: ${sessionsRoot}`);
+  }
+
+  // Delete the MCP index file.
+  const mcpIndex = path.join(storeDir, STORE_LAYOUT.mcpIndexFile);
+  try {
+    await fs.unlink(mcpIndex);
+  } catch {
+    // File may not exist — that's fine.
+  }
+
+  // Set the meta flag so we don't try again.
+  await store.writeMetaFlag("json-cleanup-done", true);
+}
+
+/**
+ * Construct the appropriate `Store` for `storeDir`.
+ *
+ * @throws If `store.db` exists but is not a valid SQLite database or cannot
+ *         be opened. The caller should surface the error — the user must
+ *         repair or delete the corrupt DB.
  */
 export async function bootstrapStore(storeDir: string): Promise<BootstrapResult> {
   // Ensure the store directory exists before SqliteStore tries to open
@@ -104,55 +135,60 @@ export async function bootstrapStore(storeDir: string): Promise<BootstrapResult>
 
   if (dbExists) {
     if (!(await looksLikeSqliteFile(dbPath))) {
-      // The file exists but is not a SQLite database. Do NOT hand it to
-      // @vscode/sqlite3 — the native binding throws an uncatchable Napi::Error
-      // and would crash the process. Fall back to JsonFsStore instead.
-      return {
-        store: new JsonFsStore(storeDir),
-        kind: "sqlite-fallback-json",
-        warning: `store.db at ${dbPath} is not a valid SQLite database. Falling back to JsonFsStore (read-only over legacy JSON). Delete or repair store.db to retry SQLite.`,
-      };
+      throw new Error(
+        `store.db at ${dbPath} is not a valid SQLite database. ` +
+          `Delete or rename it to allow a fresh store.db to be created. ` +
+          `Downgrade to pre-SQLite versions is no longer supported (P2.4).`
+      );
     }
+    const sqlite = new SqliteStore(dbPath);
     try {
-      const sqlite = new SqliteStore(dbPath);
       // Force the async open + schema apply so a corrupt-but-headered DB rejects here.
       await sqlite.listProjectSummaries();
-      return { store: sqlite, kind: "sqlite" };
     } catch (err) {
-      const warning = `SqliteStore failed to open ${dbPath}: ${
-        err instanceof Error ? err.message : String(err)
-      }. Falling back to JsonFsStore (read-only over legacy JSON).`;
-      return {
-        store: new JsonFsStore(storeDir),
-        kind: "sqlite-fallback-json",
-        warning,
-      };
+      try {
+        await sqlite.close?.();
+      } catch {
+        // ignore
+      }
+      throw new Error(
+        `SqliteStore failed to open ${dbPath}: ${
+          err instanceof Error ? err.message : String(err)
+        }. Delete or rename the file to allow a fresh store.db to be created. ` +
+          `Downgrade to pre-SQLite versions is no longer supported (P2.4).`
+      );
     }
+
+    // Clean up legacy JSON files on first launch after P2.4.
+    if (await legacyJsonSessionsExist(storeDir)) {
+      await deleteLegacyJsonFiles(storeDir, sqlite);
+    }
+
+    return { store: sqlite, kind: "sqlite" };
   }
 
-  // No DB yet. Open a fresh SqliteStore (creates the file + schema), then
-  // migrate if legacy JSON is present.
+  // No DB yet. Open a fresh SqliteStore (creates the file + schema).
   const sqlite = new SqliteStore(dbPath);
   try {
     await sqlite.listProjectSummaries();
   } catch (err) {
-    // Could not even create/open the fresh DB — fall back to JSON if present,
-    // otherwise rethrow (nothing else we can do).
-    if (await jsonSessionsExist(storeDir)) {
-      return {
-        store: new JsonFsStore(storeDir),
-        kind: "sqlite-fallback-json",
-        warning: `Could not open a fresh SqliteStore at ${dbPath}: ${
-          err instanceof Error ? err.message : String(err)
-        }. Falling back to JsonFsStore.`,
-      };
+    try {
+      await sqlite.close?.();
+    } catch {
+      // ignore
     }
-    throw err;
+    throw new Error(
+      `Could not create a fresh SqliteStore at ${dbPath}: ${
+        err instanceof Error ? err.message : String(err)
+      }.`
+    );
   }
 
-  if (await jsonSessionsExist(storeDir)) {
-    const migration = await migrateJsonToSqlite(storeDir, sqlite);
-    return { store: sqlite, kind: "sqlite-migrated", migrated: true, migration };
+  // Clean up legacy JSON files if they exist (pre-P2.4 installs that somehow
+  // lack a store.db — unlikely but harmless to handle).
+  if (await legacyJsonSessionsExist(storeDir)) {
+    await deleteLegacyJsonFiles(storeDir, sqlite);
+    return { store: sqlite, kind: "sqlite-migrated", migrated: true };
   }
 
   return { store: sqlite, kind: "sqlite" };

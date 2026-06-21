@@ -2,7 +2,6 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { writeJsonAtomic } from "../shared/src/atomicWrite";
 import { createPathsResolver, readProjectMode } from "../mcp-server/src/pathsMap";
 
 const ORIGINAL_STORE_DIR = process.env.AGENT_MINDMAP_STORE_DIR;

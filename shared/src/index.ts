@@ -84,7 +84,6 @@ export type {
   TopicPathDecision,
 } from "./llmTypes";
 export { type Store } from "./store/store";
-export { JsonFsStore } from "./store/jsonFsStore";
 export { SqliteStore } from "./store/sqliteStore";
 export {
   RemoteStore,
@@ -93,7 +92,6 @@ export {
   type RemoteStoreOptions,
 } from "./store/remoteStore";
 export { TeamStore, type PushQueueLike } from "./store/teamStore";
-export { migrateJsonToSqlite, type MigrationResult } from "./store/migrateJsonToSqlite";
 export { bootstrapStore, type BootstrapResult, type StoreKind } from "./store/storeBootstrap";
 export { computeStaleness } from "./staleness";
 export { LlmProviderError, type LlmErrorCode } from "./llmValidate/llmError";
