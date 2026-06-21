@@ -38,6 +38,28 @@ function errorResult(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
+/** Default pagination limits for MCP resources. */
+const PAGINATION_DEFAULT_LIMIT = 20;
+const PAGINATION_MAX_LIMIT = 100;
+
+/**
+ * Parse and clamp pagination params from URI search params.
+ * Ensures limit is 1..100, offset is >= 0; invalid values fall back to defaults.
+ */
+function parsePaginationParams(
+  searchParams: URLSearchParams,
+  defaultLimit = PAGINATION_DEFAULT_LIMIT
+): { limit: number; offset: number } {
+  const rawLimit = Number(searchParams.get("limit") ?? defaultLimit);
+  const rawOffset = Number(searchParams.get("offset") ?? 0);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(Math.round(rawLimit), PAGINATION_MAX_LIMIT)
+      : defaultLimit;
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.round(rawOffset) : 0;
+  return { limit, offset };
+}
+
 type ToolHandlerResult = { content: { type: "text"; text: string }[]; isError?: boolean };
 
 /**
@@ -279,8 +301,7 @@ async function main(): Promise<void> {
     },
     async (uri, variables) => {
       const projectSlug = String(variables.projectSlug ?? "");
-      const limit = Number(uri.searchParams.get("limit") ?? 20);
-      const offset = Number(uri.searchParams.get("offset") ?? 0);
+      const { limit, offset } = parsePaginationParams(uri.searchParams);
       const index = await ensureProjectIndex(ctx, projectSlug);
       const sorted = [...index.records].sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
       const page = sorted.slice(offset, offset + limit);
