@@ -157,11 +157,7 @@ function renderCellInline(md: MarkdownIt, cell: string): string {
   return md.renderInline(cell.trim(), {});
 }
 
-function renderTableHtml(
-  md: MarkdownIt,
-  header: string[],
-  rows: string[][]
-): string {
+function renderTableHtml(md: MarkdownIt, header: string[], rows: string[][]): string {
   const head =
     "<thead><tr>" +
     header.map((c) => `<th>${renderCellInline(md, c)}</th>`).join("") +
@@ -172,9 +168,7 @@ function renderTableHtml(
         rows
           .map(
             (row) =>
-              "<tr>" +
-              row.map((c) => `<td>${renderCellInline(md, c)}</td>`).join("") +
-              "</tr>"
+              "<tr>" + row.map((c) => `<td>${renderCellInline(md, c)}</td>`).join("") + "</tr>"
           )
           .join("") +
         "</tbody>"
@@ -184,17 +178,11 @@ function renderTableHtml(
 
 type TableBlock = { header: string[]; rows: string[][]; end: number };
 
-function readGfmPipeTable(
-  lines: string[],
-  start: number
-): TableBlock | undefined {
+function readGfmPipeTable(lines: string[], start: number): TableBlock | undefined {
   if (!isGfmTableRow(lines[start]!)) {
     return undefined;
   }
-  if (
-    start + 1 >= lines.length ||
-    !isGfmTableSeparator(lines[start + 1]!)
-  ) {
+  if (start + 1 >= lines.length || !isGfmTableSeparator(lines[start + 1]!)) {
     return undefined;
   }
   const header = splitTableCells(lines[start]!);
@@ -207,17 +195,11 @@ function readGfmPipeTable(
   return { header, rows, end: i };
 }
 
-function readPipeTableNoSeparator(
-  lines: string[],
-  start: number
-): TableBlock | undefined {
+function readPipeTableNoSeparator(lines: string[], start: number): TableBlock | undefined {
   if (!isLoosePipeTableRow(lines[start]!)) {
     return undefined;
   }
-  if (
-    start + 1 < lines.length &&
-    isGfmTableSeparator(lines[start + 1]!)
-  ) {
+  if (start + 1 < lines.length && isGfmTableSeparator(lines[start + 1]!)) {
     return undefined;
   }
   const header = splitTableCells(lines[start]!);
@@ -311,9 +293,7 @@ export function preprocessTables(md: string, renderer: MarkdownIt): string {
       continue;
     }
     const block =
-      readGfmPipeTable(lines, i) ??
-      readPipeTableNoSeparator(lines, i) ??
-      readTabTable(lines, i);
+      readGfmPipeTable(lines, i) ?? readPipeTableNoSeparator(lines, i) ?? readTabTable(lines, i);
     if (block) {
       out.push(renderTableHtml(renderer, block.header, block.rows));
       i = block.end;
@@ -331,6 +311,72 @@ export function preprocessGfmTables(md: string): string {
   return preprocessTables(md, mdInst);
 }
 
+/** Allowed protocols for href/src attributes. */
+const SAFE_PROTOCOLS = ["http:", "https:", "mailto:", "#", ""];
+
+/**
+ * Sanitize HTML rendered from untrusted transcript markdown.
+ * Removes dangerous tags (script, object, embed, iframe, form, meta, base)
+ * and event-handler attributes (on*), and enforces a link-protocol allowlist.
+ */
+function sanitizeTranscriptHtml(html: string): string {
+  // Remove dangerous void/self-closing tags and their content
+  let safe = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "");
+  safe = safe.replace(/<script\b[^>]*\/?>/gi, "");
+  safe = safe.replace(/<object\b[^>]*>[\s\S]*?<\/object\s*>/gi, "");
+  safe = safe.replace(/<embed\b[^>]*\/?>/gi, "");
+  safe = safe.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe\s*>/gi, "");
+  safe = safe.replace(/<form\b[^>]*>[\s\S]*?<\/form\s*>/gi, "");
+  safe = safe.replace(/<meta\b[^>]*\/?>/gi, "");
+  safe = safe.replace(/<base\b[^>]*\/?>/gi, "");
+  safe = safe.replace(/<link\b[^>]*\/?>/gi, "");
+  // Remove on* event handler attributes
+  safe = safe.replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  // Enforce safe protocols on href and src
+  safe = safe.replace(
+    /(<a\b[^>]*?\bhref\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi,
+    (match, prefix, dq, sq) => {
+      const url = dq ?? sq ?? "";
+      const proto = url.trim().split(":")[0]?.toLowerCase() ?? "";
+      if (
+        SAFE_PROTOCOLS.includes(proto + ":") ||
+        url.startsWith("#") ||
+        (url.startsWith("/") && !url.startsWith("//"))
+      ) {
+        return match;
+      }
+      // Replace unsafe href with #
+      return `${prefix}"#"`;
+    }
+  );
+  safe = safe.replace(
+    /(<\w+[^>]*?\bsrc\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi,
+    (match, prefix, dq, sq) => {
+      const url = dq ?? sq ?? "";
+      const proto = url.trim().split(":")[0]?.toLowerCase() ?? "";
+      if (SAFE_PROTOCOLS.includes(proto + ":") || (url.startsWith("/") && !url.startsWith("//"))) {
+        return match;
+      }
+      // Remove unsafe src entirely
+      return "";
+    }
+  );
+  // Remove style attributes that could contain expression() or url() attacks
+  safe = safe.replace(/(<\w+[^>]*?\bstyle\s*=\s*)(?:"[^"]*"|'[^']*')/gi, (match, prefix) => {
+    // Keep style attributes only if they don't contain dangerous CSS
+    const styleMatch =
+      match.match(/style\s*=\s*"([^"]*)"/i) ?? match.match(/style\s*=\s*'([^']*)'/i);
+    if (styleMatch) {
+      const val = styleMatch[1] ?? "";
+      if (/expression\s*\(|javascript\s*:|behavior\s*:|@import\b/i.test(val)) {
+        return ""; // strip the entire attribute
+      }
+    }
+    return match;
+  });
+  return safe;
+}
+
 export function createTranscriptMarkdownRenderer(): MarkdownIt {
   const md = new MarkdownIt({
     html: true,
@@ -340,17 +386,14 @@ export function createTranscriptMarkdownRenderer(): MarkdownIt {
 
   const defaultFence =
     md.renderer.rules.fence ??
-    ((tokens, idx, options, env, self) =>
-      self.renderToken(tokens, idx, options));
+    ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
 
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     const token = tokens[idx]!;
     const info = (token.info ?? "").trim();
     const match = info.match(CITATION_FENCE_RE);
     if (match) {
-      const body = token.content.endsWith("\n")
-        ? token.content.slice(0, -1)
-        : token.content;
+      const body = token.content.endsWith("\n") ? token.content.slice(0, -1) : token.content;
       return renderCitationFence(md, match[1]!, match[2]!, match[3]!, body);
     }
     return defaultFence(tokens, idx, options, env, self);
@@ -370,5 +413,6 @@ export function renderTranscriptMarkdownHtml(md: string): string {
     preprocessQuotedBold(md.replace(/\r\n/g, "\n")),
     sharedRenderer
   );
-  return sharedRenderer.render(normalized);
+  const raw = sharedRenderer.render(normalized);
+  return sanitizeTranscriptHtml(raw);
 }
