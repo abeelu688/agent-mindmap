@@ -139,6 +139,7 @@ async function main(): Promise<void> {
     }
   );
 
+  // @ts-expect-error TS2589: zod + MCP SDK deep type instantiation; withErrorHandler keeps inference shallow
   server.tool(
     "get_project_briefing",
     descriptions.get_project_briefing,
@@ -204,6 +205,7 @@ async function main(): Promise<void> {
     })
   );
 
+  // @ts-expect-error TS2589: zod + MCP SDK deep type instantiation; withErrorHandler keeps inference shallow
   server.tool(
     "search_project_history",
     descriptions.search_project_history,
