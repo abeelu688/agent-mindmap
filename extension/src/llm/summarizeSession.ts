@@ -4,6 +4,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { createHeartbeat } from "../progress";
 import { format, t as safeT } from "../l10n/uiTranslate";
+import { writeJsonAtomic } from "../store/atomicWrite";
+import { agentDebugLog } from "../debugLog";
 import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
 import { validateSessionOutline } from "./outlineValidate";
 import { LlmProviderError, type LlmProvider, type SessionOutline } from "./types";
@@ -58,9 +60,14 @@ async function writeCache(cacheDir: string, key: string, outline: SessionOutline
   try {
     await fs.mkdir(cacheDir, { recursive: true });
     const file = path.join(cacheDir, `${key}.json`);
-    await fs.writeFile(file, JSON.stringify(outline, null, 2), "utf8");
-  } catch {
-    // cache is best-effort
+    await writeJsonAtomic(file, outline);
+  } catch (err) {
+    agentDebugLog(
+      "summarizeSession.ts:writeCache",
+      "cache write failed",
+      { key, error: String(err) },
+      "D"
+    );
   }
 }
 

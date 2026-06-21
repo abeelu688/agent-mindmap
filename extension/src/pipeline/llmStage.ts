@@ -11,6 +11,7 @@ import {
 } from "../llm/types";
 import { dumpLlmReplay } from "../llm/llmIoDump";
 import { agentDebugLog } from "../debugLog";
+import { writeJsonAtomic } from "../store/atomicWrite";
 import { format, t as safeT } from "../l10n/uiTranslate";
 import type { ChatEvent } from "../transcript/types";
 import type { AgentHostId } from "../host/types";
@@ -88,9 +89,14 @@ async function writeStageCache<T>(cacheDir: string, key: string, value: T): Prom
   try {
     await fs.mkdir(cacheDir, { recursive: true });
     const file = path.join(cacheDir, `${key}.json`);
-    await fs.writeFile(file, JSON.stringify(value, null, 2), "utf8");
-  } catch {
-    // best-effort
+    await writeJsonAtomic(file, value);
+  } catch (err) {
+    agentDebugLog(
+      "llmStage.ts:writeStageCache",
+      "cache write failed",
+      { key, error: String(err) },
+      "D"
+    );
   }
 }
 
