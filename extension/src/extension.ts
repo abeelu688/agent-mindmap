@@ -31,6 +31,7 @@ import { wrapCommand } from "./commands/commandWrapper";
 import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
+import { isStoreRekeyedToRepo, runRekeyMigration } from "./store/rekeyMigration";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -70,6 +71,16 @@ export function activate(context: vscode.ExtensionContext): void {
         MindMapHost.setProviderId(providerId);
       }
       if (e.affectsConfiguration("agentMindmap.project.mode")) {
+        const newMode = getProjectMode();
+        if (newMode === "repo") {
+          // workspace → repo: run the one-way re-key migration (idempotent —
+          // an already-re-keyed store no-ops; a store with no sessions under
+          // workspace slugs no-ops per folder). Surfaces progress + result.
+          void runRekeyMigrationWithProgress();
+        } else {
+          // repo → workspace: refuse on a re-keyed store (one-way, rule 5).
+          void enforceOneWayRekeyGuard();
+        }
         resetHostCache();
         void runRepoModeGate();
       }
@@ -270,6 +281,70 @@ function formatRepoGateError(failures: RepoGateFailure[]): string {
     "Agent Mind Map: repo mode requires every workspace folder to be a git repo with origin at the repo root. Fix or switch to workspace mode.",
     lines.join("\n")
   );
+}
+
+/**
+ * Run the re-key migration inside a VS Code progress notification. Surfaces
+ * a summary (folders re-keyed / no-op / aborted) on completion. Best-effort:
+ * a thrown error becomes a warning notification, never blocks activation.
+ */
+async function runRekeyMigrationWithProgress(): Promise<void> {
+  try {
+    const result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: t("ui.progress.rekey.title", "Agent Mind Map: Re-keying sessions to repo mode…"),
+        cancellable: false,
+      },
+      () => runRekeyMigration()
+    );
+    if (result.kind === "ok") {
+      void vscode.window.showInformationMessage(
+        t(
+          "ui.info.rekeyDone",
+          "Agent Mind Map: Re-keyed {0} workspace folder(s) to repo slugs. Reload the window to refresh the mind map.",
+          String(result.foldersRekeyed)
+        )
+      );
+    } else if (result.kind === "noop") {
+      void vscode.window.showInformationMessage(
+        t("ui.info.rekeyNoop", "Agent Mind Map: no sessions needed re-keying.")
+      );
+    } else {
+      void vscode.window.showWarningMessage(
+        t("ui.info.rekeyAborted", "Agent Mind Map: {0}", result.reason)
+      );
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    void vscode.window.showWarningMessage(t("ui.info.rekeyAborted", "Agent Mind Map: {0}", detail));
+  }
+}
+
+/**
+ * One-way enforcement (rule 5): when the user switches `project.mode` back to
+ * `workspace` on a store already re-keyed to repo, revert the setting and
+ * surface a warning. No-op when the store was never re-keyed.
+ */
+async function enforceOneWayRekeyGuard(): Promise<void> {
+  try {
+    if (!(await isStoreRekeyedToRepo())) {
+      return;
+    }
+    await vscode.workspace
+      .getConfiguration("agentMindmap")
+      .update("project.mode", "repo", vscode.ConfigurationTarget.Global);
+    void vscode.window.showWarningMessage(
+      t(
+        "ui.warning.storeAlreadyRekeyed",
+        "Agent Mind Map: this store has already been migrated to repo mode and cannot revert to workspace mode."
+      )
+    );
+  } catch (err) {
+    mindMapLog(
+      `[activate] one-way rekey guard failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
 async function maybeWarnEmptyClaudeTranscripts(context: vscode.ExtensionContext): Promise<void> {

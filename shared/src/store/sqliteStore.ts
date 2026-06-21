@@ -43,6 +43,7 @@ const KV_LLM_REFINED_MERGE = "llm-refined-merge";
 const KV_LLM_MERGE_CACHE_PREFIX = "llm-merge-cache:";
 const KV_ONTOLOGY_INDEX = "ontology-index";
 const KV_ONTOLOGY_CACHE_PREFIX = "ontology-cache:";
+const KV_META_FLAG_PREFIX = "meta:";
 
 function ontologyCacheKey(cacheKey: string): string {
   return `${KV_ONTOLOGY_CACHE_PREFIX}${cacheKey}`;
@@ -490,6 +491,105 @@ export class SqliteStore implements Store {
          WHERE project_slug = ?`,
         [projectSlug]
       );
+      await db.run(`COMMIT`);
+    } catch (err) {
+      await db.run(`ROLLBACK`).catch(() => {});
+      throw err;
+    }
+  }
+
+  /**
+   * Fold any pending WAL frames into the main `store.db` file and truncate the
+   * WAL. Used by the re-key migration before `fs.copyFile`-based backup so the
+   * backup contains all committed data without copying the WAL sidecar.
+   *
+   * No-op when the DB is not in WAL journal mode.
+   */
+  async checkpoint(): Promise<void> {
+    await this.run(`PRAGMA wal_checkpoint(TRUNCATE)`);
+  }
+
+  /**
+   * Read a single-machine `meta:` boolean flag from the `kv` table. Returns
+   * `false` on miss / parse error / non-boolean value. Used by the re-key
+   * migration's one-way guard (`rekeyed-to-repo`).
+   *
+   * Not on the `Store` interface — single-machine-only metadata.
+   */
+  async readMetaFlag(key: string): Promise<boolean> {
+    const v = await this.readKv<boolean>(`${KV_META_FLAG_PREFIX}${key}`);
+    return v === true;
+  }
+
+  /** Upsert a single-machine `meta:` boolean flag. */
+  async writeMetaFlag(key: string, value: boolean): Promise<void> {
+    await this.writeKv(`${KV_META_FLAG_PREFIX}${key}`, value);
+  }
+
+  /**
+   * One-way re-key of every session under `oldSlug` to `newSlug`
+   * (TEAM_MODE.md §Q5 rule 11). Runs in a single transaction: copies the
+   * project row under the new slug (preserving revision / record_count /
+   * last_analyzed_at / project_path), re-keys every session row
+   * (`record_json` is copied verbatim — `CodeReference.path` is intentionally
+   * NOT rewritten, since repo mode requires the folder to be the repo root),
+   * then deletes the old project + session rows.
+   *
+   * Idempotent: if `oldSlug` has no sessions and no project row, the
+   * transaction is a no-op. If a project row already exists under `newSlug`
+   * (rare collision), its revision + record_count are added to the migrated
+   * values and last_analyzed_at / last_built_at take the max.
+   *
+   * `sessionIds?` restricts the rewrite to a subset of sessions under
+   * `oldSlug`; the project row is still re-keyed in full (the unrewritten
+   * sessions are deleted under the old slug — caller's responsibility to
+   * ensure that's intended).
+   */
+  async rekeyProjectSlug(oldSlug: string, newSlug: string, sessionIds?: string[]): Promise<void> {
+    if (oldSlug === newSlug) {
+      return;
+    }
+    const db = await this.db;
+    await db.run(`BEGIN`);
+    try {
+      // Copy project row under new slug, merging on the rare collision.
+      await db.run(
+        `INSERT INTO projects (project_slug, project_path, revision, record_count, last_analyzed_at, last_built_at)
+         SELECT ?, project_path, revision, record_count, last_analyzed_at, last_built_at
+         FROM projects WHERE project_slug = ?
+         ON CONFLICT(project_slug) DO UPDATE SET
+           revision = excluded.revision + projects.revision,
+           record_count = excluded.record_count + projects.record_count,
+           last_analyzed_at = MAX(excluded.last_analyzed_at, projects.last_analyzed_at),
+           last_built_at = MAX(excluded.last_built_at, projects.last_built_at),
+           project_path = COALESCE(projects.project_path, excluded.project_path)`,
+        [newSlug, oldSlug]
+      );
+      // Re-key sessions. INSERT OR IGNORE so a pre-existing row under
+      // (newSlug, sessionId) wins (rare collision); the old row is then
+      // deleted, which is correct either way.
+      const sessionFilter =
+        sessionIds && sessionIds.length > 0
+          ? ` AND session_id IN (${sessionIds.map(() => "?").join(", ")})`
+          : "";
+      const sessionParams: SqlBindValue[] = sessionIds && sessionIds.length > 0 ? sessionIds : [];
+      await db.run(
+        `INSERT OR IGNORE INTO sessions
+           (project_slug, session_id, transcript_sha256, analyzed_at, record_json)
+         SELECT ?, session_id, transcript_sha256, analyzed_at, record_json
+         FROM sessions WHERE project_slug = ?${sessionFilter}`,
+        [newSlug, oldSlug, ...sessionParams]
+      );
+      await db.run(`DELETE FROM sessions WHERE project_slug = ?${sessionFilter}`, [
+        oldSlug,
+        ...sessionParams,
+      ]);
+      // Delete the old project row only when ALL its sessions were re-keyed
+      // (no sessionIds filter). For partial rewrites the project row survives
+      // so the unrewritten sessions keep their FK target.
+      if (!sessionIds || sessionIds.length === 0) {
+        await db.run(`DELETE FROM projects WHERE project_slug = ?`, [oldSlug]);
+      }
       await db.run(`COMMIT`);
     } catch (err) {
       await db.run(`ROLLBACK`).catch(() => {});
