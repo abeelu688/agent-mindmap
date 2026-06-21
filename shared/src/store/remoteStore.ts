@@ -10,6 +10,7 @@ import type {
   OntologyIndex,
   OntologyRecord,
   ProjectSummary,
+  SearchHit,
   SegmentEquivalence,
   SessionRecord,
 } from "../storeTypes";
@@ -342,6 +343,32 @@ export class RemoteStore implements Store {
     _opts?: { lastAnalyzedAt?: number; projectPath?: string }
   ): Promise<McpIndexFile> {
     throw new RemoteStoreNotSupported("bumpProjectRevision");
+  }
+
+  // ─── Search (P5.4 — team mode delegates to Go token-scorer) ──────────────────
+
+  /**
+   * Server-side search via `POST /v1/projects/:slug/search`. The Go team
+   * service runs the token scorer (a port of `searchProjectRecords`) and
+   * optionally the embedding scorer, then returns ranked `SearchHit[]`.
+   * No caching — search is stateless per query.
+   */
+  async search(
+    projectSlug: string,
+    query: string,
+    limit: number,
+    opts?: { verbose?: boolean }
+  ): Promise<SearchHit[]> {
+    const body = JSON.stringify({
+      query,
+      limit,
+      verbose: opts?.verbose ?? false,
+    });
+    const raw = await this.postJson<SearchHit[]>(
+      `/v1/projects/${encodeURIComponent(projectSlug)}/search`,
+      body
+    );
+    return raw ?? [];
   }
 
   // ─── Search-index cache (mirrors mcp-server/handlers.ensureProjectIndex) ─────

@@ -10,6 +10,7 @@ import {
   searchProjectRecords,
   STORE_LAYOUT,
   type ProjectSearchIndex,
+  type SearchHit,
   type Staleness,
   type Store,
 } from "@agent-mindmap/shared";
@@ -139,23 +140,33 @@ export async function runProjectSearch(
   if (!slug) {
     return { kind: "error", message: "provide projectPath or projectSlug." };
   }
-  const index = await ensureProjectIndex(ctx, slug);
-  if (!index.records.length) {
-    return {
-      kind: "error",
-      message: `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`,
-    };
+
+  // P5.4: In team mode, delegate search to the team service (Go token-scorer)
+  // instead of building a local index. Staleness is still back-filled locally
+  // after getting hits from either path.
+  let hits: SearchHit[];
+  if (ctx.store.search) {
+    hits = await ctx.store.search(slug, opts.query, opts.limit, { verbose: opts.verbose });
+  } else {
+    const index = await ensureProjectIndex(ctx, slug);
+    if (!index.records.length) {
+      return {
+        kind: "error",
+        message: `no analyzed sessions for project \`${slug}\`. Run **Analyze All Sessions (Current Project)** first.`,
+      };
+    }
+    const equivalences = await ctx.store.readLatestSegmentEquivalences(slug);
+    hits = searchProjectRecords(
+      index.records,
+      opts.query,
+      opts.limit,
+      equivalences,
+      index.conceptTerms,
+      index.recordTokens,
+      opts.verbose ?? false
+    );
   }
-  const equivalences = await ctx.store.readLatestSegmentEquivalences(slug);
-  const hits = searchProjectRecords(
-    index.records,
-    opts.query,
-    opts.limit,
-    equivalences,
-    index.conceptTerms,
-    index.recordTokens,
-    opts.verbose ?? false
-  );
+
   return { kind: "ok", hits };
 }
 

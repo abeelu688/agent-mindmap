@@ -4,6 +4,7 @@ import type {
   OntologyIndex,
   OntologyRecord,
   ProjectSummary,
+  SearchHit,
   SegmentEquivalence,
   SessionRecord,
 } from "../storeTypes";
@@ -71,4 +72,18 @@ export interface Store {
     recordCount: number,
     opts?: { lastAnalyzedAt?: number; projectPath?: string }
   ): Promise<McpIndexFile>;
+
+  /**
+   * Server-side search (team mode only). Delegates to the Go token-scorer
+   * on the team service via `POST /v1/projects/:slug/search`. Returns
+   * `undefined` when the store does not support remote search (single-machine
+   * mode uses `searchProjectRecords` directly via the MCP server's local
+   * index).
+   */
+  search?(
+    projectSlug: string,
+    query: string,
+    limit: number,
+    opts?: { verbose?: boolean }
+  ): Promise<SearchHit[]>;
 }

@@ -238,7 +238,8 @@ describe("RemoteStore — concept-trie + equivalences", () => {
 
   it("readConceptTrieMerge returns the parsed MergeRecord on 200", async () => {
     const merge = { schemaVersion: 1, meta: { projectSlug: "p", builtAt: 1 }, mindMap: {} };
-    const f = vi.fn()
+    const f = vi
+      .fn()
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge }));
     const store = makeStore(f);
@@ -246,8 +247,13 @@ describe("RemoteStore — concept-trie + equivalences", () => {
   });
 
   it("readConceptTrieMerge uses cached merge when revision unchanged (P5.3)", async () => {
-    const merge = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] }, mindMap: {} };
-    const f = vi.fn()
+    const merge = {
+      schemaVersion: 1,
+      meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] },
+      mindMap: {},
+    };
+    const f = vi
+      .fn()
       // First call: revision=5 → fetch trie
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge }))
@@ -263,9 +269,18 @@ describe("RemoteStore — concept-trie + equivalences", () => {
   });
 
   it("readConceptTrieMerge re-fetches when revision changes (P5.3)", async () => {
-    const merge1 = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] }, mindMap: {} };
-    const merge2 = { schemaVersion: 1, meta: { kind: "deterministic", builtAt: 2, sessionIds: ["s1"], projectSlugs: ["p"] }, mindMap: {} };
-    const f = vi.fn()
+    const merge1 = {
+      schemaVersion: 1,
+      meta: { kind: "deterministic", builtAt: 1, sessionIds: [], projectSlugs: [] },
+      mindMap: {},
+    };
+    const merge2 = {
+      schemaVersion: 1,
+      meta: { kind: "deterministic", builtAt: 2, sessionIds: ["s1"], projectSlugs: ["p"] },
+      mindMap: {},
+    };
+    const f = vi
+      .fn()
       // First call: revision=5 → fetch trie1
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: { revision: 5 } }))
       .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: merge1 }))
@@ -444,5 +459,73 @@ describe("RemoteStore — ensureProjectIndex cache", () => {
     f.mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: [rec] }));
     const idx2 = await store.ensureProjectIndex("proj-a");
     expect(idx2.revision).toBe(2);
+  });
+});
+
+describe("RemoteStore — search (P5.4)", () => {
+  it("POSTs to /v1/projects/:slug/search and returns SearchHit[]", async () => {
+    const hits = [
+      {
+        kind: "session",
+        projectSlug: "proj-a",
+        sessionId: "s1",
+        sessionLabel: "Test",
+        analyzedAt: 1000,
+        score: 0.9,
+        snippet: "matched text",
+        evidence: [],
+      },
+      {
+        kind: "code",
+        projectSlug: "proj-a",
+        sessionId: "s2",
+        sessionLabel: "Code session",
+        analyzedAt: 2000,
+        codePath: "src/main.ts",
+        codeDescription: "entry point",
+        score: 0.7,
+        snippet: "main()",
+        evidence: [],
+      },
+    ];
+    const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "", json: hits }));
+    const store = makeStore(f);
+    const result = await store.search!("proj-a", "test query", 10);
+    expect(result).toHaveLength(2);
+    expect(result[0].kind).toBe("session");
+    expect(result[1].kind).toBe("code");
+
+    // Verify the POST payload.
+    const init = f.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(f.mock.calls[0][0]).toBe("https://team.example.com/v1/projects/proj-a/search");
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ query: "test query", limit: 10, verbose: false });
+  });
+
+  it("passes verbose option in the request body", async () => {
+    const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "", json: [] }));
+    const store = makeStore(f);
+    await store.search!("proj-a", "q", 5, { verbose: true });
+    const body = JSON.parse((f.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.verbose).toBe(true);
+  });
+
+  it("returns empty array when server returns null", async () => {
+    const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "null", json: null }));
+    const store = makeStore(f);
+    const result = await store.search!("proj-a", "q", 5);
+    expect(result).toEqual([]);
+  });
+
+  it("retries on 5xx (search is a POST but idempotent)", async () => {
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce(mockResponse({ status: 503, body: "down" }))
+      .mockResolvedValueOnce(mockResponse({ status: 200, body: "", json: [] }));
+    const store = makeStore(f, { maxRetries: 2, backoffBaseMs: 1 });
+    const result = await store.search!("proj-a", "q", 5);
+    expect(result).toEqual([]);
+    expect(f).toHaveBeenCalledTimes(2);
   });
 });

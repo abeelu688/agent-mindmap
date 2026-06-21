@@ -6,6 +6,7 @@ import type {
   OntologyIndex,
   OntologyRecord,
   ProjectSummary,
+  SearchHit,
   SegmentEquivalence,
   SessionRecord,
 } from "../storeTypes";
@@ -130,6 +131,17 @@ export class TeamStore implements Store {
 
   readLatestSegmentEquivalences(projectSlug: string): Promise<SegmentEquivalence[]> {
     return this.remote.readLatestSegmentEquivalences(projectSlug);
+  }
+
+  // ─── Search (P5.4 — delegates to RemoteStore → Go token-scorer) ────────────────
+
+  search(
+    projectSlug: string,
+    query: string,
+    limit: number,
+    opts?: { verbose?: boolean }
+  ): Promise<SearchHit[]> {
+    return this.remote.search(projectSlug, query, limit, opts);
   }
 
   /**
