@@ -26,6 +26,7 @@ import {
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider, SessionAnalysis } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import type { MindMapProgress } from "../progress";
 import type { ConceptOntologyRecord } from "../store/ontologyTypes";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
@@ -75,22 +76,6 @@ export type MergePipelineResult = {
 export function mindMapTopLevelCount(merge: MergeRecord): number {
   const children = merge.mindMap?.nodeData?.children ?? merge.mindMap?.children ?? [];
   return children.length;
-}
-
-function outputLanguageFromRecords(records: SessionRecord[]): OutputLanguage {
-  const votes = new Map<string, { count: number; latestIndex: number }>();
-  records.forEach((record, index) => {
-    const language = record.meta.outputLanguage;
-    if (!language) {
-      return;
-    }
-    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
-    votes.set(language, { count: current.count + 1, latestIndex: index });
-  });
-  const ranked = [...votes.entries()].sort(
-    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
-  );
-  return ranked[0]?.[0] ?? "English";
 }
 
 function sessionSegmentEquivalences(records: SessionRecord[]) {

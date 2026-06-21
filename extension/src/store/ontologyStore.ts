@@ -1,20 +1,9 @@
-import { createHeartbeat } from "../progress";
 import { t as safeT } from "../l10n/uiTranslate";
 import { ONTOLOGY_PROMPT_VERSION } from "../llm/promptOntology";
-import {
-  buildOntologyRefinePrompt,
-  buildRefineInputFromRecords,
-} from "../llm/promptOntologyRefine";
 import { TOPIC_PATHS_PROMPT_VERSION } from "../llm/promptTopicPaths";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
-import { REATTACH_PROMPT_VERSION, buildReattachPrompt } from "../llm/promptReattach";
-import { buildTrieReparentInput } from "../llm/trieReparentInput";
+import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
-import {
-  tryParseReattachResponse,
-  validateConceptOntology,
-  validateOntologyRefine,
-} from "../llm/ontologyValidate";
 import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
 import {
@@ -168,45 +157,6 @@ async function writeOntologyIndex(
 export async function clearOntologyCache(storeDir: string): Promise<void> {
   const store = await getStoreForDir(storeDir);
   await store.clearOntologyCache();
-}
-
-async function runOntologyRefine(
-  records: SessionRecord[],
-  base: Pick<ConceptOntologyRecord, "nodes" | "mappings" | "topicPaths" | "reattachMoves">,
-  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
-  provider: LlmProvider,
-  signal: AbortSignal,
-  progress?: MindMapProgress
-): Promise<ConceptOntologyRecord["segmentEquivalences"]> {
-  const hostId = opts.hostId ?? records[0]?.meta.hostId ?? "cursor";
-  const input = buildRefineInputFromRecords(records, base, base.topicPaths);
-  const prompt = buildOntologyRefinePrompt(input, hostId, opts.promptLanguage ?? "zh");
-  const heartbeat = createHeartbeat(
-    progress,
-    safeT("ui.ontology.refine.heartbeat", "Refining concept segment equivalences…")
-  );
-  try {
-    const res = await provider.summarize(
-      {
-        events: [],
-        prompt,
-        model: opts.model,
-        maxTopics: 8,
-        maxItemsPerTopic: 8,
-        responseSchema: "ontology-refine",
-        onAttempt: (attempt, maxAttempts) => {
-          if (attempt > 1) {
-            progress?.report(safeT("ui.llm.attempt", "LLM attempt {0}/{1}…", attempt, maxAttempts));
-          }
-        },
-      },
-      signal
-    );
-    const refined = validateOntologyRefine(res);
-    return refined.segmentEquivalences;
-  } finally {
-    heartbeat.stop();
-  }
 }
 
 export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
@@ -364,41 +314,4 @@ export async function ensureOntologyMemory(
     reattachMoves,
     segmentEquivalences,
   });
-}
-
-/**
- * Optional: ask LLM to produce reattach moves for suspicious root branches.
- */
-export async function suggestReattachMoves(
-  records: SessionRecord[],
-  ontology: ConceptOntologyRecord,
-  opts: { model?: string; hostId?: AgentHostId; promptLanguage?: PromptLanguage },
-  provider: LlmProvider,
-  signal: AbortSignal
-): Promise<ConceptOntologyRecord["reattachMoves"]> {
-  const hostId = opts.hostId ?? ontology.meta.hostId ?? "cursor";
-  const input = buildTrieReparentInput(records, {
-    segmentEquivalences: ontology.segmentEquivalences,
-    ontologyNodes: ontology.nodes,
-  });
-  const prompt = buildReattachPrompt(input, hostId, opts.promptLanguage ?? "zh");
-  const res = await provider.summarize(
-    {
-      events: [],
-      prompt,
-      model: opts.model,
-      maxTopics: 8,
-      maxItemsPerTopic: 8,
-      responseSchema: "reattach-moves",
-    },
-    signal
-  );
-  const { moves } = tryParseReattachResponse(res);
-  const validated = validateConceptOntology({
-    nodes: ontology.nodes,
-    mappings: ontology.mappings,
-    topicPaths: [],
-    reattachMoves: moves,
-  } as any);
-  return validated.reattachMoves;
 }

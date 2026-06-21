@@ -26,6 +26,8 @@ import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
 import { commandConfigureTeamService } from "./commands/configureTeamService";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
+import { commandInstallMcp } from "./commands/installMcp";
+import { commandSyncAiContext } from "./commands/syncAiContext";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
@@ -229,15 +231,26 @@ export function activate(context: vscode.ExtensionContext): void {
       "agent-mindmap.selectModel",
       wrapCommand(() => commandSelectModel(context))
     ),
-    vscode.commands.registerCommand("agent-mindmap.refreshRepoPaths", async () => {
-      await writePathsMaps();
-      void vscode.window.showInformationMessage(
-        t("ui.info.repoPathsRefreshed", "Agent Mind Map: Refreshed repo/workspace paths map.")
-      );
-    }),
+    vscode.commands.registerCommand(
+      "agent-mindmap.refreshRepoPaths",
+      wrapCommand(async () => {
+        await writePathsMaps();
+        void vscode.window.showInformationMessage(
+          t("ui.info.repoPathsRefreshed", "Agent Mind Map: Refreshed repo/workspace paths map.")
+        );
+      })
+    ),
     vscode.commands.registerCommand(
       "agent-mindmap.configureTeamService",
       wrapCommand(() => commandConfigureTeamService(context))
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.installMcp",
+      wrapCommand(() => commandInstallMcp(context))
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.syncAiContext",
+      wrapCommand(() => commandSyncAiContext())
     )
   );
 

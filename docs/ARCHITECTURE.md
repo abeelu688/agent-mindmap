@@ -149,10 +149,10 @@ extension.ts: commandAnalyzeAndMergeCurrentProject()
             │
             └─ onBatchDone()  (called between batches)
                 └─ batch/conceptMerge.buildProjectConceptMergeForBatch()
-                    └─ runBatchSnapshotPipeline()    ← LLM if first batch / forceRefresh
+                    └─ runBatchSnapshotPipeline()    ← L1 leaf M-merge per batch; promote every 5 snapshots
                         ├─ M1: collectMergeTerms     (DET)
-                        ├─ M2: mergeSynonyms         (LLM, optional)
-                        ├─ M3: mergeTrieReparent     (LLM, the big merge call)
+                        ├─ M-merge: mergeSessionAnalysis (LLM2, bounded batch / snapshot virtual sessions)
+                        ├─ M3: updateConceptTrie     (DET, path snap on all real sessions at root)
                         └─ buildMergedOutlineMindMap → MindMapRoot
 ```
 

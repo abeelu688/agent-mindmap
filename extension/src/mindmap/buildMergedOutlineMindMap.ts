@@ -1,5 +1,6 @@
 import { dedupRefs, unionChildRefs, withOrigin } from "./origin";
 import { mindMapLabelsForOutputLanguage, type MindMapLanguageLabels } from "./outputLanguageLabels";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import type { MergedOutline, MergedOutlineDetail, MergedOutlineNode } from "../llm/types";
 import type { MindMapNodeData, MindMapRoot, NodeOriginRef } from "../transcript/types";
 import type { SessionRecord } from "../store/storeTypes";
@@ -50,22 +51,6 @@ function refsForMergedDetail(
   return dedupRefs(refs);
 }
 
-function outputLanguageFromRecords(records: SessionRecord[]): string | undefined {
-  const votes = new Map<string, { count: number; latestIndex: number }>();
-  records.forEach((record, index) => {
-    const language = record.meta.outputLanguage;
-    if (!language) {
-      return;
-    }
-    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
-    votes.set(language, { count: current.count + 1, latestIndex: index });
-  });
-  const ranked = [...votes.entries()].sort(
-    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
-  );
-  return ranked[0]?.[0];
-}
-
 function renderMergedNode(
   node: MergedOutlineNode,
   records: SessionRecord[],
@@ -105,7 +90,9 @@ export function buildMergedOutlineMindMap(
   records: SessionRecord[],
   rootTitleOverride?: string
 ): MindMapRoot {
-  const labels = mindMapLabelsForOutputLanguage(outputLanguageFromRecords(records));
+  const labels = mindMapLabelsForOutputLanguage(
+    outputLanguageFromRecords(records, { defaultLanguage: undefined })
+  );
   const rootText = rootTitleOverride?.trim() || merged.title?.trim() || "Merged Mind Map";
   const topicNodes = merged.outline.map((n) => renderMergedNode(n, records, labels));
   const root: MindMapNodeData = {

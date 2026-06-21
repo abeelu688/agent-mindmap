@@ -5,6 +5,7 @@ import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
   mindMapLabelsForOutputLanguage,
@@ -369,22 +370,6 @@ export type ConceptTrieStructure = {
   stats: ConceptMergeStats;
 };
 
-function outputLanguageFromRecords(records: SessionRecord[]): string | undefined {
-  const votes = new Map<string, { count: number; latestIndex: number }>();
-  records.forEach((record, index) => {
-    const language = record.meta.outputLanguage;
-    if (!language) {
-      return;
-    }
-    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
-    votes.set(language, { count: current.count + 1, latestIndex: index });
-  });
-  const ranked = [...votes.entries()].sort(
-    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
-  );
-  return ranked[0]?.[0];
-}
-
 function conceptTrieEmptyLeaf(
   filteredRecordCount: number,
   totalTopics: number,
@@ -477,7 +462,9 @@ export function buildConceptTrieMindMap(
   const filtered = options.projectSlug
     ? records.filter((r) => r.meta.projectSlug === options.projectSlug)
     : records;
-  const labels = mindMapLabelsForOutputLanguage(outputLanguageFromRecords(filtered));
+  const labels = mindMapLabelsForOutputLanguage(
+    outputLanguageFromRecords(filtered, { defaultLanguage: undefined })
+  );
 
   const title =
     options.title ??
@@ -560,7 +547,7 @@ export function buildConceptMergeRecord(
   // Log trieRecords topics detail
   for (const r of trieRecords.slice(0, 2)) {
     const topics = r.graph?.topics ?? [];
-    const paths = topics.map((t: any) => t.conceptPath);
+    const paths = topics.map((t: Topic) => t.conceptPath);
     mindMapLog(
       `[buildConceptMergeRecord] trieRecord=${r.meta?.sessionId?.slice(0, 8)} topics=${topics.length} paths=${JSON.stringify(paths)}`
     );

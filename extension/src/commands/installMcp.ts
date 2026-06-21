@@ -5,6 +5,8 @@ import {
   installMcpServerConfig,
   showMcpInstallHint,
 } from "../mcp/mcpConfig";
+import { t } from "../l10n/uiTranslate";
+import { notifyError, notifyWarning } from "../notify";
 import { getStoreDir, getWorkspacePath } from "../paths";
 
 type Target = "cursor" | "claude";
@@ -24,8 +26,11 @@ function defaultTargetsForHost(host: string | undefined): { cursor: boolean; cla
 export async function commandInstallMcp(context: vscode.ExtensionContext): Promise<void> {
   const workspaceRoot = getWorkspacePath();
   if (!workspaceRoot) {
-    void vscode.window.showWarningMessage(
-      "Agent Mind Map: Open a workspace folder before installing the MCP server."
+    notifyWarning(
+      t(
+        "ui.mcp.install.noWorkspace",
+        "Agent Mind Map: Open a workspace folder before installing the MCP server."
+      )
     );
     return;
   }
@@ -50,8 +55,11 @@ export async function commandInstallMcp(context: vscode.ExtensionContext): Promi
   ];
   const picked = await vscode.window.showQuickPick(items, {
     canPickMany: true,
-    title: "Agent Mind Map: Install MCP Server",
-    placeHolder: "Select which AI products to configure (writes to the workspace).",
+    title: t("ui.mcp.install.quickPickTitle", "Agent Mind Map: Install MCP Server"),
+    placeHolder: t(
+      "ui.mcp.install.quickPickPlaceholder",
+      "Select which AI products to configure (writes to the workspace)."
+    ),
   });
   if (!picked || picked.length === 0) {
     return;
@@ -71,8 +79,13 @@ export async function commandInstallMcp(context: vscode.ExtensionContext): Promi
     showMcpInstallHint(result);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    void vscode.window.showErrorMessage(
-      `Agent Mind Map: Failed to install MCP server. Build the extension first (npm run build). ${detail}`
+    notifyError(
+      t(
+        "ui.mcp.install.failed",
+        "Agent Mind Map: Failed to install MCP server. Build the extension first (npm run build). {0}",
+        detail
+      ),
+      err
     );
   }
 }

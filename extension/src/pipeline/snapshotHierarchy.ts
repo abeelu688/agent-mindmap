@@ -23,8 +23,9 @@ import { tryReuseBatchMerge } from "./batchMergeCache";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import type { AgentHostId } from "../host/types";
-import type { LlmProvider } from "../llm/types";
+import type { LlmProvider, Topic } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import type { MindMapProgress } from "../progress";
 import type {
   MergeRecord,
@@ -95,22 +96,6 @@ function unionSessionIds(nodes: SnapshotNode[]): string[] {
     }
   }
   return [...ids].sort();
-}
-
-function outputLanguageFromRecords(records: SessionRecord[]): OutputLanguage {
-  const votes = new Map<string, { count: number; latestIndex: number }>();
-  records.forEach((record, index) => {
-    const language = record.meta.outputLanguage;
-    if (!language) {
-      return;
-    }
-    const current = votes.get(language) ?? { count: 0, latestIndex: -1 };
-    votes.set(language, { count: current.count + 1, latestIndex: index });
-  });
-  const ranked = [...votes.entries()].sort(
-    (a, b) => b[1].count - a[1].count || b[1].latestIndex - a[1].latestIndex
-  );
-  return ranked[0]?.[0] ?? "English";
 }
 
 function virtualFromSingleRecord(record: SessionRecord): FinalizedSessionAnalysis {
@@ -679,7 +664,7 @@ export async function runFinalRootRefresh(
   );
   // Log sample conceptPaths from input records
   for (const r of allReal.slice(0, 2)) {
-    const paths = r.graph?.topics?.map((t: any) => t.conceptPath) ?? [];
+    const paths = r.graph?.topics?.map((t: Topic) => t.conceptPath) ?? [];
     mindMapLog(
       `[runFinalRootRefresh] record=${r.meta?.sessionId?.slice(0, 8)} topics=${r.graph?.topics?.length ?? 0} paths=${JSON.stringify(paths.slice(0, 3))}`
     );

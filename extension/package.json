@@ -78,6 +78,16 @@
         "command": "agent-mindmap.configureTeamService",
         "title": "Agent Mind Map: Configure Team Service",
         "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.installMcp",
+        "title": "Agent Mind Map: Install MCP Server (Cursor & Claude Code)",
+        "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.syncAiContext",
+        "title": "Agent Mind Map: Sync AI Context (Current Project)",
+        "category": "Agent Mind Map"
       }
     ],
     "configuration": {

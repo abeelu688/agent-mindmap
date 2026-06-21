@@ -56,7 +56,7 @@ flowchart LR
 | P1 | ✅ | `runSessionPipeline` S1 analyze + S2 finalize → [`sessionPipeline.ts`](../extension/src/pipeline/sessionPipeline.ts) |
 | P2 | ✅ | `buildDeterministicMergeRecordAsync` → [`mergeDeterministic.ts`](../extension/src/store/mergeDeterministic.ts) |
 | P3 | ⚠️ 已移除 palette 入口 | 原 `ensureConceptMerge` 命令已删；P6 batch 内直接走 P4+P5 |
-| P4 | ✅ | **MergePipeline M1–M2**：`collectMergeTerms` + `mergeSynonyms`（无独立 Extract/TopicPaths LLM）→ [`mergePipeline.ts`](../extension/src/pipeline/mergePipeline.ts) |
+| P4 | ✅ | **MergePipeline M1 + M-merge + M3**：`collectMergeTerms` (DET) → `mergeSessionAnalysis` (LLM2) → `updateConceptTrie` (DET) → [`mergePipeline.ts`](../extension/src/pipeline/mergePipeline.ts) / [`snapshotHierarchy.ts`](../extension/src/pipeline/snapshotHierarchy.ts) |
 | P5 | ✅ | `insertPath` + `mergeTrieSiblingsByEquivalences` → [`mergeConceptTrie.ts`](../extension/src/store/mergeConceptTrie.ts) |
 | P6 | ✅ | `batchSize=5`，`skipAutoMerge=true`；`shouldAutoApplyBatchUpdates` / `hadFullLibraryCoverage` → [`batchMergeApplyMode.ts`](../extension/src/batchMergeApplyMode.ts) |
 | P7 | ✅ | `mergeWithLlm` + `computeMergeCacheKey` → [`mergeLlm.ts`](../extension/src/store/mergeLlm.ts) |
@@ -150,8 +150,10 @@ flowchart TB
 | 步骤 | 类型 | 产出 |
 |------|------|------|
 | M1 collectMergeTerms | DET | nodes, mappings, topicPaths（来自各会话 `conceptExtract` / `treeSnapshot`） |
-| M2 mergeSynonyms | LLM | `segmentEquivalences`（带 scope） |
+| M-merge mergeSessionAnalysis | LLM2 | 虚拟合并会话（与 Part I 同 schema）；`segmentEquivalences` 来自会话记录 + M1 |
 | M3 updateConceptTrie | DET | 更新 concept trie；**不**重写各会话 `outline` |
+
+> **Deprecated（已移除）**：独立 M2 `mergeSynonyms` / M3 `mergeTrieReparent` LLM 阶段；等价逻辑已并入 M-merge + DET trie snap。
 
 单会话 **不再** 调用 bulk `concept-ontology` Extract 或 `topic-paths` LLM。
 

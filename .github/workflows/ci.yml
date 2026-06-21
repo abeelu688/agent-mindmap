@@ -52,10 +52,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run vitest
-        run: npm run test:vitest
-
-      - name: Run extension tests
+      - name: Run tests
         run: npm test
 
       # ── Soft checks (warnings only, do not block) ────────────────────────
