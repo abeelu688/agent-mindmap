@@ -58,13 +58,14 @@ function llmMergeCacheKey(cacheKey: string): string {
  *
  * Uses dynamic `import()` so vitest's `resolve.alias` can intercept it
  * (vitest does not rewrite `require()` calls in transformed modules).
- * At runtime in the extension bundle, esbuild leaves `@vscode/sqlite3`
- * external (`--external:@vscode/sqlite3`), so the import resolves from
- * `extension/node_modules`.
+ * CJS packages loaded via `import()` expose exports on `.default`; unwrap
+ * before calling `new sqlite3.Database(...)`.
  */
 async function loadSqlite3(): Promise<Sqlite3Static> {
-  const mod = (await import("@vscode/sqlite3")) as unknown as Sqlite3Static;
-  return mod;
+  const mod = (await import("@vscode/sqlite3")) as {
+    default?: Sqlite3Static;
+  } & Partial<Sqlite3Static>;
+  return mod.default ?? (mod as Sqlite3Static);
 }
 
 async function openDatabase(dbPath: string): Promise<unknown> {
