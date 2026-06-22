@@ -6,7 +6,7 @@ import {
 } from "../../llm/promptSessionExtract";
 import { validateSessionConceptExtract } from "../../llm/pipelineValidate";
 import type { LlmProvider, SessionConceptExtract } from "../../llm/types";
-import type { AgentHostId } from "../../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";

@@ -12,7 +12,7 @@ import type { CollectedMergeTerms } from "./collectMergeTerms";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MindMapProgress } from "../../progress";
 import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "../../llm/types";
-import type { AgentHostId } from "../../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 
 export type ReorganizeSessionsOpts = {
   storeDir: string;

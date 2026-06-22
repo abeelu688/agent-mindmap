@@ -53,3 +53,9 @@ export {
   type AgentProject,
   type ComposerHeaderMeta,
 } from "./transcript/composerTitles";
+
+// Host module (moved in P1.3):
+export type { AgentHost, AgentHostId, HostSetting } from "./host/types";
+export { encodeClaudeProjectPath, decodeClaudeProjectPath } from "./host/claudePath";
+export { createCursorHost } from "./host/cursorHost";
+export { createClaudeHost } from "./host/claudeHost";

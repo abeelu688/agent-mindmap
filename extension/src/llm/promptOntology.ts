@@ -1,4 +1,4 @@
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -75,4 +75,3 @@ export function buildOntologyPrompt(
     blocks.join("\n\n") || "(空)",
   ].join("\n");
 }
-

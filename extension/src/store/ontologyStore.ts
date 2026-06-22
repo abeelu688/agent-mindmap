@@ -17,7 +17,7 @@ import type { SessionRecord } from "./storeTypes";
 import type { ConceptOntologyRecord, TopicConceptPathDecision } from "./ontologyTypes";
 import type { MindMapProgress } from "../progress";
 import type { LlmProvider } from "../llm/types";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 
 export type OntologyIndex = {
   schemaVersion: 1;

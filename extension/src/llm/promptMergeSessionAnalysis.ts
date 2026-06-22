@@ -6,7 +6,7 @@ import {
   formatSessionAnalysisJsonContract,
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
 } from "./promptSessionAnalysisJsonContract";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { OutputLanguage } from "./promptLanguage";
 
 /** Bump when {@link buildMergeSessionAnalysisPrompt} behavior / schema / instructions change. */

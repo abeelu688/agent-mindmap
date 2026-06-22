@@ -10,7 +10,7 @@ import type { PromptLanguage } from "../llm/promptLanguage";
 import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type { MindMapProgress } from "../progress";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 
 export type MergeLlmOptions = {
   maxTopics: number;

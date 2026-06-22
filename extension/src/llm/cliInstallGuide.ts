@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { uiTranslate } from "../l10n/uiTranslate";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 
 export const CLI_SETTINGS_KEY = "agentMindmap.llm.cliPath";
 

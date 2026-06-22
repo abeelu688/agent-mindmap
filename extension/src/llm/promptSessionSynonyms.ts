@@ -1,4 +1,4 @@
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { SessionConceptExtract } from "./types";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
@@ -21,7 +21,7 @@ export function buildSessionSynonymsPrompt(
     "",
     "segmentEquivalences[]（带 scope，禁止无 scope 全局合并）：",
     "- canonical + aliases[] + scope（pathPrefix≥1 段 / downstreamPrefix / downstreamFirst / evidenceKeywords / projectSlugs 至少一项非空）",
-    "- 根级写 pathPrefix:[] 时须**同时**写非空 evidenceKeywords 或 downstreamFirst；仅 {\"pathPrefix\":[]} 无效",
+    '- 根级写 pathPrefix:[] 时须**同时**写非空 evidenceKeywords 或 downstreamFirst；仅 {"pathPrefix":[]} 无效',
     "- 例：reactjs → react，pathPrefix [frontend]，evidenceKeywords 来自 term evidence",
     "",
     "termAliases[]（term 级别名，非 path 段）：",

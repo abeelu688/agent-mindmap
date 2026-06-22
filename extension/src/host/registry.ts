@@ -4,7 +4,7 @@ import { mindMapLog } from "../webview/MindMapLog";
 import { claudeHost } from "./claudeHost";
 import { cursorHost } from "./cursorHost";
 import { getCachedRepoSlug, getProjectMode } from "./slugDerivation";
-import type { AgentHost, AgentHostId, HostSetting } from "./types";
+import type { AgentHost, AgentHostId, HostSetting } from "@agent-mindmap/core";
 
 const HOSTS: Record<AgentHostId, AgentHost> = {
   cursor: cursorHost,

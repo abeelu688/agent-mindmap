@@ -46,7 +46,7 @@ import {
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { t } from "./l10n/uiTranslate";
 import type { SessionMeta } from "./mindmap/origin";
-import type { AgentHost } from "./host/types";
+import type { AgentHost } from "@agent-mindmap/core";
 import type { SessionRecord, SnapshotManifest } from "./store/storeTypes";
 import type { BuildOptions, MindMapRoot, TranscriptSession } from "@agent-mindmap/core";
 

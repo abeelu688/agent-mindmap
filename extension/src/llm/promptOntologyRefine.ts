@@ -5,7 +5,7 @@ import {
   type SegmentOverlapHint,
   type TopicSegmentContext,
 } from "./segmentContext";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "./promptLanguage";
 import type { SessionRecord } from "../store/storeTypes";
 import type { ConceptOntology } from "./types";

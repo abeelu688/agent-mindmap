@@ -24,7 +24,7 @@ import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { format, t } from "./l10n/uiTranslate";
 import type { ChatEvent, NodeOrigin } from "@agent-mindmap/core";
-import type { AgentHostId } from "./host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { SessionRecord } from "./store/storeTypes";
 
 function isSummaryNodeLabel(text: string): boolean {
@@ -98,7 +98,7 @@ export function consumeTranscriptDocUriIfAutoReveal(doc: vscode.TextDocument): b
   return transcriptDocUrisToAutoReveal.delete(doc.uri.toString());
 }
 
-function hostForTranscriptPath(transcriptPath: string): import("./host/types").AgentHost {
+function hostForTranscriptPath(transcriptPath: string): import("@agent-mindmap/core").AgentHost {
   if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {
     return getHostById("cursor");
   }

@@ -4,7 +4,7 @@ import { cursorHost } from "../host/cursorHost";
 import { countUserQueries, sanitizeTopicGraph } from "../llm/sanitizeTopicGraph";
 import { sanitizeSessionOutline } from "../llm/sanitizeOutline";
 import { outlineToTopicGraph } from "../llm/outlineToTopicGraph";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";
 
 function hostFor(id?: AgentHostId) {

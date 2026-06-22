@@ -3,7 +3,7 @@ import { conceptTrieMergePath, recordFreshnessToken } from "../store/sessionStor
 import { getStoreForDir } from "../store/storeClient";
 import { mindMapLog } from "../webview/MindMapLog";
 import { computeBatchMergeCacheKey } from "./mergePipeline";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { OutputLanguage } from "../llm/promptLanguage";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 

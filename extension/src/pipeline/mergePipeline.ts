@@ -24,7 +24,7 @@ import {
   finalizeSessionAnalysis,
   type FinalizedSessionAnalysis,
 } from "./stages/finalizeSessionAnalysis";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { LlmProvider, SessionAnalysis } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
 import type { MindMapProgress } from "../progress";

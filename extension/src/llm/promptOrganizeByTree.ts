@@ -1,5 +1,5 @@
 import { __testing as promptTesting } from "./prompt";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { SessionTreeSnapshot } from "./types";
 

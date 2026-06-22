@@ -24,7 +24,7 @@ import { runMergePipeline } from "./mergePipeline";
 import { tryReuseBatchMerge } from "./batchMergeCache";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { LlmProvider, Topic } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
 import type { MindMapProgress } from "../progress";

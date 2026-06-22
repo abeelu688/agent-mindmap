@@ -8,9 +8,10 @@ import { validateSessionAnalysis } from "../../llm/pipelineValidate";
 import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
 import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
 import { scaleMergeSessionAnalysisTimeoutMs } from "../../llm/reattachTimeout";
+import { outputLanguageFromRecords } from "../../llm/outputLanguageFromRecords";
 import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "./finalizeSessionAnalysis";
 import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
-import type { AgentHostId } from "../../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type {
   ConceptOntologyMapping,
   ConceptOntologyNode,
@@ -22,7 +23,6 @@ import type { MindMapProgress } from "../../progress";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MergeInputMode } from "../../llm/trieReparentInput";
 import type { OutputLanguage } from "../../llm/promptLanguage";
-import { outputLanguageFromRecords } from "../../llm/outputLanguageFromRecords";
 
 export type MergeSessionAnalysisOpts = {
   records: SessionRecord[];

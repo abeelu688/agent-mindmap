@@ -3,7 +3,7 @@ import { analyzeSession } from "./stages/analyzeSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { currentPipelineVersions } from "./pipelineVersions";
 import { createPipelineTimingCollector } from "./pipelineTiming";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { CodeReference, LlmProvider, SessionAnalysis } from "../llm/types";
 import type { MindMapProgress } from "../progress";
 import type { ChatEvent } from "@agent-mindmap/core";

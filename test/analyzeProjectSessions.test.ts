@@ -5,7 +5,7 @@ import { createBatchItemProgress } from "../extension/src/progress";
 import type * as vscode from "vscode";
 import type { TranscriptSession } from "@agent-mindmap/core";
 import type { LoadedSession } from "../extension/src/sessionLoader";
-import type { AgentHost } from "../extension/src/host/types";
+import type { AgentHost } from "@agent-mindmap/core";
 
 const sessions: TranscriptSession[] = [
   {

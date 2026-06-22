@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as posixPath from "path";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {

@@ -1,13 +1,8 @@
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { loadComposerTitles } from "@agent-mindmap/core";
-import { listCursorSessions, type ListSessionsContext } from "@agent-mindmap/core";
-import { parseJsonl } from "@agent-mindmap/core";
+import { createCursorHost, type AgentHost } from "@agent-mindmap/core";
 import { cliMissingHintSummary } from "../llm/cliInstallGuide";
-import { workspaceToSlug, slugToWorkspacePath } from "../paths";
-import type { ChatEvent, TranscriptSession } from "@agent-mindmap/core";
-import type { AgentHost } from "./types";
 
 export function getCursorProjectsRoot(): string {
   const override = vscode.workspace.getConfiguration("agentMindmap").get<string>("projectsDir");
@@ -27,76 +22,7 @@ function expandHome(p: string): string {
   return p;
 }
 
-export const cursorHost: AgentHost = {
-  id: "cursor",
-  displayName: "Cursor",
-  defaultLlmProvider: "cursor-cli",
-  jumpCommandCandidates: [
-    "glass.openAgentById",
-    "cursor.openAgentById",
-    "composer.openComposerWithSession",
-    "composer.openComposer",
-    "workbench.action.openAgentsView",
-    "workbench.action.toggleAgents",
-  ],
-
-  getProjectsRoot(): string {
-    return getCursorProjectsRoot();
-  },
-
-  encodeWorkspacePath(fsPath: string): string {
-    return workspaceToSlug(fsPath);
-  },
-
-  getProjectDir(workspacePath: string): string | undefined {
-    return path.join(getCursorProjectsRoot(), workspaceToSlug(workspacePath));
-  },
-
-  getSessionsScanDir(workspacePath: string): string | undefined {
-    const projectsRoot = getCursorProjectsRoot();
-    const slug = workspaceToSlug(workspacePath);
-    const scanDir = path.join(projectsRoot, slug, "agent-transcripts");
-    return scanDir;
-  },
-
-  async listSessions(
-    transcriptsDir: string,
-    ctx: ListSessionsContext
-  ): Promise<TranscriptSession[]> {
-    const titles = await loadComposerTitles();
-    return listCursorSessions(transcriptsDir, {
-      ...ctx,
-      hostId: "cursor",
-      titles,
-    });
-  },
-
-  parseTranscript(content: string): ChatEvent[] {
-    return parseJsonl(content);
-  },
-
-  slugToWorkspacePath(slug: string): string {
-    return slugToWorkspacePath(slug);
-  },
-
-  inferProjectFromTranscriptPath(filePath: string): {
-    projectSlug: string;
-    projectPath?: string;
-  } {
-    const transcriptsParent = path.dirname(path.dirname(filePath));
-    const slugDir = path.dirname(transcriptsParent);
-    const projectSlug = path.basename(slugDir);
-    return {
-      projectSlug,
-      projectPath: slugToWorkspacePath(projectSlug),
-    };
-  },
-
-  cliMissingHint(): string {
-    return cliMissingHintSummary("cursor");
-  },
-
-  emptyTranscriptsHint(scanDir: string): string {
-    return `Agent Mind Map: No agent transcripts in ${scanDir}`;
-  },
-};
+export const cursorHost: AgentHost = createCursorHost(
+  () => getCursorProjectsRoot(),
+  () => cliMissingHintSummary("cursor")
+);

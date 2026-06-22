@@ -14,7 +14,7 @@ import { agentDebugLog } from "../debugLog";
 import { writeJsonAtomic } from "../store/atomicWrite";
 import { format, t as safeT } from "../l10n/uiTranslate";
 import type { ChatEvent } from "@agent-mindmap/core";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { PipelineKind } from "./pipelineTiming";
 

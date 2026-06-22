@@ -31,7 +31,7 @@ import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { MindMapProgress } from "../progress";
 import type { LlmProvider, SegmentEquivalence } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
 export type ConceptMergeLlmOpts = {

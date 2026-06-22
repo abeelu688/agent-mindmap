@@ -13,7 +13,7 @@ import {
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import type { MindMapRoot, NodeOriginRef } from "@agent-mindmap/core";
 
-function hostForTranscriptPath(transcriptPath: string): import("../host/types").AgentHost {
+function hostForTranscriptPath(transcriptPath: string): import("@agent-mindmap/core").AgentHost {
   if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {
     return getHostById("cursor");
   }

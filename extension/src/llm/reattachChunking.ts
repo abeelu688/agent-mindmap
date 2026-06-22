@@ -6,15 +6,13 @@ import {
   type ReparentChain,
   type TrieReparentInput,
 } from "./trieReparentInput";
-import {
-  buildReattachNodeCatalog,
-} from "./reattachNodeCatalog";
+import { buildReattachNodeCatalog } from "./reattachNodeCatalog";
 import {
   buildStructuralReattachHints,
   enrichStructuralHintsWithNodeIds,
 } from "./reattachStructuralHints";
 import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "./promptLanguage";
 
 /** Stay under headlessCli MAX_PROMPT_BYTES (96 KiB) argv cap. */
@@ -59,21 +57,14 @@ function newChainIndices(input: TrieReparentInput): number[] {
   return input.chains.map((_, i) => i).filter((i) => !frozen.has(i));
 }
 
-function buildSliceInput(
-  input: TrieReparentInput,
-  chainIndices: number[]
-): TrieReparentInput {
+function buildSliceInput(input: TrieReparentInput, chainIndices: number[]): TrieReparentInput {
   const selected = reindexChains(chainIndices.map((i) => input.chains[i]));
   const nodeCatalog = buildReattachNodeCatalog(selected);
   const rootNodeIdByFrom = new Map(
-    nodeCatalog.numberedChains.map(
-      (c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const
-    )
+    nodeCatalog.numberedChains.map((c) => [segmentKeyForMerge(c.from), c.rootNodeId] as const)
   );
   const sessionIds = sessionIdsInChains(selected);
-  const conceptContexts = input.conceptContexts.filter((c) =>
-    sessionIds.has(c.sessionId)
-  );
+  const conceptContexts = input.conceptContexts.filter((c) => sessionIds.has(c.sessionId));
 
   return {
     ...input,
@@ -82,21 +73,10 @@ function buildSliceInput(
     chains: selected,
     topBranches: selected,
     nodeCatalog,
-    rootChildSynonymHints: buildRootChildSynonymHints(
-      selected,
-      input.segmentEquivalences
-    ),
-    topBranchSynonymHints: buildTopBranchSynonymHints(
-      selected,
-      input.segmentEquivalences
-    ),
+    rootChildSynonymHints: buildRootChildSynonymHints(selected, input.segmentEquivalences),
+    topBranchSynonymHints: buildTopBranchSynonymHints(selected, input.segmentEquivalences),
     structuralHints: enrichStructuralHintsWithNodeIds(
-      buildStructuralReattachHints(
-        selected,
-        undefined,
-        input.segmentEquivalences,
-        undefined
-      ),
+      buildStructuralReattachHints(selected, undefined, input.segmentEquivalences, undefined),
       rootNodeIdByFrom
     ),
   };
@@ -131,12 +111,8 @@ function fitsPromptBudget(
 ): boolean {
   const slice = buildSliceInput(input, chainIndices);
   return (
-    estimateReattachPromptBytes(
-      slice,
-      hostId,
-      promptLanguage,
-      mergeMode
-    ) <= REATTACH_PROMPT_TARGET_BYTES
+    estimateReattachPromptBytes(slice, hostId, promptLanguage, mergeMode) <=
+    REATTACH_PROMPT_TARGET_BYTES
   );
 }
 
@@ -157,9 +133,7 @@ export function planReattachChunks(
   }
 
   const fullIndices = Array.from({ length: n }, (_, i) => i);
-  if (
-    fitsPromptBudget(input, fullIndices, hostId, promptLanguage, mergeMode)
-  ) {
+  if (fitsPromptBudget(input, fullIndices, hostId, promptLanguage, mergeMode)) {
     return [{ chainIndices: fullIndices }];
   }
 
@@ -177,13 +151,7 @@ export function planReattachChunks(
       }
       if (
         plans.every((p) =>
-          fitsPromptBudget(
-            input,
-            p.chainIndices,
-            hostId,
-            promptLanguage,
-            mergeMode
-          )
+          fitsPromptBudget(input, p.chainIndices, hostId, promptLanguage, mergeMode)
         )
       ) {
         return plans;
@@ -197,22 +165,11 @@ export function planReattachChunks(
     const plans: ReattachChunkPlan[] = [];
     for (let i = 0; i < n; i += chunkSize) {
       plans.push({
-        chainIndices: Array.from(
-          { length: Math.min(chunkSize, n - i) },
-          (_, j) => i + j
-        ),
+        chainIndices: Array.from({ length: Math.min(chunkSize, n - i) }, (_, j) => i + j),
       });
     }
     if (
-      plans.every((p) =>
-        fitsPromptBudget(
-          input,
-          p.chainIndices,
-          hostId,
-          promptLanguage,
-          mergeMode
-        )
-      )
+      plans.every((p) => fitsPromptBudget(input, p.chainIndices, hostId, promptLanguage, mergeMode))
     ) {
       return plans;
     }

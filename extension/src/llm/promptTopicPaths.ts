@@ -1,5 +1,5 @@
 import { topicIdForTopic } from "./topicId";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { SegmentEquivalence } from "../llm/types";
 import type { SessionRecord } from "../store/storeTypes";
 

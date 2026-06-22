@@ -4,7 +4,7 @@ import {
   runFinalRootRefresh,
   type SnapshotHierarchyLlmOpts,
 } from "./snapshotHierarchy";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { OutputLanguage } from "../llm/promptLanguage";
 import type { LlmProvider } from "../llm/types";
 import type { MindMapProgress } from "../progress";

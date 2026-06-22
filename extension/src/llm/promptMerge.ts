@@ -1,5 +1,5 @@
 import { PROMPT_VERSION } from "./promptOutline";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { OutlineDetail, OutlineNode } from "./types";
 import type { SessionRecord } from "../store/storeTypes";
 

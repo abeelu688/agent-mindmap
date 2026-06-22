@@ -10,7 +10,7 @@ import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
 import { validateSessionOutline } from "./outlineValidate";
 import { LlmProviderError, type LlmProvider, type SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { PromptLanguage } from "./promptLanguage";
 

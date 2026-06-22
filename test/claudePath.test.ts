@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "../extension/src/host/claudePath";
+import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "@agent-mindmap/core";
 
 describe("encodeClaudeProjectPath", () => {
   it("encodes unix absolute paths with a leading dash", () => {
