@@ -75,11 +75,10 @@ export class PushQueue implements PushQueueLike {
         try {
           await this.drainOnce();
         } catch (err) {
-          // Log the failure and stop — no auto-retry. The user re-runs the
-          // command to retry. The watermark and pending flag reflect the
-          // partial progress so the next drain picks up where this left off.
+          // No auto-retry loop — user re-runs the command. Still propagate so
+          // the push command can surface the HTTP failure (dev fail loud).
           console.warn("[agent-mindmap] push queue drain failed:", err);
-          break;
+          throw err;
         }
         if (!this.redrainRequested) {
           break;

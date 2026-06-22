@@ -132,7 +132,7 @@ function makeQueue(): PushQueueLike & { enqueued: SessionRecord[]; drainCalls: n
 describe("TeamStore — reads delegate to remote", () => {
   it("listProjectSummaries calls remote", async () => {
     const f = vi.fn().mockResolvedValue(mockResponse(200, []));
-    const remote = new RemoteStore("https://x", "k", {
+    const remote = new RemoteStore("https://x/v1", "k", {
       fetchImpl: f as unknown as typeof fetch,
       maxRetries: 0,
       sleep: async () => {},
@@ -140,7 +140,7 @@ describe("TeamStore — reads delegate to remote", () => {
     const ts = new TeamStore(makeLocalStub(), remote, makeQueue());
     await ts.listProjectSummaries();
     expect(f).toHaveBeenCalledTimes(1);
-    expect(f.mock.calls[0][0]).toContain("/v1/projects");
+    expect(f.mock.calls[0][0]).toBe("https://x/v1/projects");
   });
 
   it("getRecord delegates to remote", async () => {

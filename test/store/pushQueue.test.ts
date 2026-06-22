@@ -128,10 +128,21 @@ describe("PushQueue", () => {
     const q = new PushQueue(local, remote);
     await q.enqueue(rec2);
     // Drain should fail after partial progress.
-    await q.drain();
+    await expect(q.drain()).rejects.toThrow(/HTTP 500/);
     // Watermark should be at 1000 (rec1 pushed); pending flag still set for 2000.
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBe(1000);
     expect(await local.readKvJson<number>(__testing.PENDING_PREFIX + "proj-a")).toBe(2000);
+  });
+
+  it("drain rethrows so callers can surface HTTP failures", async () => {
+    const rec = sampleRecord({ analyzedAt: 1000 });
+    await local.upsertRecord(rec);
+    const { remote, f } = makeRemote();
+    f.mockResolvedValue(mockResponse(404, '{"error":"not found"}'));
+    const q = new PushQueue(local, remote);
+    await q.enqueue(rec);
+    await expect(q.drain()).rejects.toThrow(/HTTP 404/);
+    expect(f).toHaveBeenCalled();
   });
 
   it("drain failure does not auto-retry; user re-runs drain to retry", async () => {
@@ -142,8 +153,8 @@ describe("PushQueue", () => {
     f.mockResolvedValue(mockResponse(500, "down"));
     const q = new PushQueue(local, remote);
     await q.enqueue(rec);
-    // First drain attempt.
-    await q.drain();
+    // First drain attempt — fails after retries; must propagate to caller.
+    await expect(q.drain()).rejects.toThrow(/HTTP 500/);
     const callsAfterFirst = f.mock.calls.length;
     expect(callsAfterFirst).toBeGreaterThanOrEqual(1);
     // Wait a bit to verify no auto-retry happens.

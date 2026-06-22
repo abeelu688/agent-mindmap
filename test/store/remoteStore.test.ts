@@ -55,7 +55,7 @@ function makeStore(
   fetchImpl: ReturnType<typeof vi.fn>,
   opts?: { maxRetries?: number; backoffBaseMs?: number; sleep?: (ms: number) => Promise<void> }
 ) {
-  return new RemoteStore("https://team.example.com", "test-key", {
+  return new RemoteStore("https://team.example.com/v1", "test-key", {
     fetchImpl: fetchImpl as unknown as typeof fetch,
     maxRetries: opts?.maxRetries ?? 2,
     backoffBaseMs: opts?.backoffBaseMs ?? 1,
@@ -72,9 +72,25 @@ describe("RemoteStore — construction", () => {
   });
   it("strips trailing slash from baseUrl", async () => {
     const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "[]", json: [] }));
-    const store = makeStore(f);
+    const store = new RemoteStore("https://team.example.com/v1/", "test-key", {
+      fetchImpl: f as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => {},
+    });
     await store.listProjectSummaries();
     expect(f.mock.calls[0][0]).toBe("https://team.example.com/v1/projects");
+  });
+
+  it("does not duplicate /v1 when serverUrl already includes it", async () => {
+    const f = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: "[]", json: [] }));
+    const store = new RemoteStore("http://localhost:8080/v1", "test-key", {
+      fetchImpl: f as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => {},
+    });
+    await store.listProjectSummaries();
+    expect(f.mock.calls[0][0]).toBe("http://localhost:8080/v1/projects");
+    expect(f.mock.calls[0][0]).not.toContain("/v1/v1/");
   });
 });
 
@@ -463,7 +479,7 @@ describe("RemoteStore — ensureProjectIndex cache", () => {
 });
 
 describe("RemoteStore — search (P5.4)", () => {
-  it("POSTs to /v1/projects/:slug/search and returns SearchHit[]", async () => {
+  it("POSTs to /projects/:slug/search and returns SearchHit[]", async () => {
     const hits = [
       {
         kind: "session",

@@ -142,6 +142,18 @@ export async function getStoreForDir(storeDir: string): Promise<Store> {
  * in-flight flag.
  */
 export async function drainAllPushQueues(): Promise<void> {
+  const remote = await getRemoteStore();
+  if (!remote) {
+    return;
+  }
+  // Ensure TeamStore + PushQueue exist (push command may run before any other
+  // getStore() call in this session).
+  await resolveTeamStoreForDir(getStoreDir());
+  if (pushQueues.length === 0) {
+    throw new Error(
+      "Team push queue is unavailable (local store is not SqliteStore). Cannot push sessions."
+    );
+  }
   for (const q of pushQueues) {
     await q.drain();
   }

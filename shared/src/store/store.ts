@@ -76,7 +76,8 @@ export interface Store {
 
   /**
    * Server-side search (team mode only). Delegates to the Go token-scorer
-   * on the team service via `POST /v1/projects/:slug/search`. Returns
+   * on the team service via `POST …/projects/:slug/search` (relative to
+   * `serverUrl`, which includes the API version prefix). Returns
    * `undefined` when the store does not support remote search (single-machine
    * mode uses `searchProjectRecords` directly via the MCP server's local
    * index).

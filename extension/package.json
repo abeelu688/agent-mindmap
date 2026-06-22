@@ -238,7 +238,7 @@
         "agentMindmap.team.serverUrl": {
           "type": "string",
           "default": "",
-          "description": "Team service base URL (e.g. https://team.example.com). Empty = single-machine mode (default). When set, the extension reads + pushes session records to the team service instead of the local store. The API key is stored in SecretStorage, not settings.json — use the 'Agent Mind Map: Configure Team Service' command to set both."
+          "description": "Team service base URL including the API version path (e.g. https://team.example.com/v1). Empty = single-machine mode (default). When set, the extension reads + pushes session records to the team service instead of the local store. The API key is stored in SecretStorage, not settings.json — use the 'Agent Mind Map: Configure Team Service' command to set both."
         },
         "agentMindmap.library.enabled": {
           "type": "boolean",

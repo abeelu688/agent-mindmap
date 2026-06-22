@@ -28,7 +28,8 @@ import type { Store } from "./store";
  *     project search-index, validated against `GET …/revision` before use
  *     — exactly the logic in `mcp-server/src/handlers.ts:ensureProjectIndex`,
  *     just hitting HTTP instead of `fs.stat`.
- *   - POST `/v1/projects/:slug/sessions/:id` is the only write path in v1.
+ *   - POST `…/projects/:slug/sessions/:id` is the only write path in v1
+ *     (`serverUrl` includes the API version prefix, e.g. `…/v1`).
  *     Other `Store` mutators (write-merge, write-ontology,
  *     deleteProjectRecords, bumpProjectRevision) throw `RemoteStoreNotSupported`
  *     — those operations are server-side (merge worker) or out of scope (no
@@ -116,7 +117,7 @@ export class RemoteStore implements Store {
     if (!apiKey) {
       throw new Error("RemoteStore: apiKey is required");
     }
-    // Strip trailing slash so `baseUrl + "/v1/..."` produces single slashes.
+    // Strip trailing slash so `baseUrl + "/projects/..."` produces single slashes.
     this.baseUrl = serverUrl.replace(/\/+$/, "");
     this.apiKey = apiKey;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
@@ -130,20 +131,20 @@ export class RemoteStore implements Store {
   // ─── Project-level ─────────────────────────────────────────────────────────
 
   async listProjectSummaries(): Promise<ProjectSummary[]> {
-    const raw = await this.getJson<ProjectSummary[]>("/v1/projects");
+    const raw = await this.getJson<ProjectSummary[]>("/projects");
     return raw ?? [];
   }
 
   async getProjectRevision(projectSlug: string): Promise<number> {
     const body = await this.getJson<{ revision: number; recordCount: number }>(
-      `/v1/projects/${encodeURIComponent(projectSlug)}/revision`
+      `/projects/${encodeURIComponent(projectSlug)}/revision`
     );
     return body.revision;
   }
 
   async getProjectRecordCount(projectSlug: string): Promise<number | undefined> {
     const body = await this.getJson<{ revision: number; recordCount: number }>(
-      `/v1/projects/${encodeURIComponent(projectSlug)}/revision`
+      `/projects/${encodeURIComponent(projectSlug)}/revision`
     );
     return body.recordCount;
   }
@@ -153,7 +154,7 @@ export class RemoteStore implements Store {
   async getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined> {
     try {
       return await this.getJson<SessionRecord>(
-        `/v1/projects/${encodeURIComponent(projectSlug)}/sessions/${encodeURIComponent(sessionId)}`
+        `/projects/${encodeURIComponent(projectSlug)}/sessions/${encodeURIComponent(sessionId)}`
       );
     } catch (err) {
       if (err instanceof RemoteStoreHttpError && err.status === 404) {
@@ -174,7 +175,7 @@ export class RemoteStore implements Store {
     // paging bug.
     for (let i = 0; i < 1000; i++) {
       const page = await this.getJson<SessionRecord[]>(
-        `/v1/projects/${encodeURIComponent(projectSlug)}/sessions?limit=${limit}&offset=${offset}`
+        `/projects/${encodeURIComponent(projectSlug)}/sessions?limit=${limit}&offset=${offset}`
       );
       if (!page || page.length === 0) {
         break;
@@ -214,7 +215,7 @@ export class RemoteStore implements Store {
     }
     const body = JSON.stringify(record);
     const resp = await this.postJson<{ revision: number }>(
-      `/v1/projects/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}`,
+      `/projects/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}`,
       body
     );
     // Invalidate the local search-index cache for this project — the
@@ -239,7 +240,7 @@ export class RemoteStore implements Store {
       return this.cachedConceptTrie.merge;
     }
     try {
-      const merge = await this.getJson<MergeRecord>("/v1/merges/concept-trie");
+      const merge = await this.getJson<MergeRecord>("/merges/concept-trie");
       this.cachedConceptTrie = { revision, merge };
       return merge;
     } catch (err) {
@@ -256,7 +257,7 @@ export class RemoteStore implements Store {
    * re-fetching the full trie when nothing changed.
    */
   async readConceptTrieRevision(): Promise<number> {
-    const body = await this.getJson<{ revision: number }>("/v1/merges/concept-trie/revision");
+    const body = await this.getJson<{ revision: number }>("/merges/concept-trie/revision");
     return body.revision;
   }
 
@@ -317,7 +318,7 @@ export class RemoteStore implements Store {
     try {
       const raw = await this.getJson<
         SegmentEquivalence[] | { segmentEquivalences: SegmentEquivalence[] }
-      >(`/v1/projects/${encodeURIComponent(projectSlug)}/equivalences`);
+      >(`/projects/${encodeURIComponent(projectSlug)}/equivalences`);
       if (!raw) {
         return [];
       }
@@ -348,7 +349,7 @@ export class RemoteStore implements Store {
   // ─── Search (P5.4 — team mode delegates to Go token-scorer) ──────────────────
 
   /**
-   * Server-side search via `POST /v1/projects/:slug/search`. The Go team
+   * Server-side search via `POST /projects/:slug/search`. The Go team
    * service runs the token scorer (a port of `searchProjectRecords`) and
    * optionally the embedding scorer, then returns ranked `SearchHit[]`.
    * No caching — search is stateless per query.
@@ -365,7 +366,7 @@ export class RemoteStore implements Store {
       verbose: opts?.verbose ?? false,
     });
     const raw = await this.postJson<SearchHit[]>(
-      `/v1/projects/${encodeURIComponent(projectSlug)}/search`,
+      `/projects/${encodeURIComponent(projectSlug)}/search`,
       body
     );
     return raw ?? [];
