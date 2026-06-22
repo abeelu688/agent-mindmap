@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { parseJsonl } from "@agent-mindmap/core";
 import {
   collectOriginRefs,
   sanitizeSessionFileName,
@@ -14,14 +15,10 @@ import { markdownToTranscriptHtmlBody } from "../extension/src/export/renderTran
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
 import { validateTopicGraph } from "../extension/src/llm/topicGraphValidate";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
-import { parseJsonl } from "../extension/src/transcript/parseJsonl";
 
 describe("renderTranscriptMarkdown", () => {
   it("adds anchors and maps turn indices to display Q numbers", () => {
-    const fixture = readFileSync(
-      join(__dirname, "fixtures/sample.jsonl"),
-      "utf8"
-    );
+    const fixture = readFileSync(join(__dirname, "fixtures/sample.jsonl"), "utf8");
     const events = parseJsonl(fixture);
     const rendered = renderTranscriptMarkdown(events, "Sample");
 
@@ -101,11 +98,7 @@ describe("markdownToTranscriptHtmlBody", () => {
   });
 
   it("renders GFM tables", () => {
-    const md = [
-      "| 步骤 | 说明 |",
-      "|------|------|",
-      "| a | b |",
-    ].join("\n");
+    const md = ["| 步骤 | 说明 |", "|------|------|", "| a | b |"].join("\n");
     const html = markdownToTranscriptHtmlBody(md);
     expect(html).toContain("<table>");
     expect(html).toContain("<th>");
@@ -113,10 +106,7 @@ describe("markdownToTranscriptHtmlBody", () => {
   });
 
   it("renders pipe tables without separator row", () => {
-    const md = [
-      "| 问题 | 答案 |",
-      "| **何时启动** | `init` 启动 |",
-    ].join("\n");
+    const md = ["| 问题 | 答案 |", "| **何时启动** | `init` 启动 |"].join("\n");
     const html = markdownToTranscriptHtmlBody(md);
     expect(html).toContain("<table>");
     expect(html).toContain("<strong>何时启动</strong>");
@@ -174,8 +164,7 @@ describe("markdownToTranscriptHtmlBody", () => {
   });
 
   it("renders bold wrapped in curly quotes", () => {
-    const md =
-      "在 Linux 里**“可打开的文件描述符 + ioctl 控制 + mmap 共享内存 + poll 等待”** 这套";
+    const md = "在 Linux 里**“可打开的文件描述符 + ioctl 控制 + mmap 共享内存 + poll 等待”** 这套";
     const html = markdownToTranscriptHtmlBody(md);
     expect(html).toContain("<strong>");
     expect(html).toContain("可打开的文件描述符");
@@ -214,15 +203,18 @@ describe("markdownToTranscriptHtmlBody", () => {
 
 describe("buildTranscriptJumpHref", () => {
   it("points to pre-rendered html with anchor fragment", () => {
-    const turnMap = new Map([[0, 1], [1, 2]]);
-    expect(
-      buildTranscriptJumpHref("transcripts/sess.html", 0, turnMap)
-    ).toBe("transcripts/sess.html#q-1");
-    expect(
-      buildTranscriptJumpHref("transcripts/sess.html", 1, turnMap)
-    ).toBe("transcripts/sess.html#q-2");
-    expect(
-      buildTranscriptJumpHref("transcripts/sess.html", undefined, turnMap)
-    ).toBe("transcripts/sess.html");
+    const turnMap = new Map([
+      [0, 1],
+      [1, 2],
+    ]);
+    expect(buildTranscriptJumpHref("transcripts/sess.html", 0, turnMap)).toBe(
+      "transcripts/sess.html#q-1"
+    );
+    expect(buildTranscriptJumpHref("transcripts/sess.html", 1, turnMap)).toBe(
+      "transcripts/sess.html#q-2"
+    );
+    expect(buildTranscriptJumpHref("transcripts/sess.html", undefined, turnMap)).toBe(
+      "transcripts/sess.html"
+    );
   });
 });

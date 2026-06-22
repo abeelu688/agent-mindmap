@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
+    "@vscode/sqlite3": "^5.1.12-vscode",
     "typescript": "^5.4.5",
     "vitest": "^2.1.9"
   }

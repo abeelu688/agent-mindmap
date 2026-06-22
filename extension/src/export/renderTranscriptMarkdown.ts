@@ -1,5 +1,5 @@
 import { isMetaSearchUserQuery } from "../jumpToOriginCore";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 export type RenderedTranscript = {
   markdown: string;
@@ -12,10 +12,7 @@ export type RenderedTranscript = {
 /**
  * Render transcript events as Markdown with stable HTML anchors for offline jumps.
  */
-export function renderTranscriptMarkdown(
-  events: ChatEvent[],
-  title: string
-): RenderedTranscript {
+export function renderTranscriptMarkdown(events: ChatEvent[], title: string): RenderedTranscript {
   const lines: string[] = [];
   const turnIndexToDisplayQ = new Map<number, number>();
   const turnIndexToLine = new Map<number, number>();

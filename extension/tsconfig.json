@@ -12,7 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "paths": {
-      "@agent-mindmap/shared": ["../shared/src/index.ts"]
+      "@agent-mindmap/shared": ["../shared/src/index.ts"],
+      "@agent-mindmap/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src/**/*"],

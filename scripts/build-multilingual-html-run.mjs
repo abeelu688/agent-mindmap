@@ -14,6 +14,8 @@ try {
     external: ["@vscode/sqlite3"],
     alias: {
       vscode: path.join(ROOT, "test/fixtures/vscode-multilingual-stub.cjs"),
+      "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
+      "@agent-mindmap/core": path.join(ROOT, "core", "src", "index.ts"),
     },
     logLevel: "info",
   });

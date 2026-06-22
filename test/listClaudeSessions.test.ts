@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, afterEach } from "vitest";
-import { listFlatJsonlSessions } from "../extension/src/transcript/listSessions";
+import { listFlatJsonlSessions } from "@agent-mindmap/core";
 
 describe("listFlatJsonlSessions", () => {
   let dir: string;

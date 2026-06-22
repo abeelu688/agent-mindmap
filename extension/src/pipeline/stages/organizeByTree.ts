@@ -7,7 +7,7 @@ import {
 import { validateSessionOutline } from "../../llm/outlineValidate";
 import type { LlmProvider, SessionOutline, SessionTreeSnapshot } from "../../llm/types";
 import type { AgentHostId } from "../../host/types";
-import type { ChatEvent } from "../../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
 

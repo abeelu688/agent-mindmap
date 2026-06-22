@@ -2,7 +2,7 @@ import { uiTranslate } from "../l10n/uiTranslate";
 import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
 import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import { sanitizeSessionRecord } from "./sanitizeRecords";
-import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
+import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 
 const MAX_LABEL = 120;

@@ -1,7 +1,7 @@
+import { readSessionFile } from "@agent-mindmap/core";
 import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { sanitizeSessionOutline } from "../../llm/sanitizeOutline";
 import { countUserQueries } from "../../llm/sanitizeTopicGraph";
-import { readSessionFile } from "../../transcript/listSessions";
 import { getHostById } from "../../host/registry";
 import { getStoreForDir } from "../../store/storeClient";
 import { resolveConceptPathWithEquivalences } from "../../llm/resolveConceptPathWithEquivalences";

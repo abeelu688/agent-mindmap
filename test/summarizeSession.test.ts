@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import {
   LlmProviderError,
@@ -10,7 +10,7 @@ import {
   type SessionOutline,
   type SummarizeInput,
 } from "../extension/src/llm/types";
-import type { ChatEvent } from "../extension/src/transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 const events: ChatEvent[] = [
   { kind: "user_query", text: "How does binder work?", lineIndex: 0 },

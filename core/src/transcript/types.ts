@@ -1,3 +1,5 @@
+import type { AgentHostId } from "@agent-mindmap/shared";
+
 export type ChatEvent =
   | { kind: "user_query"; text: string; lineIndex: number }
   | {
@@ -24,8 +26,6 @@ export type ChatEvent =
       contentSnippet?: string;
     }
   | { kind: "assistant_summary"; text: string; preview: string; lineIndex: number };
-
-import type { AgentHostId } from "../host/types";
 
 export type TranscriptSession = {
   id: string;

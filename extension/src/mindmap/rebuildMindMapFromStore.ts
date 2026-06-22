@@ -8,7 +8,7 @@ import {
 import { buildOutlineMindMap } from "./buildOutlineMindMap";
 import type { SessionMeta } from "./origin";
 import type { OutputLanguage } from "../llm/promptLanguage";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "../store/storeTypes";
 
 export function resolveProjectSlugFromMindMap(

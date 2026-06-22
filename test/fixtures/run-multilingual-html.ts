@@ -26,8 +26,8 @@ import { sanitizeSessionRecord } from "../../extension/src/store/sanitizeRecords
 import { clearProjectAnalysisCache } from "../../extension/src/store/clearProjectAnalysisCache";
 import {
   listCursorSessions,
-} from "../../extension/src/transcript/listSessions";
-import type { MindMapRoot, TranscriptSession } from "../../extension/src/transcript/types";
+} from "@agent-mindmap/core";
+import type { MindMapRoot, TranscriptSession } from "@agent-mindmap/core";
 import {
   loadSession,
   runProjectSessionBatches,

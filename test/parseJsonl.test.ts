@@ -1,8 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { extractUserQuery, parseJsonl } from "../extension/src/transcript/parseJsonl";
-import { parseClaudeJsonl } from "../extension/src/transcript/parseClaudeJsonl";
+import { extractUserQuery, parseJsonl } from "@agent-mindmap/core";
+import { parseClaudeJsonl } from "@agent-mindmap/core";
 
 describe("extractUserQuery", () => {
   it("parses user_query tags", () => {

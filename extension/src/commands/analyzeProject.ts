@@ -52,7 +52,7 @@ import {
 } from "../batch/batchStatus";
 import type { SessionRecord, SnapshotManifest } from "../store/storeTypes";
 import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 
 function applyBatchMergeToPanel(
   panel: MindMapPanel,

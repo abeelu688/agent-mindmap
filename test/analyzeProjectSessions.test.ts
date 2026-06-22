@@ -1,14 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type * as vscode from "vscode";
 import { LlmProviderError } from "../extension/src/llm/types";
-import type { TranscriptSession } from "../extension/src/transcript/types";
-import type { LoadedSession } from "../extension/src/sessionLoader";
-import {
-  analyzeProjectSessions,
-  runProjectSessionBatch,
-} from "../extension/src/sessionLoader";
-import type { AgentHost } from "../extension/src/host/types";
+import { analyzeProjectSessions, runProjectSessionBatch } from "../extension/src/sessionLoader";
 import { createBatchItemProgress } from "../extension/src/progress";
+import type * as vscode from "vscode";
+import type { TranscriptSession } from "@agent-mindmap/core";
+import type { LoadedSession } from "../extension/src/sessionLoader";
+import type { AgentHost } from "../extension/src/host/types";
 
 const sessions: TranscriptSession[] = [
   {
@@ -73,14 +70,15 @@ describe("createBatchItemProgress", () => {
 });
 
 describe("runProjectSessionBatch", () => {
-  const loadSessionFn = vi.fn<
-    (
-      session: TranscriptSession,
-      deps: unknown,
-      options?: { forceRefresh?: boolean; skipAutoMerge?: boolean },
-      host?: AgentHost
-    ) => Promise<LoadedSession>
-  >();
+  const loadSessionFn =
+    vi.fn<
+      (
+        session: TranscriptSession,
+        deps: unknown,
+        options?: { forceRefresh?: boolean; skipAutoMerge?: boolean },
+        host?: AgentHost
+      ) => Promise<LoadedSession>
+    >();
 
   beforeEach(() => {
     loadSessionFn.mockReset();
@@ -162,14 +160,18 @@ describe("runProjectSessionBatch", () => {
   });
 
   it("re-throws cancellation", async () => {
-    loadSessionFn.mockRejectedValue(
-      new LlmProviderError("cancelled", "cancelled")
-    );
+    loadSessionFn.mockRejectedValue(new LlmProviderError("cancelled", "cancelled"));
 
     await expect(
-      runProjectSessionBatch(sessions, "my-project", mockHost, {
-        context: fakeContext,
-      }, { loadSessionFn })
+      runProjectSessionBatch(
+        sessions,
+        "my-project",
+        mockHost,
+        {
+          context: fakeContext,
+        },
+        { loadSessionFn }
+      )
     ).rejects.toMatchObject({ code: "cancelled" });
   });
 });

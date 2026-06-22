@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
+import { readSessionFile } from "@agent-mindmap/core";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import { getProvider } from "./llm";
 import { showCliInstallGuide } from "./llm/cliInstallGuide";
@@ -44,11 +45,10 @@ import {
 } from "./store/sessionStore";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { t } from "./l10n/uiTranslate";
-import { readSessionFile } from "./transcript/listSessions";
 import type { SessionMeta } from "./mindmap/origin";
 import type { AgentHost } from "./host/types";
 import type { SessionRecord, SnapshotManifest } from "./store/storeTypes";
-import type { BuildOptions, MindMapRoot, TranscriptSession } from "./transcript/types";
+import type { BuildOptions, MindMapRoot, TranscriptSession } from "@agent-mindmap/core";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Section: Types & settings resolution

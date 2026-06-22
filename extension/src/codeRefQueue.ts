@@ -18,11 +18,11 @@ import { isRetryableError } from "./errors";
 import { LlmProviderError } from "./llm/types";
 import { mindMapLabelsForOutputLanguage } from "./mindmap/outputLanguageLabels";
 import type { MindMapProgress } from "./progress";
-import type { ChatEvent } from "./transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { CodeReference, LlmProvider, SessionOutline } from "./llm/types";
 import type { OutputLanguage } from "./llm/promptLanguage";
 import type { SessionMeta } from "./mindmap/origin";
-import type { MindMapRoot } from "./transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "./store/storeTypes";
 import type { BatchStatus } from "./webview/MindMapHost";
 

@@ -6,7 +6,7 @@ import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { AgentHostId } from "../host/types";
 import type { CodeReference, LlmProvider, SessionAnalysis } from "../llm/types";
 import type { MindMapProgress } from "../progress";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type {
   SessionConceptExtract,
   SessionOutline,

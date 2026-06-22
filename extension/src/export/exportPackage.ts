@@ -11,7 +11,7 @@ import {
   TRANSCRIPT_PAGE_STYLES,
 } from "./renderTranscriptHtml";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import type { MindMapRoot, NodeOriginRef } from "../transcript/types";
+import type { MindMapRoot, NodeOriginRef } from "@agent-mindmap/core";
 
 function hostForTranscriptPath(transcriptPath: string): import("../host/types").AgentHost {
   if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {

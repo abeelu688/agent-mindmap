@@ -2,7 +2,7 @@ import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 import { mindMapLabelsForOutputLanguage, type MindMapLanguageLabels } from "./outputLanguageLabels";
 import type { CodeReference, OutlineNode, SessionOutline } from "../llm/types";
-import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
+import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 
 const MAX_LABEL = 120;
 

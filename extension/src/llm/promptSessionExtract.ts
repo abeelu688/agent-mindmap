@@ -1,6 +1,6 @@
 import { __testing as promptTesting } from "./prompt";
 import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",

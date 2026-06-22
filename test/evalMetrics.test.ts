@@ -14,7 +14,7 @@ import {
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { Topic, TopicGraph } from "../extension/src/llm/types";
-import type { MindMapNodeData } from "../extension/src/transcript/types";
+import type { MindMapNodeData } from "@agent-mindmap/core";
 
 function topic(
   title: string,

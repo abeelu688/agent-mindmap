@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { __testing, resolveOutputLanguageForEvents } from "../extension/src/llm/promptLanguage";
-import type { ChatEvent } from "../extension/src/transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 describe("output language detection", () => {
   it("classifies individual user queries by dominant natural language", () => {

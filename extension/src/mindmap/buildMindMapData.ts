@@ -1,6 +1,6 @@
 import { type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 import { mindMapLabelsForOutputLanguage } from "./outputLanguageLabels";
-import type { BuildOptions, ChatEvent, MindMapNodeData, MindMapRoot } from "../transcript/types";
+import type { BuildOptions, ChatEvent, MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 
 const MAX_LABEL = 120;
 

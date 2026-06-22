@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MindMapRoot } from "../extension/src/transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "../extension/src/store/storeTypes";
 
 const mocks = vi.hoisted(() => ({

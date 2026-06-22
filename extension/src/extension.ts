@@ -1,13 +1,14 @@
 import * as vscode from "vscode";
+import { loadGlassResumableIds, clearComposerTitleCache } from "@agent-mindmap/core";
+import { closeStateDb } from "@agent-mindmap/core";
+import { setCoreLogger, setCursorStateDbOverride } from "@agent-mindmap/core";
 import {
   drainPendingJump,
   handleNodeClicked,
   consumeTranscriptDocUriIfAutoReveal,
 } from "./jumpToOrigin";
-import { loadGlassResumableIds, clearComposerTitleCache } from "./transcript/composerTitles";
-import { closeStateDb } from "./transcript/cursorStateDb";
 import { mindMapLog } from "./webview/MindMapLog";
-import { initLog } from "./log";
+import { initLog, agentLog } from "./log";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { MindMapHost } from "./webview/MindMapHost";
 import { getActiveHost, getWorkspaceSlug, resetHostCache, resolveHostId } from "./host";
@@ -43,6 +44,27 @@ import { setExtensionContext, disposePushQueues } from "./store/storeClient";
 export function activate(context: vscode.ExtensionContext): void {
   initLog(context);
   setExtensionContext(context);
+
+  // Wire core/ logging to the VS Code output channel.
+  setCoreLogger(agentLog);
+
+  // Sync core's cursorStateDb override from vscode config.
+  {
+    const configureCursorStateDbOverride = () => {
+      const override = vscode.workspace
+        .getConfiguration("agentMindmap")
+        .get<string>("cursorStateDb");
+      setCursorStateDbOverride(override || undefined);
+    };
+    configureCursorStateDbOverride();
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("agentMindmap.cursorStateDb")) {
+          configureCursorStateDbOverride();
+        }
+      })
+    );
+  }
   agentDebugLog(
     "extension.ts:activate",
     "extension activated",

@@ -1,5 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { parseJsonl } from "@agent-mindmap/core";
+import { listCursorSessions, readSessionFile } from "@agent-mindmap/core";
 import {
   diffAgainstBaseline,
   measureConceptMerge,
@@ -18,15 +20,13 @@ import {
 import { getProvider } from "../../extension/src/llm";
 import { PROMPT_VERSION } from "../../extension/src/llm/promptOutline";
 import { summarizeSession } from "../../extension/src/llm/summarizeSession";
-import { parseJsonl } from "../../extension/src/transcript/parseJsonl";
-import { listCursorSessions, readSessionFile } from "../../extension/src/transcript/listSessions";
 import {
   buildRecordMeta,
   buildSessionRecord,
   listRecords,
   sha256Hex,
 } from "../../extension/src/store/sessionStore";
-import type { TranscriptSession } from "../../extension/src/transcript/types";
+import type { TranscriptSession } from "@agent-mindmap/core";
 import type { SessionRecord } from "../../extension/src/store/storeTypes";
 
 /** Repo root when bundled to `extension/dist/eval-run.js`. */

@@ -17,7 +17,7 @@ import {
 } from "./prepareConceptMergeRecords";
 import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
 import { sanitizeSessionRecord } from "./sanitizeRecords";
-import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
+import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type {
   CodeReference,

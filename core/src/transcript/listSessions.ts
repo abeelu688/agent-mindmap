@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { extractUserQuery } from "./parseJsonl";
-import type { AgentHostId } from "../host/types";
+import type { AgentHostId } from "@agent-mindmap/shared";
 import type { TranscriptSession } from "./types";
 
 async function exists(dir: string): Promise<boolean> {

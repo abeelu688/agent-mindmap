@@ -4,7 +4,7 @@ import {
   computeBatchGroups,
 } from "../extension/src/pipeline/stableBatchPartition";
 import type { SnapshotManifest, SnapshotNode } from "../extension/src/store/storeTypes";
-import type { TranscriptSession } from "../extension/src/transcript/types";
+import type { TranscriptSession } from "@agent-mindmap/core";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers

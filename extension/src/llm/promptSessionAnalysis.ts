@@ -4,7 +4,7 @@ import {
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
 } from "./promptSessionAnalysisJsonContract";
 import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { OutputLanguage } from "./promptLanguage";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {

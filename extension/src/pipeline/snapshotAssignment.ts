@@ -1,4 +1,4 @@
-import type { TranscriptSession } from "../transcript/types";
+import type { TranscriptSession } from "@agent-mindmap/core";
 import type { SessionRecord, SnapshotManifest } from "../store/storeTypes";
 
 /** Bump when canonical leaf slot rules change (requires hierarchy rebuild). */

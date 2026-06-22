@@ -4,7 +4,7 @@ import {
   formatPickerLabel,
   type JumpCandidate,
 } from "../extension/src/jumpToOriginCore";
-import type { NodeOriginRef } from "../extension/src/transcript/types";
+import type { NodeOriginRef } from "@agent-mindmap/core";
 
 const sessA: Omit<NodeOriginRef, "turnIndex"> = {
   sessionId: "sess-A",
@@ -50,11 +50,7 @@ describe("flattenCandidates", () => {
   });
 
   it("treats branch refs (turnIndex undefined) as their own row", () => {
-    const refs: NodeOriginRef[] = [
-      { ...sessA },
-      { ...sessA, turnIndex: 0 },
-      { ...sessA },
-    ];
+    const refs: NodeOriginRef[] = [{ ...sessA }, { ...sessA, turnIndex: 0 }, { ...sessA }];
     const out = flattenCandidates(refs);
     expect(out.length).toBe(2);
     expect(out[0].turnIndex).toBeUndefined();
@@ -71,9 +67,7 @@ describe("formatPickerLabel", () => {
   };
 
   it("renders branch-level candidates as 整段会话", () => {
-    expect(formatPickerLabel({ ...base, turnIndex: undefined })).toBe(
-      "整段会话"
-    );
+    expect(formatPickerLabel({ ...base, turnIndex: undefined })).toBe("整段会话");
   });
 
   it("renders turn candidates as Q{n+1}: <preview>", () => {

@@ -1,6 +1,6 @@
 import type { AgentHostId, LlmProviderId } from "@agent-mindmap/shared";
-import type { ListSessionsContext } from "../transcript/listSessions";
-import type { ChatEvent, TranscriptSession } from "../transcript/types";
+import type { ListSessionsContext } from "@agent-mindmap/core";
+import type { ChatEvent, TranscriptSession } from "@agent-mindmap/core";
 
 export type { AgentHostId };
 

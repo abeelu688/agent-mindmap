@@ -1,4 +1,4 @@
-import type { MindMapNodeData, NodeOrigin, NodeOriginRef } from "../transcript/types";
+import type { MindMapNodeData, NodeOrigin, NodeOriginRef } from "@agent-mindmap/core";
 
 /**
  * Shared session-level fields that every leaf / branch ref inherits.
@@ -50,10 +50,7 @@ export function unionChildRefs(children: MindMapNodeData[]): NodeOriginRef[] {
  * turn ids the LLM tagged on the item). Empty / missing falls back to a
  * single branch-level ref so the click flow still has somewhere to jump.
  */
-export function leafRefs(
-  session: SessionMeta,
-  sourceTurnIndices?: number[]
-): NodeOriginRef[] {
+export function leafRefs(session: SessionMeta, sourceTurnIndices?: number[]): NodeOriginRef[] {
   if (sourceTurnIndices && sourceTurnIndices.length) {
     return dedupRefs(
       sourceTurnIndices
@@ -68,10 +65,7 @@ export function leafRefs(
  * Attach `origin.refs` to a node when there's at least one ref. Empty input
  * yields no `origin` field so unrelated nodes remain inert on click.
  */
-export function withOrigin(
-  node: MindMapNodeData,
-  refs: NodeOriginRef[]
-): MindMapNodeData {
+export function withOrigin(node: MindMapNodeData, refs: NodeOriginRef[]): MindMapNodeData {
   if (!refs.length) {
     return node;
   }

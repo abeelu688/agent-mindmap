@@ -2,11 +2,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { parseClaudeJsonl } from "../transcript/parseClaudeJsonl";
-import { listFlatJsonlSessions, type ListSessionsContext } from "../transcript/listSessions";
+import { parseClaudeJsonl } from "@agent-mindmap/core";
+import { listFlatJsonlSessions, type ListSessionsContext } from "@agent-mindmap/core";
 import { cliMissingHintSummary } from "../llm/cliInstallGuide";
 import { decodeClaudeProjectPath, encodeClaudeProjectPath } from "./claudePath";
-import type { ChatEvent, TranscriptSession } from "../transcript/types";
+import type { ChatEvent, TranscriptSession } from "@agent-mindmap/core";
 import type { AgentHost } from "./types";
 
 const SUBAGENT_DIR = "subagents";

@@ -7,7 +7,7 @@ import { t as safeT } from "../l10n/uiTranslate";
 import { sha256Hex } from "./sessionStore";
 import { getStoreForDir } from "./storeClient";
 import type { PromptLanguage } from "../llm/promptLanguage";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type { MindMapProgress } from "../progress";
 import type { AgentHostId } from "../host/types";

@@ -3,7 +3,7 @@ import {
   getProjectSessionIdsOnMap,
   resolveCodeRefPanelNotifyKind,
 } from "../extension/src/codeRefQueue";
-import type { MindMapRoot } from "../extension/src/transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 
 function mapWithSessions(projectSlug: string, sessionIds: string[]): MindMapRoot {
   return {

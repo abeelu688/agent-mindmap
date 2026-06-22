@@ -1,8 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { parseJsonl } from "@agent-mindmap/core";
 import { buildTurnMindMap } from "../extension/src/mindmap/buildMindMapData";
-import { parseJsonl } from "../extension/src/transcript/parseJsonl";
 
 // The "turn" view is the fallback renderer used when the LLM provider is
 // unavailable. The default renderer is buildTopicMindMap (see its own test).

@@ -1,15 +1,15 @@
-import sqlite3 from "@vscode/sqlite3";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { promisify } from "util";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import sqlite3 from "@vscode/sqlite3";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   clearComposerTitleCache,
   loadComposerHeaders,
   loadComposerTitles,
-} from "../extension/src/transcript/composerTitles";
+  setCursorStateDbOverride,
+} from "@agent-mindmap/core";
 
 async function createFixtureDb(): Promise<{
   dbPath: string;
@@ -27,10 +27,7 @@ async function createFixtureDb(): Promise<{
     });
   });
   const exec = promisify(db.exec.bind(db)) as (sql: string) => Promise<void>;
-  const run = promisify(db.run.bind(db)) as (
-    sql: string,
-    params?: unknown[]
-  ) => Promise<void>;
+  const run = promisify(db.run.bind(db)) as (sql: string, params?: unknown[]) => Promise<void>;
 
   await exec(`
     CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT);
@@ -70,22 +67,15 @@ async function createFixtureDb(): Promise<{
   };
 }
 
-function mockCursorStateDb(dbPath: string): void {
-  vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-    get: (key: string, defaultValue?: unknown) =>
-      key === "cursorStateDb" ? dbPath : defaultValue,
-  } as ReturnType<typeof vscode.workspace.getConfiguration>);
-}
-
 describe("composerTitles state.vscdb readers", () => {
   afterEach(() => {
     clearComposerTitleCache();
-    vi.restoreAllMocks();
+    setCursorStateDbOverride(undefined);
   });
 
   it("loadComposerTitles reads composerData names via readonly sqlite", async () => {
     const fixture = await createFixtureDb();
-    mockCursorStateDb(fixture.dbPath);
+    setCursorStateDbOverride(fixture.dbPath);
 
     const titles = await loadComposerTitles();
     expect(titles.get(fixture.composerId)).toBe("Fix JIT hooks");
@@ -96,7 +86,7 @@ describe("composerTitles state.vscdb readers", () => {
 
   it("loadComposerHeaders reads composer.composerHeaders via readonly sqlite", async () => {
     const fixture = await createFixtureDb();
-    mockCursorStateDb(fixture.dbPath);
+    setCursorStateDbOverride(fixture.dbPath);
 
     const headers = await loadComposerHeaders();
     const meta = headers.get(fixture.composerId);

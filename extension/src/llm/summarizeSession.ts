@@ -11,7 +11,7 @@ import { validateSessionOutline } from "./outlineValidate";
 import { LlmProviderError, type LlmProvider, type SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
 import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { PromptLanguage } from "./promptLanguage";
 
 export type SummarizeOptions = {

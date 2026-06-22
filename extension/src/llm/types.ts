@@ -2,7 +2,7 @@ import {
   LlmProviderError as SharedLlmProviderError,
   type LlmErrorCode,
 } from "@agent-mindmap/shared";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type {
   AgentHostId,
   LlmProviderId,

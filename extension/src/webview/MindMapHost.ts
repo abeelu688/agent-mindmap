@@ -8,7 +8,7 @@ import { getCuratedModels } from "../llm/modelList";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import type { MindMapRoot, NodeOrigin } from "../transcript/types";
+import type { MindMapRoot, NodeOrigin } from "@agent-mindmap/core";
 import type { LlmProviderId } from "../llm/types";
 
 export type WebviewToExtensionMessage =

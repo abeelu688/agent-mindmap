@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as posixPath from "path";
 import type { AgentHostId } from "../host/types";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -184,7 +184,7 @@ export function buildPrompt(
     "- 禁止把助理回复里提到的其他会话/其他 thread 的轮次号写入 sourceTurnIndices；若要点来自助理归纳的其他会话，省略该字段",
     "- conceptPath: 3-5 段，从【最泛领域】到【最细概念】，每段 ≤12 字、小写英文/通用术语，用于跨会话合并按公共前缀聚类；本会话单图不显示。",
     "  层级：第 1 段=领域（frontend / backend / devops / …）；第 2 段=子系统或框架；第 3–5 段=具体主题。同会话内同领域核心必须共享前缀。",
-    "  示例：「React Hooks 用法」→ [\"frontend\",\"react\",\"hooks\"]；「Express 中间件」→ [\"backend\",\"nodejs\",\"express\",\"middleware\"]；「K8s Deployment」→ [\"devops\",\"kubernetes\",\"deployment\"]。",
+    '  示例：「React Hooks 用法」→ ["frontend","react","hooks"]；「Express 中间件」→ ["backend","nodejs","express","middleware"]；「K8s Deployment」→ ["devops","kubernetes","deployment"]。',
     "  path 必须根据本 transcript 内容归纳，禁止照搬与对话无关的示例路径。",
     "",
     "只输出严格 JSON，不要 markdown / 解释 / ```：",

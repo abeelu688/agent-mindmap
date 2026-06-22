@@ -3,16 +3,10 @@ import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
+import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
 import type { TopicGraph } from "../extension/src/llm/types";
-import type {
-  MindMapNodeData,
-  NodeOriginRef,
-} from "../extension/src/transcript/types";
+import type { MindMapNodeData, NodeOriginRef } from "@agent-mindmap/core";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-} from "../extension/src/store/sessionStore";
 
 function collectLeaves(node: MindMapNodeData): MindMapNodeData[] {
   if (!node.children?.length) {
@@ -53,12 +47,8 @@ describe("buildOutlineMindMap origin bubbling", () => {
   it("attaches per-leaf refs from sourceTurnIndices", () => {
     const root = buildOutlineMindMap(outline, "label", sessionMeta);
     const leaves = collectLeaves(root);
-    const itemNode = leaves.find((c) =>
-      c.data.text.includes("tr.code 不在 Parcel")
-    );
-    expect(itemNode?.data.origin?.refs).toEqual([
-      { ...sessionMeta, turnIndex: 0 },
-    ]);
+    const itemNode = leaves.find((c) => c.data.text.includes("tr.code 不在 Parcel"));
+    expect(itemNode?.data.origin?.refs).toEqual([{ ...sessionMeta, turnIndex: 0 }]);
   });
 
   it("topic branch carries the union of its leaves' refs", () => {
@@ -92,11 +82,7 @@ describe("buildOutlineMindMap origin bubbling", () => {
 });
 
 describe("buildConceptTrieMindMap origin bubbling", () => {
-  function recordFor(
-    sessionId: string,
-    slug: string,
-    topics: TopicGraph["topics"]
-  ) {
+  function recordFor(sessionId: string, slug: string, topics: TopicGraph["topics"]) {
     return buildSessionRecord(
       buildRecordMeta({
         sessionId,
@@ -128,9 +114,7 @@ describe("buildConceptTrieMindMap origin bubbling", () => {
     const ipc = android?.children?.[0];
     const binder = ipc?.children?.[0];
     const topicBranch = binder?.children?.[0];
-    const leaf = topicBranch?.children?.find((c) =>
-      c.data.text.includes("tr.code")
-    );
+    const leaf = topicBranch?.children?.find((c) => c.data.text.includes("tr.code"));
     expect(leaf?.data.origin?.refs).toEqual([
       {
         sessionId: "sess-1",

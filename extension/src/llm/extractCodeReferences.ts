@@ -5,7 +5,7 @@ import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { LlmProviderError } from "./types";
 import type { OutputLanguage } from "./promptLanguage";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "./types";
 import type { MindMapProgress } from "../progress";
 

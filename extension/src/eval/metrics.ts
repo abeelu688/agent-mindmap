@@ -7,7 +7,7 @@ import {
   type ConceptTrieStructure,
 } from "../store/mergeConceptTrie";
 import type { SessionRecord } from "../store/storeTypes";
-import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
+import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 
 export type ConceptMergeMetrics = ConceptMergeStats & {
   trieNodeCount: number;
@@ -49,11 +49,7 @@ export function countTrieNodes(node: ConceptTrieNode): number {
   return count;
 }
 
-function walkTrieSessionIds(
-  node: ConceptTrieNode,
-  terminalOnly: boolean,
-  out: Set<string>
-): void {
+function walkTrieSessionIds(node: ConceptTrieNode, terminalOnly: boolean, out: Set<string>): void {
   const isTerminal = node.children.size === 0 && node.topics.length > 0;
   if (!terminalOnly || isTerminal) {
     for (const loc of node.topics) {
@@ -65,17 +61,13 @@ function walkTrieSessionIds(
   }
 }
 
-export function collectSessionIdsAtTerminalTopics(
-  structure: ConceptTrieStructure
-): Set<string> {
+export function collectSessionIdsAtTerminalTopics(structure: ConceptTrieStructure): Set<string> {
   const out = new Set<string>();
   walkTrieSessionIds(structure.root, true, out);
   return out;
 }
 
-export function collectSessionIdsInAnyTopic(
-  structure: ConceptTrieStructure
-): Set<string> {
+export function collectSessionIdsInAnyTopic(structure: ConceptTrieStructure): Set<string> {
   const out = new Set<string>();
   walkTrieSessionIds(structure.root, false, out);
   for (const loc of structure.orphans) {
@@ -92,9 +84,7 @@ export function measureSessionCoverage(
   const atTerminal = collectSessionIdsAtTerminalTopics(structure);
   const inAny = collectSessionIdsInAnyTopic(structure);
   const analyzedSessionCount = structure.filtered.length;
-  const sessionsAtTerminalTopics = [...atTerminal].filter((id) =>
-    fixtureSet.has(id)
-  ).length;
+  const sessionsAtTerminalTopics = [...atTerminal].filter((id) => fixtureSet.has(id)).length;
   const sessionsInAnyTopic = [...inAny].filter((id) => fixtureSet.has(id)).length;
   const fixtureSessionCount = fixtureSessionIds.length;
   const sessionCoverageRate =
@@ -168,20 +158,16 @@ export function diffAgainstBaseline(
 ): BaselineDelta {
   return {
     trieNodeCount: report.conceptMerge.trieNodeCount - baseline.conceptMerge.trieNodeCount,
-    mindMapNodeCount:
-      report.conceptMerge.mindMapNodeCount - baseline.conceptMerge.mindMapNodeCount,
+    mindMapNodeCount: report.conceptMerge.mindMapNodeCount - baseline.conceptMerge.mindMapNodeCount,
     totalTopics: report.conceptMerge.totalTopics - baseline.conceptMerge.totalTopics,
-    topicsWithPath:
-      report.conceptMerge.topicsWithPath - baseline.conceptMerge.topicsWithPath,
+    topicsWithPath: report.conceptMerge.topicsWithPath - baseline.conceptMerge.topicsWithPath,
     topicsWithoutPath:
       report.conceptMerge.topicsWithoutPath - baseline.conceptMerge.topicsWithoutPath,
     rootChildren: report.conceptMerge.rootChildren - baseline.conceptMerge.rootChildren,
     sessionCoverageRate:
       report.coverage.sessionCoverageRate - baseline.coverage.sessionCoverageRate,
     sessionsAtTerminalTopics:
-      report.coverage.sessionsAtTerminalTopics -
-      baseline.coverage.sessionsAtTerminalTopics,
-    sessionsInAnyTopic:
-      report.coverage.sessionsInAnyTopic - baseline.coverage.sessionsInAnyTopic,
+      report.coverage.sessionsAtTerminalTopics - baseline.coverage.sessionsAtTerminalTopics,
+    sessionsInAnyTopic: report.coverage.sessionsInAnyTopic - baseline.coverage.sessionsInAnyTopic,
   };
 }

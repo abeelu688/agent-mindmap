@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 /**
  * Legacy setting value. Production analysis prompts are English; this setting

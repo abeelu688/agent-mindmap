@@ -12,7 +12,7 @@ import {
   getLastBatchStatus,
   getPendingMindMap,
 } from "./batchStatus";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MindMapPanel } from "../webview/MindMapPanel";
 
 export function hasPendingPanelUpdates(): boolean {

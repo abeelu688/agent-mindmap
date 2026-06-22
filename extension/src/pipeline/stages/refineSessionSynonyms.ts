@@ -4,13 +4,9 @@ import {
   SESSION_SYNONYM_PROMPT_VERSION,
 } from "../../llm/promptSessionSynonyms";
 import { validateSessionSynonymRefine } from "../../llm/pipelineValidate";
-import type {
-  LlmProvider,
-  SessionConceptExtract,
-  SessionSynonymRefine,
-} from "../../llm/types";
+import type { LlmProvider, SessionConceptExtract, SessionSynonymRefine } from "../../llm/types";
 import type { AgentHostId } from "../../host/types";
-import type { ChatEvent } from "../../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
 
@@ -29,10 +25,7 @@ export async function refineSessionSynonyms(
   signal: AbortSignal,
   progress?: MindMapProgress
 ): Promise<SessionSynonymRefine> {
-  const prompt = buildSessionSynonymsPrompt(
-    opts.extract,
-    opts.hostId ?? "cursor"
-  );
+  const prompt = buildSessionSynonymsPrompt(opts.extract, opts.hostId ?? "cursor");
   return runLlmStage(
     {
       stageId: "session-synonym-refine",

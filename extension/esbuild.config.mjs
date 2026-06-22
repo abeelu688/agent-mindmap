@@ -21,6 +21,7 @@ const extensionBuild = {
   logLevel: "info",
   alias: {
     "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
+    "@agent-mindmap/core": path.join(ROOT, "core", "src", "index.ts"),
   },
 };
 

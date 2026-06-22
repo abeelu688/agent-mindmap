@@ -1,5 +1,5 @@
 import { promisify } from "util";
-import { agentLog } from "../log";
+import { getCoreLogger } from "../logging";
 
 type SqlBindValue = string | number | bigint | Buffer | null;
 
@@ -17,7 +17,7 @@ function warnLoadFailed(err: unknown): void {
     return;
   }
   loadFailedWarned = true;
-  agentLog.error("@vscode/sqlite3 failed to load", err);
+  getCoreLogger().error("@vscode/sqlite3 failed to load", err);
 }
 
 function loadSqlite3(): Sqlite3Static | undefined {
@@ -50,27 +50,20 @@ function openReadonlyStateDb(dbPath: string): Promise<Sqlite3Database | undefine
   }
 
   return new Promise((resolve) => {
-    const db = new sqlite3.Database(
-      dbPath,
-      sqlite3.OPEN_READONLY,
-      (err: Error | null) => {
-        if (err) {
-          agentLog.error(
-            `Failed to open Cursor state.vscdb (${dbPath})`,
-            err
-          );
-          resolve(undefined);
-          return;
-        }
-        db.run("PRAGMA busy_timeout = 3000", (err: Error | null) => {
-          if (err) {
-            agentLog.error("PRAGMA busy_timeout failed", err);
-          }
-        });
-        openDbs.set(dbPath, db);
-        resolve(db);
+    const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err: Error | null) => {
+      if (err) {
+        getCoreLogger().error(`Failed to open Cursor state.vscdb (${dbPath})`, err);
+        resolve(undefined);
+        return;
       }
-    );
+      db.run("PRAGMA busy_timeout = 3000", (err: Error | null) => {
+        if (err) {
+          getCoreLogger().error("PRAGMA busy_timeout failed", err);
+        }
+      });
+      openDbs.set(dbPath, db);
+      resolve(db);
+    });
   });
 }
 
@@ -97,7 +90,7 @@ export async function queryStateDb<T extends Record<string, unknown>>(
   params: SqlBindValue[] = []
 ): Promise<T[]> {
   // Validate any interpolated table names in the SQL
-  const tablesInSql = sql.match(/\bFROM\s+(\w+)/ig);
+  const tablesInSql = sql.match(/\bFROM\s+(\w+)/gi);
   if (tablesInSql) {
     for (const fragment of tablesInSql) {
       const tableName = fragment.replace(/^FROM\s+/i, "");
@@ -111,15 +104,12 @@ export async function queryStateDb<T extends Record<string, unknown>>(
     return [];
   }
 
-  const all = promisify(db.all.bind(db)) as (
-    sql: string,
-    params?: SqlBindValue[]
-  ) => Promise<T[]>;
+  const all = promisify(db.all.bind(db)) as (sql: string, params?: SqlBindValue[]) => Promise<T[]>;
 
   try {
     return await all(sql, params);
   } catch (err) {
-    agentLog.error("state.vscdb query failed", err);
+    getCoreLogger().error("state.vscdb query failed", err);
     return [];
   }
 }

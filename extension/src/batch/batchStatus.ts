@@ -1,6 +1,6 @@
 import type { MindMapPanel } from "../webview/MindMapPanel";
 import type { BatchStatus } from "../webview/MindMapHost";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 
 let pendingMindMap: MindMapRoot | undefined;
 let pendingBatchNo: number | undefined;

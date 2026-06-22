@@ -1,12 +1,12 @@
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { loadComposerTitles } from "../transcript/composerTitles";
-import { listCursorSessions, type ListSessionsContext } from "../transcript/listSessions";
-import { parseJsonl } from "../transcript/parseJsonl";
+import { loadComposerTitles } from "@agent-mindmap/core";
+import { listCursorSessions, type ListSessionsContext } from "@agent-mindmap/core";
+import { parseJsonl } from "@agent-mindmap/core";
 import { cliMissingHintSummary } from "../llm/cliInstallGuide";
 import { workspaceToSlug, slugToWorkspacePath } from "../paths";
-import type { ChatEvent, TranscriptSession } from "../transcript/types";
+import type { ChatEvent, TranscriptSession } from "@agent-mindmap/core";
 import type { AgentHost } from "./types";
 
 export function getCursorProjectsRoot(): string {

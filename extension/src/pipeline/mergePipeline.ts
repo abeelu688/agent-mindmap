@@ -12,6 +12,7 @@ import {
 } from "../llm/segmentContext";
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
 import {
   mergeSessionAnalysis,
@@ -26,11 +27,10 @@ import {
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider, SessionAnalysis } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
-import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import type { MindMapProgress } from "../progress";
 import type { ConceptOntologyRecord } from "../store/ontologyTypes";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 
 export type MergeRefineMode = "batch" | "final" | "skip";
 

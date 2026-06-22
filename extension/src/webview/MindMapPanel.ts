@@ -7,7 +7,7 @@ import {
   type SelectModelRequestedListener,
   type ModelUpdatedListener,
 } from "./MindMapHost";
-import type { MindMapRoot } from "../transcript/types";
+import type { MindMapRoot } from "@agent-mindmap/core";
 
 /**
  * Mind map as an editor-area {@link vscode.WebviewPanel} (code editor strip),

@@ -1,40 +1,36 @@
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import * as vscode from "vscode";
-import { agentLog } from "../log";
-import {
-  clearStateDbBackend,
-  getStateDbValue,
-  queryStateDb,
-} from "./cursorStateDb";
+import { getCoreLogger } from "../logging";
+import { clearStateDbBackend, getStateDbValue, queryStateDb } from "./cursorStateDb";
+
+let cursorStateDbOverride: string | undefined;
+
+/**
+ * Override the Cursor `state.vscdb` path detection. The extension wires this
+ * to `agentMindmap.cursorStateDb`; CLI / tests can call it directly. Pass
+ * `undefined` (or empty) to clear.
+ */
+export function setCursorStateDbOverride(p: string | undefined): void {
+  cursorStateDbOverride = p && p.trim() ? p.trim() : undefined;
+}
 
 /**
  * Resolve Cursor's globalStorage `state.vscdb` path.
  *
- * The user can override via the `agentMindmap.cursorStateDb` setting. When
- * empty, we fall back to platform-specific defaults that match Cursor's
+ * When {@link setCursorStateDbOverride} has been called, that value wins.
+ * Otherwise we fall back to platform-specific defaults that match Cursor's
  * installer layout. Returns `undefined` when no path can be determined.
  */
 export function getCursorStateDbPath(): string | undefined {
-  const override = vscode.workspace
-    .getConfiguration("agentMindmap")
-    .get<string>("cursorStateDb");
-  if (override && override.trim()) {
-    return expandHome(override.trim());
+  if (cursorStateDbOverride) {
+    return expandHome(cursorStateDbOverride);
   }
 
   const home = os.homedir();
   switch (process.platform) {
     case "linux":
-      return path.join(
-        home,
-        ".config",
-        "Cursor",
-        "User",
-        "globalStorage",
-        "state.vscdb"
-      );
+      return path.join(home, ".config", "Cursor", "User", "globalStorage", "state.vscdb");
     case "darwin":
       return path.join(
         home,
@@ -50,13 +46,7 @@ export function getCursorStateDbPath(): string | undefined {
       if (!appData) {
         return undefined;
       }
-      return path.join(
-        appData,
-        "Cursor",
-        "User",
-        "globalStorage",
-        "state.vscdb"
-      );
+      return path.join(appData, "Cursor", "User", "globalStorage", "state.vscdb");
     }
     default:
       return undefined;
@@ -104,11 +94,7 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
     return new Map();
   }
 
-  if (
-    cached &&
-    cached.path === dbPath &&
-    cached.entry.mtimeMs === stat.mtimeMs
-  ) {
+  if (cached && cached.path === dbPath && cached.entry.mtimeMs === stat.mtimeMs) {
     return cached.entry.titles;
   }
 
@@ -148,7 +134,7 @@ export async function loadComposerTitles(): Promise<Map<string, string>> {
       titles.set(id, trimmed);
     }
   } catch (err) {
-    agentLog.error("Failed to parse Cursor state.vscdb", err);
+    getCoreLogger().error("Failed to parse Cursor state.vscdb", err);
     // Fall through to cache an empty map so we don't retry on every call.
   }
 
@@ -218,9 +204,7 @@ let composerHeadersCache:
  * composerId. Returns an empty map on any failure (so callers should
  * not treat empty as "definitely archived"). Cached on file mtime.
  */
-export async function loadComposerHeaders(): Promise<
-  Map<string, ComposerHeaderMeta>
-> {
+export async function loadComposerHeaders(): Promise<Map<string, ComposerHeaderMeta>> {
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return new Map();
 
@@ -240,11 +224,7 @@ export async function loadComposerHeaders(): Promise<
 
   const headers = new Map<string, ComposerHeaderMeta>();
   try {
-    const value = await getStateDbValue(
-      dbPath,
-      "ItemTable",
-      "composer.composerHeaders"
-    );
+    const value = await getStateDbValue(dbPath, "ItemTable", "composer.composerHeaders");
     if (typeof value === "string") {
       let parsed: unknown;
       try {
@@ -258,9 +238,8 @@ export async function loadComposerHeaders(): Promise<
           const e = entry as Record<string, unknown>;
           const id = e.composerId;
           if (typeof id !== "string" || !id) continue;
-          const ws = (e.workspaceIdentifier as
-            | { uri?: { fsPath?: unknown } }
-            | undefined)?.uri?.fsPath;
+          const ws = (e.workspaceIdentifier as { uri?: { fsPath?: unknown } } | undefined)?.uri
+            ?.fsPath;
           headers.set(id, {
             composerId: id,
             workspacePath: typeof ws === "string" ? ws : undefined,
@@ -272,10 +251,7 @@ export async function loadComposerHeaders(): Promise<
       }
     }
   } catch (err) {
-    console.warn(
-      "[agent-mindmap] failed to read composer.composerHeaders:",
-      err
-    );
+    console.warn("[agent-mindmap] failed to read composer.composerHeaders:", err);
   }
 
   composerHeadersCache = { path: dbPath, mtimeMs: stat.mtimeMs, headers };
@@ -360,11 +336,7 @@ export async function loadAgentProjects(): Promise<{
   const projects = new Map<string, AgentProject>();
   const membership = new Map<string, string>();
   try {
-    const projValue = await getStateDbValue(
-      dbPath,
-      "ItemTable",
-      "glass.localAgentProjects.v1"
-    );
+    const projValue = await getStateDbValue(dbPath, "ItemTable", "glass.localAgentProjects.v1");
     if (typeof projValue === "string") {
       try {
         const list = JSON.parse(projValue) as Array<Record<string, unknown>>;
@@ -372,9 +344,7 @@ export async function loadAgentProjects(): Promise<{
           for (const p of list) {
             const id = p.id;
             if (typeof id !== "string") continue;
-            const ws = (p.workspace as
-              | { uri?: { fsPath?: unknown } }
-              | undefined)?.uri?.fsPath;
+            const ws = (p.workspace as { uri?: { fsPath?: unknown } } | undefined)?.uri?.fsPath;
             projects.set(id, {
               id,
               name: typeof p.name === "string" ? p.name : undefined,
@@ -408,7 +378,7 @@ export async function loadAgentProjects(): Promise<{
       }
     }
   } catch (err) {
-    agentLog.error("loadAgentProjects failed", err);
+    getCoreLogger().error("loadAgentProjects failed", err);
   }
 
   agentProjectsCache = {
@@ -446,15 +416,12 @@ export async function findKeysReferencingComposer(
         hits.push({
           table,
           key: row.key,
-          valuePreview:
-            row.value.length > 200
-              ? row.value.slice(0, 200) + "…"
-              : row.value,
+          valuePreview: row.value.length > 200 ? row.value.slice(0, 200) + "…" : row.value,
         });
       }
     }
   } catch (err) {
-    agentLog.error("findKeysReferencingComposer failed", err);
+    getCoreLogger().error("findKeysReferencingComposer failed", err);
   }
   return hits;
 }
@@ -466,9 +433,7 @@ export async function findKeysReferencingComposer(
  * why `glass.openAgentById` returns false for some otherwise-known
  * composers.
  */
-export async function inspectComposerHeader(
-  composerId: string
-): Promise<{
+export async function inspectComposerHeader(composerId: string): Promise<{
   totalComposers: number;
   typeCounts: Record<string, number>;
   ourEntry: unknown;
@@ -483,18 +448,12 @@ export async function inspectComposerHeader(
   const dbPath = getCursorStateDbPath();
   if (!dbPath) return empty;
   try {
-    const value = await getStateDbValue(
-      dbPath,
-      "ItemTable",
-      "composer.composerHeaders"
-    );
+    const value = await getStateDbValue(dbPath, "ItemTable", "composer.composerHeaders");
     if (typeof value !== "string") return empty;
     const parsed = JSON.parse(value) as {
       allComposers?: Array<Record<string, unknown>>;
     };
-    const composers = Array.isArray(parsed.allComposers)
-      ? parsed.allComposers
-      : [];
+    const composers = Array.isArray(parsed.allComposers) ? parsed.allComposers : [];
     const typeCounts: Record<string, number> = {};
     let ourEntry: unknown;
     for (const c of composers) {
@@ -509,7 +468,7 @@ export async function inspectComposerHeader(
       rawHeader: parsed,
     };
   } catch (err) {
-    agentLog.error("inspectComposerHeader failed", err);
+    getCoreLogger().error("inspectComposerHeader failed", err);
     return empty;
   }
 }
@@ -528,7 +487,7 @@ export async function readStateDbKey(key: string): Promise<string | undefined> {
       if (typeof value === "string") return value;
     }
   } catch (err) {
-    agentLog.error(`readStateDbKey(${key}) failed`, err);
+    getCoreLogger().error(`readStateDbKey(${key}) failed`, err);
   }
   return undefined;
 }
@@ -563,7 +522,7 @@ export async function listAgentRelatedKeys(): Promise<
       }
     }
   } catch (err) {
-    agentLog.error("listAgentRelatedKeys failed", err);
+    getCoreLogger().error("listAgentRelatedKeys failed", err);
   }
   return out;
 }

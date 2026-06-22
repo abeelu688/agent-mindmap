@@ -1,4 +1,4 @@
-import type { ChatEvent } from "../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { TopicGraph } from "./types";
 
 export function countUserQueries(events: ChatEvent[]): number {
@@ -10,10 +10,7 @@ export function countUserQueries(events: ChatEvent[]): number {
  * sometimes copies turn numbers from conversations cited in assistant replies
  * (other sessions) instead of [Q#] indices in the transcript being analyzed.
  */
-export function sanitizeTopicGraph(
-  graph: TopicGraph,
-  userQueryCount: number
-): TopicGraph {
+export function sanitizeTopicGraph(graph: TopicGraph, userQueryCount: number): TopicGraph {
   if (userQueryCount <= 0) {
     return stripAllTurnIndices(graph);
   }

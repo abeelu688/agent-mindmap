@@ -7,7 +7,7 @@ import {
 import { validateSessionConceptExtract } from "../../llm/pipelineValidate";
 import type { LlmProvider, SessionConceptExtract } from "../../llm/types";
 import type { AgentHostId } from "../../host/types";
-import type { ChatEvent } from "../../transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
 
@@ -26,11 +26,7 @@ export async function extractConcepts(
   signal: AbortSignal,
   progress?: MindMapProgress
 ): Promise<SessionConceptExtract> {
-  const prompt = buildSessionExtractPrompt(
-    opts.events,
-    opts.prompt,
-    opts.hostId ?? "cursor"
-  );
+  const prompt = buildSessionExtractPrompt(opts.events, opts.prompt, opts.hostId ?? "cursor");
   return runLlmStage(
     {
       stageId: "session-concept-extract",

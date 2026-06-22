@@ -9,7 +9,7 @@ import {
   type CodeRefQueueItem,
 } from "../extension/src/codeRefQueue";
 import type { CodeReference } from "../extension/src/llm/types";
-import type { ChatEvent } from "../extension/src/transcript/types";
+import type { ChatEvent } from "@agent-mindmap/core";
 
 const mocks = vi.hoisted(() => ({
   extractMock: vi.fn(),

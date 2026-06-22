@@ -23,7 +23,7 @@ import {
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { format, t } from "./l10n/uiTranslate";
-import type { ChatEvent, NodeOrigin } from "./transcript/types";
+import type { ChatEvent, NodeOrigin } from "@agent-mindmap/core";
 import type { AgentHostId } from "./host/types";
 import type { SessionRecord } from "./store/storeTypes";
 
