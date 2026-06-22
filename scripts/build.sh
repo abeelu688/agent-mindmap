@@ -7,6 +7,7 @@ cd "$ROOT"
 
 npm run version:sync
 npm run build:shared
+npm run build:core
 npm run build:mcp
 npm run build:webview
 npm run build:extension

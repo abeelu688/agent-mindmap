@@ -20,6 +20,9 @@ const ROOT_PACKAGE = join(ROOT, "package.json");
 const TARGETS = [
   join(ROOT, "extension", "package.json"),
   join(ROOT, "webview", "package.json"),
+  join(ROOT, "shared", "package.json"),
+  join(ROOT, "core", "package.json"),
+  join(ROOT, "mcp-server", "package.json"),
 ];
 
 const checkMode = process.argv.includes("--check");
