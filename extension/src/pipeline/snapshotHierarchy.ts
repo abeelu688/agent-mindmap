@@ -18,6 +18,8 @@ import {
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
 import { mindMapLog } from "../webview/MindMapLog";
 import { conceptTrieMergePath, writeMergeRecord } from "../store/sessionStore";
+import { getStoreForDir } from "../store/storeClient";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { runMergePipeline } from "./mergePipeline";
 import { tryReuseBatchMerge } from "./batchMergeCache";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
@@ -25,7 +27,6 @@ import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import type { AgentHostId } from "../host/types";
 import type { LlmProvider, Topic } from "../llm/types";
 import type { OutputLanguage } from "../llm/promptLanguage";
-import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import type { MindMapProgress } from "../progress";
 import type {
   MergeRecord,
@@ -297,7 +298,14 @@ async function promoteLevel(
   progress?: MindMapProgress
 ): Promise<void> {
   const size = groupSizeFor(manifest);
+  let iterations = 0;
   while (true) {
+    iterations += 1;
+    if (iterations > 64) {
+      throw new Error(
+        `[agent-mindmap] promoteLevel: exceeded max iterations at level ${level} (topLevel=${manifest.topLevelIds.length})`
+      );
+    }
     const atLevel = manifest.topLevelIds
       .map((id) => manifest.nodes.find((n) => n.id === id))
       .filter((n): n is SnapshotNode => n != null && n.level === level)
@@ -637,6 +645,7 @@ export async function runBatchSnapshotPipeline(
   }
 
   await writeMergeRecord(conceptTrieMergePath(opts.storeDir), merge);
+  await (await getStoreForDir(opts.storeDir)).writeConceptTrieMerge(merge);
   return merge;
 }
 

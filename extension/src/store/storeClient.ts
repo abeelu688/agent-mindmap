@@ -16,10 +16,10 @@ import { PushQueue } from "./pushQueue";
  * Team mode (P4.2 + P4.3): when `agentMindmap.team.serverUrl` is set and an
  * API key exists in SecretStorage, `getStore()` returns a `TeamStore` wrapper
  * that:
- *   - Reads from the team service via `RemoteStore` (authoritative for
- *     cross-machine aggregation).
- *   - Writes locally to `SqliteStore` (working copy) + enqueues an async
- *     push to the team service via `PushQueue` (with retry + watermark).
+ *   - Uses the local `SqliteStore` for all session/merge/ontology I/O (UI +
+ *     batch pipeline — never pulls remote records for mind maps).
+ *   - Exposes team-service reads via `search`, `listProjectSummaries`, etc.
+ *   - Push to the team service is explicit (`Push Sessions to Team Service`).
  * When team mode is off (or partially configured), `getStore()` falls back to
  * the per-`storeDir` local `SqliteStore` via `bootstrapStore`.
  */

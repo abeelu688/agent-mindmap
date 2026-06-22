@@ -1,5 +1,6 @@
 import { runLlmStage } from "../pipeline/llmStage";
 import { t } from "../l10n/uiTranslate";
+import { mindMapLog } from "../webview/MindMapLog";
 import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { LlmProviderError } from "./types";
@@ -481,9 +482,8 @@ function matchEntriesToDescriptions(
   }
 
   if (unmatchedPathCount > 0) {
-    throw new LlmProviderError(
-      "bad-shape",
-      `Code reference description LLM returned paths that did not match ${unmatchedPathCount} input entr${unmatchedPathCount === 1 ? "y" : "ies"}`
+    mindMapLog(
+      `[extractCodeReferences] ${unmatchedPathCount} path(s) had no LLM description; using fallback text`
     );
   }
 

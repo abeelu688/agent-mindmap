@@ -13,26 +13,17 @@ import type {
 import type { Store } from "./store";
 
 /**
- * `TeamStore` is the team-mode `Store` — a write-through wrapper that
- * combines a local `SqliteStore` (the working copy) with a `RemoteStore`
- * (the team service HTTP client) and a `PushQueue` (drain to the team
- * service with watermark tracking).
+ * `TeamStore` is the team-mode `Store` — a local working copy (`SqliteStore`)
+ * plus a `RemoteStore` for team-service APIs (search, project list, push).
  *
- * Read paths delegate to `RemoteStore` (the team service is authoritative
- * for cross-machine aggregation). Write paths:
- *   - `upsertRecord` → local `SqliteStore` only. Push to the team service
- *     happens when the user explicitly runs the "Push Sessions to Team
- *     Service" command (not automatically on every write).
- *   - `writeConceptTrieMerge` / `writeOntologyIndex` / etc → no-op. The
- *     Go merge worker on the team service owns these; client writes have
- *     no team-mode equivalent.
- *   - `bumpProjectRevision` → no-op. Server bumps revision inside
- *     `POST /sessions/:id`.
- *   - `deleteProjectRecords` / `clearOntologyCache` → throw
- *     `RemoteStoreNotSupported` (no delete surface in v1).
+ * **Extension UI + merge pipeline (local only):** session records, concept
+ * trie, ontology cache, deterministic merge — all read/write via `local`.
+ * Mind maps and batch merge never pull remote sessions or remote merge JSON.
  *
- * The push queue persists its watermark in the local `kv` table so
- * restarts resume from the last successfully-pushed `analyzedAt`.
+ * **Team service (remote only):** `listProjectSummaries`, revision/count,
+ * and `search`. Push drains `local` → remote via `PushQueue` on user command.
+ *
+ * `upsertRecord` writes local only; push is explicit (not on every write).
  */
 export class TeamStore implements Store {
   constructor(
@@ -41,7 +32,7 @@ export class TeamStore implements Store {
     private readonly queue: PushQueueLike
   ) {}
 
-  // ─── Project-level (read → remote) ──────────────────────────────────────────
+  // ─── Project-level (remote — team service aggregation) ────────────────────
 
   listProjectSummaries(): Promise<ProjectSummary[]> {
     return this.remote.listProjectSummaries();
@@ -53,77 +44,74 @@ export class TeamStore implements Store {
     return this.remote.getProjectRecordCount(projectSlug);
   }
 
-  // ─── Session records (read → remote; write → local + push) ──────────────────
+  // ─── Session records (local only) ─────────────────────────────────────────
 
   getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined> {
-    return this.remote.getRecord(projectSlug, sessionId);
+    return this.local.getRecord(projectSlug, sessionId);
   }
   listRecordsForProject(projectSlug: string): Promise<SessionRecord[]> {
-    return this.remote.listRecordsForProject(projectSlug);
+    return this.local.listRecordsForProject(projectSlug);
   }
   listAllRecords(): Promise<SessionRecord[]> {
-    return this.remote.listAllRecords();
+    return this.local.listAllRecords();
   }
 
   async upsertRecord(record: SessionRecord): Promise<{ revision: number }> {
-    // Local write only — push to the team service happens when the user
-    // explicitly runs the "Push Sessions to Team Service" command.
-    const result = await this.local.upsertRecord(record);
-    return result;
+    return this.local.upsertRecord(record);
   }
 
   async deleteProjectRecords(_projectSlug: string): Promise<void> {
     throw new RemoteStoreNotSupported("deleteProjectRecords");
   }
 
-  // ─── Merge / ontology (writes no-op; reads → remote) ─────────────────────────
+  // ─── Merge / ontology (local only) ────────────────────────────────────────
 
   readConceptTrieMerge(): Promise<MergeRecord | undefined> {
-    return this.remote.readConceptTrieMerge();
+    return this.local.readConceptTrieMerge();
   }
-  async writeConceptTrieMerge(_merge: MergeRecord): Promise<void> {
-    // No-op — the Go merge worker owns this on the server side.
+  writeConceptTrieMerge(merge: MergeRecord): Promise<void> {
+    return this.local.writeConceptTrieMerge(merge);
   }
   readDeterministicMerge(): Promise<MergeRecord | undefined> {
-    return this.remote.readDeterministicMerge();
+    return this.local.readDeterministicMerge();
   }
-  async writeDeterministicMerge(_merge: MergeRecord): Promise<void> {
-    // No-op.
+  writeDeterministicMerge(merge: MergeRecord): Promise<void> {
+    return this.local.writeDeterministicMerge(merge);
   }
   readLlmRefinedMerge(): Promise<MergeRecord | undefined> {
-    return this.remote.readLlmRefinedMerge();
+    return this.local.readLlmRefinedMerge();
   }
-  async writeLlmRefinedMerge(_merge: MergeRecord): Promise<void> {
-    // No-op.
+  writeLlmRefinedMerge(merge: MergeRecord): Promise<void> {
+    return this.local.writeLlmRefinedMerge(merge);
   }
   readLlmMergeCache(cacheKey: string): Promise<MergeRecord | undefined> {
-    return this.remote.readLlmMergeCache(cacheKey);
+    return this.local.readLlmMergeCache(cacheKey);
   }
-  async writeLlmMergeCache(_cacheKey: string, _merge: MergeRecord): Promise<void> {
-    // No-op.
+  writeLlmMergeCache(cacheKey: string, merge: MergeRecord): Promise<void> {
+    return this.local.writeLlmMergeCache(cacheKey, merge);
   }
 
   readOntologyIndex(): Promise<OntologyIndex | undefined> {
-    return this.remote.readOntologyIndex();
+    return this.local.readOntologyIndex();
   }
-  async writeOntologyIndex(_index: OntologyIndex): Promise<void> {
-    // No-op.
+  writeOntologyIndex(index: OntologyIndex): Promise<void> {
+    return this.local.writeOntologyIndex(index);
   }
   readOntologyRecord(cacheKey: string): Promise<OntologyRecord | undefined> {
-    return this.remote.readOntologyRecord(cacheKey);
+    return this.local.readOntologyRecord(cacheKey);
   }
-  async writeOntologyRecord(_cacheKey: string, _record: OntologyRecord): Promise<void> {
-    // No-op.
+  writeOntologyRecord(cacheKey: string, record: OntologyRecord): Promise<void> {
+    return this.local.writeOntologyRecord(cacheKey, record);
   }
-  async clearOntologyCache(): Promise<void> {
-    // No-op — server-side concern.
+  clearOntologyCache(): Promise<void> {
+    return this.local.clearOntologyCache();
   }
 
   readLatestSegmentEquivalences(projectSlug: string): Promise<SegmentEquivalence[]> {
-    return this.remote.readLatestSegmentEquivalences(projectSlug);
+    return this.local.readLatestSegmentEquivalences(projectSlug);
   }
 
-  // ─── Search (P5.4 — delegates to RemoteStore → Go token-scorer) ────────────────
+  // ─── Search (remote — team service) ───────────────────────────────────────
 
   search(
     projectSlug: string,
@@ -135,42 +123,27 @@ export class TeamStore implements Store {
   }
 
   /**
-   * No-op in team mode — the server bumps revision inside `POST /sessions/:id`.
-   * Returns a placeholder McpIndexFile so callers that read the result don't
-   * crash. Real revision reads go through `getProjectRevision` (remote).
+   * Local revision bump for MCP index file (single-machine semantics on the
+   * working copy). Team-service revision reads use `getProjectRevision`.
    */
-  async bumpProjectRevision(
+  bumpProjectRevision(
     projectSlug: string,
-    _recordCount: number,
-    _opts?: { lastAnalyzedAt?: number; projectPath?: string }
+    recordCount: number,
+    opts?: { lastAnalyzedAt?: number; projectPath?: string }
   ): Promise<McpIndexFile> {
-    // No-op. Caller in single-machine mode uses the returned McpIndexFile to
-    // refresh the MCP search index; in team mode the search index reads from
-    // the team service directly, so this return value is unused.
-    return {
-      schemaVersion: 1,
-      updatedAt: Date.now(),
-      projects: {
-        [projectSlug]: {
-          revision: 0,
-          recordCount: 0,
-          lastBuiltAt: 0,
-        },
-      },
-    };
+    return this.local.bumpProjectRevision(projectSlug, recordCount, opts);
   }
 
-  /** Exposed for callers that need the underlying RemoteStore (e.g. search). */
+  /** Team-service HTTP client (search, project list, push target). */
   getRemoteStore(): RemoteStore {
     return this.remote;
   }
 
-  /** Exposed for callers that need the local Store (e.g. push queue drain). */
+  /** Local working copy (push queue source, UI reads). */
   getLocalStore(): Store {
     return this.local;
   }
 
-  /** Exposed for activation drain + tests. */
   getPushQueue(): PushQueueLike {
     return this.queue;
   }

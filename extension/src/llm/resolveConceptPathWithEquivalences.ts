@@ -1,3 +1,4 @@
+import { agentLog } from "../log";
 import { normalizeConceptPath } from "./normalizeConceptPath";
 import { segmentKeyForMerge } from "./topicGraphValidate";
 import type { SegmentEquivalence } from "./types";
@@ -126,8 +127,17 @@ function reorderPathForScopedEquivalences(
   let labels = path.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
   let reordered = false;
 
+  const maxIterations = Math.max(32, labels.length * Math.max(1, equivalences.length) * 2);
+  let iterations = 0;
   let changed = true;
   while (changed) {
+    iterations += 1;
+    if (iterations > maxIterations) {
+      agentLog.warn(
+        `[resolveConceptPath] reorderPathForScopedEquivalences stopped after ${maxIterations} iterations (path length ${labels.length}); using partial reorder`
+      );
+      break;
+    }
     changed = false;
     const keys = labels.map((s) => segmentKeyForMerge(s));
     for (const eq of equivalences) {
@@ -206,3 +216,7 @@ export function resolveConceptPathWithEquivalences(
 
   return normalizeConceptPath(out);
 }
+
+export const __testing = {
+  reorderPathForScopedEquivalences,
+};

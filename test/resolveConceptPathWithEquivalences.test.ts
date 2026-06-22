@@ -27,21 +27,19 @@ describe("resolveConceptPathWithEquivalences", () => {
 
   it("does not rewrite runtime without android prefix", () => {
     expect(
-      resolveConceptPathWithEquivalences(
-        ["node", "runtime"],
-        artRuntimeEq,
-        { title: "Node runtime", items: ["nodejs"] }
-      )
+      resolveConceptPathWithEquivalences(["node", "runtime"], artRuntimeEq, {
+        title: "Node runtime",
+        items: ["nodejs"],
+      })
     ).toEqual(["node", "runtime"]);
   });
 
   it("skips equivalence when evidence keywords do not match", () => {
     expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "runtime", "start"],
-        artRuntimeEq,
-        { title: "Generic", items: ["unrelated topic"] }
-      )
+      resolveConceptPathWithEquivalences(["android", "runtime", "start"], artRuntimeEq, {
+        title: "Generic",
+        items: ["unrelated topic"],
+      })
     ).toEqual(["android", "runtime", "start"]);
   });
 
@@ -55,18 +53,16 @@ describe("resolveConceptPathWithEquivalences", () => {
       },
     ];
     expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "art", "runtime", "start"],
-        underArt,
-        { title: "ART", items: ["libart"] }
-      )
+      resolveConceptPathWithEquivalences(["android", "art", "runtime", "start"], underArt, {
+        title: "ART",
+        items: ["libart"],
+      })
     ).toEqual(["android", "art", "start"]);
     expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "runtime", "start"],
-        underArt,
-        { title: "ART", items: ["libart"] }
-      )
+      resolveConceptPathWithEquivalences(["android", "runtime", "start"], underArt, {
+        title: "ART",
+        items: ["libart"],
+      })
     ).toEqual(["android", "runtime", "start"]);
   });
 
@@ -82,29 +78,25 @@ describe("resolveConceptPathWithEquivalences", () => {
         confidence: 0.9,
       },
     ];
-    expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "runtime", "jit"],
-        eq,
-        {}
-      )
-    ).toEqual(["android", "art", "jit"]);
-    expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "runtime", "start"],
-        eq,
-        {}
-      )
-    ).toEqual(["android", "runtime", "start"]);
+    expect(resolveConceptPathWithEquivalences(["android", "runtime", "jit"], eq, {})).toEqual([
+      "android",
+      "art",
+      "jit",
+    ]);
+    expect(resolveConceptPathWithEquivalences(["android", "runtime", "start"], eq, {})).toEqual([
+      "android",
+      "runtime",
+      "start",
+    ]);
   });
 
   it("uses summary in evidence matching", () => {
     expect(
-      resolveConceptPathWithEquivalences(
-        ["android", "runtime", "start"],
-        artRuntimeEq,
-        { title: "Generic", summary: "libart module", items: [] }
-      )
+      resolveConceptPathWithEquivalences(["android", "runtime", "start"], artRuntimeEq, {
+        title: "Generic",
+        summary: "libart module",
+        items: [],
+      })
     ).toEqual(["android", "art", "start"]);
   });
 
@@ -116,5 +108,29 @@ describe("resolveConceptPathWithEquivalences", () => {
         { title: "ART entry_point", items: ["libart"] }
       )
     ).toEqual(["android", "art", "method-execution"]);
+  });
+
+  it("stops reorder when scoped equivalences oscillate", () => {
+    const oscillating: SegmentEquivalence[] = [
+      {
+        canonical: "a",
+        aliases: ["seg1"],
+        scope: { pathPrefix: ["seg2"] },
+        confidence: 0.9,
+      },
+      {
+        canonical: "b",
+        aliases: ["seg2"],
+        scope: { pathPrefix: ["seg1"] },
+        confidence: 0.9,
+      },
+    ];
+    expect(() =>
+      resolveConceptPathWithEquivalences(["seg1", "seg2"], oscillating, {})
+    ).not.toThrow();
+    expect(resolveConceptPathWithEquivalences(["seg1", "seg2"], oscillating, {})).toEqual([
+      "seg1",
+      "seg2",
+    ]);
   });
 });

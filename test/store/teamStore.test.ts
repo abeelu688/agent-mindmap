@@ -129,7 +129,7 @@ function makeQueue(): PushQueueLike & { enqueued: SessionRecord[]; drainCalls: n
   return q;
 }
 
-describe("TeamStore — reads delegate to remote", () => {
+describe("TeamStore — session record reads (local only)", () => {
   it("listProjectSummaries calls remote", async () => {
     const f = vi.fn().mockResolvedValue(mockResponse(200, []));
     const remote = new RemoteStore("https://x/v1", "k", {
@@ -143,7 +143,26 @@ describe("TeamStore — reads delegate to remote", () => {
     expect(f.mock.calls[0][0]).toBe("https://x/v1/projects");
   });
 
-  it("getRecord delegates to remote", async () => {
+  it("getRecord reads local only and does not call remote", async () => {
+    const localRec = sampleRecord({ analyzedAt: 2000 });
+    const local = makeLocalStub();
+    local.getRecord = vi.fn().mockResolvedValue(localRec);
+    const f = vi.fn();
+    const remote = new RemoteStore("https://x", "k", {
+      fetchImpl: f as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => {},
+    });
+    const ts = new TeamStore(local, remote, makeQueue());
+    const got = await ts.getRecord("proj-a", "s1");
+    expect(got?.meta.analyzedAt).toBe(2000);
+    expect(local.getRecord).toHaveBeenCalledWith("proj-a", "s1");
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("getRecord returns undefined when local has no record (no remote fallback)", async () => {
+    const local = makeLocalStub();
+    local.getRecord = vi.fn().mockResolvedValue(undefined);
     const rec = sampleRecord();
     const f = vi.fn().mockResolvedValue(mockResponse(200, rec));
     const remote = new RemoteStore("https://x", "k", {
@@ -151,9 +170,27 @@ describe("TeamStore — reads delegate to remote", () => {
       maxRetries: 0,
       sleep: async () => {},
     });
-    const ts = new TeamStore(makeLocalStub(), remote, makeQueue());
+    const ts = new TeamStore(local, remote, makeQueue());
     const got = await ts.getRecord("proj-a", "s1");
-    expect(got?.meta.sessionId).toBe("s1");
+    expect(got).toBeUndefined();
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("listRecordsForProject reads local only", async () => {
+    const localRec = sampleRecord();
+    const local = makeLocalStub();
+    local.listRecordsForProject = vi.fn().mockResolvedValue([localRec]);
+    const f = vi.fn().mockResolvedValue(mockResponse(200, [sampleRecord({ sessionId: "remote" })]));
+    const remote = new RemoteStore("https://x", "k", {
+      fetchImpl: f as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => {},
+    });
+    const ts = new TeamStore(local, remote, makeQueue());
+    const got = await ts.listRecordsForProject("proj-a");
+    expect(got).toHaveLength(1);
+    expect(got[0]?.meta.sessionId).toBe("s1");
+    expect(f).not.toHaveBeenCalled();
   });
 });
 
@@ -193,8 +230,8 @@ describe("TeamStore — unsupported mutators throw", () => {
   });
 });
 
-describe("TeamStore — write-merge methods are no-ops", () => {
-  it("writeConceptTrieMerge resolves without calling remote or local", async () => {
+describe("TeamStore — merge/ontology reads and writes (local only)", () => {
+  it("writeConceptTrieMerge writes to local, not remote", async () => {
     const f = vi.fn();
     const remote = new RemoteStore("https://x", "k", {
       fetchImpl: f as unknown as typeof fetch,
@@ -202,22 +239,50 @@ describe("TeamStore — write-merge methods are no-ops", () => {
       sleep: async () => {},
     });
     const local = makeLocalStub();
+    const writeSpy = vi.spyOn(local, "writeConceptTrieMerge");
     const ts = new TeamStore(local, remote, makeQueue());
-    await ts.writeConceptTrieMerge({} as never);
+    const merge = { schemaVersion: 1 } as never;
+    await ts.writeConceptTrieMerge(merge);
+    expect(writeSpy).toHaveBeenCalledWith(merge);
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("bumpProjectRevision resolves with a placeholder McpIndexFile", async () => {
+  it("readConceptTrieMerge reads from local", async () => {
+    const merge = { schemaVersion: 1, meta: {}, mindMap: { data: { text: "t" } } } as never;
+    const local = makeLocalStub();
+    local.readConceptTrieMerge = vi.fn().mockResolvedValue(merge);
     const f = vi.fn();
     const remote = new RemoteStore("https://x", "k", {
       fetchImpl: f as unknown as typeof fetch,
       maxRetries: 0,
       sleep: async () => {},
     });
-    const ts = new TeamStore(makeLocalStub(), remote, makeQueue());
+    const ts = new TeamStore(local, remote, makeQueue());
+    const got = await ts.readConceptTrieMerge();
+    expect(got).toBe(merge);
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("TeamStore — bumpProjectRevision (local)", () => {
+  it("bumpProjectRevision delegates to local store", async () => {
+    const f = vi.fn();
+    const remote = new RemoteStore("https://x", "k", {
+      fetchImpl: f as unknown as typeof fetch,
+      maxRetries: 0,
+      sleep: async () => {},
+    });
+    const local = makeLocalStub();
+    const bumpSpy = vi.spyOn(local, "bumpProjectRevision").mockResolvedValue({
+      schemaVersion: 1,
+      updatedAt: 42,
+      projects: { "proj-a": { revision: 3, recordCount: 5, lastBuiltAt: 42 } },
+    });
+    const ts = new TeamStore(local, remote, makeQueue());
     const result = await ts.bumpProjectRevision("proj-a", 5);
-    expect(result.schemaVersion).toBe(1);
-    expect(result.projects["proj-a"]).toBeDefined();
+    expect(bumpSpy).toHaveBeenCalledWith("proj-a", 5, undefined);
+    expect(result.projects["proj-a"]?.revision).toBe(3);
+    expect(f).not.toHaveBeenCalled();
   });
 });
 

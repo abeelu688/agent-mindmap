@@ -1,6 +1,7 @@
 import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
 import { refreshSnapshotForSession, runBatchSnapshotPipeline } from "../pipeline/snapshotHierarchy";
 import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
+import { getStoreForDir } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import { mindMapLog } from "../webview/MindMapLog";
 import { t } from "../l10n/uiTranslate";
@@ -10,6 +11,20 @@ import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
 import type { MindMapProgress } from "../progress";
 import type { SessionRecord } from "../store/storeTypes";
 import type { MergeRecord } from "../store/storeTypes";
+
+/** Local library records for merge, with in-memory batch overlay winning on conflict. */
+export async function resolveProjectRecordsForMerge(
+  storeDir: string,
+  projectSlug: string,
+  overlayById: Map<string, SessionRecord>
+): Promise<SessionRecord[]> {
+  const fromStore = await (await getStoreForDir(storeDir)).listRecordsForProject(projectSlug);
+  const byId = new Map(fromStore.map((r) => [r.meta.sessionId, r]));
+  for (const [sessionId, record] of overlayById) {
+    byId.set(sessionId, record);
+  }
+  return [...byId.values()];
+}
 
 export function toConceptMergeLlmOpts(
   llmOpts: LlmProviderOptions,

@@ -158,6 +158,15 @@ function finishCodeRefPanelStatus(): void {
     return;
   }
   publishCodeRefPanelStatus({ active: false });
+  if (!running) {
+    void flushAllDirtyCodeRefProjects();
+  }
+}
+
+async function flushAllDirtyCodeRefProjects(): Promise<void> {
+  for (const projectSlug of [...dirtyProjectItems.keys()]) {
+    await flushPendingCodeRefRefreshForProject(projectSlug);
+  }
 }
 
 function notifyPanelPendingCodeRefUpdate(

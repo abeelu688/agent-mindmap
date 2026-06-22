@@ -1,21 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
+  createBatchMergePanelState,
   hadFullLibraryCoverage,
+  markBatchMergeRendered,
+  shouldApplyMergeDirectlyToPanel,
   shouldAutoApplyBatchUpdates,
 } from "../extension/src/batchMergeApplyMode";
 
-describe("shouldAutoApplyBatchUpdates", () => {
-  it("returns false when no sessions and no panel map", () => {
-    expect(
-      shouldAutoApplyBatchUpdates({
-        sessionCount: 0,
-        libraryRecordCount: 0,
-        panelHasMindMap: false,
-      })
-    ).toBe(false);
+describe("batch merge panel contract", () => {
+  it("renders the first merge when the panel started empty", () => {
+    const state = createBatchMergePanelState(false);
+    expect(shouldApplyMergeDirectlyToPanel(state)).toBe(true);
+    markBatchMergeRendered(state);
+    expect(shouldApplyMergeDirectlyToPanel(state)).toBe(false);
   });
 
-  it("returns true when library covers all sessions", () => {
+  it("uses pending Refresh for all merges when the panel already had a map", () => {
+    const state = createBatchMergePanelState(true);
+    expect(shouldApplyMergeDirectlyToPanel(state)).toBe(false);
+  });
+});
+
+describe("shouldAutoApplyBatchUpdates (legacy)", () => {
+  it("matches first-render semantics from batch-start panel state", () => {
     expect(
       shouldAutoApplyBatchUpdates({
         sessionCount: 24,
@@ -23,29 +30,13 @@ describe("shouldAutoApplyBatchUpdates", () => {
         panelHasMindMap: false,
       })
     ).toBe(true);
-  });
-
-  it("returns false for partial library without panel map", () => {
-    expect(
-      shouldAutoApplyBatchUpdates({
-        sessionCount: 24,
-        libraryRecordCount: 10,
-        panelHasMindMap: false,
-      })
-    ).toBe(false);
-  });
-
-  it("returns true for partial library when panel already has a map", () => {
     expect(
       shouldAutoApplyBatchUpdates({
         sessionCount: 24,
         libraryRecordCount: 10,
         panelHasMindMap: true,
       })
-    ).toBe(true);
-  });
-
-  it("returns false for force re-analyze even with full library coverage", () => {
+    ).toBe(false);
     expect(
       shouldAutoApplyBatchUpdates({
         sessionCount: 7,
