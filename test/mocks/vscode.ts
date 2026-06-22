@@ -9,6 +9,7 @@ export const window = {
   showInformationMessage: async () => undefined,
   showWarningMessage: async () => undefined,
   showErrorMessage: async () => undefined,
+  withProgress: async (_opts: unknown, cb: () => Promise<void>) => cb(),
 };
 
 export const Uri = {
@@ -17,6 +18,10 @@ export const Uri = {
 
 export const commands = {
   executeCommand: async () => undefined,
+};
+
+export const ProgressLocation = {
+  Notification: 15,
 };
 
 export const env = {

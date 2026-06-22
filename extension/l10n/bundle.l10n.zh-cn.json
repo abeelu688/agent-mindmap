@@ -195,5 +195,11 @@
   "team.config.applied": "Agent Mind Map: 团队服务已配置。请重新加载窗口以切换存储。",
   "team.config.cleared": "Agent Mind Map: 团队服务已停用。请重新加载窗口以切回本地存储。",
   "team.config.invalid": "Agent Mind Map: 团队服务配置无效：{0}",
-  "team.bulkPush.title": "Agent Mind Map: 正在批量推送会话到团队服务…"
+  "team.bulkPush.title": "Agent Mind Map: 正在批量推送会话到团队服务…",
+  "team.push.notEnabled": "团队模式未配置。请设置 `agentMindmap.team.serverUrl` 以启用。",
+  "team.push.noRecords": "没有本地会话需要推送。",
+  "team.push.allPushed": "所有会话已推送完毕。",
+  "team.push.title": "Agent Mind Map: 正在推送会话到团队服务…",
+  "team.push.done": "已推送 {0} 个会话到团队服务。",
+  "team.push.partialFail": "部分会话推送失败。请重试命令推送剩余记录。错误: {0}"
 }

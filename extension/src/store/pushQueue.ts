@@ -3,45 +3,46 @@ import type { RemoteStore, SessionRecord, Store } from "@agent-mindmap/shared";
 import type { SqliteStore } from "@agent-mindmap/shared";
 
 /**
- * Push queue (P4.3) — mirrors local session writes to the team service.
+ * Push queue — mirrors local session writes to the team service.
  *
  * Design:
  *   - `enqueue(record)`: bumps the per-project "highest enqueued analyzedAt"
  *     counter in local `kv` (key `push-pending:<slug>` = number). Does NOT
- *     push yet — `drain()` does the pushing.
+ *     push yet and does NOT trigger a drain — only writes the pending flag.
  *   - `drain()`: for each project with `analyzedAt > lastPushedWatermark`,
  *     list local records, push each via `RemoteStore.upsertRecord`, advance
  *     the watermark on success. Failures leave the watermark unchanged so
- *     the next drain retries.
+ *     the next drain retries. Called only when the user explicitly runs the
+ *     "Push Sessions to Team Service" command.
  *
  * Watermarks in local `kv`:
  *   - `push-watermark:<slug>` = number (max analyzedAt successfully pushed)
  *   - `push-pending:<slug>` = number (max analyzedAt enqueued but not yet
  *     confirmed pushed). Used to know which projects need draining.
  *
- * Backoff: on failure, `drain()` schedules a retry with exponential backoff
- * (capped at 5 min per PR plan). Successive drains dedupe via an in-flight
- * flag. The queue is persistent (watermarks in kv) so a restart resumes
- * from the last confirmed push.
+ * No auto-retry: on drain failure, the watermark stays at the last
+ * successfully-pushed value and the pending flag stays set. The user re-runs
+ * the command to retry. The queue is persistent (watermarks in kv) so a
+ * restart resumes from the last confirmed push.
  */
 
 export const WATERMARK_PREFIX = "push-watermark:";
 export const PENDING_PREFIX = "push-pending:";
-const BACKOFF_BASE_MS = 1000;
-const BACKOFF_MAX_MS = 5 * 60 * 1000;
-const MAX_RETRIES_PER_DRAIN = 3;
 
 export class PushQueue implements PushQueueLike {
   private draining = false;
   private redrainRequested = false;
-  private retryTimer: NodeJS.Timeout | undefined;
-  private retryAttempts = 0;
 
   constructor(
     private readonly local: SqliteStore,
     private readonly remote: RemoteStore
   ) {}
 
+  /**
+   * Enqueue a record for future push. Writes the `push-pending:<slug>` kv
+   * flag but does NOT trigger a drain. The drain happens only when the user
+   * explicitly runs the "Push Sessions to Team Service" command.
+   */
   async enqueue(record: SessionRecord): Promise<void> {
     const slug = record.meta.projectSlug;
     if (!slug) {
@@ -53,8 +54,7 @@ export class PushQueue implements PushQueueLike {
     if (at > current) {
       await this.local.writeKvJson(pendingKey, at);
     }
-    // Trigger a drain (fire-and-forget). The drain dedupes via `this.draining`.
-    void this.drain();
+    // No auto-drain — the command calls drain() explicitly.
   }
 
   async drain(): Promise<void> {
@@ -62,7 +62,7 @@ export class PushQueue implements PushQueueLike {
       // A drain is already running. Mark that another drain was requested
       // so the in-flight drain re-runs after it finishes. Without this,
       // a pending key written during the in-flight drain would sit
-      // unprocessed until the next enqueue.
+      // unprocessed until the next command invocation.
       this.redrainRequested = true;
       return;
     }
@@ -74,11 +74,12 @@ export class PushQueue implements PushQueueLike {
         this.redrainRequested = false;
         try {
           await this.drainOnce();
-          this.retryAttempts = 0;
-          this.clearRetryTimer();
         } catch (err) {
-          this.scheduleRetry(err);
-          break; // Stop the loop on failure — retry timer will re-trigger.
+          // Log the failure and stop — no auto-retry. The user re-runs the
+          // command to retry. The watermark and pending flag reflect the
+          // partial progress so the next drain picks up where this left off.
+          console.warn("[agent-mindmap] push queue drain failed:", err);
+          break;
         }
         if (!this.redrainRequested) {
           break;
@@ -138,34 +139,8 @@ export class PushQueue implements PushQueueLike {
     return this.local.listRecordsForProject(slug);
   }
 
-  private scheduleRetry(err: unknown): void {
-    this.retryAttempts += 1;
-    if (this.retryAttempts > MAX_RETRIES_PER_DRAIN) {
-      console.warn(
-        `[agent-mindmap] push queue: gave up after ${MAX_RETRIES_PER_DRAIN} retries (will retry on next enqueue):`,
-        err
-      );
-      this.retryAttempts = 0;
-      return;
-    }
-    const delay = Math.min(BACKOFF_BASE_MS * Math.pow(2, this.retryAttempts - 1), BACKOFF_MAX_MS);
-    this.clearRetryTimer();
-    this.retryTimer = setTimeout(() => {
-      void this.drain();
-    }, delay);
-  }
-
-  private clearRetryTimer(): void {
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
-      this.retryTimer = undefined;
-    }
-  }
-
-  /** Stop any pending retry timer. Called on deactivate. */
-  dispose(): void {
-    this.clearRetryTimer();
-  }
+  /** No-op — kept for API compatibility. Retry timers were removed. */
+  dispose(): void {}
 }
 
 /** Factory: build a PushQueue from a TeamStore's local + remote backends. */
@@ -177,7 +152,4 @@ export function makePushQueue(local: SqliteStore, remote: RemoteStore): PushQueu
 export const __testing = {
   WATERMARK_PREFIX,
   PENDING_PREFIX,
-  BACKOFF_BASE_MS,
-  BACKOFF_MAX_MS,
-  MAX_RETRIES_PER_DRAIN,
 };

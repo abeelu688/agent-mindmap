@@ -28,6 +28,7 @@ import { commandConfigureTeamService } from "./commands/configureTeamService";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
 import { commandInstallMcp } from "./commands/installMcp";
 import { commandSyncAiContext } from "./commands/syncAiContext";
+import { commandPushToTeam } from "./commands/pushToTeam";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
@@ -35,12 +36,7 @@ import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
 import { isStoreRekeyedToRepo, runRekeyMigration } from "./store/rekeyMigration";
-import {
-  setExtensionContext,
-  drainAllPushQueues,
-  disposePushQueues,
-  runBulkPushIfNeededNow,
-} from "./store/storeClient";
+import { setExtensionContext, disposePushQueues } from "./store/storeClient";
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -251,6 +247,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.syncAiContext",
       wrapCommand(() => commandSyncAiContext())
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.pushToTeam",
+      wrapCommand(() => commandPushToTeam())
     )
   );
 
@@ -262,19 +262,6 @@ export function activate(context: vscode.ExtensionContext): void {
   // when the user picked "open in new/current window". Runs once per
   // activation; ignores expired or wrong-workspace records.
   void drainPendingJump({ context });
-
-  // Team mode: drain any pending pushes from prior sessions. Safe no-op when
-  // team mode is off (pushQueues is empty).
-  void drainAllPushQueues().catch((err) => {
-    console.warn(`[agent-mindmap] push queue drain failed: ${(err as Error).message}`);
-  });
-
-  // Team mode: on first activation with team mode enabled, run a one-shot
-  // bulk push of all local sessions to the team service (P4.4). Skips
-  // immediately if already done or team mode is off.
-  void runBulkPushIfNeededNow(context).catch((err) => {
-    console.warn(`[agent-mindmap] bulk push failed: ${(err as Error).message}`);
-  });
 
   void resolveHostId(context).then((hostId) => {
     if (hostId !== "cursor") {

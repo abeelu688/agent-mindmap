@@ -9,7 +9,6 @@ import {
 import { getStoreDir } from "../paths";
 import { getRemoteStoreIfEnabled } from "./storeFactory";
 import { PushQueue } from "./pushQueue";
-import { runBulkPushIfNeeded } from "./bulkPush";
 
 /**
  * Process-wide accessor for the extension's `Store`.
@@ -138,8 +137,9 @@ export async function getStoreForDir(storeDir: string): Promise<Store> {
 }
 
 /**
- * Drain all push queues. Called on activation + after batch analyze. Safe to
- * call multiple times — drains dedupe via the queue's in-flight flag.
+ * Drain all push queues. Called by the "Push Sessions to Team Service"
+ * command. Safe to call multiple times — drains dedupe via the queue's
+ * in-flight flag.
  */
 export async function drainAllPushQueues(): Promise<void> {
   for (const q of pushQueues) {
@@ -158,31 +158,15 @@ export async function isTeamModeEnabled(): Promise<boolean> {
 
 /**
  * Returns the local `SqliteStore` for the active `storeDir`, or `undefined`
- * if the local store isn't a `SqliteStore` (unlikely). Used by
- * the bulk-push path (P4.4) to enumerate records + set pending flags.
+ * if the local store isn't a `SqliteStore` (unlikely). Used by the
+ * push-to-team command to enumerate records + set pending flags.
  */
 export async function getLocalSqliteStore(): Promise<SqliteStore | undefined> {
   const store = await bootstrapForDir(getStoreDir());
   return store instanceof SqliteStore ? store : undefined;
 }
 
-/**
- * One-shot bulk push on first team-mode activation (P4.4). Delegates to
- * `runBulkPushIfNeeded` with the storeClient's deps. Safe to call on every
- * activation — skips immediately when the bulk-push flag is already set or
- * team mode is off.
- */
-export async function runBulkPushIfNeededNow(
-  context: import("vscode").ExtensionContext
-): Promise<void> {
-  await runBulkPushIfNeeded(context, {
-    isTeamModeEnabled,
-    getLocalStore: getLocalSqliteStore,
-    drainAllPushQueues,
-  });
-}
-
-/** Dispose all push queues (clear retry timers). Called on deactivate. */
+/** Dispose all push queues. Called on deactivate. */
 export function disposePushQueues(): void {
   for (const q of pushQueues) {
     q.dispose();

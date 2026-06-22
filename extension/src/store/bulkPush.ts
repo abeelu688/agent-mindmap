@@ -4,34 +4,26 @@ import { PENDING_PREFIX } from "./pushQueue";
 import type { SessionRecord, SqliteStore } from "@agent-mindmap/shared";
 
 /**
- * One-shot bulk push (P4.4) — when team mode is first enabled, push every
- * local session to the team service so the server-side merge index starts
- * from a complete dataset. Per `TEAM_MODE.md` §Migration 2.
+ * Push local sessions to the team service — called by the "Push Sessions to
+ * Team Service" command.
  *
- * Detection: a `globalState` flag (`agentMindmap.team.bulkPushDone`) marks
- * the machine as "bulk-pushed". The flag is per-machine (not per-workspace)
- * because the local SqliteStore is per-machine — once we've pushed its
- * contents once, the incremental push queue (P4.3) keeps the server in sync
- * on every subsequent `upsertRecord`.
+ * Mechanism: we set the `push-pending:<slug>` flag (to the max `analyzedAt`
+ * for that project) for every project that has local records, then invoke
+ * `drainAllPushQueues()` inside a VS Code progress notification. The push
+ * queue handles watermark advancement. On failure, the watermarks reflect
+ * partial progress and the pending flags stay set so the next command
+ * invocation retries from there.
  *
- * Mechanism: rather than reimplement the push loop, we set the
- * `push-pending:<slug>` flag (to the max `analyzedAt` for that project) for
- * every project that has local records, then invoke `drainAllPushQueues()`
- * inside a VS Code progress notification. The push queue handles retry,
- * backoff, and watermark advancement. After the drain returns, we mark the
- * flag done — even on partial failure, the queue's watermarks reflect what
- * did get pushed, and the next activation's incremental drain retries the
- * rest.
+ * This is idempotent — records already above the watermark are not
+ * re-pushed.
  */
 
-export const BULK_PUSH_DONE_KEY = "agentMindmap.team.bulkPushDone";
-
-export type BulkPushResult =
-  | { kind: "skipped"; reason: "already-done" | "team-mode-off" | "no-local-store" }
+export type PushLocalResult =
+  | { kind: "skipped"; reason: "team-mode-off" | "no-local-store" }
   | { kind: "noop"; totalRecords: 0 }
   | { kind: "done"; totalRecords: number };
 
-export interface BulkPushDeps {
+export interface PushLocalDeps {
   /** Returns true when team mode is enabled (URL + key both configured). */
   isTeamModeEnabled: () => Promise<boolean>;
   /** Returns the local SqliteStore, or undefined if not yet bootstrapped. */
@@ -40,13 +32,7 @@ export interface BulkPushDeps {
   drainAllPushQueues: () => Promise<void>;
 }
 
-export async function runBulkPushIfNeeded(
-  context: vscode.ExtensionContext,
-  deps: BulkPushDeps
-): Promise<BulkPushResult> {
-  if (context.globalState.get<boolean>(BULK_PUSH_DONE_KEY)) {
-    return { kind: "skipped", reason: "already-done" };
-  }
+export async function pushLocalRecordsToTeam(deps: PushLocalDeps): Promise<PushLocalResult> {
   if (!(await deps.isTeamModeEnabled())) {
     return { kind: "skipped", reason: "team-mode-off" };
   }
@@ -56,20 +42,18 @@ export async function runBulkPushIfNeeded(
   }
   const records = await local.listAllRecords();
   if (records.length === 0) {
-    await context.globalState.update(BULK_PUSH_DONE_KEY, true);
     return { kind: "noop", totalRecords: 0 };
   }
 
   // Set `push-pending:<slug>` = max analyzedAt for each project that has
   // local records. The drain will push every record with analyzedAt >
-  // watermark (which is 0/undefined on first run), so this effectively
-  // queues all records for push.
+  // watermark, so this effectively queues all unpushed records.
   await setPendingFlagsForAllProjects(local, records);
 
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: t("team.bulkPush.title", "Agent Mind Map: Bulk pushing sessions to team service…"),
+      title: t("team.push.title", "Agent Mind Map: Pushing sessions to team service…"),
       cancellable: false,
     },
     async () => {
@@ -77,11 +61,10 @@ export async function runBulkPushIfNeeded(
     }
   );
 
-  await context.globalState.update(BULK_PUSH_DONE_KEY, true);
   return { kind: "done", totalRecords: records.length };
 }
 
-async function setPendingFlagsForAllProjects(
+export async function setPendingFlagsForAllProjects(
   local: SqliteStore,
   records: SessionRecord[]
 ): Promise<void> {

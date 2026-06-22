@@ -195,5 +195,11 @@
   "team.config.applied": "Agent Mind Map: Team service configured. Reload the window to switch stores.",
   "team.config.cleared": "Agent Mind Map: Team service disabled. Reload the window to switch back to the local store.",
   "team.config.invalid": "Agent Mind Map: Invalid team service configuration: {0}",
-  "team.bulkPush.title": "Agent Mind Map: Bulk pushing sessions to team service…"
+  "team.bulkPush.title": "Agent Mind Map: Bulk pushing sessions to team service…",
+  "team.push.notEnabled": "Team mode is not configured. Set `agentMindmap.team.serverUrl` to enable.",
+  "team.push.noRecords": "No local sessions to push.",
+  "team.push.allPushed": "All sessions are already pushed.",
+  "team.push.title": "Agent Mind Map: Pushing sessions to team service…",
+  "team.push.done": "Pushed {0} session(s) to team service.",
+  "team.push.partialFail": "Some sessions failed to push. Re-run the command to retry remaining sessions. Error: {0}"
 }

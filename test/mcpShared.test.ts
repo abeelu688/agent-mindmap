@@ -1,8 +1,8 @@
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { describe, expect, it } from "vitest";
-import { bootstrapStore } from "../shared/src";
+import { describe, expect, it, vi } from "vitest";
+import { bootstrapStore, TeamStore, RemoteStore } from "../shared/src";
 import {
   renderConceptDetail,
   renderMemoryRetrieval,
@@ -12,6 +12,7 @@ import {
 } from "../shared/src/markdownRender";
 import { workspaceToSlug } from "../shared/src/paths";
 import { searchProjectRecords } from "../shared/src/searchIndex";
+import type { SqliteStore } from "../shared/src";
 import type { ConceptContextForMerge, SessionRecord } from "../shared/src/storeTypes";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
@@ -223,6 +224,51 @@ describe("SqliteStore — project revision", () => {
 
       try {
         await (store as { close?: () => Promise<void> }).close?.();
+      } catch {
+        // ignore
+      }
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("TeamStore.upsertRecord does not trigger network push", () => {
+  it("writes locally without calling remote or queue", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "amm-team-nopush-"));
+    try {
+      const result = await bootstrapStore(tmp);
+      const local = result.store as SqliteStore;
+
+      // Create a mock remote that tracks calls.
+      const remote = new RemoteStore("https://team.example.com", "key", {
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+        maxRetries: 0,
+        sleep: async () => {},
+      });
+
+      // Create a mock queue that tracks calls.
+      const enqueueSpy = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const drainSpy = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      const mockQueue = { enqueue: enqueueSpy, drain: drainSpy };
+
+      const teamStore = new TeamStore(local, remote, mockQueue);
+
+      // Upsert a record.
+      const rev = await teamStore.upsertRecord(
+        sampleRecord({ projectSlug: "proj-a", sessionId: "s1" })
+      );
+      expect(rev.revision).toBe(1);
+
+      // Queue.enqueue should NOT have been called — push is manual only.
+      expect(enqueueSpy).not.toHaveBeenCalled();
+
+      // Verify the record is in the local store.
+      const records = await local.listRecordsForProject("proj-a");
+      expect(records.length).toBe(1);
+
+      try {
+        await local.close();
       } catch {
         // ignore
       }

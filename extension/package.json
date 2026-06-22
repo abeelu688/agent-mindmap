@@ -88,6 +88,11 @@
         "command": "agent-mindmap.syncAiContext",
         "title": "Agent Mind Map: Sync AI Context (Current Project)",
         "category": "Agent Mind Map"
+      },
+      {
+        "command": "agent-mindmap.pushToTeam",
+        "title": "Agent Mind Map: Push Sessions to Team Service",
+        "category": "Agent Mind Map"
       }
     ],
     "configuration": {

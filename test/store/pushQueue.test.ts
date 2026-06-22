@@ -68,15 +68,30 @@ describe("PushQueue", () => {
     return { remote, f };
   }
 
-  it("enqueue writes pending watermark; drain pushes and clears", async () => {
+  it("enqueue writes pending flag but does NOT trigger drain (no fetch)", async () => {
+    const rec = sampleRecord({ analyzedAt: 1000 });
+    await local.upsertRecord(rec);
+    const { remote, f } = makeRemote();
+    const q = new PushQueue(local, remote);
+    await q.enqueue(rec);
+    // Pending flag should be set.
+    expect(await local.readKvJson<number>(__testing.PENDING_PREFIX + "proj-a")).toBe(1000);
+    // No drain was triggered — no fetch call.
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("explicit drain pushes records and clears pending", async () => {
     const rec = sampleRecord({ analyzedAt: 1000 });
     await local.upsertRecord(rec);
     const { remote, f } = makeRemote();
     f.mockResolvedValue(mockResponse(200, { revision: 1 }));
     const q = new PushQueue(local, remote);
     await q.enqueue(rec);
-    // drain runs synchronously inside enqueue (fire-and-forget); give it a tick.
-    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    // No fetch yet — enqueue doesn't drain.
+    expect(f).not.toHaveBeenCalled();
+    // Explicit drain pushes.
+    await q.drain();
+    expect(f).toHaveBeenCalledTimes(1);
     // Watermark should now be 1000; pending flag cleared.
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBe(1000);
     expect(await local.listKvKeys(__testing.PENDING_PREFIX)).toEqual([]);
@@ -91,9 +106,9 @@ describe("PushQueue", () => {
     f.mockResolvedValue(mockResponse(200, { revision: 1 }));
     const q = new PushQueue(local, remote);
     await q.enqueue(rec2);
-    // drain pushes ALL local records with analyzedAt > watermark (0) — that's
+    // Drain pushes ALL local records with analyzedAt > watermark (0) — that's
     // both rec1 (at=1000) and rec2 (at=2000).
-    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+    await q.drain();
     expect(f).toHaveBeenCalledTimes(2);
     // Second drain should not push again (watermark at 2000, no records above).
     await q.drain();
@@ -112,31 +127,37 @@ describe("PushQueue", () => {
     );
     const q = new PushQueue(local, remote);
     await q.enqueue(rec2);
-    // Wait for the failed drain to complete.
-    await vi.waitFor(() => expect(f.mock.calls.length).toBeGreaterThanOrEqual(2));
+    // Drain should fail after partial progress.
+    await q.drain();
     // Watermark should be at 1000 (rec1 pushed); pending flag still set for 2000.
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBe(1000);
     expect(await local.readKvJson<number>(__testing.PENDING_PREFIX + "proj-a")).toBe(2000);
   });
 
-  it("drain retries on failure with backoff", async () => {
+  it("drain failure does not auto-retry; user re-runs drain to retry", async () => {
     const rec = sampleRecord({ analyzedAt: 1000 });
     await local.upsertRecord(rec);
     const { remote, f } = makeRemote();
+    // All pushes fail.
     f.mockResolvedValue(mockResponse(500, "down"));
     const q = new PushQueue(local, remote);
     await q.enqueue(rec);
-    // First drain attempt happens immediately.
-    await vi.waitFor(() => expect(f).toHaveBeenCalled());
+    // First drain attempt.
+    await q.drain();
     const callsAfterFirst = f.mock.calls.length;
-    // Wait for at least one retry (BACKOFF_BASE_MS = 1000ms in production,
-    // but we use the real timer here — give it a generous wait).
-    // Actually the production code uses setTimeout with real time; in tests
-    // we should use fake timers. For simplicity, just verify the first
-    // attempt happened and the watermark is NOT advanced.
+    expect(callsAfterFirst).toBeGreaterThanOrEqual(1);
+    // Wait a bit to verify no auto-retry happens.
+    await new Promise((r) => setTimeout(r, 200));
+    expect(f.mock.calls.length).toBe(callsAfterFirst); // No retry.
+    // Watermark not advanced; pending flag still set.
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBeUndefined();
     expect(await local.readKvJson<number>(__testing.PENDING_PREFIX + "proj-a")).toBe(1000);
-    q.dispose();
+    // Now make push succeed and re-run drain (user re-runs command).
+    f.mockResolvedValue(mockResponse(200, { revision: 1 }));
+    await q.drain();
+    expect(f.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBe(1000);
+    expect(await local.listKvKeys(__testing.PENDING_PREFIX)).toEqual([]);
   });
 
   it("enqueue dedupes concurrent drains", async () => {
@@ -145,16 +166,10 @@ describe("PushQueue", () => {
     const { remote, f } = makeRemote();
     f.mockResolvedValue(mockResponse(200, { revision: 1 }));
     const q = new PushQueue(local, remote);
-    // Fire 5 enqueues concurrently.
-    await Promise.all([
-      q.enqueue(rec),
-      q.enqueue(rec),
-      q.enqueue(rec),
-      q.enqueue(rec),
-      q.enqueue(rec),
-    ]);
-    await vi.waitFor(() => expect(f).toHaveBeenCalled());
-    // Only one drain should have run (deduped).
+    // Set pending flag first so drain has something to do.
+    await q.enqueue(rec);
+    // Fire 2 drains concurrently — only one should actually run.
+    await Promise.all([q.drain(), q.drain()]);
     expect(f).toHaveBeenCalledTimes(1);
   });
 
@@ -177,19 +192,15 @@ describe("PushQueue", () => {
     const q = new PushQueue(local, remote);
     await q.enqueue(rec1);
     await q.enqueue(rec2);
-    await vi.waitFor(() => expect(f.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await q.drain();
+    expect(f.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-a")).toBe(1000);
     expect(await local.readKvJson<number>(__testing.WATERMARK_PREFIX + "proj-b")).toBe(2000);
   });
 
-  it("dispose clears retry timers", async () => {
-    const rec = sampleRecord({ analyzedAt: 1000 });
-    await local.upsertRecord(rec);
-    const { remote, f } = makeRemote();
-    f.mockResolvedValue(mockResponse(500, "down"));
+  it("dispose is a no-op (no retry timers to clear)", () => {
+    const { remote } = makeRemote();
     const q = new PushQueue(local, remote);
-    await q.enqueue(rec);
-    await vi.waitFor(() => expect(f).toHaveBeenCalled());
     // Should not throw.
     q.dispose();
   });
@@ -199,8 +210,5 @@ describe("PushQueue — constants", () => {
   it("uses the documented key prefixes", () => {
     expect(__testing.WATERMARK_PREFIX).toBe("push-watermark:");
     expect(__testing.PENDING_PREFIX).toBe("push-pending:");
-  });
-  it("caps backoff at 5 minutes", () => {
-    expect(__testing.BACKOFF_MAX_MS).toBe(5 * 60 * 1000);
   });
 });

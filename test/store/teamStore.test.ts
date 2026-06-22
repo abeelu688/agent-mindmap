@@ -157,8 +157,8 @@ describe("TeamStore — reads delegate to remote", () => {
   });
 });
 
-describe("TeamStore — upsertRecord writes local + enqueues", () => {
-  it("writes to local store and enqueues push", async () => {
+describe("TeamStore — upsertRecord writes local only (no auto-push)", () => {
+  it("writes to local store without calling queue or remote", async () => {
     const f = vi.fn().mockResolvedValue(mockResponse(200, { revision: 1 }));
     const remote = new RemoteStore("https://x", "k", {
       fetchImpl: f as unknown as typeof fetch,
@@ -173,32 +173,10 @@ describe("TeamStore — upsertRecord writes local + enqueues", () => {
     expect(result.revision).toBe(1);
     expect(local.upsurtCalls).toHaveLength(1);
     expect(local.upsurtCalls[0]).toBe(rec);
-    expect(queue.enqueued).toHaveLength(1);
-    expect(queue.enqueued[0]).toBe(rec);
-    // Should NOT have POSTed synchronously — the push is async via the queue.
+    // upsertRecord no longer calls queue.enqueue — push is manual only.
+    expect(queue.enqueued).toHaveLength(0);
+    // Should NOT have POSTed synchronously.
     expect(f).not.toHaveBeenCalled();
-  });
-
-  it("enqueue failure does not break the local write or the return", async () => {
-    const f = vi.fn();
-    const remote = new RemoteStore("https://x", "k", {
-      fetchImpl: f as unknown as typeof fetch,
-      maxRetries: 0,
-      sleep: async () => {},
-    });
-    const local = makeLocalStub();
-    const queue: PushQueueLike = {
-      enqueue: async () => {
-        throw new Error("queue broken");
-      },
-      drain: async () => {},
-    };
-    const ts = new TeamStore(local, remote, queue);
-    const rec = sampleRecord();
-    // Should not throw — enqueue errors are swallowed.
-    const result = await ts.upsertRecord(rec);
-    expect(result.revision).toBe(1);
-    expect(local.upsurtCalls).toHaveLength(1);
   });
 });
 

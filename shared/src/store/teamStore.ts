@@ -15,15 +15,14 @@ import type { Store } from "./store";
 /**
  * `TeamStore` is the team-mode `Store` — a write-through wrapper that
  * combines a local `SqliteStore` (the working copy) with a `RemoteStore`
- * (the team service HTTP client) and a `PushQueue` (async drain to the
- * team service with retry + watermark).
+ * (the team service HTTP client) and a `PushQueue` (drain to the team
+ * service with watermark tracking).
  *
  * Read paths delegate to `RemoteStore` (the team service is authoritative
  * for cross-machine aggregation). Write paths:
- *   - `upsertRecord` → local `SqliteStore` synchronously + enqueue push.
- *     Local write is fast (sub-millisecond); push is async so analysis
- *     never blocks on network (decision: "never block local analysis on
- *     push success").
+ *   - `upsertRecord` → local `SqliteStore` only. Push to the team service
+ *     happens when the user explicitly runs the "Push Sessions to Team
+ *     Service" command (not automatically on every write).
  *   - `writeConceptTrieMerge` / `writeOntologyIndex` / etc → no-op. The
  *     Go merge worker on the team service owns these; client writes have
  *     no team-mode equivalent.
@@ -32,9 +31,8 @@ import type { Store } from "./store";
  *   - `deleteProjectRecords` / `clearOntologyCache` → throw
  *     `RemoteStoreNotSupported` (no delete surface in v1).
  *
- * The push queue's drain is fire-and-forget — callers don't await it.
- * The queue persists its watermark in the local `kv` table so restarts
- * resume from the last successfully-pushed `analyzedAt`.
+ * The push queue persists its watermark in the local `kv` table so
+ * restarts resume from the last successfully-pushed `analyzedAt`.
  */
 export class TeamStore implements Store {
   constructor(
@@ -68,17 +66,9 @@ export class TeamStore implements Store {
   }
 
   async upsertRecord(record: SessionRecord): Promise<{ revision: number }> {
-    // Local write first — keeps the working copy current and gives us a
-    // revision number to return. The push to the team service is async
-    // via the queue.
+    // Local write only — push to the team service happens when the user
+    // explicitly runs the "Push Sessions to Team Service" command.
     const result = await this.local.upsertRecord(record);
-    // Fire-and-forget enqueue; the queue's drain handles retry/backoff.
-    void this.queue.enqueue(record).catch((err) => {
-      // Log + swallow — push failures must not break local analysis.
-      console.warn(
-        `[agent-mindmap] team push queue enqueue failed for ${record.meta.projectSlug}/${record.meta.sessionId}: ${(err as Error).message}`
-      );
-    });
     return result;
   }
 
@@ -192,8 +182,8 @@ export class TeamStore implements Store {
  * interface so `TeamStore` can reference it without a circular import.
  */
 export interface PushQueueLike {
-  /** Enqueue a record for async push to the team service. */
+  /** Enqueue a record — writes the pending flag but does NOT trigger a drain. */
   enqueue(record: SessionRecord): Promise<void>;
-  /** Drain pending pushes. Called on activation + after each enqueue. */
+  /** Drain pending pushes. Called when the user runs the push-to-team command. */
   drain(): Promise<void>;
 }
