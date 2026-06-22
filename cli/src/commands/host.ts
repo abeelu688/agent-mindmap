@@ -19,7 +19,7 @@ function getCursorProjectsRoot(): string {
 }
 
 function getClaudeProjectsRoot(): string {
-  return path.join(os.homedir(), ".claude");
+  return path.join(os.homedir(), ".claude", "projects");
 }
 
 export const hostCommand = new Command("host")

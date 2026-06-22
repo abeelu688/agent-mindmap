@@ -11,6 +11,8 @@ import { doctorCommand } from "./commands/doctor";
 import { configCommand } from "./commands/config";
 import { hostCommand } from "./commands/host";
 import { modelCommand } from "./commands/model";
+import { sessionCommand } from "./commands/session";
+import { projectCommand } from "./commands/project";
 import { resolveGlobalFlags } from "./ui/flags";
 import { applyGlobalFlags, setJsonMode } from "./ui/logger";
 
@@ -37,6 +39,8 @@ program.addCommand(doctorCommand);
 program.addCommand(configCommand);
 program.addCommand(hostCommand);
 program.addCommand(modelCommand);
+program.addCommand(sessionCommand);
+program.addCommand(projectCommand);
 
 // Global flag handling
 program.hook("preAction", () => {

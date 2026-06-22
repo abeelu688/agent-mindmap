@@ -1,0 +1,294 @@
+/**
+ * `agent-mindmap session` — session-related commands.
+ */
+import { Command } from "commander";
+import * as os from "os";
+import * as path from "path";
+import { listSessions, analyzeSession, type ListSessionsResult } from "@agent-mindmap/core";
+import { CliConfigStore } from "../config/configStore";
+import {
+  log,
+  logSuccess,
+  logError,
+  logWarn,
+  isJsonMode,
+  printJson,
+  createSpinner,
+} from "../ui/logger";
+import { buildCliHostAccess, buildCliAnalyzeSessionDepsAsync } from "../adapters/analyzeDeps";
+
+// ────────────────────────────────────────────────────────────────────────────
+// session list
+// ────────────────────────────────────────────────────────────────────────────
+
+async function runSessionList(
+  cwd: string,
+  storeDir: string | undefined,
+  options: { allHosts?: boolean; limit?: number; json?: boolean }
+) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+
+  const hostAccess = buildCliHostAccess(cwd);
+
+  const result: ListSessionsResult | undefined = await listSessions({ hostAccess });
+
+  if (!result) {
+    logWarn("No sessions found. Is this a Cursor or Claude Code project?");
+    return;
+  }
+
+  let sessions = result.sessions;
+  if (options.limit) {
+    sessions = sessions.slice(0, options.limit);
+  }
+
+  if (isJsonMode()) {
+    printJson(
+      sessions.map((s) => ({
+        id: s.id,
+        label: s.label,
+        mtimeMs: s.mtimeMs,
+        hostId: s.hostId,
+        projectSlug: s.projectSlug,
+      }))
+    );
+    return;
+  }
+
+  if (sessions.length === 0) {
+    logWarn("No sessions found.");
+    return;
+  }
+
+  for (const s of sessions) {
+    const age = formatAge(s.mtimeMs);
+    log(`  ${s.id.slice(0, 8)}  ${age.padStart(6)}  ${s.label}`);
+  }
+  log(`\n${sessions.length} session(s)`);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// session show
+// ────────────────────────────────────────────────────────────────────────────
+
+async function runSessionShow(cwd: string, storeDir: string | undefined, sessionId: string) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+
+  const hostAccess = buildCliHostAccess(cwd);
+  const result = await listSessions({ hostAccess });
+
+  if (!result) {
+    logError("No sessions found.");
+    return;
+  }
+
+  const session = result.sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
+  if (!session) {
+    logError(`Session not found: ${sessionId}`);
+    process.exit(1);
+  }
+
+  // Check library for existing record
+  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  let record: import("@agent-mindmap/shared").SessionRecord | undefined;
+  try {
+    const { readRecord } = await import("@agent-mindmap/core");
+    record = await readRecord(storeDirPath, result.projectSlug, session.id);
+  } catch {
+    // No record
+  }
+
+  const info = {
+    id: session.id,
+    label: session.label,
+    hostId: session.hostId,
+    projectSlug: session.projectSlug,
+    transcriptPath: session.filePath,
+    mtimeMs: session.mtimeMs,
+    analyzed: !!record,
+    analyzedAt: record?.meta.analyzedAt,
+    outlineTopics: record?.outline?.topics?.length ?? 0,
+    llmProvider: record?.meta.llm?.provider,
+    llmModel: record?.meta.llm?.model,
+  };
+
+  if (isJsonMode()) {
+    printJson(info);
+    return;
+  }
+
+  log(`Session: ${info.label}`);
+  log(`  ID:            ${info.id}`);
+  log(`  Host:          ${info.hostId ?? "(unknown)"}`);
+  log(`  Project:       ${info.projectSlug}`);
+  log(`  Transcript:    ${info.transcriptPath}`);
+  log(`  Modified:      ${new Date(info.mtimeMs).toISOString()}`);
+  if (info.analyzed) {
+    logSuccess(`Analyzed at ${new Date(info.analyzedAt!).toISOString()}`);
+    log(`  Topics:        ${info.outlineTopics}`);
+    log(`  LLM:           ${info.llmProvider}${info.llmModel ? ` / ${info.llmModel}` : ""}`);
+  } else {
+    logWarn("Not yet analyzed");
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// session analyze
+// ────────────────────────────────────────────────────────────────────────────
+
+async function runSessionAnalyze(
+  cwd: string,
+  storeDir: string | undefined,
+  options: { latest?: boolean; force?: boolean; sessionId?: string }
+) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+
+  const hostAccess = buildCliHostAccess(cwd);
+  const result = await listSessions({ hostAccess });
+
+  if (!result || result.sessions.length === 0) {
+    logError("No sessions found.");
+    process.exit(1);
+  }
+
+  let session = result.sessions[0]!;
+  if (!options.latest && options.sessionId) {
+    const found = result.sessions.find(
+      (s) => s.id === options.sessionId || s.id.startsWith(options.sessionId)
+    );
+    if (!found) {
+      logError(`Session not found: ${options.sessionId}`);
+      process.exit(1);
+    }
+    session = found;
+  }
+
+  const spinner = createSpinner(`Analyzing session: ${session.label}`);
+  spinner.start();
+
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  // Handle SIGINT
+  const onSigint = () => {
+    controller.abort();
+    spinner.fail("Cancelled");
+    process.exit(130);
+  };
+  process.on("SIGINT", onSigint);
+
+  const progress: import("@agent-mindmap/core").ProgressReporter = {
+    report(update) {
+      const msg = typeof update === "string" ? update : (update.message ?? "");
+      spinner.text = msg || `Analyzing: ${session.label}`;
+    },
+  };
+
+  try {
+    const deps = await buildCliAnalyzeSessionDepsAsync(cwd, config, signal, progress);
+    const handle = await analyzeSession(session, deps, { forceRefresh: options.force });
+
+    spinner.succeed("Analysis complete");
+
+    // Wait for background work (code-ref queue drain) — critical for CLI
+    const bgSpinner = createSpinner("Draining code-ref queue…");
+    if (handle.completed) {
+      bgSpinner.start();
+      await handle.completed();
+      bgSpinner.succeed("Code-ref queue drained");
+    }
+
+    const loaded = handle.result;
+    if (isJsonMode()) {
+      printJson({
+        sessionId: loaded.session.id,
+        label: loaded.session.label,
+        source: loaded.source,
+        fromLibrary: loaded.fromLibrary,
+        topics: loaded.mindMap?.children?.length ?? 0,
+      });
+      return;
+    }
+
+    logSuccess(`Session: ${loaded.session.label}`);
+    log(`  Source: ${loaded.source}${loaded.fromLibrary ? " (from library)" : ""}`);
+    log(`  Topics: ${loaded.mindMap?.children?.length ?? 0}`);
+  } catch (err) {
+    spinner.fail("Analysis failed");
+    if (err instanceof Error) {
+      logError(err.message);
+    } else {
+      logError(String(err));
+    }
+    process.exit(1);
+  } finally {
+    process.off("SIGINT", onSigint);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+function formatAge(mtimeMs: number): string {
+  const diff = Date.now() - mtimeMs;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Command registration
+// ────────────────────────────────────────────────────────────────────────────
+
+export const sessionCommand = new Command("session")
+  .description("Manage and analyze agent chat sessions")
+  .addCommand(
+    new Command("list")
+      .description("List sessions for the current workspace")
+      .option("--all-hosts", "Include sessions from all hosts")
+      .option("--limit <n>", "Limit number of sessions", parseInt)
+      .action(async () => {
+        const opts = sessionCommand.optsWithGlobals();
+        const cmd = opts._command as Command | undefined;
+        const cmdOpts = cmd?.opts() ?? {};
+        await runSessionList(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined,
+          { allHosts: cmdOpts.allHosts, limit: cmdOpts.limit, json: opts.json }
+        );
+      })
+  )
+  .addCommand(
+    new Command("show")
+      .description("Show session metadata")
+      .argument("<id>", "Session ID (or prefix)")
+      .action(async (sessionId: string) => {
+        const opts = sessionCommand.optsWithGlobals();
+        await runSessionShow(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined,
+          sessionId
+        );
+      })
+  )
+  .addCommand(
+    new Command("analyze")
+      .description("Analyze a session using the LLM pipeline")
+      .option("--latest", "Analyze the most recent session (default)")
+      .option("--force", "Force re-analysis even if cached")
+      .argument("[id]", "Session ID (or prefix)")
+      .action(async (sessionId?: string) => {
+        const opts = sessionCommand.optsWithGlobals();
+        const cmdOpts = sessionCommand.commands.find((c) => c.name() === "analyze")?.opts() ?? {};
+        await runSessionAnalyze(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined,
+          { latest: !sessionId, force: cmdOpts.force, sessionId }
+        );
+      })
+  );
