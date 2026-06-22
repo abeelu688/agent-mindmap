@@ -7,8 +7,13 @@ import { uiTranslate, t } from "../l10n/uiTranslate";
 import { ensureModelSelected, readLlmOptions, resolveLlmProviderId } from "../llmOptions";
 import { ensureStore } from "../store/sessionStore";
 import { getStore } from "../store/storeClient";
-import { runFinalRootRefresh } from "../pipeline/snapshotHierarchy";
+import {
+  runBatchSnapshotPipeline,
+  refreshSnapshotForSession,
+  runFinalRootRefresh,
+} from "../pipeline/snapshotHierarchy";
 import { clearProjectAnalysisCache } from "../store/clearProjectAnalysisCache";
+import { readSnapshotManifest } from "../store/mergeSnapshot";
 import { flushPendingCodeRefRefreshForProject, purgeCodeRefQueueForProject } from "../codeRefQueue";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import { getProvider } from "../llm";
@@ -39,7 +44,7 @@ import {
   getPendingBatchNo,
   getPendingMindMap,
 } from "../batch/batchStatus";
-import type { SessionRecord } from "../store/storeTypes";
+import type { SessionRecord, SnapshotManifest } from "../store/storeTypes";
 import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
 
 function formatAnalyzeProjectSummary(result: AnalyzeProjectResult): string {
@@ -216,11 +221,23 @@ export async function commandAnalyzeAndMergeCurrentProject(
             .get<number>("library.mergeFullReconcileEvery", 4) ?? 4;
         let batchOntologyFailed = false;
 
+        // Read existing snapshot manifest for stable batch partition (avoids
+        // re-merging unchanged leaves when new sessions appear).
+        let snapshotManifest: SnapshotManifest | undefined;
+        if (!mode.forceRefresh) {
+          try {
+            snapshotManifest = await readSnapshotManifest(storeDir, slug);
+          } catch {
+            // Missing manifest is fine — will fall back to legacy chunking
+          }
+        }
+
         const deps: LoadDeps = { context, signal, progress };
         const result = await runProjectSessionBatches(sessions, slug, host, deps, {
           forceRefresh: mode.forceRefresh,
           skipAutoMerge: true,
           batchSize: 5,
+          snapshotManifest,
           onBatchDone: async (info: AnalyzeProjectBatchInfo) => {
             if (signal.aborted) {
               return;
@@ -228,7 +245,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
 
             const cached = info.skippedFresh;
             agentLog.info(
-              `[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} fresh=${info.freshlyAnalyzedSessionIds.length} batchSessionIds=${info.batchSessionIds.join(",")} freshSessionIds=${info.freshlyAnalyzedSessionIds.join(",")}`
+              `[onBatchDone] batchNo=${info.batchNo} processed=${info.processed}/${info.total} analyzed=${info.analyzed} skippedFresh=${info.skippedFresh} failed=${info.failed} fresh=${info.freshlyAnalyzedSessionIds.length} leafId=${info.leafId ?? "(none)"} leafAction=${info.leafAction ?? "(none)"} batchSessionIds=${info.batchSessionIds.join(",")} freshSessionIds=${info.freshlyAnalyzedSessionIds.join(",")}`
             );
 
             // Refresh in-memory record cache for every session in this
@@ -249,10 +266,6 @@ export async function commandAnalyzeAndMergeCurrentProject(
               return;
             }
 
-            // Pure-cache batch with an existing snapshot hierarchy: skip
-            // merge entirely. The on-disk concept-trie.json is still valid
-            // because nothing in the session set changed.
-            const noFreshSessions = info.freshlyAnalyzedSessionIds.length === 0;
             const batchRecords: SessionRecord[] = [];
             for (const sessionId of info.batchSessionIds) {
               const rec = projectRecordsById.get(sessionId);
@@ -286,10 +299,102 @@ export async function commandAnalyzeAndMergeCurrentProject(
                     forceRefresh: mode.forceRefresh,
                   }
                 );
-              } else if (noFreshSessions) {
-                // All cache hits → no LLM merge needed. Read the existing
-                // concept-trie merge record from disk so the panel stays
-                // up to date when the user opens the panel mid-run.
+              } else if (info.leafAction === "reuse") {
+                // Stable partition: leaf is unchanged on disk → skip merge.
+                agentLog.info(
+                  `[onBatchDone] batch ${info.batchNo} leaf ${info.leafId} is stable, skipping merge`
+                );
+                progress.report(
+                  t(
+                    "ui.batch.progress.stableLeafReuse",
+                    "Batch {0}/{1}: snapshot leaf unchanged, skipping merge…",
+                    info.processed,
+                    info.total
+                  )
+                );
+                // Lazy-load existing merge for first reuse batch only.
+                if (!panel.getMindMapData()) {
+                  const existingMerge = await (await getStore()).readConceptTrieMerge();
+                  if (existingMerge) {
+                    conceptMerge = existingMerge;
+                  }
+                }
+              } else if (info.leafAction === "rebuild") {
+                // Stable partition: leaf needs rebuilding (orphaned or appended).
+                progress.report(
+                  t(
+                    "ui.batch.progress.rebuildLeaf",
+                    "Rebuilding snapshot leaf for {0} changed session(s)…",
+                    info.freshlyAnalyzedSessionIds.length
+                  )
+                );
+                if (info.freshlyAnalyzedSessionIds.length > 0) {
+                  conceptMerge = await refreshSnapshotsForFreshSessions(
+                    storeDir,
+                    [...projectRecordsById.values()],
+                    info.freshlyAnalyzedSessionIds,
+                    {
+                      projectSlug: slug,
+                      conceptLlm,
+                      provider,
+                      signal,
+                      progress,
+                      llmTimeoutMs: conceptLlm.timeoutMs,
+                    }
+                  );
+                } else {
+                  // All cache hits but leaf structure changed (orphaned) —
+                  // still need to refresh the leaf to remove the deleted session.
+                  const representativeSid = info.batchSessionIds[0];
+                  if (representativeSid) {
+                    conceptMerge = await refreshSnapshotForSession(
+                      {
+                        storeDir,
+                        projectSlug: slug,
+                        allRecords: [...projectRecordsById.values()],
+                        provider,
+                        providerId: conceptLlm.providerId,
+                        model: conceptLlm.model,
+                        hostId: conceptLlm.hostId,
+                        outputLanguage: conceptLlm.outputLanguage,
+                        llmTimeoutMs: conceptLlm.timeoutMs,
+                        signal,
+                        forceReattach: true,
+                        sessionId: representativeSid,
+                      },
+                      progress
+                    );
+                  }
+                }
+              } else if (info.leafAction === "new") {
+                // Stable partition: brand-new leaf with new sessions.
+                progress.report(
+                  t(
+                    "ui.batch.progress.newLeaf",
+                    "Creating new snapshot leaf for {0} session(s)…",
+                    info.batchSessionIds.length
+                  )
+                );
+                conceptMerge = await runBatchSnapshotPipeline(
+                  {
+                    storeDir,
+                    projectSlug: slug,
+                    allRecords: [...projectRecordsById.values()],
+                    batchRecords,
+                    batchNo: info.batchNo,
+                    provider,
+                    providerId: conceptLlm.providerId,
+                    model: conceptLlm.model,
+                    hostId: conceptLlm.hostId,
+                    outputLanguage: conceptLlm.outputLanguage,
+                    llmTimeoutMs: conceptLlm.timeoutMs,
+                    signal,
+                    forceReattach: true,
+                  },
+                  progress
+                );
+              } else if (info.freshlyAnalyzedSessionIds.length === 0) {
+                // Legacy mode: all cache hits → no LLM merge needed.
                 agentLog.info(`[onBatchDone] batch ${info.batchNo} all cache hits, skipping merge`);
                 progress.report(
                   t(
@@ -307,8 +412,7 @@ export async function commandAnalyzeAndMergeCurrentProject(
                   }
                 }
               } else {
-                // Incremental: refresh only the snapshot leaves whose
-                // sessions actually changed, then cascade up.
+                // Legacy mode: incremental refresh for sessions that changed.
                 progress.report(
                   t(
                     "ui.batch.progress.incrementalMerge",

@@ -32,6 +32,11 @@ import { resolveAndBuildConceptMergeAsync } from "./store/conceptMergeContext";
 import { runBatchSnapshotPipeline, refreshSnapshotForSession } from "./pipeline/snapshotHierarchy";
 import { readSnapshotManifest } from "./store/mergeSnapshot";
 import {
+  computeStableBatchPartition,
+  computeBatchGroups,
+  type LeafAction,
+} from "./pipeline/stableBatchPartition";
+import {
   buildRecordMeta,
   buildSessionRecord,
   isRecordFresh,
@@ -42,7 +47,7 @@ import { t } from "./l10n/uiTranslate";
 import { readSessionFile } from "./transcript/listSessions";
 import type { SessionMeta } from "./mindmap/origin";
 import type { AgentHost } from "./host/types";
-import type { SessionRecord } from "./store/storeTypes";
+import type { SessionRecord, SnapshotManifest } from "./store/storeTypes";
 import type { BuildOptions, MindMapRoot, TranscriptSession } from "./transcript/types";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -262,6 +267,13 @@ export type AnalyzeProjectOptions = {
   loadSessionFn?: typeof loadSession;
   batchSize?: number;
   onBatchDone?: (info: AnalyzeProjectBatchInfo) => Promise<void> | void;
+  /**
+   * Existing snapshot manifest for stable partition. When provided (and not
+   * force-refresh), `runProjectSessionBatches` uses stable batch partition
+   * to avoid re-merging unchanged leaves. When undefined, falls back to
+   * legacy mtime-desc chunking.
+   */
+  snapshotManifest?: SnapshotManifest;
 };
 
 export type AnalyzeProjectResult = {
@@ -292,6 +304,19 @@ export type AnalyzeProjectBatchInfo = AnalyzeProjectResult & {
    * pure cache hit and the caller can skip merge work entirely.
    */
   freshlyAnalyzedSessionIds: string[];
+  /**
+   * Snapshot hierarchy leaf id this batch maps to (e.g. "l1-0003").
+   * Undefined when not using stable partition (legacy mode).
+   */
+  leafId?: string;
+  /**
+   * What to do with this leaf after batch analysis:
+   * - "reuse": leaf is stable on disk, no merge needed
+   * - "rebuild": leaf needs rebuilding (orphaned or appended sessions)
+   * - "new": brand-new leaf to create
+   * Undefined when not using stable partition (legacy mode).
+   */
+  leafAction?: LeafAction;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -820,12 +845,64 @@ export async function runProjectSessionBatches(
     t("ui.batch.progress.start", "{0} session(s) total, starting batch analysis…", total)
   );
 
+  // ── Stable batch partition ────────────────────────────────────────────
+  // When a snapshot manifest exists and we're not force-refreshing, compute
+  // a stable partition that keeps existing leaf assignments unchanged and
+  // only creates new leaves for new sessions. This avoids re-merging stable
+  // snapshot leaves when the session list changes.
+  const useStablePartition =
+    !forceRefresh && options.snapshotManifest && options.snapshotManifest.nodes.length > 0;
+
+  const partition = useStablePartition
+    ? computeStableBatchPartition(sessions, options.snapshotManifest, { groupSize: batchSize })
+    : undefined;
+
+  // Build a mapping: sessionId → { leafId, action } from the partition plan
+  const sessionLeafMap = new Map<string, { leafId: string; action: LeafAction }>();
+  if (partition) {
+    const groups = computeBatchGroups(partition);
+    for (const g of groups) {
+      sessionLeafMap.set(g.sessionId, { leafId: g.leafId, action: g.action });
+    }
+  }
+
+  // Analysis order: use partition's analysisOrder (mtime desc) when available,
+  // otherwise use the original session order (already mtime desc from listSessions).
+  const analysisSessions = partition?.analysisOrder ?? sessions;
+
+  // Track per-leaf progress: how many sessions processed vs. total per leaf.
+  // When all sessions of a leaf are processed, fire onBatchDone for that leaf.
+  const leafSessionCounts = new Map<string, { total: number; processed: number }>();
+  const leafSessionIds = new Map<string, string[]>();
+  const leafFreshlyAnalyzed = new Map<string, string[]>();
+
+  if (partition) {
+    for (const leaf of partition.stableLeaves) {
+      leafSessionCounts.set(leaf.leafId, { total: leaf.sessionIds.length, processed: 0 });
+      leafSessionIds.set(leaf.leafId, []);
+      leafFreshlyAnalyzed.set(leaf.leafId, []);
+    }
+    for (const leaf of partition.rebuildLeaves) {
+      leafSessionCounts.set(leaf.leafId, { total: leaf.sessionIds.length, processed: 0 });
+      leafSessionIds.set(leaf.leafId, []);
+      leafFreshlyAnalyzed.set(leaf.leafId, []);
+    }
+    for (const leaf of partition.newLeaves) {
+      leafSessionCounts.set(leaf.leafId, { total: leaf.sessionIds.length, processed: 0 });
+      leafSessionIds.set(leaf.leafId, []);
+      leafFreshlyAnalyzed.set(leaf.leafId, []);
+    }
+  }
+
   let batchNo = 0;
-  let batchSessionIds: string[] = [];
-  let freshlyAnalyzedSessionIds: string[] = [];
-  for (let i = 0; i < sessions.length; i++) {
-    const session = sessions[i]!;
-    batchSessionIds.push(session.id);
+  // Legacy mode accumulators (only used when partition is undefined)
+  let legacyBatchSessionIds: string[] = [];
+  let legacyFreshlyAnalyzedSessionIds: string[] = [];
+
+  for (let i = 0; i < analysisSessions.length; i++) {
+    const session = analysisSessions[i]!;
+    const leafInfo = sessionLeafMap.get(session.id);
+
     const { progress: itemProgress, reportComplete } = createBatchItemProgress(
       progress,
       i,
@@ -854,7 +931,11 @@ export async function runProjectSessionBatches(
         reportComplete(t("ui.batch.item.fallbackTurnView", "Fell back to chronological view"));
       } else {
         // source === "topic" and not from library → real LLM analysis ran
-        freshlyAnalyzedSessionIds.push(session.id);
+        if (leafInfo) {
+          leafFreshlyAnalyzed.get(leafInfo.leafId)?.push(session.id);
+        } else {
+          legacyFreshlyAnalyzedSessionIds.push(session.id);
+        }
         reportComplete(t("ui.batch.item.done", "Analysis completed"));
       }
     } catch (err) {
@@ -871,28 +952,66 @@ export async function runProjectSessionBatches(
       agentLog.warn(`Batch analyze failed for ${session.id}`, { error: String(err) });
     }
 
-    const processed = analyzed + failed;
-    const completedBatch = processed > 0 && processed % batchSize === 0;
-    const finishedAll = processed === total;
-    if ((completedBatch || finishedAll) && onBatchDone) {
-      batchNo += 1;
-      await onBatchDone({
-        projectSlug,
-        total,
-        analyzed,
-        skippedFresh,
-        turnFallbacks,
-        cliMissingCount,
-        jsonParseFailures,
-        failed,
-        failures,
-        batchNo,
-        processed,
-        batchSessionIds,
-        freshlyAnalyzedSessionIds,
-      });
-      batchSessionIds = [];
-      freshlyAnalyzedSessionIds = [];
+    // ── Batch boundary detection ──────────────────────────────────────
+    if (leafInfo && partition) {
+      // Stable partition mode: fire onBatchDone when all sessions of a
+      // leaf have been processed.
+      const counts = leafSessionCounts.get(leafInfo.leafId);
+      if (counts) {
+        counts.processed += 1;
+        leafSessionIds.get(leafInfo.leafId)?.push(session.id);
+
+        if (counts.processed === counts.total && onBatchDone) {
+          batchNo += 1;
+          const processed = analyzed + failed;
+          await onBatchDone({
+            projectSlug,
+            total,
+            analyzed,
+            skippedFresh,
+            turnFallbacks,
+            cliMissingCount,
+            jsonParseFailures,
+            failed,
+            failures,
+            batchNo,
+            processed,
+            batchSessionIds: leafSessionIds.get(leafInfo.leafId) ?? [],
+            freshlyAnalyzedSessionIds: leafFreshlyAnalyzed.get(leafInfo.leafId) ?? [],
+            leafId: leafInfo.leafId,
+            leafAction: leafInfo.action,
+          });
+          // Reset per-leaf tracking
+          leafSessionIds.set(leafInfo.leafId, []);
+          leafFreshlyAnalyzed.set(leafInfo.leafId, []);
+        }
+      }
+    } else if (onBatchDone) {
+      // Legacy mode: fire onBatchDone at fixed batch boundaries.
+      legacyBatchSessionIds.push(session.id);
+      const processed = analyzed + failed;
+      const completedBatch = processed > 0 && processed % batchSize === 0;
+      const finishedAll = processed === total;
+      if (completedBatch || finishedAll) {
+        batchNo += 1;
+        await onBatchDone({
+          projectSlug,
+          total,
+          analyzed,
+          skippedFresh,
+          turnFallbacks,
+          cliMissingCount,
+          jsonParseFailures,
+          failed,
+          failures,
+          batchNo,
+          processed,
+          batchSessionIds: legacyBatchSessionIds,
+          freshlyAnalyzedSessionIds: legacyFreshlyAnalyzedSessionIds,
+        });
+        legacyBatchSessionIds = [];
+        legacyFreshlyAnalyzedSessionIds = [];
+      }
     }
   }
 
