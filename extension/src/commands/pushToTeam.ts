@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { notifyInfo, notifyWarning } from "../notify";
 import { t } from "../l10n/uiTranslate";
 import { isTeamModeEnabled, getLocalSqliteStore, drainAllPushQueues } from "../store/storeClient";
+import { getTeamServerUrl } from "../store/storeFactory";
 import { setPendingFlagsForAllProjects } from "../store/bulkPush";
 
 /**
@@ -16,11 +17,17 @@ import { setPendingFlagsForAllProjects } from "../store/bulkPush";
 export async function commandPushToTeam(): Promise<void> {
   // 1. Check team mode is enabled.
   if (!(await isTeamModeEnabled())) {
+    const hasServerUrl = getTeamServerUrl().length > 0;
     notifyWarning(
-      t(
-        "team.push.notEnabled",
-        "Team mode is not configured. Set `agentMindmap.team.serverUrl` to enable."
-      )
+      hasServerUrl
+        ? t(
+            "team.push.missingApiKey",
+            "Team service URL is set but the API key is missing. Run 'Agent Mind Map: Configure Team Service' to store the key in SecretStorage (not settings.json)."
+          )
+        : t(
+            "team.push.notEnabled",
+            "Team mode is not configured. Set `agentMindmap.team.serverUrl` to enable."
+          )
     );
     return;
   }

@@ -197,6 +197,7 @@
   "team.config.invalid": "Agent Mind Map: Invalid team service configuration: {0}",
   "team.bulkPush.title": "Agent Mind Map: Bulk pushing sessions to team service…",
   "team.push.notEnabled": "Team mode is not configured. Set `agentMindmap.team.serverUrl` to enable.",
+  "team.push.missingApiKey": "Team service URL is set but the API key is missing. Run 'Agent Mind Map: Configure Team Service' to store the key in SecretStorage (not settings.json).",
   "team.push.noRecords": "No local sessions to push.",
   "team.push.allPushed": "All sessions are already pushed.",
   "team.push.title": "Agent Mind Map: Pushing sessions to team service…",

@@ -173,6 +173,12 @@ export function disposePushQueues(): void {
   }
 }
 
+/** Drop memoized team remote store so config / SecretStorage changes take effect without reload. */
+export function resetTeamStoreCache(): void {
+  remoteStorePromise = undefined;
+  teamCache.clear();
+}
+
 /**
  * For tests: drop the memoized stores so the next call rebuilds. Pass a dir to
  * invalidate just one entry, or omit to clear all.

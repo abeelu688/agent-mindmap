@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { notifyInfo, notifyWarning } from "../notify";
 import { t } from "../l10n/uiTranslate";
 import { getTeamServerUrl, setTeamApiKey } from "../store/storeFactory";
+import { resetTeamStoreCache } from "../store/storeClient";
 
 /**
  * Command: `agent-mindmap.configureTeamService`.
@@ -39,6 +40,7 @@ export async function commandConfigureTeamService(context: vscode.ExtensionConte
   if (!trimmedUrl) {
     // Disabling: clear the API key too.
     await setTeamApiKey(context, "");
+    resetTeamStoreCache();
     notifyInfo(
       t(
         "team.config.cleared",
@@ -70,6 +72,7 @@ export async function commandConfigureTeamService(context: vscode.ExtensionConte
     return;
   }
   await setTeamApiKey(context, trimmedKey);
+  resetTeamStoreCache();
   notifyInfo(
     t(
       "team.config.applied",

@@ -5,11 +5,16 @@ import type { SqliteStore, SessionRecord } from "../../shared/src";
 const mockIsTeamModeEnabled = vi.fn<() => Promise<boolean>>();
 const mockGetLocalSqliteStore = vi.fn<() => Promise<SqliteStore | undefined>>();
 const mockDrainAllPushQueues = vi.fn<() => Promise<void>>();
+const mockGetTeamServerUrl = vi.fn<() => string>();
 
 vi.mock("../../extension/src/store/storeClient", () => ({
   isTeamModeEnabled: (...args: unknown[]) => mockIsTeamModeEnabled(...args),
   getLocalSqliteStore: (...args: unknown[]) => mockGetLocalSqliteStore(...args),
   drainAllPushQueues: (...args: unknown[]) => mockDrainAllPushQueues(...args),
+}));
+
+vi.mock("../../extension/src/store/storeFactory", () => ({
+  getTeamServerUrl: (...args: unknown[]) => mockGetTeamServerUrl(...args),
 }));
 
 // Mock the bulkPush module.
@@ -65,12 +70,21 @@ function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord
 describe("commandPushToTeam", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetTeamServerUrl.mockReturnValue("");
   });
 
   it("shows warning when team mode is not enabled", async () => {
     mockIsTeamModeEnabled.mockResolvedValue(false);
     await commandPushToTeam();
     expect(mockNotifyWarning).toHaveBeenCalledWith("team.push.notEnabled");
+    expect(mockDrainAllPushQueues).not.toHaveBeenCalled();
+  });
+
+  it("shows missing-api-key warning when URL is set but team mode is off", async () => {
+    mockIsTeamModeEnabled.mockResolvedValue(false);
+    mockGetTeamServerUrl.mockReturnValue("https://team.example.com");
+    await commandPushToTeam();
+    expect(mockNotifyWarning).toHaveBeenCalledWith("team.push.missingApiKey");
     expect(mockDrainAllPushQueues).not.toHaveBeenCalled();
   });
 

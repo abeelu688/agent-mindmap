@@ -197,6 +197,7 @@
   "team.config.invalid": "Agent Mind Map: 团队服务配置无效：{0}",
   "team.bulkPush.title": "Agent Mind Map: 正在批量推送会话到团队服务…",
   "team.push.notEnabled": "团队模式未配置。请设置 `agentMindmap.team.serverUrl` 以启用。",
+  "team.push.missingApiKey": "团队服务地址已设置，但 API 密钥缺失。请运行「Agent Mind Map: Configure Team Service」将密钥保存到 SecretStorage（不能写在 settings.json 中）。",
   "team.push.noRecords": "没有本地会话需要推送。",
   "team.push.allPushed": "所有会话已推送完毕。",
   "team.push.title": "Agent Mind Map: 正在推送会话到团队服务…",
