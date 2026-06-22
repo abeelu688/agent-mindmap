@@ -1,6 +1,7 @@
 // LLM module — auto-generated barrel (P1.4). Each helper is re-exported
 // transitively from `./llm/*`. Internal `__testing*` exports keep unique
 // names so namespaces don't collide.
+export * from "./applyReattachMoves";
 export * from "./applySegmentEquivalencesToRecords";
 export * from "./applyVirtualSessionToRecords";
 export * from "./buildConceptContexts";
@@ -34,6 +35,7 @@ export * from "./promptSessionSynonyms";
 export * from "./promptTopicPaths";
 export * from "./reattachChanges";
 export * from "./reattachNodeCatalog";
+export * from "./reattachSteps";
 export * from "./reattachStepsToMoves";
 export * from "./reattachStructuralHints";
 export * from "./reattachTimeout";
@@ -46,4 +48,5 @@ export * from "./segmentContext";
 export * from "./synonymHintDerive";
 export * from "./topicGraphValidate";
 export * from "./topicId";
+export * from "./trieReparentInput";
 export * from "./types";

@@ -3,6 +3,7 @@ import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import type { ConceptMergePrepOntology } from "./prepareConceptMergeRecords";
 import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
@@ -331,17 +332,9 @@ function renderNode(node: TrieNode): MindMapNodeData {
 }
 
 /**
- * Ontology prep context for the concept trie.
- * Matches the shape from `prepareConceptMergeRecords` but defined here
- * to avoid core ↔ extension coupling.
+ * Re-export the canonical prep ontology type from `prepareConceptMergeRecords`.
  */
-export type ConceptMergePrepOntology = {
-  segmentEquivalences: SegmentEquivalence[];
-  conceptOntology?: {
-    nodes: ConceptOntologyNode[];
-    topicPaths: import("./ontologyTypes").TopicConceptPathDecision[];
-  };
-};
+export type { ConceptMergePrepOntology } from "./prepareConceptMergeRecords";
 
 export type ConceptMergeOptions = {
   title?: string;
