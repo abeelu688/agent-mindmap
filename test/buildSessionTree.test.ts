@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSessionTree } from "../extension/src/pipeline/stages/buildSessionTree";
+import { buildSessionTree } from "@agent-mindmap/core";
 import type {
   SessionConceptExtract,
   SessionSynonymRefine,

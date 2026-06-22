@@ -2,7 +2,7 @@ import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { sanitizeSessionOutline } from "@agent-mindmap/core";
 import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
 import { enrichAnalysisNodesFromOutline } from "@agent-mindmap/core";
-import { buildSessionTree } from "./buildSessionTree";
+import { buildSessionTree } from "@agent-mindmap/core";
 import type {
   SessionAnalysis,
   SessionConceptExtract,

@@ -7,7 +7,7 @@ import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology as PrepOntology,
 } from "../../store/prepareConceptMergeRecords";
-import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../mergeSynonymPolicy";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import type {
   ReattachMove,
   ReattachStep,

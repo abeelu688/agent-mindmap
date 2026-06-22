@@ -1,5 +1,5 @@
-import { normalizeConceptPath } from "@agent-mindmap/core";
-import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import { normalizeConceptPath } from "../../llm/normalizeConceptPath";
+import { resolveConceptPathWithEquivalences } from "../../llm/resolveConceptPathWithEquivalences";
 import type {
   ConceptOntologyMapping,
   ConceptOntologyNode,
@@ -7,7 +7,7 @@ import type {
   SessionSynonymRefine,
   SessionTreeSnapshot,
   TopicPathDecision,
-} from "@agent-mindmap/core";
+} from "../../llm/types";
 
 export type BuildSessionTreeMeta = {
   sessionId: string;

@@ -1,5 +1,5 @@
 import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
-import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import { topicIdForTopic } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { SessionRecord } from "./storeTypes";

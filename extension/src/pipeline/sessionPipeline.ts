@@ -1,7 +1,7 @@
 import { countUserQueries } from "@agent-mindmap/core";
 import { analyzeSession } from "./stages/analyzeSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
-import { currentPipelineVersions } from "./pipelineVersions";
+import { currentPipelineVersions } from "@agent-mindmap/core";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap/core";

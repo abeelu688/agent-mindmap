@@ -1,5 +1,5 @@
 import type { SnapshotManifest, SnapshotNode } from "../store/storeTypes";
-import type { TranscriptSession } from "@agent-mindmap/core";
+import type { TranscriptSession } from "../transcript/types";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types

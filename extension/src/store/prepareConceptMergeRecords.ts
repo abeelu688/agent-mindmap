@@ -3,7 +3,7 @@ import { snapRecordsToVirtualSession } from "@agent-mindmap/core";
 import { applyReattachMovesSequentially, applyReattachStepsToRecords } from "../llm/reattachSteps";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import { segmentKeyForMerge } from "@agent-mindmap/core";
-import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import { mindMapLog } from "../webview/MindMapLog";
 import { applyTopicPathsFromOntology } from "./applyOntology";
 import type { SessionAnalysis } from "@agent-mindmap/core";

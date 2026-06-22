@@ -9,7 +9,7 @@ import { segmentKeyForMerge } from "@agent-mindmap/core";
 import {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
   MERGE_DERIVE_SEGMENT_EQUIVALENCES,
-} from "../pipeline/mergeSynonymPolicy";
+} from "@agent-mindmap/core";
 import {
   ontologySliceForPrep,
   prepareRecordsForFinalTrie,

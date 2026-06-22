@@ -4,7 +4,7 @@ import { segmentKeyForMerge } from "@agent-mindmap/core";
 import { normalizeConceptPath } from "@agent-mindmap/core";
 import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { filterProjectCodeReferences } from "@agent-mindmap/core";
-import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
+import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "@agent-mindmap/core";
 import {

@@ -84,6 +84,30 @@ export {
   type MindMapLanguageLabels,
 } from "./mindmap/outputLanguageLabels";
 
+// Pipeline (P1.6) — leaf files only; hub pipeline files stay in extension.
+export {
+  PIPELINE_VERSION,
+  currentPipelineVersions,
+  pipelineVersionsMatch,
+} from "./pipeline/pipelineVersions";
+export { MERGE_APPLY_SEGMENT_EQUIVALENCES, MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "./pipeline/mergeSynonymPolicy";
+export {
+  computeStableBatchPartition,
+  getLeafBatchesFromPlan,
+  computeBatchGroups,
+  type PartitionPlan,
+  type StablePartitionOpts,
+  type StableLeaf,
+  type RebuildLeaf,
+  type NewLeaf,
+  type LeafAction,
+  type LeafBatchInfo,
+} from "./pipeline/stableBatchPartition";
+export {
+  buildSessionTree,
+  type BuildSessionTreeMeta,
+} from "./pipeline/stages/buildSessionTree";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {

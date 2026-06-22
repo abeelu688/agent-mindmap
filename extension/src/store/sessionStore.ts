@@ -11,7 +11,7 @@ import {
   currentPipelineVersions,
   pipelineVersionsMatch,
   PIPELINE_VERSION,
-} from "../pipeline/pipelineVersions";
+} from "@agent-mindmap/core";
 import { writeJsonAtomic } from "./atomicWrite";
 import type {
   PipelineVersions,

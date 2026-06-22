@@ -15,7 +15,7 @@ import { agentLog } from "./log";
 import { notify, notifyWarning, notifyError } from "./notify";
 import { buildSessionAnalysisPrompt } from "@agent-mindmap/core";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
-import { currentPipelineVersions, PIPELINE_VERSION } from "./pipeline/pipelineVersions";
+import { currentPipelineVersions, PIPELINE_VERSION } from "@agent-mindmap/core";
 import { resolveOutputLanguageForEvents } from "@agent-mindmap/core";
 import { countUserQueries } from "@agent-mindmap/core";
 import {
@@ -36,7 +36,7 @@ import {
   computeStableBatchPartition,
   computeBatchGroups,
   type LeafAction,
-} from "./pipeline/stableBatchPartition";
+} from "@agent-mindmap/core";
 import {
   buildRecordMeta,
   buildSessionRecord,
