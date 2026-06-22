@@ -1,13 +1,15 @@
 import * as vscode from "vscode";
+import { analyzeSession, type LoadedSession } from "@agent-mindmap/core";
+import { mergeAbortSignals as coreMergeAbortSignals } from "@agent-mindmap/core";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import {
   createProgressReporter,
   type MindMapProgress,
   type MindMapProgressUpdate,
 } from "./progress";
-import { loadSession, type LoadDeps, type LoadedSession } from "./sessionLoader";
 import { t } from "./l10n/uiTranslate";
 import { setActiveSession } from "./commands/openLatest";
+import { buildAnalyzeSessionDeps } from "./adapters/coreUseCaseDeps";
 
 function progressMessage(update: MindMapProgressUpdate): string {
   return typeof update === "string" ? update : (update.message ?? "");
@@ -36,22 +38,8 @@ export async function withNotificationProgress<T>(
   );
 }
 
-function linkAbortSignal(source: AbortSignal, controller: AbortController): void {
-  if (source.aborted) {
-    controller.abort(source.reason);
-    return;
-  }
-  source.addEventListener("abort", () => controller.abort(source.reason), { once: true });
-}
-
 /** Merge multiple abort sources; aborts when any input signal aborts. */
-export function mergeAbortSignals(...sources: AbortSignal[]): AbortSignal {
-  const controller = new AbortController();
-  for (const source of sources) {
-    linkAbortSignal(source, controller);
-  }
-  return controller.signal;
-}
+export const mergeAbortSignals = coreMergeAbortSignals;
 
 export async function withCancellableNotificationProgress<T>(
   title: string,
@@ -136,15 +124,17 @@ export function attachTranscriptWatch(
       t("ui.loading.transcriptUpdatedReanalyzing", "Transcript updated, re-analyzing…")
     );
     try {
-      const refreshed = await withCancellableProgress(
-        ({ signal, progress }) =>
-          loadSession(session.session, { context, signal, progress }, { forceRefresh: true }),
+      const handle = await withCancellableProgress(
+        async ({ signal, progress }) => {
+          const deps = buildAnalyzeSessionDeps(context, currentPanel!, signal, progress);
+          return analyzeSession(session.session, deps, { forceRefresh: true });
+        },
         progressTitle(),
         currentPanel
       );
-      if (refreshed) {
-        setActiveSession(refreshed);
-        MindMapPanel.getCurrent()?.setMindMapData(refreshed.mindMap);
+      if (handle) {
+        setActiveSession(handle.result);
+        MindMapPanel.getCurrent()?.setMindMapData(handle.result.mindMap);
       }
     } finally {
       MindMapPanel.getCurrent()?.setLoading(false);

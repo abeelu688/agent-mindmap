@@ -1,20 +1,19 @@
-import { refreshMcpIndexForWorkspace } from "../mcp/mcpConfig";
+import { syncAiContext } from "@agent-mindmap/core";
 import { t } from "../l10n/uiTranslate";
 import { notifyInfo, notifyWarning } from "../notify";
-import { getWorkspacePath } from "../paths";
+import { buildHostAccess, buildLogger } from "../adapters/coreUseCaseDeps";
+import { refreshMcpIndexForWorkspace } from "../mcp/mcpConfig";
 
 export async function commandSyncAiContext(): Promise<void> {
-  const projectPath = getWorkspacePath();
-  if (!projectPath) {
-    notifyWarning(
-      t(
-        "ui.mcp.sync.noWorkspace",
-        "Agent Mind Map: Open a workspace folder before syncing AI context."
-      )
-    );
-    return;
-  }
-  const result = await refreshMcpIndexForWorkspace();
+  const result = await syncAiContext({
+    hostAccess: buildHostAccess(),
+    logger: buildLogger(),
+    mcpRefresher: {
+      async refreshMcpIndex(_projectSlug) {
+        return refreshMcpIndexForWorkspace();
+      },
+    },
+  });
   if (!result) {
     notifyWarning(
       t(

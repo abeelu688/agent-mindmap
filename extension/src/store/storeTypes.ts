@@ -101,6 +101,8 @@ export type SnapshotManifest = {
   /** Real session id → L1 snapshot id. */
   sessionToLeafId: Record<string, string>;
   rootSnapshotId?: string;
+  /** Bumped when assignment logic changes; triggers a rebuild. */
+  assignmentVersion?: number;
 };
 
 export type SnapshotNode = {

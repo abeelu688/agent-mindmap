@@ -9,6 +9,16 @@
 
 export const CORE_PACKAGE_VERSION = "0.2.3";
 
+// Error types (P1.10):
+export {
+  AgentMindmapError,
+  isRetryableError,
+  isCancellationError,
+  isUserFacingError,
+  toMindmapError,
+  type MindmapErrorCode,
+} from "./errors";
+
 // Logging — pluggable backend, defaults to console.
 export { setCoreLogger, getCoreLogger, type CoreLogger } from "./logging";
 
@@ -33,7 +43,6 @@ export { parseClaudeJsonl } from "./transcript/parseClaudeJsonl";
 export {
   listCursorSessions,
   listFlatJsonlSessions,
-  listSessions,
   readFirstUserQueryPreview,
   readSessionFile,
   type ListSessionsContext,
@@ -153,6 +162,21 @@ export {
 // MCP config core (P1.9):
 export * from "./mcp/mcpConfigCore";
 
+// Code-ref queue (P1.10):
+export {
+  initCodeRefQueue,
+  enqueueCodeRefUpdate,
+  drainCodeRefQueue,
+  purgeCodeRefQueueForProject,
+  flushPendingCodeRefRefreshForProject,
+  getProjectSessionIdsOnMap,
+  resolveCodeRefPanelNotifyKind,
+  CODE_REF_MAX_ATTEMPTS,
+  __testingCodeRefQueue,
+  type CodeRefQueueItem,
+  type CodeRefPanelNotifyKind,
+} from "./codeRefQueue";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {
@@ -170,3 +194,6 @@ export type {
   ConceptMapping,
   TopicConceptPathDecision,
 } from "./store/ontologyTypes";
+
+// Use case orchestrators (P1.11):
+export * from "./useCases/index";

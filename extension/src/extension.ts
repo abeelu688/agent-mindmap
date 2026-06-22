@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { loadGlassResumableIds, clearComposerTitleCache } from "@agent-mindmap/core";
 import { closeStateDb } from "@agent-mindmap/core";
-import { setCoreLogger, setCursorStateDbOverride } from "@agent-mindmap/core";
+import { setCoreLogger, setCursorStateDbOverride, initCodeRefQueue } from "@agent-mindmap/core";
+import { LlmProviderError } from "@agent-mindmap/core";
 import {
   drainPendingJump,
   handleNodeClicked,
@@ -14,9 +15,9 @@ import { MindMapHost } from "./webview/MindMapHost";
 import { getActiveHost, getWorkspaceSlug, resetHostCache, resolveHostId } from "./host";
 import { checkRepoModeGate, getProjectMode, type RepoGateFailure } from "./host/slugDerivation";
 import { t } from "./l10n/uiTranslate";
-import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
+import { logLlmDumpLocationsOnce, extensionLlmDumpDeps } from "./llm/llmIoDump";
+import { extensionCodeRefQueueDeps } from "./codeRefQueueAdapter";
 import { agentDebugLog } from "./debugLog";
-import { LlmProviderError } from "@agent-mindmap/core";
 import { getStore } from "./store/storeClient";
 import { resolveLlmProviderId } from "./llmOptions";
 import { setActiveSession } from "./commands/openLatest";
@@ -48,6 +49,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // Wire core/ logging to the VS Code output channel.
   setCoreLogger(agentLog);
 
+  // Wire core/ code-ref queue with extension-specific dependencies.
+  initCodeRefQueue(extensionCodeRefQueueDeps);
+
   // Sync core's cursorStateDb override from vscode config.
   {
     const configureCursorStateDbOverride = () => {
@@ -75,7 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     "E"
   );
-  logLlmDumpLocationsOnce();
+  logLlmDumpLocationsOnce(extensionLlmDumpDeps);
 
   // ── Configuration change listeners ─────────────────────────────────────
 

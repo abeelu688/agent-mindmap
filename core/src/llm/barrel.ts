@@ -12,6 +12,22 @@ export * from "./dumpHooks";
 export * from "./enrichNodeChildrenFromOutline";
 export * from "./filterCodeReferences";
 export * from "./headlessCli";
+export * from "./llmStage";
+export * from "./extractCodeReferences";
+// llmIoDump — selective re-export to avoid collisions with dumpHooks
+export {
+  writeLlmIoDump,
+  dumpLlmReplay,
+  errorForDump,
+  resolveLlmDumpRoots,
+  resolveLlmDumpDir,
+  logLlmDumpLocationsOnce,
+  dumpDirForWorkspace,
+  LLM_DUMP_FOLDER,
+  __testingLlmIoDump,
+  type LlmIoDumpPayload,
+  type LlmDumpSource,
+} from "./llmIoDump";
 export * from "./modelList";
 export * from "./normalizeConceptPath";
 export * from "./ontologyValidate";

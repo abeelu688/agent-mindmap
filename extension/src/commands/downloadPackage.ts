@@ -1,23 +1,19 @@
 import * as vscode from "vscode";
+import { exportSession } from "@agent-mindmap/core";
 import { MindMapPanel } from "../webview/MindMapPanel";
-import { exportMindMapPackage } from "@agent-mindmap/core";
 import { openMindMapPackage } from "../export/openMindMapPackage";
 import { readMindMapUiConfig } from "../ui/mindMapUiConfig";
 import { notifyWarning, notifyError } from "../notify";
 import { t } from "../l10n/uiTranslate";
+import { buildLogger } from "../adapters/coreUseCaseDeps";
 
-export async function commandDownloadPackage(
-  extensionUri: vscode.Uri
-): Promise<void> {
+export async function commandDownloadPackage(extensionUri: vscode.Uri): Promise<void> {
   const panel = MindMapPanel.getCurrent();
   const mindMap = panel?.getMindMapData();
   if (!mindMap) {
-    notifyWarning(
-      t("ui.warning.openMindMapFirst", "Agent Mind Map: Open a mind map first.")
-    );
+    notifyWarning(t("ui.warning.openMindMapFirst", "Agent Mind Map: Open a mind map first."));
     return;
   }
-
   const picked = await vscode.window.showOpenDialog({
     canSelectFiles: false,
     canSelectFolders: true,
@@ -27,34 +23,26 @@ export async function commandDownloadPackage(
   if (!picked?.length) {
     return;
   }
-
-  const outDir = picked[0]!.fsPath;
-
   try {
-    const result = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: t("ui.download.exporting.title", "Agent Mind Map: Exporting…"),
-        cancellable: false,
+    const result = await exportSession({
+      mindMapSink: { refreshMindMap() {}, showInfo() {} },
+      prompter: {
+        showQuickPick: async () => undefined,
+        showInputBox: async () => undefined,
+        showWarningMessage: async () => undefined,
+        showInformationMessage: async () => undefined,
       },
-      async () =>
-        exportMindMapPackage({
-          outDir,
-          mindMap,
-          mediaDir: vscode.Uri.joinPath(extensionUri, "media").fsPath,
-          ui: readMindMapUiConfig(),
-          onWarning: (msg) => void vscode.window.showWarningMessage(msg),
-        })
-    );
-
-    const openBrowser = t(
-      "ui.download.choice.openInBrowser",
-      "Open in browser"
-    );
-    const showFolder = t(
-      "ui.download.choice.showInExplorer",
-      "Show in file manager"
-    );
+      logger: buildLogger(),
+      mindMap,
+      mediaDir: vscode.Uri.joinPath(extensionUri, "media").fsPath,
+      outDir: picked[0]!.fsPath,
+      uiConfig: readMindMapUiConfig(),
+    });
+    if (!result) {
+      return;
+    }
+    const openBrowser = t("ui.download.choice.openInBrowser", "Open in browser");
+    const showFolder = t("ui.download.choice.showInExplorer", "Show in file manager");
     const choice = await vscode.window.showInformationMessage(
       t(
         "ui.download.exported.summary",

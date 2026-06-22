@@ -45,3 +45,24 @@ export function createHeartbeat(
     },
   };
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Abort-signal utilities
+// ────────────────────────────────────────────────────────────────────────────
+
+function linkAbortSignal(source: AbortSignal, controller: AbortController): void {
+  if (source.aborted) {
+    controller.abort(source.reason);
+    return;
+  }
+  source.addEventListener("abort", () => controller.abort(source.reason), { once: true });
+}
+
+/** Merge multiple abort sources; aborts when any input signal aborts. */
+export function mergeAbortSignals(...sources: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  for (const source of sources) {
+    linkAbortSignal(source, controller);
+  }
+  return controller.signal;
+}

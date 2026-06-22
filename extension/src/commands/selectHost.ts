@@ -1,32 +1,24 @@
-import * as vscode from "vscode";
+import { selectHost } from "@agent-mindmap/core";
 import { resetHostCache, getHostById, WORKSPACE_HOST_KEY } from "../host";
 import { notifyInfo } from "../notify";
+import { buildPrompter } from "../adapters/coreUseCaseDeps";
+import type * as vscode from "vscode";
 
-export async function commandSelectHost(
-  context: vscode.ExtensionContext
-): Promise<void> {
-  const items = [
-    {
-      label: "Cursor",
-      description: "Read Cursor agent transcripts",
-      id: "cursor" as const,
+export async function commandSelectHost(context: vscode.ExtensionContext): Promise<void> {
+  const hostId = await selectHost({
+    prompter: buildPrompter(),
+    configStore: {
+      get<T>(_key: string) {
+        return context.workspaceState.get<T>(WORKSPACE_HOST_KEY);
+      },
+      set(_key: string, value: unknown) {
+        context.workspaceState.update(WORKSPACE_HOST_KEY, value);
+      },
     },
-    {
-      label: "Claude Code",
-      description: "Read Claude Code transcripts",
-      id: "claude-code" as const,
-    },
-  ];
-  const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: "Select agent host for current workspace",
   });
-  if (!picked) {
-    return;
+  if (hostId) {
+    resetHostCache();
+    const host = getHostById(hostId);
+    notifyInfo(`Agent Mind Map: Host set to ${host.displayName} for this workspace`);
   }
-  await context.workspaceState.update(WORKSPACE_HOST_KEY, picked.id);
-  resetHostCache();
-  const host = getHostById(picked.id);
-  notifyInfo(
-    `Agent Mind Map: Host set to ${host.displayName} for this workspace`
-  );
 }

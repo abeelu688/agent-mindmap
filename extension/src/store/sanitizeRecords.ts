@@ -6,17 +6,17 @@
  */
 import {
   sanitizeSessionRecord as coreSanitize,
-  sanitizeRecordsForMerge as coreSanitizeAll,
   resolveUserQueryCount as coreResolveUserQueryCount,
   type TranscriptParser,
 } from "@agent-mindmap/core";
-import { getActiveHost } from "../host";
+import { getHostById } from "../host";
 import type { SessionRecord } from "./storeTypes";
 
 export type { TranscriptParser } from "@agent-mindmap/core";
 
 function parserForHost(record: SessionRecord): TranscriptParser {
-  const host = getActiveHost(record.meta.hostId);
+  const hostId = record.meta.hostId ?? "cursor";
+  const host = getHostById(hostId);
   return (content: string) => host.parseTranscript(content);
 }
 
