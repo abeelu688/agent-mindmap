@@ -3,7 +3,7 @@ import {
   claudeMcpConfigPath,
   cursorMcpConfigPath,
   mergeAgentMindmapIntoConfig,
-} from "../extension/src/mcp/mcpConfigCore";
+} from "@agent-mindmap/core";
 
 describe("mcp install config paths", () => {
   it("resolves Cursor and Claude Code config paths", () => {

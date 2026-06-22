@@ -128,6 +128,9 @@ export * from "./export/renderTranscriptHtml";
 export * from "./export/renderTranscriptMarkdownHtml";
 export { exportMindMapPackage, buildTranscriptJumpHref, type ExportPackageOptions, type ExportPackageResult, type ExportHostResolver } from "./export/exportPackage";
 
+// MCP config core (P1.9):
+export * from "./mcp/mcpConfigCore";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {

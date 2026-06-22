@@ -10,7 +10,7 @@ import {
   mergeAgentMindmapIntoConfig,
   type McpInstallResult,
   type McpServersConfig,
-} from "./mcpConfigCore";
+} from "@agent-mindmap/core";
 
 export {
   claudeMcpConfigPath,
@@ -18,7 +18,7 @@ export {
   mergeAgentMindmapIntoConfig,
   type McpInstallResult,
   type McpServersConfig,
-} from "./mcpConfigCore";
+} from "@agent-mindmap/core";
 
 export async function resolveExistingMcpServerEntry(extensionPath: string): Promise<string> {
   const bundled = path.join(extensionPath, "mcp-server", "index.js");
