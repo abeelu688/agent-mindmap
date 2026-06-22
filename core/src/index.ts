@@ -115,6 +115,19 @@ export * from "./store/applyOntology";
 export * from "./store/mergeTrieByEquivalences";
 export * from "./store/pushQueue";
 
+// UI types (P1.8):
+export * from "./ui/mindMapUiTypes";
+export * from "./ui/themeMerge";
+export * from "./ui/themePath";
+
+// Export / offline package (P1.8):
+export * from "./jumpToOriginCore";
+export * from "./export/collectOriginRefs";
+export * from "./export/renderTranscriptMarkdown";
+export * from "./export/renderTranscriptHtml";
+export * from "./export/renderTranscriptMarkdownHtml";
+export { exportMindMapPackage, buildTranscriptJumpHref, type ExportPackageOptions, type ExportPackageResult, type ExportHostResolver } from "./export/exportPackage";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {

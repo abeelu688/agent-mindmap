@@ -1,4 +1,4 @@
-import type { MindMapUiDirectionName, MindMapUiPreset } from "./mindMapUiTypes";
+import type { MindMapUiDirectionName, MindMapUiPreset } from "@agent-mindmap/core";
 
 export type UiSettingKey = "preset" | "direction";
 

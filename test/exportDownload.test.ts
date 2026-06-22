@@ -5,13 +5,13 @@ import { parseJsonl } from "@agent-mindmap/core";
 import {
   collectOriginRefs,
   sanitizeSessionFileName,
-} from "../extension/src/export/collectOriginRefs";
-import { buildTranscriptJumpHref } from "../extension/src/export/exportPackage";
+} from "@agent-mindmap/core";
+import { buildTranscriptJumpHref } from "@agent-mindmap/core";
 import {
   anchorForTurnIndex,
   renderTranscriptMarkdown,
-} from "../extension/src/export/renderTranscriptMarkdown";
-import { markdownToTranscriptHtmlBody } from "../extension/src/export/renderTranscriptHtml";
+} from "@agent-mindmap/core";
+import { markdownToTranscriptHtmlBody } from "@agent-mindmap/core";
 import { buildTopicMindMap } from "@agent-mindmap/core";
 import { validateTopicGraph } from "@agent-mindmap/core";
 import type { SessionMeta } from "@agent-mindmap/core";

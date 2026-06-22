@@ -1,4 +1,4 @@
-import { renderTranscriptMarkdownHtml } from "./renderTranscriptMarkdownHtml";
+import { renderTranscriptMarkdownHtml } from "@agent-mindmap/core";
 
 declare global {
   interface Window {

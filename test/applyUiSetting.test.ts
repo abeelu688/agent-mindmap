@@ -3,7 +3,7 @@ import { parseUiSettingUpdate } from "../extension/src/ui/applyUiSetting";
 import {
   directionFromSetting,
   presetFromSetting,
-} from "../extension/src/ui/mindMapUiTypes";
+} from "@agent-mindmap/core";
 
 describe("parseUiSettingUpdate", () => {
   it("accepts valid preset values", () => {

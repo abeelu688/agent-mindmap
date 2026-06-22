@@ -11,15 +11,15 @@ import {
   type JumpCandidate,
   type PendingJump,
   PENDING_JUMP_KEY,
-} from "./jumpToOriginCore";
+} from "@agent-mindmap/core";
 import { getActiveHost } from "./host";
 import { getHostById } from "./host/registry";
 import { slugToWorkspacePath } from "./paths";
-import { anchorForTurnIndex, renderTranscriptMarkdown } from "./export/renderTranscriptMarkdown";
+import { anchorForTurnIndex, renderTranscriptMarkdown } from "@agent-mindmap/core";
 import {
   buildTranscriptPageHtml,
   markdownToTranscriptHtmlBody,
-} from "./export/renderTranscriptHtml";
+} from "@agent-mindmap/core";
 import { mindMapLog } from "./webview/MindMapLog";
 import { MindMapPanel } from "./webview/MindMapPanel";
 import { format, t } from "./l10n/uiTranslate";

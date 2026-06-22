@@ -1,8 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as vscode from "vscode";
-import { getHostById } from "../host/registry";
-import { readMindMapUiConfig } from "../ui/mindMapUiConfig";
+import { createClaudeHost } from "../host/claudeHost";
+import { createCursorHost } from "../host/cursorHost";
 import { collectOriginRefs, sanitizeSessionFileName } from "./collectOriginRefs";
 import { anchorForTurnIndex, renderTranscriptMarkdown } from "./renderTranscriptMarkdown";
 import {
@@ -10,14 +9,20 @@ import {
   markdownToTranscriptHtmlBody,
   TRANSCRIPT_PAGE_STYLES,
 } from "./renderTranscriptHtml";
+import type { AgentHost } from "../host/types";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import type { MindMapRoot, NodeOriginRef } from "@agent-mindmap/core";
+import type { MindMapRoot, NodeOriginRef } from "../transcript/types";
 
-function hostForTranscriptPath(transcriptPath: string): import("@agent-mindmap/core").AgentHost {
+export type ExportHostResolver = (transcriptPath: string) => AgentHost;
+
+function defaultHostForTranscriptPath(
+  hosts: { cursor: AgentHost; claudeCode: AgentHost },
+  transcriptPath: string
+): AgentHost {
   if (transcriptPath.includes(`${path.sep}agent-transcripts${path.sep}`)) {
-    return getHostById("cursor");
+    return hosts.cursor;
   }
-  return getHostById("claude-code");
+  return hosts.claudeCode;
 }
 
 /** Build offline jump href to a pre-rendered transcript HTML page. */
@@ -242,7 +247,18 @@ start "" "%INDEX%"
 export type ExportPackageOptions = {
   outDir: string;
   mindMap: MindMapRoot;
-  extensionUri: vscode.Uri;
+  /** Absolute path to the directory containing `webview.js`, `webview.css`,
+   *  `transcript-markdown.js` (the extension's `media/` dir, or the CLI's
+   *  bundled assets dir). */
+  mediaDir: string;
+  /** UI options for the exported viewer (preset / direction / theme). */
+  ui: MindMapUiOptions;
+  /** Hosts used to parse transcripts during export. Defaults to the built-in
+   *  cursor / claude-code hosts if omitted. */
+  resolveHost?: ExportHostResolver;
+  /** Optional sink for non-fatal warnings (e.g. partial transcript failures).
+   *  Extension wires this to `vscode.window.showWarningMessage`; CLI logs. */
+  onWarning?: (message: string) => void;
   title?: string;
 };
 
@@ -254,16 +270,16 @@ export type ExportPackageResult = {
 export async function exportMindMapPackage(
   options: ExportPackageOptions
 ): Promise<ExportPackageResult> {
-  const { outDir, mindMap, extensionUri } = options;
+  const { outDir, mindMap, mediaDir, ui, resolveHost, onWarning } = options;
   const assetsDir = path.join(outDir, "assets");
   const transcriptsDir = path.join(outDir, "transcripts");
 
   await fs.mkdir(assetsDir, { recursive: true });
   await fs.mkdir(transcriptsDir, { recursive: true });
 
-  const mediaDir = path.join(extensionUri.fsPath, "media");
+  const mediaSrc = mediaDir;
   for (const file of ["webview.js", "webview.css", "transcript-markdown.js"]) {
-    await fs.copyFile(path.join(mediaDir, file), path.join(assetsDir, file));
+    await fs.copyFile(path.join(mediaSrc, file), path.join(assetsDir, file));
   }
 
   const sessionRefs = collectOriginRefs(mindMap);
@@ -280,7 +296,15 @@ export async function exportMindMapPackage(
 
     try {
       const content = await fs.readFile(ref.transcriptPath, "utf8");
-      const host = hostForTranscriptPath(ref.transcriptPath);
+      const host = resolveHost
+        ? resolveHost(ref.transcriptPath)
+        : defaultHostForTranscriptPath(
+            {
+              cursor: createCursorHost("", () => ""),
+              claudeCode: createClaudeHost("", () => ""),
+            },
+            ref.transcriptPath
+          );
       const events = host.parseTranscript(content);
       const rendered = renderTranscriptMarkdown(events, ref.sessionLabel);
       await fs.writeFile(mdAbs, rendered.markdown, "utf8");
@@ -300,13 +324,12 @@ export async function exportMindMapPackage(
   }
 
   if (failures.length) {
-    void vscode.window.showWarningMessage(
+    onWarning?.(
       `Agent Mind Map: 部分对话导出失败（${failures.length}/${sessionRefs.length}）`
     );
   }
 
   const exportData = cloneWithJumpHrefs(mindMap, sessionHtmlPath, turnMaps);
-  const ui = readMindMapUiConfig();
   const uiForExport: MindMapUiOptions = {
     ...ui,
     preset: ui.preset === "auto" ? "light" : ui.preset,

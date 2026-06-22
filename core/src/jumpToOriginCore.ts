@@ -1,4 +1,4 @@
-import type { NodeOriginRef } from "@agent-mindmap/core";
+import type { NodeOriginRef } from "./transcript/types";
 
 /**
  * Persisted "open this agent right after the next window finishes loading"

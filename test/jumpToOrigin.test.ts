@@ -3,7 +3,7 @@ import {
   flattenCandidates,
   formatPickerLabel,
   type JumpCandidate,
-} from "../extension/src/jumpToOriginCore";
+} from "@agent-mindmap/core";
 import type { NodeOriginRef } from "@agent-mindmap/core";
 
 const sessA: Omit<NodeOriginRef, "turnIndex"> = {

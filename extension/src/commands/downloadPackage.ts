@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { MindMapPanel } from "../webview/MindMapPanel";
-import { exportMindMapPackage } from "../export/exportPackage";
+import { exportMindMapPackage } from "@agent-mindmap/core";
 import { openMindMapPackage } from "../export/openMindMapPackage";
+import { readMindMapUiConfig } from "../ui/mindMapUiConfig";
 import { notifyWarning, notifyError } from "../notify";
 import { t } from "../l10n/uiTranslate";
 
@@ -40,7 +41,9 @@ export async function commandDownloadPackage(
         exportMindMapPackage({
           outDir,
           mindMap,
-          extensionUri,
+          mediaDir: vscode.Uri.joinPath(extensionUri, "media").fsPath,
+          ui: readMindMapUiConfig(),
+          onWarning: (msg) => void vscode.window.showWarningMessage(msg),
         })
     );
 

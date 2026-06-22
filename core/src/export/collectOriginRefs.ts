@@ -1,4 +1,4 @@
-import type { MindMapRoot, NodeOriginRef } from "@agent-mindmap/core";
+import type { MindMapRoot, NodeOriginRef } from "../transcript/types";
 
 export function sanitizeSessionFileName(sessionId: string): string {
   const safe = sessionId.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^\.+/, "");

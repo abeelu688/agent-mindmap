@@ -33,6 +33,9 @@ const transcriptMarkdownBuild = {
   platform: "browser",
   target: "es2020",
   logLevel: "info",
+  alias: {
+    "@agent-mindmap/core": path.join(ROOT, "core", "src", "export", "renderTranscriptMarkdownHtml.ts"),
+  },
 };
 
 async function main() {

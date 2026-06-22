@@ -5,13 +5,13 @@ import {
   directionFromSetting,
   presetFromSetting,
   sideBranchOrderFromSetting,
-} from "./mindMapUiTypes";
-import { parseThemeFileJson } from "./themeMerge";
-import { resolveThemeFilePath } from "./themePath";
-import type { MindMapUiOptions } from "./mindMapUiTypes";
+} from "@agent-mindmap/core";
+import { parseThemeFileJson } from "@agent-mindmap/core";
+import { resolveThemeFilePath } from "@agent-mindmap/core";
+import type { MindMapUiOptions } from "@agent-mindmap/core";
 
-export type { MindMapUiOptions } from "./mindMapUiTypes";
-export { resolveThemeFilePath } from "./themePath";
+export type { MindMapUiOptions } from "@agent-mindmap/core";
+export { resolveThemeFilePath } from "@agent-mindmap/core";
 
 export function readThemeFileOverrides(
   themeFileSetting: string,

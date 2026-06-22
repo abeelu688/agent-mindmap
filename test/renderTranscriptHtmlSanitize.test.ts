@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   renderTranscriptMarkdownHtml,
   escHtml,
-} from "../extension/src/export/renderTranscriptMarkdownHtml";
+} from "@agent-mindmap/core";
 
 describe("sanitizeTranscriptHtml (via renderTranscriptMarkdownHtml)", () => {
   it("strips <script> tags", () => {

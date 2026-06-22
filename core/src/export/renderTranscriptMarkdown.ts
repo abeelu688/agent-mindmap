@@ -1,5 +1,5 @@
 import { isMetaSearchUserQuery } from "../jumpToOriginCore";
-import type { ChatEvent } from "@agent-mindmap/core";
+import type { ChatEvent } from "../transcript/types";
 
 export type RenderedTranscript = {
   markdown: string;

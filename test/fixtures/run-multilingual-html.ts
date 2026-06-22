@@ -7,7 +7,7 @@ import {
   buildProjectConceptMergeForBatch,
   toConceptMergeLlmOpts,
 } from "../../extension/src/batch/conceptMerge";
-import { exportMindMapPackage } from "../../extension/src/export/exportPackage";
+import { exportMindMapPackage } from "@agent-mindmap/core";
 import { cursorHost } from "../../extension/src/host/cursorHost";
 import { getProvider } from "../../extension/src/llm";
 import { readLlmOptions } from "../../extension/src/llmOptions";

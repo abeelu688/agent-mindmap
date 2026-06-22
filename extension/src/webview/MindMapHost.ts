@@ -7,7 +7,7 @@ import { t } from "../l10n/uiTranslate";
 import { getCuratedModels } from "@agent-mindmap/core";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
-import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
+import type { MindMapUiOptions } from "@agent-mindmap/core";
 import type { MindMapRoot, NodeOrigin } from "@agent-mindmap/core";
 import type { LlmProviderId } from "@agent-mindmap/core";
 

@@ -6,9 +6,9 @@ import {
   directionFromSetting,
   presetFromSetting,
   sideBranchOrderFromSetting,
-} from "../extension/src/ui/mindMapUiTypes";
-import { parseThemeFileJson } from "../extension/src/ui/themeMerge";
-import { resolveThemeFilePath } from "../extension/src/ui/themePath";
+} from "@agent-mindmap/core";
+import { parseThemeFileJson } from "@agent-mindmap/core";
+import { resolveThemeFilePath } from "@agent-mindmap/core";
 
 describe("parseThemeFileJson", () => {
   it("parses cssVar and palette", () => {

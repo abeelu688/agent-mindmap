@@ -3,7 +3,7 @@ import {
   findBestTurnIndex,
   isMetaSearchUserQuery,
   parseQTagsFromNodeLabel,
-} from "../extension/src/jumpToOriginCore";
+} from "@agent-mindmap/core";
 
 describe("isMetaSearchUserQuery", () => {
   it("detects cursor transcript search prompts", () => {
