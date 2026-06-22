@@ -5,7 +5,7 @@ import {
   type OutlineTranslation,
 } from "@agent-mindmap/shared";
 import { uiTranslate } from "../l10n/uiTranslate";
-import type { SessionOutline, TopicGraph } from "./types";
+import type { SessionOutline, TopicGraph } from "@agent-mindmap/core";
 
 /**
  * Extension-local wrapper that injects the localized placeholder strings

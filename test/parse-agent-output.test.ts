@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __testing } from "../extension/src/llm/cursorCliProvider";
+import { __testingHeadlessCli as __testing } from "@agent-mindmap/core";
 
 /** Realistic cursor-agent stdout when the model prefixes prose before JSON. */
 const AGENT_STDOUT_WITH_PROSE = JSON.stringify({

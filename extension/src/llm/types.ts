@@ -36,7 +36,7 @@ import type {
 } from "@agent-mindmap/shared";
 
 // Re-export the payload types that live in shared/ so existing extension
-// imports (`from "../llm/types"`) keep working. Provider-runtime types stay
+// imports (`from "@agent-mindmap/core"`) keep working. Provider-runtime types stay
 // here — they are not part of the persisted SessionRecord and don't need to
 // be shared with the MCP server.
 export type {

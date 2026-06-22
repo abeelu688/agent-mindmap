@@ -3,9 +3,9 @@ import {
   buildSessionExtractPrompt,
   EXTRACT_PROMPT_VERSION,
   type SessionExtractPromptOptions,
-} from "../../llm/promptSessionExtract";
-import { validateSessionConceptExtract } from "../../llm/pipelineValidate";
-import type { LlmProvider, SessionConceptExtract } from "../../llm/types";
+} from "@agent-mindmap/core";
+import { validateSessionConceptExtract } from "@agent-mindmap/core";
+import type { LlmProvider, SessionConceptExtract } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";

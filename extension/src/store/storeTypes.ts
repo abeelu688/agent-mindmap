@@ -5,7 +5,7 @@ import type {
   SegmentEquivalence,
   SessionAnalysis,
   SessionTreeSnapshot,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "./ontologyTypes";
 
 // SessionRecord, SessionRecordMeta, ConceptContextForMerge, MergeRecord, and

@@ -1,5 +1,5 @@
 import type { ChatEvent } from "@agent-mindmap/core";
-import type { TopicGraph } from "./types";
+import type { TopicGraph } from "@agent-mindmap/core";
 
 export function countUserQueries(events: ChatEvent[]): number {
   return events.filter((e) => e.kind === "user_query").length;

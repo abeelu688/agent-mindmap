@@ -3,9 +3,9 @@ import {
   applyOrphanRootReparent,
   buildOrphanRootReparentRules,
   rulesToReparentMap,
-} from "../extension/src/llm/reparentOrphanRootPaths";
+} from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
-import type { ConceptOntologyNode } from "../extension/src/llm/types";
+import type { ConceptOntologyNode } from "@agent-mindmap/core";
 
 function paths(...conceptPaths: string[][]): TopicConceptPathDecision[] {
   return conceptPaths.map((conceptPath, i) => ({

@@ -2,7 +2,7 @@ import type {
   NumberedReparentChain,
   NumberedSubtreeNode,
   ReattachCatalogNode,
-} from "./reattachNodeCatalog";
+} from "@agent-mindmap/core";
 import type { ConceptContextForMerge } from "../store/storeTypes";
 import type {
   RootChildSynonymHint,
@@ -14,8 +14,8 @@ import type {
   ListedChildCollapseHint,
   OntologySubordinateHint,
   PrefixSubordinateHint,
-} from "./reattachStructuralHints";
-import type { SegmentEquivalence } from "./types";
+} from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 
 export type TabularSchema = {
   name: string;

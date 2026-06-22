@@ -1,7 +1,7 @@
 import { agentLog } from "../log";
-import { normalizeConceptPath } from "./normalizeConceptPath";
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { SegmentEquivalence } from "./types";
+import { normalizeConceptPath } from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 
 export type TopicPathContext = {
   title?: string;

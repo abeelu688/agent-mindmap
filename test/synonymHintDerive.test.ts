@@ -3,9 +3,9 @@ import {
   buildAllSegmentOverlapHints,
   buildChainCollapseOverlapHints,
   deriveEquivalencesFromTopicPaths,
-} from "../extension/src/llm/synonymHintDerive";
+} from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
-import type { ConceptOntologyNode } from "../extension/src/llm/types";
+import type { ConceptOntologyNode } from "@agent-mindmap/core";
 
 describe("synonymHintDerive", () => {
   it("detects chain collapse outer/inner on same path prefix", () => {

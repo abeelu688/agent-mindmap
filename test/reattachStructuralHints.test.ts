@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDuplicateTopRootHints,
   deriveEquivalencesFromOntologyNodes,
-} from "../extension/src/llm/reattachStructuralHints";
+} from "@agent-mindmap/core";
 import type { ReparentChain } from "../extension/src/llm/trieReparentInput";
 
 describe("reattachStructuralHints", () => {

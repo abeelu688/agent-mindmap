@@ -5,8 +5,8 @@ import {
   type SnapshotHierarchyLlmOpts,
 } from "./snapshotHierarchy";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { OutputLanguage } from "../llm/promptLanguage";
-import type { LlmProvider } from "../llm/types";
+import type { OutputLanguage } from "@agent-mindmap/core";
+import type { LlmProvider } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { MergeRecord, MergeSnapshot, SessionRecord } from "../store/storeTypes";
 import type { MergePipelineResult } from "./mergePipeline";

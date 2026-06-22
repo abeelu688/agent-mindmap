@@ -5,7 +5,7 @@ import type {
   MergeSessionInputNode,
   MergeSessionInputSession,
 } from "./mergeSessionAnalysisInput";
-import type { SegmentEquivalence } from "./types";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 
 export type MergeTabularSchema = {
   name: string;

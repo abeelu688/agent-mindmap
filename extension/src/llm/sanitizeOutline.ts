@@ -1,4 +1,4 @@
-import type { OutlineDetail, OutlineNode, SessionOutline } from "./types";
+import type { OutlineDetail, OutlineNode, SessionOutline } from "@agent-mindmap/core";
 
 function sanitizeDetail(
   detail: OutlineDetail,

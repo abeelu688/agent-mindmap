@@ -1,5 +1,5 @@
 import { sha256Hex } from "../store/sessionStore";
-import type { Topic } from "./types";
+import type { Topic } from "@agent-mindmap/core";
 
 /**
  * Stable id for classifying a topic across runs.

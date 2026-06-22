@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "../host";
 import { refreshMcpIndexForProject } from "../mcp/mcpConfig";
 import { getStoreDir } from "../paths";
-import { showCliInstallGuide } from "../llm/cliInstallGuide";
+import { showCliInstallGuide } from "../llm/cliInstallGuideUi";
 import { uiTranslate, t } from "../l10n/uiTranslate";
 import { ensureModelSelected, readLlmOptions, resolveLlmProviderId } from "../llmOptions";
 import { ensureStore } from "../store/sessionStore";

@@ -3,7 +3,7 @@ import {
   buildOntologyRefinePrompt,
   buildRefineInputFromRecords,
   ONTOLOGY_REFINE_PROMPT_VERSION,
-} from "../extension/src/llm/promptOntologyRefine";
+} from "@agent-mindmap/core";
 
 describe("promptOntologyRefine", () => {
   it("uses refine prompt version 5 with contextSamples and overlapHints", () => {

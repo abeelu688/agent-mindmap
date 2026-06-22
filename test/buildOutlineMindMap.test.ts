@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
-import type { CodeReference, SessionOutline } from "../extension/src/llm/types";
+import type { CodeReference, SessionOutline } from "@agent-mindmap/core";
 
 const sampleOutline: SessionOutline = {
   title: "Binder IPC",

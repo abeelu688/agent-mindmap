@@ -8,7 +8,7 @@ import {
   type LlmProvider,
   type LlmResponseSchema,
   type LlmSummarizeResult,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 import { dumpLlmReplay } from "../llm/llmIoDump";
 import { agentDebugLog } from "../debugLog";
 import { writeJsonAtomic } from "../store/atomicWrite";

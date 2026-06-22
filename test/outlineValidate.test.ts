@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   validateMergedOutline,
   validateSessionOutline,
-} from "../extension/src/llm/outlineValidate";
-import { LlmProviderError } from "../extension/src/llm/types";
+} from "@agent-mindmap/core";
+import { LlmProviderError } from "@agent-mindmap/core";
 
 describe("validateSessionOutline", () => {
   it("accepts hierarchical outline with details", () => {

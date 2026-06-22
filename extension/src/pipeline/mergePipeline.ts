@@ -5,14 +5,14 @@ import {
   writeOntologyRecord,
 } from "../store/ontologyStore";
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
-} from "../llm/segmentContext";
+} from "@agent-mindmap/core";
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
-import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
+import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
 import {
   mergeSessionAnalysis,
@@ -25,8 +25,8 @@ import {
   type FinalizedSessionAnalysis,
 } from "./stages/finalizeSessionAnalysis";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { LlmProvider, SessionAnalysis } from "../llm/types";
-import type { OutputLanguage } from "../llm/promptLanguage";
+import type { LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { ConceptOntologyRecord } from "../store/ontologyTypes";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";

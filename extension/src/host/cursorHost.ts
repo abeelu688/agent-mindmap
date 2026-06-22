@@ -2,7 +2,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { createCursorHost, type AgentHost } from "@agent-mindmap/core";
-import { cliMissingHintSummary } from "../llm/cliInstallGuide";
+import { cliMissingHintSummary } from "@agent-mindmap/core";
 
 export function getCursorProjectsRoot(): string {
   const override = vscode.workspace.getConfiguration("agentMindmap").get<string>("projectsDir");

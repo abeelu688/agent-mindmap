@@ -7,7 +7,7 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import { topicIdForTopic } from "../extension/src/llm/topicId";
+import { topicIdForTopic } from "@agent-mindmap/core";
 
 function makeRecord(sessionId: string, projectSlug: string) {
   const graph = {

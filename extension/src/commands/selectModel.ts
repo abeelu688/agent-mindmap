@@ -5,12 +5,12 @@ import {
   fetchModelList,
   getCuratedModels,
   type DetectedCli,
-} from "../llm/modelList";
-import { showCliInstallGuide } from "../llm/cliInstallGuide";
-import { CLI_SETTINGS_KEY } from "../llm/cliInstallGuide";
+} from "@agent-mindmap/core";
+import { showCliInstallGuide } from "../llm/cliInstallGuideUi";
+import { CLI_SETTINGS_KEY } from "@agent-mindmap/core";
 import { notifyInfo } from "../notify";
 import { t } from "../l10n/uiTranslate";
-import type { LlmProviderId } from "../llm/types";
+import type { LlmProviderId } from "@agent-mindmap/core";
 
 type CliPickItem = vscode.QuickPickItem & {
   cli: DetectedCli;

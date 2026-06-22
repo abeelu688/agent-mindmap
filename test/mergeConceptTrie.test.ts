@@ -11,10 +11,10 @@ import {
 import {
   canonicalizeConceptSegment,
   segmentKeyForMerge,
-} from "../extension/src/llm/cursorCliProvider";
+} from "@agent-mindmap/core";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { Topic, TopicGraph } from "../extension/src/llm/types";
+import type { Topic, TopicGraph } from "@agent-mindmap/core";
 
 function topic(
   title: string,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateSessionAnalysis } from "../extension/src/llm/pipelineValidate";
-import { LlmProviderError } from "../extension/src/llm/types";
+import { validateSessionAnalysis } from "@agent-mindmap/core";
+import { LlmProviderError } from "@agent-mindmap/core";
 
 const validAnalysis = {
   domains: ["frontend"],

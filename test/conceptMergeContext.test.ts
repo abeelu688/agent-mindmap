@@ -9,11 +9,11 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { SegmentEquivalence } from "../extension/src/llm/types";
-import { topicIdForTopic } from "../extension/src/llm/topicId";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
+import { topicIdForTopic } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 
 const equivalences: SegmentEquivalence[] = [
   {

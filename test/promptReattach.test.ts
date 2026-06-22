@@ -8,7 +8,7 @@ import {
   estimateReattachJsonInputBytes,
 } from "../extension/src/llm/promptReattachTabular";
 import { estimateReattachPromptBytes } from "../extension/src/llm/reattachChunking";
-import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
+import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import type {
   ReparentChain,
   TrieReparentInput,

@@ -4,11 +4,11 @@ import {
   buildMergeSessionAnalysisPrompt,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../../llm/promptMergeSessionAnalysis";
-import { validateSessionAnalysis } from "../../llm/pipelineValidate";
+import { validateSessionAnalysis } from "@agent-mindmap/core";
 import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
 import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
-import { scaleMergeSessionAnalysisTimeoutMs } from "../../llm/reattachTimeout";
-import { outputLanguageFromRecords } from "../../llm/outputLanguageFromRecords";
+import { scaleMergeSessionAnalysisTimeoutMs } from "@agent-mindmap/core";
+import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "./finalizeSessionAnalysis";
 import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 import type { AgentHostId } from "@agent-mindmap/core";
@@ -18,11 +18,11 @@ import type {
   LlmProvider,
   SegmentEquivalence,
   TopicPathDecision,
-} from "../../llm/types";
+} from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MergeInputMode } from "../../llm/trieReparentInput";
-import type { OutputLanguage } from "../../llm/promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 
 export type MergeSessionAnalysisOpts = {
   records: SessionRecord[];

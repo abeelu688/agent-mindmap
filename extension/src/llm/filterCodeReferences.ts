@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { CodeReference } from "./types";
+import type { CodeReference } from "@agent-mindmap/core";
 
 /**
  * Filter code references to only include files within the project.

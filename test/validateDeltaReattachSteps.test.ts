@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
+import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
 import {
   DeltaReattachValidationError,

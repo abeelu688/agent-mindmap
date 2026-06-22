@@ -6,7 +6,7 @@ import { clearProjectAnalysisCache } from "../extension/src/store/clearProjectAn
 import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
 import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import type { OntologyRecord } from "../shared/src";
-import type { SessionOutline } from "../extension/src/llm/types";
+import type { SessionOutline } from "@agent-mindmap/core";
 
 const sampleOutline: SessionOutline = {
   title: "Test",

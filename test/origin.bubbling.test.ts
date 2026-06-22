@@ -4,7 +4,7 @@ import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMa
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
 import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
-import type { TopicGraph } from "../extension/src/llm/types";
+import type { TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData, NodeOriginRef } from "@agent-mindmap/core";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
 

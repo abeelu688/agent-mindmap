@@ -1,6 +1,6 @@
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "./origin";
 import { mindMapLabelsForOutputLanguage } from "./outputLanguageLabels";
-import type { TopicGraph } from "../llm/types";
+import type { TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 
 const MAX_LABEL = 120;

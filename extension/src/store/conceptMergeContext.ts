@@ -3,9 +3,9 @@ import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
 import {
   collectSessionSegmentEquivalences,
   enhanceSegmentEquivalencesForMerge,
-} from "../llm/synonymHintDerive";
+} from "@agent-mindmap/core";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
-import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
   MERGE_DERIVE_SEGMENT_EQUIVALENCES,
@@ -29,8 +29,8 @@ import {
 import { getStoreForDir } from "./storeClient";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { MindMapProgress } from "../progress";
-import type { LlmProvider, SegmentEquivalence } from "../llm/types";
-import type { OutputLanguage } from "../llm/promptLanguage";
+import type { LlmProvider, SegmentEquivalence } from "@agent-mindmap/core";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 

@@ -3,9 +3,9 @@ import * as path from "path";
 import { agentLog } from "../log";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { outlineToTopicGraph, topicGraphToOutline } from "../llm/outlineToTopicGraph";
-import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import { writeJsonAtomic } from "./atomicWrite";
 import { buildConceptTrieStructure, type ConceptTrieNode } from "./mergeConceptTrie";
 import {
@@ -22,7 +22,7 @@ import type {
   SessionOutline,
   SessionTreeSnapshot,
   Topic,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "./ontologyTypes";
 import type {
   ConceptContextForMerge,

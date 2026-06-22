@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPrefixSubordinateHints,
   buildStructuralReattachHints,
-} from "../extension/src/llm/reattachStructuralHints";
+} from "@agent-mindmap/core";
 import {
   applyReattachStepsToRecords,
   inferPrefixSubordinateSteps,

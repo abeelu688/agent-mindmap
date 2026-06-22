@@ -8,7 +8,7 @@ import {
   buildSessionRecord,
   writeRecord,
 } from "../../extension/src/store/sessionStore";
-import type { SessionOutline } from "../../extension/src/llm/types";
+import type { SessionOutline } from "@agent-mindmap/core";
 
 /**
  * P1.3 → P2.4 contract test: the `Store` methods the extension routes its

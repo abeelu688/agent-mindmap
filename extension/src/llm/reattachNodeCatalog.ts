@@ -1,4 +1,4 @@
-import type { ReattachStep } from "./types";
+import type { ReattachStep } from "@agent-mindmap/core";
 
 /** Minimal chain shape for catalog numbering (avoids import cycle). */
 export type CatalogChainInput = {

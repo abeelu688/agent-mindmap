@@ -2,7 +2,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { createClaudeHost, type AgentHost } from "@agent-mindmap/core";
-import { cliMissingHintSummary } from "../llm/cliInstallGuide";
+import { cliMissingHintSummary } from "@agent-mindmap/core";
 
 export function getClaudeProjectsRoot(): string {
   const override = vscode.workspace

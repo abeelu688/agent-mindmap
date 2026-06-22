@@ -1,6 +1,6 @@
-import { PROMPT_VERSION } from "./promptOutline";
+import { PROMPT_VERSION } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { OutlineDetail, OutlineNode } from "./types";
+import type { OutlineDetail, OutlineNode } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 const HOST_MERGE_LABELS: Record<AgentHostId, string> = {

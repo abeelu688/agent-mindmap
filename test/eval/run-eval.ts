@@ -18,7 +18,7 @@ import {
   type EvalPaths,
 } from "../../extension/src/eval/loadEvalConfig";
 import { getProvider } from "../../extension/src/llm";
-import { PROMPT_VERSION } from "../../extension/src/llm/promptOutline";
+import { PROMPT_VERSION } from "@agent-mindmap/core";
 import { summarizeSession } from "../../extension/src/llm/summarizeSession";
 import {
   buildRecordMeta,

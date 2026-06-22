@@ -4,12 +4,12 @@ import * as vscode from "vscode";
 import { applyUiSettingToWorkspace } from "../ui/applyUiSettingWorkspace";
 import { readMindMapUiConfig, resolveThemeFilePath } from "../ui/mindMapUiConfig";
 import { t } from "../l10n/uiTranslate";
-import { getCuratedModels } from "../llm/modelList";
+import { getCuratedModels } from "@agent-mindmap/core";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
 import type { MindMapRoot, NodeOrigin } from "@agent-mindmap/core";
-import type { LlmProviderId } from "../llm/types";
+import type { LlmProviderId } from "@agent-mindmap/core";
 
 export type WebviewToExtensionMessage =
   | { type: "ready" }

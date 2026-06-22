@@ -1,5 +1,5 @@
 import { LlmProviderError } from "./types";
-import { reattachStepsToMoves } from "./reattachSteps";
+import { reattachStepsToMoves } from "./reattachStepsToMoves";
 import { parseConceptPath } from "./topicGraphValidate";
 import type {
   ConceptOntology,

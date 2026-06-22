@@ -1,9 +1,9 @@
 import {
   resolveConceptPathWithEquivalences,
   type TopicPathContext,
-} from "../llm/resolveConceptPathWithEquivalences";
-import { segmentKeyForMerge } from "../llm/topicGraphValidate";
-import type { SegmentEquivalence, Topic } from "../llm/types";
+} from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { SegmentEquivalence, Topic } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";
 
 type TopicLocation = {

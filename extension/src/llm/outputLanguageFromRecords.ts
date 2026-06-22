@@ -1,4 +1,4 @@
-import type { OutputLanguage } from "./promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 export type OutputLanguageFromRecordsOptions = {

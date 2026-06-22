@@ -1,11 +1,11 @@
-import { __testing as promptTesting } from "./prompt";
+import { __testing as promptTesting } from "@agent-mindmap/core";
 import {
   formatSessionAnalysisJsonContract,
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
-} from "./promptSessionAnalysisJsonContract";
+} from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
-import type { OutputLanguage } from "./promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 
 const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",

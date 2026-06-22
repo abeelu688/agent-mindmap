@@ -1,14 +1,14 @@
 import { buildConceptTrieStructure, type ConceptTrieNode } from "../store/mergeConceptTrie";
-import { collectConceptContextsForMerge } from "./buildConceptContexts";
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import { buildReattachNodeCatalog, type ReattachNodeCatalog } from "./reattachNodeCatalog";
+import { collectConceptContextsForMerge } from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import { buildReattachNodeCatalog, type ReattachNodeCatalog } from "@agent-mindmap/core";
 import {
   buildStructuralReattachHints,
   enrichStructuralHintsWithNodeIds,
   type StructuralReattachHints,
-} from "./reattachStructuralHints";
+} from "@agent-mindmap/core";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
-import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
+import type { ConceptOntologyNode, SegmentEquivalence } from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
 export type { ReattachNodeCatalog, StructuralReattachHints };

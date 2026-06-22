@@ -1,6 +1,6 @@
-import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
-import { topicIdForTopic } from "../llm/topicId";
+import { topicIdForTopic } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { SessionRecord } from "./storeTypes";
 

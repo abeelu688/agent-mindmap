@@ -1,4 +1,4 @@
-import { LlmProviderError, type LlmErrorCode } from "./llm/types";
+import { LlmProviderError, type LlmErrorCode } from "@agent-mindmap/core";
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 

@@ -13,7 +13,7 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { Topic, TopicGraph } from "../extension/src/llm/types";
+import type { Topic, TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData } from "@agent-mindmap/core";
 
 function topic(

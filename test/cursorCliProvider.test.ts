@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { __testing } from "../extension/src/llm/cursorCliProvider";
-import { validateTopicGraph } from "../extension/src/llm/topicGraphValidate";
-import { LlmProviderError } from "../extension/src/llm/types";
+import { __testingHeadlessCli as __testing } from "@agent-mindmap/core";
+import { validateTopicGraph } from "@agent-mindmap/core";
+import { LlmProviderError } from "@agent-mindmap/core";
 
 describe("isRetryableError", () => {
   it("retries on transient codes", () => {

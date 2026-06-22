@@ -4,7 +4,7 @@ import { getStoreForDir } from "../store/storeClient";
 import { mindMapLog } from "../webview/MindMapLog";
 import { computeBatchMergeCacheKey } from "./mergePipeline";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { OutputLanguage } from "../llm/promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 
 export type BatchMergeCacheLookup =

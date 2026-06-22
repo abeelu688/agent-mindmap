@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { buildConceptContextsFromAnalysis } from "../extension/src/llm/buildConceptContexts";
+import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
 import {
   collectChildEdgesFromOutline,
   enrichAnalysisNodesFromOutline,
-} from "../extension/src/llm/enrichNodeChildrenFromOutline";
+} from "@agent-mindmap/core";
 import { finalizeSessionAnalysis } from "../extension/src/pipeline/stages/finalizeSessionAnalysis";
 
 test("collectChildEdgesFromOutline reads conceptPath on leaves", () => {

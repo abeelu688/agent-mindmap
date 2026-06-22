@@ -6,8 +6,8 @@ import { agentDebugLog } from "../debugLog";
 import { agentLog } from "../log";
 import { getStoreDir } from "../paths";
 import { mindMapLog } from "../webview/MindMapLog";
-import { LlmProviderError } from "./types";
-import type { LlmDumpMeta, LlmErrorCode, LlmResponseSchema } from "./types";
+import { LlmProviderError } from "@agent-mindmap/core";
+import type { LlmDumpMeta, LlmErrorCode, LlmResponseSchema } from "@agent-mindmap/core";
 
 /** Visible folder name (no leading dot — easier to find in the workspace tree). */
 export const LLM_DUMP_FOLDER = "agent-mindmap-llm-dumps";

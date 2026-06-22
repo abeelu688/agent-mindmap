@@ -1,7 +1,7 @@
-import { normalizeConceptKey } from "./enrichNodeChildrenFromOutline";
-import { resolveConceptPathWithEquivalences } from "./resolveConceptPathWithEquivalences";
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ConceptOntologyNode, SegmentEquivalence, SessionAnalysis } from "./types";
+import { normalizeConceptKey } from "@agent-mindmap/core";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ConceptOntologyNode, SegmentEquivalence, SessionAnalysis } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 function buildCanonicalPathsFromNodes(nodes: ConceptOntologyNode[]): Map<string, string[]> {

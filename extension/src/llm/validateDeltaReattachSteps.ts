@@ -1,5 +1,5 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ReattachStep } from "./types";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ReattachStep } from "@agent-mindmap/core";
 import type { TrieReparentInput } from "./trieReparentInput";
 
 export class DeltaReattachValidationError extends Error {

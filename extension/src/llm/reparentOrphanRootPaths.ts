@@ -1,5 +1,5 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ConceptOntologyNode } from "./types";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ConceptOntologyNode } from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
 /** Reparent root paths [S, …] → [parent, S, …] when nested paths exist. */

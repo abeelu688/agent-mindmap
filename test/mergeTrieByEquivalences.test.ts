@@ -6,7 +6,7 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { SegmentEquivalence } from "../extension/src/llm/types";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 
 const equivalences: SegmentEquivalence[] = [
   {

@@ -13,7 +13,7 @@ import {
 } from "../extension/src/export/renderTranscriptMarkdown";
 import { markdownToTranscriptHtmlBody } from "../extension/src/export/renderTranscriptHtml";
 import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
-import { validateTopicGraph } from "../extension/src/llm/topicGraphValidate";
+import { validateTopicGraph } from "@agent-mindmap/core";
 import type { SessionMeta } from "../extension/src/mindmap/origin";
 
 describe("renderTranscriptMarkdown", () => {

@@ -1,22 +1,22 @@
 import { t as safeT } from "../l10n/uiTranslate";
-import { ONTOLOGY_PROMPT_VERSION } from "../llm/promptOntology";
-import { TOPIC_PATHS_PROMPT_VERSION } from "../llm/promptTopicPaths";
+import { ONTOLOGY_PROMPT_VERSION } from "@agent-mindmap/core";
+import { TOPIC_PATHS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
-import { PROMPT_VERSION as OUTLINE_PROMPT_VERSION } from "../llm/promptOutline";
+import { OUTLINE_PROMPT_VERSION } from "@agent-mindmap/core";
 import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
-} from "../llm/segmentContext";
+} from "@agent-mindmap/core";
 import { recordFreshnessToken, sha256Hex } from "./sessionStore";
 import { getStoreForDir } from "./storeClient";
-import type { OutputLanguage, PromptLanguage } from "../llm/promptLanguage";
+import type { OutputLanguage, PromptLanguage } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";
 import type { ConceptOntologyRecord, TopicConceptPathDecision } from "./ontologyTypes";
 import type { MindMapProgress } from "../progress";
-import type { LlmProvider } from "../llm/types";
+import type { LlmProvider } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 
 export type OntologyIndex = {

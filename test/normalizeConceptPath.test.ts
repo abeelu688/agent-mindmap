@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeConceptPath } from "../extension/src/llm/normalizeConceptPath";
+import { normalizeConceptPath } from "@agent-mindmap/core";
 
 describe("normalizeConceptPath", () => {
   it("drops consecutive duplicate segments (case-insensitive via merge key)", () => {

@@ -1,6 +1,6 @@
-import { ClaudeCliProvider } from "./claudeCliProvider";
-import { CursorCliProvider } from "./cursorCliProvider";
-import { LlmProviderError, type LlmProvider, type LlmProviderOptions } from "./types";
+import { ClaudeCliProvider } from "@agent-mindmap/core";
+import { CursorCliProvider } from "@agent-mindmap/core";
+import { LlmProviderError, type LlmProvider, type LlmProviderOptions } from "@agent-mindmap/core";
 
 export function getProvider(options: LlmProviderOptions): LlmProvider {
   switch (options.provider) {
@@ -18,7 +18,7 @@ export function getProvider(options: LlmProviderOptions): LlmProvider {
   }
 }
 
-export { LlmProviderError } from "./types";
+export { LlmProviderError } from "@agent-mindmap/core";
 export type {
   LlmProvider,
   LlmProviderId,
@@ -32,5 +32,5 @@ export type {
   Topic,
   TopicGraph,
   TopicItem,
-} from "./types";
-export { PROMPT_VERSION } from "./promptOutline";
+} from "@agent-mindmap/core";
+export { PROMPT_VERSION } from "@agent-mindmap/core";

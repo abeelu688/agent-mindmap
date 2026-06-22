@@ -5,7 +5,7 @@ import {
   planReattachChunks,
   REATTACH_PROMPT_TARGET_BYTES,
 } from "../extension/src/llm/reattachChunking";
-import { buildReattachNodeCatalog } from "../extension/src/llm/reattachNodeCatalog";
+import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
 
 function makeChain(chainIndex: number, from: string, sessionIds: string[]): ReparentChain {

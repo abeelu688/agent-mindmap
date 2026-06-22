@@ -6,14 +6,14 @@ import {
   type ReparentChain,
   type TrieReparentInput,
 } from "./trieReparentInput";
-import { buildReattachNodeCatalog } from "./reattachNodeCatalog";
+import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import {
   buildStructuralReattachHints,
   enrichStructuralHintsWithNodeIds,
-} from "./reattachStructuralHints";
-import { segmentKeyForMerge } from "./topicGraphValidate";
+} from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { PromptLanguage } from "./promptLanguage";
+import type { PromptLanguage } from "@agent-mindmap/core";
 
 /** Stay under headlessCli MAX_PROMPT_BYTES (96 KiB) argv cap. */
 export const REATTACH_PROMPT_TARGET_BYTES = 90 * 1024;

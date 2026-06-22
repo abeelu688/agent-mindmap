@@ -1,11 +1,11 @@
-import { buildTopicContextIndex } from "../../llm/segmentContext";
+import { buildTopicContextIndex } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "../../store/ontologyTypes";
 import type { SessionRecord } from "../../store/storeTypes";
 import type {
   ConceptOntologyMapping,
   ConceptOntologyNode,
   TopicPathDecision,
-} from "../../llm/types";
+} from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../../store/ontologyTypes";
 
 export type CollectedMergeTerms = {

@@ -16,7 +16,7 @@ import {
   writeRecord,
 } from "../extension/src/store/sessionStore";
 import type { SessionRecord, SessionRecordMeta } from "../extension/src/store/storeTypes";
-import type { SessionOutline } from "../extension/src/llm/types";
+import type { SessionOutline } from "@agent-mindmap/core";
 
 const sampleOutline: SessionOutline = {
   title: "Binder",

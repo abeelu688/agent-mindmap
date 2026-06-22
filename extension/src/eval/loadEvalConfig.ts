@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import type { LlmProviderId } from "../llm/types";
+import type { LlmProviderId } from "@agent-mindmap/core";
 
 export type EvalPromptParams = {
   maxTopics: number;

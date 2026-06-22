@@ -13,7 +13,7 @@ import type {
   ReattachStep,
   SegmentEquivalence,
   SessionAnalysis,
-} from "../../llm/types";
+} from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 
 export type { ConceptMergePrepOntology } from "../../store/prepareConceptMergeRecords";

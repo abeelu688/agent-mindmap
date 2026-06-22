@@ -1,7 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { __testing, resolveCliSpawnTarget } from "../extension/src/llm/resolveWindowsCliSpawn";
+import { __testingWindowsCliSpawn as __testing, resolveCliSpawnTarget } from "@agent-mindmap/core";
 
 describe("resolveCliSpawnTarget", () => {
   afterEach(() => {

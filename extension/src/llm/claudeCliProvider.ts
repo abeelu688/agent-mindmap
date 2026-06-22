@@ -1,10 +1,10 @@
-import { HeadlessCliProvider } from "./headlessCli";
+import { HeadlessCliProvider } from "@agent-mindmap/core";
 import type {
   LlmProvider,
   LlmProviderOptions,
   LlmSummarizeResult,
-} from "./types";
-import type { SummarizeInput } from "./types";
+} from "@agent-mindmap/core";
+import type { SummarizeInput } from "@agent-mindmap/core";
 
 const DEFAULT_BINARIES = ["claude"];
 

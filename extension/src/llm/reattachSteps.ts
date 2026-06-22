@@ -1,16 +1,16 @@
 import { mindMapLog } from "../webview/MindMapLog";
 import { applyReattachMovesToRecords, normalizeHubAttachMoves } from "./applyReattachMoves";
-import { resolveReattachStepsWithCatalog } from "./reattachNodeCatalog";
+import { resolveReattachStepsWithCatalog } from "@agent-mindmap/core";
 import {
   buildPrefixSubordinateHints,
   segmentsInSameEquivalenceGroup,
   type PrefixSubordinateHint,
-} from "./reattachStructuralHints";
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ReattachNodeCatalog } from "./reattachNodeCatalog";
+} from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ReattachNodeCatalog } from "@agent-mindmap/core";
 import type { ReparentChain, TopBranchSynonymHint } from "./trieReparentInput";
-import type { ReattachMove, ReattachStep, ReattachStepKind } from "./types";
-import type { SegmentEquivalence } from "./types";
+import type { ReattachMove, ReattachStep, ReattachStepKind } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 export function reattachStepToMove(step: ReattachStep): ReattachMove {

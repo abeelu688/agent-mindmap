@@ -1,0 +1,696 @@
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "child_process";
+import { agentDebugLog } from "../debugLog";
+import { getCoreLogger } from "../logging";
+import { resolveCliSpawnTarget } from "./resolveWindowsCliSpawn";
+import { validateMergedOutline, validateSessionOutline } from "./outlineValidate";
+import {
+  validateConceptOntology,
+  validateOntologyRefine,
+  validateReattachMoves,
+  validateTopicPaths,
+} from "./ontologyValidate";
+import {
+  validateSessionConceptExtract,
+  validateSessionSynonymRefine,
+  validateSessionAnalysis,
+} from "./pipelineValidate";
+import {
+  LlmProviderError,
+  type LlmProviderOptions,
+  type LlmResponseSchema,
+  type LlmSummarizeResult,
+  type MergedOutline,
+  type SessionOutline,
+  type SummarizeInput,
+  type TopicGraph,
+} from "./types";
+import { dumpLlmCallResult } from "./dumpHooks";
+import { validateTopicGraph } from "./topicGraphValidate";
+
+export type HeadlessCliConfig = {
+  readonly providerLabel: string;
+  readonly defaultBinaries: string[];
+  readonly missingInstallHint: string;
+  buildArgs(opts: LlmProviderOptions, prompt: string): string[];
+};
+
+const MAX_PROMPT_BYTES = 96 * 1024;
+const MAX_BACKOFF_MS = 10_000;
+const MAX_STDOUT_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_STDERR_BYTES = 1 * 1024 * 1024; // 1 MB
+const STDERR_TAIL_BYTES = 32 * 1024; // keep last 32 KB for error messages
+
+type RunResult = { stdout: string; stderr: string };
+
+function uniq(arr: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of arr) {
+    if (a && !seen.has(a)) {
+      seen.add(a);
+      out.push(a);
+    }
+  }
+  return out;
+}
+
+function spawnCliProcess(
+  target: ReturnType<typeof resolveCliSpawnTarget>
+): ChildProcessWithoutNullStreams {
+  const options: SpawnOptions = {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+    ...(target.shell ? { shell: true } : {}),
+  };
+  return spawn(target.command, target.args, options) as ChildProcessWithoutNullStreams;
+}
+
+export function runCli(
+  bin: string,
+  args: string[],
+  signal: AbortSignal,
+  timeoutMs: number,
+  providerLabel: string
+): Promise<RunResult> {
+  return new Promise<RunResult>((resolve, reject) => {
+    const spawnTarget = resolveCliSpawnTarget(bin, args);
+    let proc;
+    try {
+      proc = spawnCliProcess(spawnTarget);
+    } catch (err) {
+      reject(
+        new LlmProviderError(
+          "cli-missing",
+          `Failed to launch ${bin}: ${(err as Error).message}`,
+          err
+        )
+      );
+      return;
+    }
+
+    let stdout = "";
+    let stderr = "";
+    let stdoutOverflow = false;
+    let stderrOverflow = false;
+    let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+
+    const killProc = () => {
+      try {
+        // On Windows, SIGTERM is not supported and results in a hard kill
+        // (TerminateProcess). Using no argument sends SIGTERM on POSIX and
+        // uses TerminateProcess on Windows, which is the same behavior but
+        // more idiomatic. For a graceful shutdown on Windows, we'd need
+        // taskkill, but child CLI processes don't have cleanup needs.
+        proc.kill();
+      } catch {
+        // ignore
+      }
+    };
+
+    const onAbort = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      killProc();
+      reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        killProc();
+        reject(
+          new LlmProviderError(
+            "timeout",
+            `${providerLabel} timed out after ${timeoutMs}ms`,
+            undefined,
+            { stdout, stderr }
+          )
+        );
+      }, timeoutMs);
+    }
+
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
+    proc.stdout.on("data", (chunk: string) => {
+      if (stdoutOverflow) return;
+      stdout += chunk;
+      if (Buffer.byteLength(stdout, "utf8") > MAX_STDOUT_BYTES) {
+        stdoutOverflow = true;
+        stdout = stdout.slice(0, MAX_STDOUT_BYTES);
+        if (!settled) {
+          settled = true;
+          killProc();
+          reject(
+            new LlmProviderError(
+              "output-too-large",
+              `${providerLabel} stdout exceeded ${MAX_STDOUT_BYTES} bytes`,
+              undefined,
+              { stdout, stderr }
+            )
+          );
+        }
+      }
+    });
+    proc.stderr.on("data", (chunk: string) => {
+      if (stderrOverflow) return;
+      stderr += chunk;
+      if (Buffer.byteLength(stderr, "utf8") > MAX_STDERR_BYTES) {
+        stderrOverflow = true;
+        // Keep only the tail for diagnostics
+        const bytes = Buffer.from(stderr, "utf8");
+        stderr = bytes.slice(bytes.length - STDERR_TAIL_BYTES).toString("utf8");
+      }
+    });
+
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (err.code === "ENOENT") {
+        reject(new LlmProviderError("cli-missing", `Binary not found: ${bin}`, err));
+      } else {
+        reject(new LlmProviderError("cli-failed", `Failed to spawn ${bin}: ${err.message}`, err));
+      }
+    });
+
+    proc.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (code !== 0) {
+        reject(
+          new LlmProviderError(
+            "cli-failed",
+            `${bin} exited with code ${code}: ${stderr.trim().slice(0, 500)}`,
+            undefined,
+            { stdout, stderr }
+          )
+        );
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+function extractPayload(stdout: string): string {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const tryParseJson = (s: string): unknown => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const pickPayload = (obj: unknown): string | undefined => {
+    if (typeof obj !== "object" || obj === null) {
+      return undefined;
+    }
+    const o = obj as Record<string, unknown>;
+    for (const key of [
+      "result",
+      "structured_output",
+      "response",
+      "content",
+      "text",
+      "message",
+      "output",
+    ]) {
+      const v = o[key];
+      if (typeof v === "string" && v.trim()) {
+        return v;
+      }
+      if (v && typeof v === "object") {
+        return JSON.stringify(v);
+      }
+    }
+    return undefined;
+  };
+
+  const direct = tryParseJson(trimmed);
+  if (direct !== undefined) {
+    if (Array.isArray(direct)) {
+      for (const item of direct) {
+        const s = pickPayload(item);
+        if (s) {
+          return s;
+        }
+      }
+    } else {
+      const s = pickPayload(direct);
+      if (s) {
+        return s;
+      }
+    }
+  }
+
+  let fallback = "";
+  for (const line of trimmed.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) {
+      continue;
+    }
+    const obj = tryParseJson(t);
+    const s = pickPayload(obj);
+    if (s) {
+      fallback = s;
+    }
+  }
+  if (fallback) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function stripFences(s: string): string {
+  return s
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+}
+
+function extractBalancedJsonSlice(cleaned: string, open: "{" | "["): string | undefined {
+  const close = open === "{" ? "}" : "]";
+  const start = cleaned.indexOf(open);
+  if (start < 0) {
+    return undefined;
+  }
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (ch === open) {
+      depth++;
+    } else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        return cleaned.slice(start, i + 1);
+      }
+    }
+  }
+  return undefined;
+}
+
+function firstParseableJsonSlice(cleaned: string, open: "{" | "["): string | undefined {
+  const slice = extractBalancedJsonSlice(cleaned, open);
+  if (!slice) {
+    return undefined;
+  }
+  for (const candidate of [slice, repairJsonText(slice)]) {
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // try next variant
+    }
+  }
+  return slice;
+}
+
+function extractTopicsJson(payload: string): string {
+  const cleaned = stripFences(payload.trim());
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    // fall through
+  }
+  const arrayStart = cleaned.indexOf("[");
+  const objectStart = cleaned.indexOf("{");
+  // Prefer a top-level JSON array (e.g. code-ref-descriptions) over the first object inside it.
+  if (arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart)) {
+    const arraySlice = firstParseableJsonSlice(cleaned, "[");
+    if (arraySlice) {
+      return arraySlice;
+    }
+  }
+  const objectSlice = firstParseableJsonSlice(cleaned, "{");
+  if (objectSlice) {
+    return objectSlice;
+  }
+  return cleaned;
+}
+
+/** Best-effort fixes for common LLM JSON mistakes (trailing commas, smart quotes, missing commas between objects/arrays). */
+export function repairJsonText(s: string): string {
+  return s
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/"\s*}\s*{/g, '"},{')
+    .replace(/"\s*]\s*\[\s*"/g, '"],["')
+    .replace(/"\s*\}\s*\[\s*"/g, '"},["');
+}
+
+function tryParseJsonLoose(text: string): unknown | undefined {
+  const variants = [text, repairJsonText(text)];
+  for (const candidate of variants) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // continue
+    }
+    const extracted = extractTopicsJson(candidate);
+    for (const slice of [extracted, repairJsonText(extracted)]) {
+      try {
+        return JSON.parse(slice);
+      } catch {
+        // continue
+      }
+    }
+  }
+  return undefined;
+}
+
+function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
+  const payload = extractPayload(stdout);
+  if (!payload.trim()) {
+    throw new LlmProviderError("empty", `${providerLabel} returned empty output`);
+  }
+  const jsonText = extractTopicsJson(payload);
+  const parsed = tryParseJsonLoose(jsonText);
+  if (parsed !== undefined) {
+    return parsed;
+  }
+
+  throw new LlmProviderError(
+    "bad-json",
+    `Failed to parse JSON from ${providerLabel} (output may include prose or truncated JSON)`
+  );
+}
+
+export function parseTopicGraphFromStdout(stdout: string, providerLabel: string): TopicGraph {
+  return validateTopicGraph(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionOutlineFromStdout(
+  stdout: string,
+  providerLabel: string
+): SessionOutline {
+  return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseMergedOutlineFromStdout(stdout: string, providerLabel: string): MergedOutline {
+  return validateMergedOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseConceptOntologyFromStdout(stdout: string, providerLabel: string) {
+  return validateConceptOntology(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseTopicPathsFromStdout(stdout: string, providerLabel: string) {
+  return validateTopicPaths(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseReattachMovesFromStdout(stdout: string, providerLabel: string) {
+  return validateReattachMoves(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseOntologyRefineFromStdout(stdout: string, providerLabel: string) {
+  return validateOntologyRefine(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionConceptExtractFromStdout(stdout: string, providerLabel: string) {
+  return validateSessionConceptExtract(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionSynonymRefineFromStdout(stdout: string, providerLabel: string) {
+  return validateSessionSynonymRefine(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionOutlineByTreeFromStdout(stdout: string, providerLabel: string) {
+  return validateSessionOutline(parseJsonFromStdout(stdout, providerLabel));
+}
+
+export function parseSessionAnalysisFromStdout(stdout: string, providerLabel: string) {
+  return validateSessionAnalysis(parseJsonFromStdout(stdout, providerLabel));
+}
+
+function parseBySchema(
+  stdout: string,
+  providerLabel: string,
+  schema: LlmResponseSchema
+): TopicGraph | SessionOutline | MergedOutline | unknown {
+  switch (schema) {
+    case "topic-graph":
+      return parseTopicGraphFromStdout(stdout, providerLabel);
+    case "merged-outline":
+      return parseMergedOutlineFromStdout(stdout, providerLabel);
+    case "concept-ontology":
+      return parseConceptOntologyFromStdout(stdout, providerLabel);
+    case "topic-paths":
+      return parseTopicPathsFromStdout(stdout, providerLabel);
+    case "reattach-moves":
+      return parseReattachMovesFromStdout(stdout, providerLabel);
+    case "ontology-refine":
+      return parseOntologyRefineFromStdout(stdout, providerLabel);
+    case "session-concept-extract":
+      return parseSessionConceptExtractFromStdout(stdout, providerLabel);
+    case "session-synonym-refine":
+      return parseSessionSynonymRefineFromStdout(stdout, providerLabel);
+    case "session-outline-by-tree":
+      return parseSessionOutlineByTreeFromStdout(stdout, providerLabel);
+    case "session-analysis":
+      // Parse JSON only; validation is handled by the caller (runLlmStage.validate)
+      return parseJsonFromStdout(stdout, providerLabel);
+    case "code-ref-descriptions":
+      return parseJsonFromStdout(stdout, providerLabel);
+    case "session-outline":
+    default:
+      return parseSessionOutlineFromStdout(stdout, providerLabel);
+  }
+}
+
+function isRetryableError(err: LlmProviderError): boolean {
+  switch (err.code) {
+    case "timeout":
+    case "cli-failed":
+    case "bad-json":
+    case "bad-shape":
+      return true;
+    case "cli-missing":
+    case "cancelled":
+    case "empty":
+    case "output-too-large":
+      return false;
+    default:
+      return false;
+  }
+}
+
+function sleepWithCancel(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new LlmProviderError("cancelled", "LLM call was cancelled"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function computeBackoff(base: number, attempt: number): number {
+  const exp = base * Math.pow(2, Math.max(0, attempt - 1));
+  const jitter = exp * 0.25 * (Math.random() * 2 - 1);
+  return Math.min(MAX_BACKOFF_MS, Math.max(0, Math.round(exp + jitter)));
+}
+
+export class HeadlessCliProvider {
+  constructor(
+    public readonly id: string,
+    private readonly config: HeadlessCliConfig,
+    private readonly options: LlmProviderOptions
+  ) {}
+
+  async summarize(
+    input: SummarizeInput,
+    signal: AbortSignal
+  ): Promise<import("./types").LlmSummarizeResult> {
+    const responseSchema = input.responseSchema ?? "session-outline";
+    agentDebugLog(
+      "headlessCli.ts:summarize",
+      "CLI summarize enter",
+      {
+        responseSchema,
+        hasDumpMeta: input.dumpMeta != null,
+        dumpStageId: input.dumpMeta?.stageId ?? null,
+        providerId: this.id,
+      },
+      "C"
+    );
+    const promptBytes = Buffer.byteLength(input.prompt, "utf8");
+    if (promptBytes > MAX_PROMPT_BYTES) {
+      throw new LlmProviderError(
+        "cli-failed",
+        `Prompt too large for argv (${promptBytes}B > ${MAX_PROMPT_BYTES}B). ` +
+          "Reduce agentMindmap.maxTopics/maxItemsPerTopic or trim transcript."
+      );
+    }
+
+    const candidates = uniq([this.options.cliPath, ...this.config.defaultBinaries]);
+    const args = this.config.buildArgs(this.options, input.prompt);
+    const maxAttempts = Math.max(1, this.options.maxAttempts || 1);
+    const backoffBase = Math.max(0, this.options.retryBackoffMs || 0);
+    const timeoutMs = input.timeoutMs ?? this.options.timeoutMs;
+
+    let lastErr: LlmProviderError | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      input.onAttempt?.(attempt, maxAttempts);
+      let allMissing: LlmProviderError | undefined;
+      let runErr: LlmProviderError | undefined;
+      const attemptStarted = performance.now();
+
+      for (const bin of candidates) {
+        const started = performance.now();
+        let stdout = "";
+        let stderr = "";
+        try {
+          const run = await runCli(bin, args, signal, timeoutMs, this.config.providerLabel);
+          stdout = run.stdout;
+          stderr = run.stderr;
+          const durationMs = performance.now() - started;
+          if (attempt > 1) {
+            getCoreLogger().info(`LLM (${this.id}) succeeded on attempt ${attempt}/${maxAttempts}`);
+          }
+          try {
+            const parsed = parseBySchema(stdout, this.config.providerLabel, responseSchema);
+            await dumpLlmCallResult({
+              input,
+              providerId: this.id,
+              stdout,
+              stderr,
+              parsed,
+              attempt,
+              maxAttempts,
+              durationMs,
+            });
+            return parsed as LlmSummarizeResult;
+          } catch (parseErr) {
+            const durationMs = performance.now() - started;
+            await dumpLlmCallResult({
+              input,
+              providerId: this.id,
+              stdout,
+              stderr,
+              error: parseErr,
+              attempt,
+              maxAttempts,
+              durationMs,
+            });
+            throw parseErr;
+          }
+        } catch (err) {
+          const lpe =
+            err instanceof LlmProviderError
+              ? err
+              : new LlmProviderError("cli-failed", String(err), err);
+          if (lpe.cliCapture) {
+            stdout = lpe.cliCapture.stdout;
+            stderr = lpe.cliCapture.stderr;
+          }
+          if (lpe.code === "cli-missing") {
+            allMissing = lpe;
+            continue;
+          }
+          runErr = lpe;
+          break;
+        }
+      }
+
+      const attemptErr =
+        runErr ?? allMissing ?? new LlmProviderError("cli-missing", this.config.missingInstallHint);
+
+      const isLastAttempt = attempt >= maxAttempts;
+      const shouldDumpFailure =
+        input.dumpMeta != null && (!isRetryableError(attemptErr) || isLastAttempt);
+      if (shouldDumpFailure) {
+        const cap = attemptErr.cliCapture;
+        await dumpLlmCallResult({
+          input,
+          providerId: this.id,
+          stdout: cap?.stdout ?? "",
+          stderr: cap?.stderr,
+          error: attemptErr,
+          attempt,
+          maxAttempts,
+          durationMs: performance.now() - attemptStarted,
+        });
+      }
+      if (!isRetryableError(attemptErr) || isLastAttempt) {
+        throw attemptErr;
+      }
+
+      lastErr = attemptErr;
+      const delay = computeBackoff(backoffBase, attempt);
+      getCoreLogger().warn(
+        `LLM (${this.id}) attempt ${attempt}/${maxAttempts} failed (${attemptErr.code}); retrying in ${delay}ms…`
+      );
+      await sleepWithCancel(delay, signal);
+    }
+    throw lastErr ?? new LlmProviderError("cli-failed", "All attempts failed");
+  }
+}
+
+export const __testingHeadlessCli = {
+  resolveCliSpawnTarget,
+  extractPayload,
+  extractTopicsJson,
+  repairJsonText,
+  parseJsonFromStdout,
+  parseTopicGraphFromStdout,
+  parseSessionOutlineFromStdout,
+  parseMergedOutlineFromStdout,
+  isRetryableError,
+  computeBackoff,
+  sleepWithCancel,
+};

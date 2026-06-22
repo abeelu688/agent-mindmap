@@ -1,5 +1,5 @@
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { SessionConceptExtract } from "./types";
+import type { SessionConceptExtract } from "@agent-mindmap/core";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",

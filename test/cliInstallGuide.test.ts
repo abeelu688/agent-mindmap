@@ -5,7 +5,7 @@ import {
   CURSOR_CLI_DOCS_URL,
   CURSOR_INSTALL_UNIX,
   CURSOR_INSTALL_WIN32,
-} from "../extension/src/llm/cliInstallGuide";
+} from "@agent-mindmap/core";
 
 const identityT = (
   _key: string,

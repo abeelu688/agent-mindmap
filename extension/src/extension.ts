@@ -16,7 +16,7 @@ import { checkRepoModeGate, getProjectMode, type RepoGateFailure } from "./host/
 import { t } from "./l10n/uiTranslate";
 import { logLlmDumpLocationsOnce } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
-import { LlmProviderError } from "./llm/types";
+import { LlmProviderError } from "@agent-mindmap/core";
 import { getStore } from "./store/storeClient";
 import { resolveLlmProviderId } from "./llmOptions";
 import { setActiveSession } from "./commands/openLatest";

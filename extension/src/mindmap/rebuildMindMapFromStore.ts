@@ -7,7 +7,7 @@ import {
 } from "../store/conceptMergeContext";
 import { buildOutlineMindMap } from "./buildOutlineMindMap";
 import type { SessionMeta } from "./origin";
-import type { OutputLanguage } from "../llm/promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "../store/storeTypes";
 

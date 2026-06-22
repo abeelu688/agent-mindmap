@@ -1,17 +1,17 @@
 import { readSessionFile } from "@agent-mindmap/core";
 import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
-import { sanitizeSessionOutline } from "../../llm/sanitizeOutline";
-import { countUserQueries } from "../../llm/sanitizeTopicGraph";
+import { sanitizeSessionOutline } from "@agent-mindmap/core";
+import { countUserQueries } from "@agent-mindmap/core";
 import { getHostById } from "../../host/registry";
 import { getStoreForDir } from "../../store/storeClient";
-import { resolveConceptPathWithEquivalences } from "../../llm/resolveConceptPathWithEquivalences";
-import { normalizeConceptPath } from "../../llm/normalizeConceptPath";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import { normalizeConceptPath } from "@agent-mindmap/core";
 import { logPipelineStageTiming } from "../pipelineTiming";
 import { organizeByTree } from "./organizeByTree";
 import type { CollectedMergeTerms } from "./collectMergeTerms";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MindMapProgress } from "../../progress";
-import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "../../llm/types";
+import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 
 export type ReorganizeSessionsOpts = {

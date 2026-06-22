@@ -3,7 +3,7 @@ import { buildSessionTree } from "../extension/src/pipeline/stages/buildSessionT
 import type {
   SessionConceptExtract,
   SessionSynonymRefine,
-} from "../extension/src/llm/types";
+} from "@agent-mindmap/core";
 
 describe("buildSessionTree", () => {
   it("builds nodes and topic paths from extract + synonyms", () => {

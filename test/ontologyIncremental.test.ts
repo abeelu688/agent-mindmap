@@ -15,9 +15,9 @@ import {
 } from "../extension/src/store/sessionStore";
 import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
-import type { LlmProvider } from "../extension/src/llm/types";
+import type { LlmProvider } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {

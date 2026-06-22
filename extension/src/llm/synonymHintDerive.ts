@@ -1,5 +1,5 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ConceptOntologyNode, SegmentEquivalence } from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 import type { SessionRecord } from "../store/storeTypes";
 

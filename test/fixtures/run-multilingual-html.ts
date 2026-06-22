@@ -35,7 +35,7 @@ import {
   type LoadDeps,
 } from "../../extension/src/sessionLoader";
 import type { SessionRecord } from "../../extension/src/store/storeTypes";
-import type { LlmErrorCode } from "../../extension/src/llm/types";
+import type { LlmErrorCode } from "@agent-mindmap/core";
 
 const execFileAsync = promisify(execFile);
 

@@ -5,9 +5,9 @@ import {
 import {
   formatSessionAnalysisJsonContract,
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
-} from "./promptSessionAnalysisJsonContract";
+} from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { OutputLanguage } from "./promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 
 /** Bump when {@link buildMergeSessionAnalysisPrompt} behavior / schema / instructions change. */
 export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 11;

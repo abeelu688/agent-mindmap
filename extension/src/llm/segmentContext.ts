@@ -1,6 +1,6 @@
-import { topicIdForTopic } from "./topicId";
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { OutlineNode } from "./types";
+import { topicIdForTopic } from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { OutlineNode } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
@@ -9,7 +9,7 @@ export type {
   NodeSegmentRelationshipHint,
   SegmentOverlapHint,
   SiblingSegmentOverlapHint,
-} from "./synonymHintDerive";
+} from "@agent-mindmap/core";
 export {
   buildAllSegmentOverlapHints,
   buildChainCollapseOverlapHints,
@@ -20,13 +20,13 @@ export {
   deriveEquivalencesFromTopicPaths,
   enhanceSegmentEquivalencesForMerge,
   mergeSegmentEquivalencesLists,
-} from "./synonymHintDerive";
+} from "@agent-mindmap/core";
 export {
   applyOrphanRootReparent,
   buildOrphanRootReparentRules,
   rulesToReparentMap,
   type OrphanRootReparentRule,
-} from "./reparentOrphanRootPaths";
+} from "@agent-mindmap/core";
 
 export type SegmentSliceContext = {
   index: number;

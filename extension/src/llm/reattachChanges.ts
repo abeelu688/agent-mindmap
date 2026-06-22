@@ -1,5 +1,5 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
-import type { ReattachStep } from "./types";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import type { ReattachStep } from "@agent-mindmap/core";
 
 /** LLM-facing delta merge change (segment keys / labels, not node ids). */
 export type ReattachTreeChange =

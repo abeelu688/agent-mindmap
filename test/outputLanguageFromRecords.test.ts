@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outputLanguageFromRecords } from "../extension/src/llm/outputLanguageFromRecords";
+import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { buildRecordMeta, buildSessionRecord, sha256Hex } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 

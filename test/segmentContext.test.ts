@@ -3,7 +3,7 @@ import {
   buildRefineContextSamples,
   buildSiblingSegmentOverlapHints,
   buildTopicContextIndex,
-} from "../extension/src/llm/segmentContext";
+} from "@agent-mindmap/core";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -11,7 +11,7 @@ import {
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
-import { topicIdForTopic } from "../extension/src/llm/topicId";
+import { topicIdForTopic } from "@agent-mindmap/core";
 
 function recordWithOutline(
   sessionId: string,

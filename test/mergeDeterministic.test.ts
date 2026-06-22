@@ -10,7 +10,7 @@ import {
 } from "../extension/src/store/sessionStore";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { TopicGraph } from "../extension/src/llm/types";
+import type { TopicGraph } from "@agent-mindmap/core";
 
 const graphA: TopicGraph = {
   title: "Binder",

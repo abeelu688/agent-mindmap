@@ -1,5 +1,5 @@
-import { resolveConceptPathWithEquivalences } from "./resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence } from "./types";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 /** Apply M2 ontology segmentEquivalences to topic paths (domain-agnostic). */

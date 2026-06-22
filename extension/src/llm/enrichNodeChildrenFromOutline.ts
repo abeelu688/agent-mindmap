@@ -3,7 +3,7 @@ import type {
   OutlineNode,
   SessionAnalysis,
   SessionOutline,
-} from "./types";
+} from "@agent-mindmap/core";
 
 export function normalizeConceptKey(key: string): string {
   return key.toLowerCase().trim();

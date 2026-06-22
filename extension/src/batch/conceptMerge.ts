@@ -5,7 +5,7 @@ import { getStoreForDir } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import { mindMapLog } from "../webview/MindMapLog";
 import { t } from "../l10n/uiTranslate";
-import type { LlmProviderOptions, LlmProvider } from "../llm/types";
+import type { LlmProviderOptions, LlmProvider } from "@agent-mindmap/core";
 import type { ConceptMergeLlmOpts } from "../store/conceptMergeContext";
 import type { ProjectMergeMode } from "../pipeline/deltaMergePipeline";
 import type { MindMapProgress } from "../progress";

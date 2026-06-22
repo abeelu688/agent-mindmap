@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { buildConceptContextsFromAnalysis } from "../extension/src/llm/buildConceptContexts";
+import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
 
 test("buildConceptContextsFromAnalysis derives childKeys and domainKeys", () => {
   const contexts = buildConceptContextsFromAnalysis(

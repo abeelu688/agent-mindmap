@@ -3,15 +3,15 @@ import {
   buildSessionAnalysisPrompt,
   SESSION_ANALYSIS_PROMPT_VERSION,
   type SessionAnalysisPromptOptions,
-} from "../../llm/promptSessionAnalysis";
-import { validateSessionAnalysis } from "../../llm/pipelineValidate";
+} from "@agent-mindmap/core";
+import { validateSessionAnalysis } from "@agent-mindmap/core";
 import { buildPendingCodeReferencesFromEvents } from "../../llm/extractCodeReferences";
-import type { CodeReference, LlmProvider, SessionAnalysis } from "../../llm/types";
+import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
 import type { StageTimingOpts } from "../stageTimingOpts";
-import type { OutputLanguage } from "../../llm/promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 
 export type AnalyzeSessionOpts = StageTimingOpts & {
   events: ChatEvent[];

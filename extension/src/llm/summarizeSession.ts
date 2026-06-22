@@ -6,13 +6,13 @@ import { createHeartbeat } from "../progress";
 import { format, t as safeT } from "../l10n/uiTranslate";
 import { writeJsonAtomic } from "../store/atomicWrite";
 import { agentDebugLog } from "../debugLog";
-import { buildOutlinePrompt, type OutlinePromptOptions } from "./promptOutline";
-import { validateSessionOutline } from "./outlineValidate";
-import { LlmProviderError, type LlmProvider, type SessionOutline } from "./types";
+import { buildOutlinePrompt, type OutlinePromptOptions } from "@agent-mindmap/core";
+import { validateSessionOutline } from "@agent-mindmap/core";
+import { LlmProviderError, type LlmProvider, type SessionOutline } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
-import type { PromptLanguage } from "./promptLanguage";
+import type { PromptLanguage } from "@agent-mindmap/core";
 
 export type SummarizeOptions = {
   prompt: OutlinePromptOptions;

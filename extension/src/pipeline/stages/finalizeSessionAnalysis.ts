@@ -1,7 +1,7 @@
 import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
-import { sanitizeSessionOutline } from "../../llm/sanitizeOutline";
-import { buildConceptContextsFromAnalysis } from "../../llm/buildConceptContexts";
-import { enrichAnalysisNodesFromOutline } from "../../llm/enrichNodeChildrenFromOutline";
+import { sanitizeSessionOutline } from "@agent-mindmap/core";
+import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
+import { enrichAnalysisNodesFromOutline } from "@agent-mindmap/core";
 import { buildSessionTree } from "./buildSessionTree";
 import type {
   SessionAnalysis,
@@ -10,7 +10,7 @@ import type {
   SessionSynonymRefine,
   SessionTreeSnapshot,
   TopicGraph,
-} from "../../llm/types";
+} from "@agent-mindmap/core";
 import type { ConceptContextForMerge } from "../../store/storeTypes";
 
 export type FinalizeSessionAnalysisMeta = {

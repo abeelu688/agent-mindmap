@@ -1,12 +1,12 @@
 import { createHeartbeat } from "../progress";
-import { buildMergePrompt, MERGE_PROMPT_VERSION } from "../llm/promptMerge";
-import { PROMPT_VERSION } from "../llm/promptOutline";
-import { LlmProviderError, type LlmProvider, type MergedOutline } from "../llm/types";
+import { buildMergePrompt, MERGE_PROMPT_VERSION } from "@agent-mindmap/core";
+import { PROMPT_VERSION } from "@agent-mindmap/core";
+import { LlmProviderError, type LlmProvider, type MergedOutline } from "@agent-mindmap/core";
 import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
 import { t as safeT } from "../l10n/uiTranslate";
 import { sha256Hex } from "./sessionStore";
 import { getStoreForDir } from "./storeClient";
-import type { PromptLanguage } from "../llm/promptLanguage";
+import type { PromptLanguage } from "@agent-mindmap/core";
 import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type { MindMapProgress } from "../progress";

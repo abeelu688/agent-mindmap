@@ -3,7 +3,7 @@ import {
   parseReattachChangesList,
   reattachChangesToSteps,
   tryParseReattachChangesResponse,
-} from "../extension/src/llm/reattachChanges";
+} from "@agent-mindmap/core";
 
 describe("reattachChanges", () => {
   it("parses attach and merge changes", () => {

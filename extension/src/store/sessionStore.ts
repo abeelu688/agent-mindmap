@@ -21,7 +21,7 @@ import type {
   SessionSynonymRefine,
   SessionTreeSnapshot,
   TopicGraph,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 import type {
   ConceptContextForMerge,
   MergeRecord,

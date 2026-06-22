@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outlineToTopicGraph } from "../extension/src/llm/outlineToTopicGraph";
-import type { SessionOutline } from "../extension/src/llm/types";
+import type { SessionOutline } from "@agent-mindmap/core";
 
 describe("outlineToTopicGraph conceptPath derivation", () => {
   it("derives conceptPath from outline branch titles when LLM omits it", () => {

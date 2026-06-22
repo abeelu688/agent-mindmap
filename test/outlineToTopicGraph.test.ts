@@ -3,7 +3,7 @@ import {
   outlineToTopicGraph,
   topicGraphToOutline,
 } from "../extension/src/llm/outlineToTopicGraph";
-import type { SessionOutline, TopicGraph } from "../extension/src/llm/types";
+import type { SessionOutline, TopicGraph } from "@agent-mindmap/core";
 
 const graph: TopicGraph = {
   title: "Root",

@@ -9,7 +9,7 @@ import {
   type LlmSummarizeResult,
   type SessionOutline,
   type SummarizeInput,
-} from "../extension/src/llm/types";
+} from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 const events: ChatEvent[] = [

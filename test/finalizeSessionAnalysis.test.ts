@@ -4,7 +4,7 @@ import {
   analysisToSessionSynonyms,
   finalizeSessionAnalysis,
 } from "../extension/src/pipeline/stages/finalizeSessionAnalysis";
-import type { SessionAnalysis } from "../extension/src/llm/types";
+import type { SessionAnalysis } from "@agent-mindmap/core";
 
 const analysis: SessionAnalysis = {
   domains: ["frontend"],

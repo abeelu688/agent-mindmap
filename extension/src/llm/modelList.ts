@@ -1,5 +1,5 @@
 import { execFile } from "child_process";
-import type { LlmProviderId } from "./types";
+import type { LlmProviderId } from "@agent-mindmap/core";
 
 export type ModelEntry = {
   id: string;

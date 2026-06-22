@@ -1,5 +1,5 @@
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptSessionAnalysis";
-import type { PipelineVersions } from "../llm/types";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
+import type { PipelineVersions } from "@agent-mindmap/core";
 
 /** Aggregate pipeline version for library freshness. */
 export const PIPELINE_VERSION = SESSION_ANALYSIS_PROMPT_VERSION;

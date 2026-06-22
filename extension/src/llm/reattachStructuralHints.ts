@@ -2,11 +2,11 @@ import {
   buildChainCollapseOverlapHints,
   deriveEquivalencesFromOverlapHints,
   mergeSegmentEquivalencesLists,
-} from "./synonymHintDerive";
-import { segmentKeyForMerge } from "./topicGraphValidate";
+} from "@agent-mindmap/core";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
-import type { CatalogChainInput } from "./reattachNodeCatalog";
-import type { ConceptOntologyNode, SegmentEquivalence } from "./types";
+import type { CatalogChainInput } from "@agent-mindmap/core";
+import type { ConceptOntologyNode, SegmentEquivalence } from "@agent-mindmap/core";
 
 export type DuplicateTopRootHint = {
   kind: "duplicate_top_root";

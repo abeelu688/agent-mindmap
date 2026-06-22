@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveConceptPathWithEquivalences } from "../extension/src/llm/resolveConceptPathWithEquivalences";
-import type { SegmentEquivalence } from "../extension/src/llm/types";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 
 const artRuntimeEq: SegmentEquivalence[] = [
   {

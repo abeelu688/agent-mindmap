@@ -1,12 +1,12 @@
 import { runLlmStage } from "../pipeline/llmStage";
 import { t } from "../l10n/uiTranslate";
 import { mindMapLog } from "../webview/MindMapLog";
-import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
-import { filterProjectCodeReferences } from "./filterCodeReferences";
-import { LlmProviderError } from "./types";
-import type { OutputLanguage } from "./promptLanguage";
+import { groupTurns, toRelPath, isProjectRelativePath } from "@agent-mindmap/core";
+import { filterProjectCodeReferences } from "@agent-mindmap/core";
+import { LlmProviderError } from "@agent-mindmap/core";
+import type { OutputLanguage } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
-import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "./types";
+import type { CodeReference, LlmProvider, OutlineNode, SessionOutline } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 
 // ────────────────────────────────────────────────────────────────────────────

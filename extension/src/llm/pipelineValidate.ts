@@ -1,10 +1,10 @@
-import { LlmProviderError } from "./types";
-import { validateSessionOutline } from "./outlineValidate";
+import { LlmProviderError } from "@agent-mindmap/core";
+import { validateSessionOutline } from "@agent-mindmap/core";
 import {
   parseSegmentEquivalences,
   validateConceptOntology,
   validateOntologyRefine,
-} from "./ontologyValidate";
+} from "@agent-mindmap/core";
 import type {
   CodeReference,
   SessionAnalysis,
@@ -12,7 +12,7 @@ import type {
   SessionSynonymRefine,
   SessionTermAlias,
   TermWithContext,
-} from "./types";
+} from "@agent-mindmap/core";
 
 const MAX_DOMAINS = 16;
 const MAX_TERMS = 80;

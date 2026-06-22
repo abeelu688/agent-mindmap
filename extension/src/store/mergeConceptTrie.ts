@@ -1,11 +1,11 @@
 import { uiTranslate } from "../l10n/uiTranslate";
 import { mindMapLog } from "../webview/MindMapLog";
-import { segmentKeyForMerge } from "../llm/cursorCliProvider";
-import { normalizeConceptPath } from "../llm/normalizeConceptPath";
-import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
+import { normalizeConceptPath } from "@agent-mindmap/core";
+import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
+import { filterProjectCodeReferences } from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
-import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
+import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
   mindMapLabelsForOutputLanguage,
@@ -29,7 +29,7 @@ import type {
   SessionAnalysis,
   SessionOutline,
   Topic,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 
 const MAX_LABEL = 120;
 

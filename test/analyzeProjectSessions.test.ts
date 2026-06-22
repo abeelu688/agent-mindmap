@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { LlmProviderError } from "../extension/src/llm/types";
+import { LlmProviderError } from "@agent-mindmap/core";
 import { analyzeProjectSessions, runProjectSessionBatch } from "../extension/src/sessionLoader";
 import { createBatchItemProgress } from "../extension/src/progress";
 import type * as vscode from "vscode";

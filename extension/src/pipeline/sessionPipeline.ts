@@ -1,10 +1,10 @@
-import { countUserQueries } from "../llm/sanitizeTopicGraph";
+import { countUserQueries } from "@agent-mindmap/core";
 import { analyzeSession } from "./stages/analyzeSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { currentPipelineVersions } from "./pipelineVersions";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { CodeReference, LlmProvider, SessionAnalysis } from "../llm/types";
+import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type {
@@ -12,10 +12,10 @@ import type {
   SessionOutline,
   SessionSynonymRefine,
   SessionTreeSnapshot,
-} from "../llm/types";
+} from "@agent-mindmap/core";
 import type { ConceptContextForMerge } from "../store/storeTypes";
 import type { LlmStageTimingOut } from "./llmStage";
-import type { OutputLanguage } from "../llm/promptLanguage";
+import type { OutputLanguage } from "@agent-mindmap/core";
 
 export type SessionPipelinePromptOpts = {
   maxDomains: number;

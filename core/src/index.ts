@@ -12,6 +12,9 @@ export const CORE_PACKAGE_VERSION = "0.2.3";
 // Logging — pluggable backend, defaults to console.
 export { setCoreLogger, getCoreLogger, type CoreLogger } from "./logging";
 
+// Crypto (P1.4 leaf).
+export { sha256Hex } from "./crypto";
+
 // Transcript module (moved in P1.2):
 export type {
   BuildOptions,
@@ -59,3 +62,19 @@ export type { AgentHost, AgentHostId, HostSetting } from "./host/types";
 export { encodeClaudeProjectPath, decodeClaudeProjectPath } from "./host/claudePath";
 export { createCursorHost } from "./host/cursorHost";
 export { createClaudeHost } from "./host/claudeHost";
+
+// LLM module (P1.4) — re-exported via a dedicated barrel under `core/src/llm/`.
+export * from "./llm/barrel";
+
+// Store types only (leaf — full store extraction lands later when llm hub
+// files are no longer in extension):
+export type {
+  MergeRecordMeta,
+  MergeSnapshot,
+  MergeSnapshotMeta,
+  SessionIndex,
+  SessionIndexEntry,
+  SnapshotManifest,
+  SnapshotNode,
+} from "./store/storeTypes";
+export type { ConceptOntologyRecord, ConceptNode, ConceptMapping, TopicConceptPathDecision } from "./store/ontologyTypes";

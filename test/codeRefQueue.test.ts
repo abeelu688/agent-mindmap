@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LlmProviderError } from "../extension/src/llm/types";
+import { LlmProviderError } from "@agent-mindmap/core";
 import { getLastBatchStatus, setLastBatchStatus } from "../extension/src/batch/batchStatus";
 import {
   CODE_REF_MAX_ATTEMPTS,
@@ -8,7 +8,7 @@ import {
   enqueueCodeRefUpdate,
   type CodeRefQueueItem,
 } from "../extension/src/codeRefQueue";
-import type { CodeReference } from "../extension/src/llm/types";
+import type { CodeReference } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 const mocks = vi.hoisted(() => ({

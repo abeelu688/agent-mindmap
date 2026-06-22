@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeTopicGraph } from "../extension/src/llm/sanitizeTopicGraph";
-import type { TopicGraph } from "../extension/src/llm/types";
+import { sanitizeTopicGraph } from "@agent-mindmap/core";
+import type { TopicGraph } from "@agent-mindmap/core";
 
 const sample: TopicGraph = {
   title: "t",

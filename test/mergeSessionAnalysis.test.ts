@@ -14,7 +14,7 @@ import {
   buildMergeSessionAnalysisPrompt,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../extension/src/llm/promptMergeSessionAnalysis";
-import { snapConceptPathToVirtualSession } from "../extension/src/llm/applyVirtualSessionToRecords";
+import { snapConceptPathToVirtualSession } from "@agent-mindmap/core";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -23,7 +23,7 @@ import {
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../extension/src/store/mergeSnapshot";
 import type { ConceptContextForMerge } from "../extension/src/store/storeTypes";
-import type { OutlineNode } from "../extension/src/llm/types";
+import type { OutlineNode } from "@agent-mindmap/core";
 
 function sessionRecord(
   sessionId: string,

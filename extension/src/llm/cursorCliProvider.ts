@@ -1,17 +1,17 @@
-import { HeadlessCliProvider } from "./headlessCli";
+import { HeadlessCliProvider } from "@agent-mindmap/core";
 import type {
   LlmProvider,
   LlmProviderOptions,
   LlmSummarizeResult,
-} from "./types";
-import type { SummarizeInput } from "./types";
+} from "@agent-mindmap/core";
+import type { SummarizeInput } from "@agent-mindmap/core";
 
 export {
   canonicalizeConceptSegment,
   segmentKeyForMerge,
   validateTopicGraph,
-} from "./topicGraphValidate";
-export { validateSessionOutline, validateMergedOutline } from "./outlineValidate";
+} from "@agent-mindmap/core";
+export { validateSessionOutline, validateMergedOutline } from "@agent-mindmap/core";
 
 const DEFAULT_BINARIES = ["agent", "cursor-agent"];
 
@@ -24,7 +24,7 @@ function buildArgs(opts: LlmProviderOptions, prompt: string): string[] {
   return args;
 }
 
-export { __testing } from "./headlessCli";
+export { __testing } from "@agent-mindmap/core";
 
 export class CursorCliProvider implements LlmProvider {
   public readonly id = "cursor-cli";

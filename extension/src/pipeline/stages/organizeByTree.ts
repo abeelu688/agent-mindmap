@@ -3,9 +3,9 @@ import {
   buildOrganizeByTreePrompt,
   ORGANIZE_PROMPT_VERSION,
   type OrganizeByTreePromptOptions,
-} from "../../llm/promptOrganizeByTree";
-import { validateSessionOutline } from "../../llm/outlineValidate";
-import type { LlmProvider, SessionOutline, SessionTreeSnapshot } from "../../llm/types";
+} from "@agent-mindmap/core";
+import { validateSessionOutline } from "@agent-mindmap/core";
+import type { LlmProvider, SessionOutline, SessionTreeSnapshot } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";

@@ -14,7 +14,7 @@ import {
   readSnapshotManifest,
 } from "../extension/src/store/mergeSnapshot";
 import { __resetStoreForTest } from "../extension/src/store/storeClient";
-import type { LlmProvider, SessionAnalysis, SessionOutline } from "../extension/src/llm/types";
+import type { LlmProvider, SessionAnalysis, SessionOutline } from "@agent-mindmap/core";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
 
 const projectSlug = "proj-a";

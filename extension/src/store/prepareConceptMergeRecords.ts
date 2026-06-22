@@ -1,13 +1,13 @@
-import { applySegmentEquivalencesToRecords } from "../llm/applySegmentEquivalencesToRecords";
-import { snapRecordsToVirtualSession } from "../llm/applyVirtualSessionToRecords";
+import { applySegmentEquivalencesToRecords } from "@agent-mindmap/core";
+import { snapRecordsToVirtualSession } from "@agent-mindmap/core";
 import { applyReattachMovesSequentially, applyReattachStepsToRecords } from "../llm/reattachSteps";
 import { buildTrieReparentInput } from "../llm/trieReparentInput";
-import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import { mindMapLog } from "../webview/MindMapLog";
 import { applyTopicPathsFromOntology } from "./applyOntology";
-import type { SessionAnalysis } from "../llm/types";
-import type { ReattachMove, ReattachStep } from "../llm/types";
+import type { SessionAnalysis } from "@agent-mindmap/core";
+import type { ReattachMove, ReattachStep } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type { SessionRecord } from "./storeTypes";
 

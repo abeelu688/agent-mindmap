@@ -1,6 +1,6 @@
-import { topicIdForTopic } from "./topicId";
+import { topicIdForTopic } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { SegmentEquivalence } from "../llm/types";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 const HOST_LABELS: Record<AgentHostId, string> = {

@@ -13,7 +13,7 @@ import {
   sha256Hex,
 } from "../extension/src/store/sessionStore";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { OutlineNode, SessionOutline } from "../extension/src/llm/types";
+import type { OutlineNode, SessionOutline } from "@agent-mindmap/core";
 
 function recordWithOutline(sessionId: string, tree: OutlineNode[]) {
   const outline: SessionOutline = { title: "t", outline: tree.length ? tree : [{ title: "t", summary: "s", details: [{ text: "d" }] }] };

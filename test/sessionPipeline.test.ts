@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runSessionPipeline } from "../extension/src/pipeline/sessionPipeline";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
-import type { LlmProvider, SessionAnalysis, SessionOutline } from "../extension/src/llm/types";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
+import type { LlmProvider, SessionAnalysis, SessionOutline } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 const events: ChatEvent[] = [{ kind: "user_query", text: "Explain React hooks", lineIndex: 0 }];

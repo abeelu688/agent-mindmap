@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { getActiveHost } from "./host";
-import type { LlmProviderId, LlmProviderOptions } from "./llm/types";
+import type { LlmProviderId, LlmProviderOptions } from "@agent-mindmap/core";
 
 export function resolveLlmProviderId(
   setting: string,

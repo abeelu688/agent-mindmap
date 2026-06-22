@@ -4,26 +4,26 @@ import * as vscode from "vscode";
 import { readSessionFile } from "@agent-mindmap/core";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "./host";
 import { getProvider } from "./llm";
-import { showCliInstallGuide } from "./llm/cliInstallGuide";
+import { showCliInstallGuide } from "./llm/cliInstallGuideUi";
 import { enqueueCodeRefUpdate } from "./codeRefQueue";
 import { clearPendingMindMapIfForSession } from "./batch/batchStatus";
-import { sanitizeSessionOutline } from "./llm/sanitizeOutline";
+import { sanitizeSessionOutline } from "@agent-mindmap/core";
 import { dumpLlmReplay } from "./llm/llmIoDump";
 import { agentDebugLog } from "./debugLog";
 import { mindMapLog } from "./webview/MindMapLog";
 import { agentLog } from "./log";
 import { notify, notifyWarning, notifyError } from "./notify";
-import { buildSessionAnalysisPrompt } from "./llm/promptSessionAnalysis";
+import { buildSessionAnalysisPrompt } from "@agent-mindmap/core";
 import { runSessionPipeline } from "./pipeline/sessionPipeline";
 import { currentPipelineVersions, PIPELINE_VERSION } from "./pipeline/pipelineVersions";
-import { resolveOutputLanguageForEvents } from "./llm/promptLanguage";
-import { countUserQueries } from "./llm/sanitizeTopicGraph";
+import { resolveOutputLanguageForEvents } from "@agent-mindmap/core";
+import { countUserQueries } from "@agent-mindmap/core";
 import {
   LlmProviderError,
   type LlmErrorCode,
   type LlmProviderId,
   type LlmProviderOptions,
-} from "./llm/types";
+} from "@agent-mindmap/core";
 import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
 import { buildTurnMindMap } from "./mindmap/buildMindMapData";
 import { getStoreDir } from "./paths";

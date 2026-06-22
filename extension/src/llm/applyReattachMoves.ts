@@ -1,6 +1,6 @@
-import { segmentKeyForMerge } from "./topicGraphValidate";
+import { segmentKeyForMerge } from "@agent-mindmap/core";
 import type { ReparentChain } from "./trieReparentInput";
-import type { ReattachMove } from "./types";
+import type { ReattachMove } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
 
 const DEFAULT_MIN_CONFIDENCE = 0.55;

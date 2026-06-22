@@ -17,7 +17,7 @@ import {
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "../extension/src/llm/promptSessionAnalysis";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {
   return buildSessionRecord(

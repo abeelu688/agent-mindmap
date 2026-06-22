@@ -4,11 +4,11 @@ import {
   buildTopicContextIndex,
   type SegmentOverlapHint,
   type TopicSegmentContext,
-} from "./segmentContext";
+} from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { PromptLanguage } from "./promptLanguage";
+import type { PromptLanguage } from "@agent-mindmap/core";
 import type { SessionRecord } from "../store/storeTypes";
-import type { ConceptOntology } from "./types";
+import type { ConceptOntology } from "@agent-mindmap/core";
 import type { TopicConceptPathDecision } from "../store/ontologyTypes";
 
 const HOST_LABELS: Record<AgentHostId, string> = {

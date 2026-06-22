@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildReattachNodeCatalog,
   resolveReattachStepsWithCatalog,
-} from "../extension/src/llm/reattachNodeCatalog";
-import type { CatalogChainInput } from "../extension/src/llm/reattachNodeCatalog";
+} from "@agent-mindmap/core";
+import type { CatalogChainInput } from "@agent-mindmap/core";
 
 describe("reattachNodeCatalog", () => {
   const chains: CatalogChainInput[] = [

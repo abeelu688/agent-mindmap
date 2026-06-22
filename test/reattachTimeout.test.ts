@@ -4,7 +4,7 @@ import {
   REATTACH_TIMEOUT_CHAINS_PER_SLOT,
   scaleMergeSessionAnalysisTimeoutMs,
   scaleReattachTimeoutMs,
-} from "../extension/src/llm/reattachTimeout";
+} from "@agent-mindmap/core";
 
 describe("scaleReattachTimeoutMs", () => {
   it("doubles base timeout for 11 chains (batch 1 full reconcile)", () => {

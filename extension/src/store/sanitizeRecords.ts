@@ -1,8 +1,8 @@
 import * as fs from "fs/promises";
 import { claudeHost } from "../host/claudeHost";
 import { cursorHost } from "../host/cursorHost";
-import { countUserQueries, sanitizeTopicGraph } from "../llm/sanitizeTopicGraph";
-import { sanitizeSessionOutline } from "../llm/sanitizeOutline";
+import { countUserQueries, sanitizeTopicGraph } from "@agent-mindmap/core";
+import { sanitizeSessionOutline } from "@agent-mindmap/core";
 import { outlineToTopicGraph } from "../llm/outlineToTopicGraph";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";

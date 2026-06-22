@@ -2,8 +2,8 @@ import {
   collectChildEdgesFromParentKeys,
   enrichAnalysisNodesFromOutline,
   normalizeConceptKey,
-} from "./enrichNodeChildrenFromOutline";
-import type { ConceptOntologyNode, SessionAnalysis } from "./types";
+} from "@agent-mindmap/core";
+import type { ConceptOntologyNode, SessionAnalysis } from "@agent-mindmap/core";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 
 export type BuildConceptContextsMeta = {

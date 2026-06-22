@@ -1,6 +1,4 @@
-import * as vscode from "vscode";
-import { uiTranslate } from "../l10n/uiTranslate";
-import type { AgentHostId } from "@agent-mindmap/core";
+import type { AgentHostId } from "@agent-mindmap/shared";
 
 export const CLI_SETTINGS_KEY = "agentMindmap.llm.cliPath";
 
@@ -25,18 +23,10 @@ export type TranslateFn = (
   ...args: Array<string | number | boolean>
 ) => string;
 
-export function defaultTranslate(
-  key: string,
-  message: string,
-  ...args: Array<string | number | boolean>
-): string {
-  return uiTranslate(key, message, ...args);
-}
-
 export function buildCliInstallGuide(
   hostId: AgentHostId,
-  platform: NodeJS.Platform = process.platform,
-  t: TranslateFn = uiTranslate
+  platform: NodeJS.Platform,
+  t: TranslateFn
 ): CliInstallGuide {
   const settingsKey = CLI_SETTINGS_KEY;
   const isWin = platform === "win32";
@@ -118,46 +108,15 @@ export function buildCliInstallGuide(
 
 export function cliMissingHintSummary(
   hostId: AgentHostId,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  t?: TranslateFn
 ): string {
-  return buildCliInstallGuide(hostId, platform, uiTranslate).summary;
-}
-
-export async function showCliInstallGuide(
-  hostId: AgentHostId,
-  options: { modal?: boolean; t?: TranslateFn } = {}
-): Promise<void> {
-  const t = options.t ?? uiTranslate;
-  const guide = buildCliInstallGuide(hostId, process.platform, t);
-  const modal = options.modal ?? true;
-
-  const openSettingsLabel = t("ui.cliInstall.action.openSettings", "Open CLI settings");
-  const copyLabel = t("ui.cliInstall.action.copyCommand", "Copy install command");
-  const docsLabel = t("ui.cliInstall.action.openDocs", "Open install docs");
-
-  const actions: string[] = [openSettingsLabel, docsLabel];
-  if (guide.installCommand) {
-    actions.splice(1, 0, copyLabel);
+  if (t) {
+    return buildCliInstallGuide(hostId, platform, t).summary;
   }
-
-  const choice = await vscode.window.showWarningMessage(
-    guide.summary,
-    { modal, detail: guide.detail },
-    ...actions
-  );
-
-  if (choice === openSettingsLabel) {
-    await vscode.commands.executeCommand("workbench.action.openSettings", guide.settingsKey);
-    return;
+  // Fallback: plain English when no translate function is available.
+  if (hostId === "claude-code") {
+    return "Agent Mind Map: Claude Code CLI not found — sessions cannot be saved to the library.";
   }
-  if (choice === copyLabel && guide.installCommand) {
-    await vscode.env.clipboard.writeText(guide.installCommand);
-    void vscode.window.showInformationMessage(
-      t("ui.cliInstall.copied", "Agent Mind Map: Install command copied to clipboard.")
-    );
-    return;
-  }
-  if (choice === docsLabel) {
-    await vscode.env.openExternal(vscode.Uri.parse(guide.docsUrl));
-  }
+  return "Agent Mind Map: cursor-agent CLI not found — sessions cannot be saved to the library.";
 }

@@ -4,7 +4,7 @@ import {
   collectStaleReattachTopRoots,
   prepareRecordsForFinalTrie,
 } from "../extension/src/store/prepareConceptMergeRecords";
-import type { ReattachStep } from "../extension/src/llm/types";
+import type { ReattachStep } from "@agent-mindmap/core";
 
 function topic(path: string[], title: string) {
   return { title, summary: title, items: [], conceptPath: path };

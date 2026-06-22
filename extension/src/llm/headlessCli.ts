@@ -1,19 +1,19 @@
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "child_process";
 import { agentDebugLog } from "../debugLog";
 import { agentLog } from "../log";
-import { resolveCliSpawnTarget } from "./resolveWindowsCliSpawn";
-import { validateMergedOutline, validateSessionOutline } from "./outlineValidate";
+import { resolveCliSpawnTarget } from "@agent-mindmap/core";
+import { validateMergedOutline, validateSessionOutline } from "@agent-mindmap/core";
 import {
   validateConceptOntology,
   validateOntologyRefine,
   validateReattachMoves,
   validateTopicPaths,
-} from "./ontologyValidate";
+} from "@agent-mindmap/core";
 import {
   validateSessionConceptExtract,
   validateSessionSynonymRefine,
   validateSessionAnalysis,
-} from "./pipelineValidate";
+} from "@agent-mindmap/core";
 import {
   LlmProviderError,
   type LlmProviderOptions,
@@ -23,9 +23,9 @@ import {
   type SessionOutline,
   type SummarizeInput,
   type TopicGraph,
-} from "./types";
+} from "@agent-mindmap/core";
 import { dumpLlmCallResult } from "./llmIoDump";
-import { validateTopicGraph } from "./topicGraphValidate";
+import { validateTopicGraph } from "@agent-mindmap/core";
 
 export type HeadlessCliConfig = {
   readonly providerLabel: string;

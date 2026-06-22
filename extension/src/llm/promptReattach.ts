@@ -4,7 +4,7 @@ import {
   formatInputSchema,
 } from "./promptReattachTabular";
 import type { AgentHostId } from "@agent-mindmap/core";
-import type { PromptLanguage } from "./promptLanguage";
+import type { PromptLanguage } from "@agent-mindmap/core";
 import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
