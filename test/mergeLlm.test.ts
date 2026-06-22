@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeMergeCacheKey } from "../extension/src/store/mergeLlm";
-import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
+import { buildRecordMeta, buildSessionRecord } from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 
 function makeRecord(sessionId: string, projectSlug: string) {

@@ -4,7 +4,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { createHeartbeat } from "../progress";
 import { format, t as safeT } from "../l10n/uiTranslate";
-import { writeJsonAtomic } from "../store/atomicWrite";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 import { agentDebugLog } from "../debugLog";
 import { buildOutlinePrompt, type OutlinePromptOptions } from "@agent-mindmap/core";
 import { validateSessionOutline } from "@agent-mindmap/core";

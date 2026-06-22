@@ -15,7 +15,7 @@ import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology,
 } from "./prepareConceptMergeRecords";
-import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
+import { mergeTrieSiblingsByEquivalences } from "@agent-mindmap/core";
 import { sanitizeSessionRecord } from "./sanitizeRecords";
 import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";

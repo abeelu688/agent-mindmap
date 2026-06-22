@@ -21,7 +21,7 @@ import {
   readRecord,
   readMergeRecord,
   conceptTrieMergePath,
-} from "../../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { sanitizeSessionRecord } from "../../extension/src/store/sanitizeRecords";
 import { clearProjectAnalysisCache } from "../../extension/src/store/clearProjectAnalysisCache";
 import {

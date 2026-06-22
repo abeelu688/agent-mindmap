@@ -9,7 +9,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { MergeSnapshot } from "../extension/src/store/storeTypes";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";

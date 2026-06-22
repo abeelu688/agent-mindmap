@@ -5,7 +5,7 @@ import { buildTrieReparentInput } from "../llm/trieReparentInput";
 import { segmentKeyForMerge } from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import { mindMapLog } from "../webview/MindMapLog";
-import { applyTopicPathsFromOntology } from "./applyOntology";
+import { applyTopicPathsFromOntology } from "@agent-mindmap/core";
 import type { SessionAnalysis } from "@agent-mindmap/core";
 import type { ReattachMove, ReattachStep } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "./ontologyTypes";

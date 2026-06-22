@@ -5,7 +5,7 @@ import { getStoreDir } from "../paths";
 import { showCliInstallGuide } from "../llm/cliInstallGuideUi";
 import { uiTranslate, t } from "../l10n/uiTranslate";
 import { ensureModelSelected, readLlmOptions, resolveLlmProviderId } from "../llmOptions";
-import { ensureStore } from "../store/sessionStore";
+import { ensureStore } from "@agent-mindmap/core";
 import { getStore } from "../store/storeClient";
 import {
   runBatchSnapshotPipeline,

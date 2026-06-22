@@ -7,7 +7,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { SegmentEquivalence } from "@agent-mindmap/core";
 import { topicIdForTopic } from "@agent-mindmap/core";

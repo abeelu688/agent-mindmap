@@ -6,14 +6,14 @@ import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { outlineToTopicGraph, topicGraphToOutline } from "../llm/outlineToTopicGraph";
 import { segmentKeyForMerge } from "@agent-mindmap/core";
-import { writeJsonAtomic } from "./atomicWrite";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 import { buildConceptTrieStructure, type ConceptTrieNode } from "./mergeConceptTrie";
 import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology,
   collectDistinctTopSegmentKeys,
 } from "./prepareConceptMergeRecords";
-import { buildRecordMeta, buildSessionRecord, STORE_LAYOUT } from "./sessionStore";
+import { buildRecordMeta, buildSessionRecord, STORE_LAYOUT } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "./ontologyTypes";
 import type {
   ReattachStep,

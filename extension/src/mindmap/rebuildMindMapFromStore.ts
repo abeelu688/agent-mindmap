@@ -1,4 +1,4 @@
-import { conceptTrieMergePath } from "../store/sessionStore";
+import { conceptTrieMergePath } from "@agent-mindmap/core";
 import { getStoreForDir } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import {

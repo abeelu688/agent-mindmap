@@ -1,5 +1,5 @@
 import { getStoreForDir } from "../store/storeClient";
-import { conceptTrieMergePath, readMergeRecord } from "../store/sessionStore";
+import { conceptTrieMergePath, readMergeRecord } from "@agent-mindmap/core";
 import { mindMapLog } from "../webview/MindMapLog";
 import {
   rebuildProjectMergeFromStore,

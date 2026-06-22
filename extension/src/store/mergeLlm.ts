@@ -4,7 +4,7 @@ import { PROMPT_VERSION } from "@agent-mindmap/core";
 import { LlmProviderError, type LlmProvider, type MergedOutline } from "@agent-mindmap/core";
 import { buildMergedOutlineMindMap } from "@agent-mindmap/core";
 import { t as safeT } from "../l10n/uiTranslate";
-import { sha256Hex } from "./sessionStore";
+import { sha256Hex } from "@agent-mindmap/core";
 import { getStoreForDir } from "./storeClient";
 import type { PromptLanguage } from "@agent-mindmap/core";
 import type { MindMapRoot } from "@agent-mindmap/core";

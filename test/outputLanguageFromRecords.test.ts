@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
-import { buildRecordMeta, buildSessionRecord, sha256Hex } from "../extension/src/store/sessionStore";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 
 function record(sessionId: string, outputLanguage?: string) {

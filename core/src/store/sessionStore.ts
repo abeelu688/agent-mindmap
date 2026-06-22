@@ -6,22 +6,11 @@ import {
   validateAndBackfillRecord,
   looksLikeSessionRecord,
 } from "@agent-mindmap/shared";
-import { agentLog } from "../log";
-import {
-  currentPipelineVersions,
-  pipelineVersionsMatch,
-  PIPELINE_VERSION,
-} from "@agent-mindmap/core";
+import { getCoreLogger } from "../logging";
+import { currentPipelineVersions, pipelineVersionsMatch, PIPELINE_VERSION } from "../pipeline/pipelineVersions";
 import { writeJsonAtomic } from "./atomicWrite";
-import type {
-  PipelineVersions,
-  SessionAnalysis,
-  SessionConceptExtract,
-  SessionOutline,
-  SessionSynonymRefine,
-  SessionTreeSnapshot,
-  TopicGraph,
-} from "@agent-mindmap/core";
+import type { PipelineVersions } from "@agent-mindmap/shared";
+import type { SessionAnalysis, SessionConceptExtract, SessionOutline, SessionSynonymRefine, SessionTreeSnapshot, TopicGraph } from "../llm/types";
 import type {
   ConceptContextForMerge,
   MergeRecord,
@@ -104,7 +93,7 @@ async function readJson<T>(filePath: string): Promise<T | undefined> {
     return JSON.parse(raw) as T;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      agentLog.warn(`Failed to read ${filePath}`, { error: String(err) });
+      getCoreLogger().warn(`Failed to read ${filePath}`, { error: String(err) });
     }
     return undefined;
   }
@@ -385,7 +374,7 @@ export async function readMergeRecord(filePath: string): Promise<MergeRecord | u
 
 export { PIPELINE_VERSION, currentPipelineVersions };
 
-export const __testing = {
+export const __testingSessionStore = {
   isSessionRecord,
   toIndexEntry,
   writeJsonAtomic,

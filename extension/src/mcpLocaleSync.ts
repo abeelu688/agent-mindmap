@@ -3,7 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { resolveUiLocale, type UiLocale } from "./l10n/uiTranslate";
 import { getStoreDir } from "./paths";
-import { writeJsonAtomic } from "./store/atomicWrite";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 
 const LOCALE_FILENAME = "mcp-locale.json";
 

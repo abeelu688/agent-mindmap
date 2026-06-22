@@ -3,7 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { clearProjectAnalysisCache } from "../extension/src/store/clearProjectAnalysisCache";
-import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
+import { buildRecordMeta, buildSessionRecord } from "@agent-mindmap/core";
 import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import type { OntologyRecord } from "../shared/src";
 import type { SessionOutline } from "@agent-mindmap/core";

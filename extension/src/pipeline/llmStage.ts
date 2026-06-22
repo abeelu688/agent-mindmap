@@ -11,7 +11,7 @@ import {
 } from "@agent-mindmap/core";
 import { dumpLlmReplay } from "../llm/llmIoDump";
 import { agentDebugLog } from "../debugLog";
-import { writeJsonAtomic } from "../store/atomicWrite";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 import { format, t as safeT } from "../l10n/uiTranslate";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";

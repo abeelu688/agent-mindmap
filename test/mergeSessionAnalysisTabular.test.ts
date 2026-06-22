@@ -11,7 +11,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { OutlineNode, SessionOutline } from "@agent-mindmap/core";
 

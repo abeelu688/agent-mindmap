@@ -17,7 +17,7 @@ import {
 } from "../store/mergeSnapshot";
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
 import { mindMapLog } from "../webview/MindMapLog";
-import { conceptTrieMergePath, writeMergeRecord } from "../store/sessionStore";
+import { conceptTrieMergePath, writeMergeRecord } from "@agent-mindmap/core";
 import { getStoreForDir } from "../store/storeClient";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { runMergePipeline } from "./mergePipeline";

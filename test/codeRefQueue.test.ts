@@ -37,13 +37,17 @@ vi.mock("../extension/src/progressHelpers", () => ({
   mergeAbortSignals: (...sources: AbortSignal[]) => sources[0] ?? new AbortController().signal,
 }));
 
-vi.mock("../extension/src/store/sessionStore", () => ({
-  conceptTrieMergePath: vi.fn(() => "/tmp/merge.json"),
-  listRecords: vi.fn().mockResolvedValue([]),
-  readRecord: vi.fn(),
-  writeRecord: vi.fn(),
-  writeMergeRecord: vi.fn(),
-}));
+vi.mock("@agent-mindmap/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@agent-mindmap/core")>();
+  return {
+    ...actual,
+    conceptTrieMergePath: vi.fn(() => "/tmp/merge.json"),
+    listRecords: vi.fn().mockResolvedValue([]),
+    readRecord: vi.fn(),
+    writeRecord: vi.fn(),
+    writeMergeRecord: vi.fn(),
+  };
+});
 
 vi.mock("../extension/src/store/storeClient", () => ({
   getStoreForDir: vi.fn(async () => ({

@@ -7,7 +7,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   writeRecord,
-} from "../../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import type { SessionOutline } from "@agent-mindmap/core";
 
 /**

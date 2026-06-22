@@ -108,6 +108,13 @@ export {
   type BuildSessionTreeMeta,
 } from "./pipeline/stages/buildSessionTree";
 
+// Store (P1.7) — leaf files only; hub store files stay in extension.
+export * from "./store/atomicWrite";
+export * from "./store/sessionStore";
+export * from "./store/applyOntology";
+export * from "./store/mergeTrieByEquivalences";
+export * from "./store/pushQueue";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {

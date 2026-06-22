@@ -10,7 +10,7 @@ import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "@agent-mindmap/core";
-import { recordFreshnessToken, sha256Hex } from "./sessionStore";
+import { recordFreshnessToken, sha256Hex } from "@agent-mindmap/core";
 import { getStoreForDir } from "./storeClient";
 import type { OutputLanguage, PromptLanguage } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";

@@ -14,7 +14,7 @@ import {
   recordPath,
   sha256Hex,
   writeRecord,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import type { SessionRecord, SessionRecordMeta } from "../extension/src/store/storeTypes";
 import type { SessionOutline } from "@agent-mindmap/core";
 

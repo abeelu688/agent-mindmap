@@ -42,7 +42,7 @@ import {
   buildSessionRecord,
   isRecordFresh,
   recordFreshnessToken,
-} from "./store/sessionStore";
+} from "@agent-mindmap/core";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { t } from "./l10n/uiTranslate";
 import type { SessionMeta } from "@agent-mindmap/core";

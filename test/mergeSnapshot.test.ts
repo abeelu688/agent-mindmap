@@ -13,7 +13,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";

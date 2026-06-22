@@ -9,7 +9,7 @@ import {
   normalizeRepoUriToSlug,
 } from "../host/slugDerivation";
 import { mindMapLog } from "../webview/MindMapLog";
-import { writeJsonAtomic } from "./atomicWrite";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 
 const WORKSPACE_MAP_FILENAME = "workspace-paths.json";
 const REPO_MAP_FILENAME = "repo-paths.json";

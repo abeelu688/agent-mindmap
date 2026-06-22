@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyTopicPathsFromOntology } from "../extension/src/store/applyOntology";
+import { applyTopicPathsFromOntology } from "@agent-mindmap/core";
 import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
 import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { topicIdForTopic } from "@agent-mindmap/core";
 

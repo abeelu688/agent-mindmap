@@ -3,8 +3,8 @@ import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { computeBatchMergeCacheKey } from "../extension/src/pipeline/mergePipeline";
-import { ontologyCachePath } from "../extension/src/store/sessionStore";
-import { writeJsonAtomic } from "../extension/src/store/atomicWrite";
+import { ontologyCachePath } from "@agent-mindmap/core";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 
 describe("computeBatchMergeCacheKey", () => {
   it("produces Windows-safe filenames (no colon separators)", () => {

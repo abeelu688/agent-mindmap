@@ -8,7 +8,7 @@ import {
 } from "@agent-mindmap/shared";
 import { getStoreDir } from "../paths";
 import { getRemoteStoreIfEnabled } from "./storeFactory";
-import { PushQueue } from "./pushQueue";
+import { PushQueue } from "@agent-mindmap/core";
 
 /**
  * Process-wide accessor for the extension's `Store`.

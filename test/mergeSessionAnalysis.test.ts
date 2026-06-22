@@ -19,7 +19,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { MERGE_SNAPSHOT_SESSION_ID } from "../extension/src/store/mergeSnapshot";
 import type { ConceptContextForMerge } from "../extension/src/store/storeTypes";

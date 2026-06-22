@@ -12,7 +12,7 @@ import {
   buildRecordMeta,
   buildSessionRecord,
   sha256Hex,
-} from "../extension/src/store/sessionStore";
+} from "@agent-mindmap/core";
 import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";

@@ -3,7 +3,7 @@ import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { buildOutlineMindMap } from "@agent-mindmap/core";
 import { buildTopicMindMap } from "@agent-mindmap/core";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
-import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
+import { buildRecordMeta, buildSessionRecord } from "@agent-mindmap/core";
 import type { TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData, NodeOriginRef } from "@agent-mindmap/core";
 import type { SessionMeta } from "@agent-mindmap/core";
