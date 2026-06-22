@@ -7,12 +7,14 @@ import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "@agent-mindmap/core";
 import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
 
+// Re-export version constant so extension modules that import from this
+// file still find it.
+export { REATTACH_PROMPT_VERSION } from "@agent-mindmap/core";
+
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
   "claude-code": "Claude Code Agent",
 };
-
-export const REATTACH_PROMPT_VERSION = 23;
 
 export type ReattachPromptChunkMeta = {
   chunkIndex: number;

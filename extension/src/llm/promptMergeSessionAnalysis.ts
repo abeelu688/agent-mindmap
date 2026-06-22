@@ -1,16 +1,17 @@
 import {
-  formatMergeSessionAnalysisInput,
-  type MergeSessionAnalysisInput,
-} from "./mergeSessionAnalysisInput";
-import {
   formatSessionAnalysisJsonContract,
   SCOPE_PATH_PREFIX_GUIDANCE_LINES,
 } from "@agent-mindmap/core";
+import {
+  formatMergeSessionAnalysisInput,
+  type MergeSessionAnalysisInput,
+} from "./mergeSessionAnalysisInput";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
 
-/** Bump when {@link buildMergeSessionAnalysisPrompt} behavior / schema / instructions change. */
-export const MERGE_SESSION_ANALYSIS_PROMPT_VERSION = 11;
+// Re-export version constant so extension modules that import from this
+// file still find it.
+export { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 
 const HOST_LABELS: Record<AgentHostId, string> = {
   cursor: "Cursor Agent",
@@ -34,8 +35,8 @@ export function buildMergeSessionAnalysisPrompt(
   const agentLabel = HOST_LABELS[hostId];
   const maxDomains = Math.max(1, options.maxDomains);
   const maxNodes = Math.max(1, options.maxNodes);
-  const maxBranches = Math.max(1, options.maxBranches);
-  const maxDetails = Math.max(1, options.maxDetailsPerNode);
+  const _maxBranches = Math.max(1, options.maxBranches);
+  const _maxDetails = Math.max(1, options.maxDetailsPerNode);
   const sessionCount = input.sessions.length;
   const body = formatMergeSessionAnalysisInput(input);
   const snapshotSession = input.sessions.find((s) => s.role === "snapshot");

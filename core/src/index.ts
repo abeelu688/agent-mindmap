@@ -15,6 +15,9 @@ export { setCoreLogger, getCoreLogger, type CoreLogger } from "./logging";
 // Crypto (P1.4 leaf).
 export { sha256Hex } from "./crypto";
 
+// Port interfaces — seams where core delegates to the surface layer.
+export * from "./ports";
+
 // Transcript module (moved in P1.2):
 export type {
   BuildOptions,
@@ -84,13 +87,16 @@ export {
   type MindMapLanguageLabels,
 } from "./mindmap/outputLanguageLabels";
 
-// Pipeline (P1.6) — leaf files only; hub pipeline files stay in extension.
+// Pipeline (P1.6) — leaf files + hub stages.
 export {
   PIPELINE_VERSION,
   currentPipelineVersions,
   pipelineVersionsMatch,
 } from "./pipeline/pipelineVersions";
-export { MERGE_APPLY_SEGMENT_EQUIVALENCES, MERGE_DERIVE_SEGMENT_EQUIVALENCES } from "./pipeline/mergeSynonymPolicy";
+export {
+  MERGE_APPLY_SEGMENT_EQUIVALENCES,
+  MERGE_DERIVE_SEGMENT_EQUIVALENCES,
+} from "./pipeline/mergeSynonymPolicy";
 export {
   computeStableBatchPartition,
   getLeafBatchesFromPlan,
@@ -103,17 +109,24 @@ export {
   type LeafAction,
   type LeafBatchInfo,
 } from "./pipeline/stableBatchPartition";
+export { buildSessionTree, type BuildSessionTreeMeta } from "./pipeline/stages/buildSessionTree";
 export {
-  buildSessionTree,
-  type BuildSessionTreeMeta,
-} from "./pipeline/stages/buildSessionTree";
+  finalizeSessionAnalysis,
+  analysisToConceptExtract,
+  analysisToSessionSynonyms,
+  type FinalizeSessionAnalysisMeta,
+  type FinalizedSessionAnalysis,
+} from "./pipeline/stages/finalizeSessionAnalysis";
+export { collectMergeTerms, type CollectedMergeTerms } from "./pipeline/stages/collectMergeTerms";
 
-// Store (P1.7) — leaf files only; hub store files stay in extension.
+// Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";
 export * from "./store/sessionStore";
 export * from "./store/applyOntology";
 export * from "./store/mergeTrieByEquivalences";
 export * from "./store/pushQueue";
+export * from "./store/mergeDeterministic";
+export * from "./store/mergeConceptTrie";
 
 // UI types (P1.8):
 export * from "./ui/mindMapUiTypes";
@@ -126,7 +139,13 @@ export * from "./export/collectOriginRefs";
 export * from "./export/renderTranscriptMarkdown";
 export * from "./export/renderTranscriptHtml";
 export * from "./export/renderTranscriptMarkdownHtml";
-export { exportMindMapPackage, buildTranscriptJumpHref, type ExportPackageOptions, type ExportPackageResult, type ExportHostResolver } from "./export/exportPackage";
+export {
+  exportMindMapPackage,
+  buildTranscriptJumpHref,
+  type ExportPackageOptions,
+  type ExportPackageResult,
+  type ExportHostResolver,
+} from "./export/exportPackage";
 
 // MCP config core (P1.9):
 export * from "./mcp/mcpConfigCore";
@@ -142,4 +161,9 @@ export type {
   SnapshotManifest,
   SnapshotNode,
 } from "./store/storeTypes";
-export type { ConceptOntologyRecord, ConceptNode, ConceptMapping, TopicConceptPathDecision } from "./store/ontologyTypes";
+export type {
+  ConceptOntologyRecord,
+  ConceptNode,
+  ConceptMapping,
+  TopicConceptPathDecision,
+} from "./store/ontologyTypes";
