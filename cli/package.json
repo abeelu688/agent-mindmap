@@ -1,0 +1,32 @@
+{
+  "name": "@agent-mindmap/cli",
+  "version": "0.2.3",
+  "description": "Terminal CLI for Agent Mind Map — analyze AI agent sessions and dump mind maps",
+  "license": "MIT",
+  "bin": {
+    "agent-mindmap": "dist/index.js",
+    "amind": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node scripts/build-cli.mjs",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-mindmap/core": "file:../core",
+    "@agent-mindmap/shared": "file:../shared",
+    "@inquirer/prompts": "^7.0.0",
+    "commander": "^12.1.0",
+    "ora": "^8.0.1",
+    "picocolors": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.9"
+  }
+}
