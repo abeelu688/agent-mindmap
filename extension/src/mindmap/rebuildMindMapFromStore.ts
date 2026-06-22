@@ -5,8 +5,7 @@ import {
   buildConceptMergeWithOntology,
   loadSegmentEquivalencesForRecords,
 } from "../store/conceptMergeContext";
-import { buildOutlineMindMap } from "./buildOutlineMindMap";
-import type { SessionMeta } from "./origin";
+import { buildOutlineMindMap, type SessionMeta } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "../store/storeTypes";

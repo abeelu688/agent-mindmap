@@ -1,8 +1,8 @@
-import { outputLanguageFromRecords } from "@agent-mindmap/core";
+import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { dedupRefs, unionChildRefs, withOrigin } from "./origin";
 import { mindMapLabelsForOutputLanguage, type MindMapLanguageLabels } from "./outputLanguageLabels";
-import type { MergedOutline, MergedOutlineDetail, MergedOutlineNode } from "@agent-mindmap/core";
-import type { MindMapNodeData, MindMapRoot, NodeOriginRef } from "@agent-mindmap/core";
+import type { MergedOutline, MergedOutlineDetail, MergedOutlineNode } from "../llm/types";
+import type { MindMapNodeData, MindMapRoot, NodeOriginRef } from "../transcript/types";
 import type { SessionRecord } from "../store/storeTypes";
 
 const MAX_LABEL = 120;

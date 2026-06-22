@@ -24,8 +24,8 @@ import {
   type LlmProviderId,
   type LlmProviderOptions,
 } from "@agent-mindmap/core";
-import { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
-import { buildTurnMindMap } from "./mindmap/buildMindMapData";
+import { buildOutlineMindMap } from "@agent-mindmap/core";
+import { buildTurnMindMap } from "@agent-mindmap/core";
 import { getStoreDir } from "./paths";
 import { getStore, getStoreForDir } from "./store/storeClient";
 import { buildDeterministicMergeRecordAsync } from "./store/mergeDeterministic";
@@ -45,7 +45,7 @@ import {
 } from "./store/sessionStore";
 import { createBatchItemProgress, type MindMapProgress } from "./progress";
 import { t } from "./l10n/uiTranslate";
-import type { SessionMeta } from "./mindmap/origin";
+import type { SessionMeta } from "@agent-mindmap/core";
 import type { AgentHost } from "@agent-mindmap/core";
 import type { SessionRecord, SnapshotManifest } from "./store/storeTypes";
 import type { BuildOptions, MindMapRoot, TranscriptSession } from "@agent-mindmap/core";

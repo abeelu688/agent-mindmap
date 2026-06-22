@@ -1,4 +1,4 @@
-import type { MindMapNodeData, NodeOrigin, NodeOriginRef } from "@agent-mindmap/core";
+import type { MindMapNodeData, NodeOrigin, NodeOriginRef } from "../transcript/types";
 
 /**
  * Shared session-level fields that every leaf / branch ref inherits.

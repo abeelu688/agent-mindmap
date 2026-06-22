@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
-import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
+import { buildOutlineMindMap } from "@agent-mindmap/core";
+import { buildTopicMindMap } from "@agent-mindmap/core";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
 import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
 import type { TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData, NodeOriginRef } from "@agent-mindmap/core";
-import type { SessionMeta } from "../extension/src/mindmap/origin";
+import type { SessionMeta } from "@agent-mindmap/core";
 
 function collectLeaves(node: MindMapNodeData): MindMapNodeData[] {
   if (!node.children?.length) {

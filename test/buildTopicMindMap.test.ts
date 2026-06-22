@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
+import { buildTopicMindMap } from "@agent-mindmap/core";
 import type { TopicGraph } from "@agent-mindmap/core";
 
 const sampleGraph: TopicGraph = {

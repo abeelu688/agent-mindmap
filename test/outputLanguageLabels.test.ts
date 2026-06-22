@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mindMapLabelsForOutputLanguage } from "../extension/src/mindmap/outputLanguageLabels";
+import { mindMapLabelsForOutputLanguage } from "@agent-mindmap/core";
 
 describe("mindMapLabelsForOutputLanguage", () => {
   it("returns localized structural labels for supported output languages", () => {

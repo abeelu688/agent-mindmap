@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMergedOutlineMindMap } from "../extension/src/mindmap/buildMergedOutlineMindMap";
+import { buildMergedOutlineMindMap } from "@agent-mindmap/core";
 import { buildRecordMeta, buildSessionRecord } from "../extension/src/store/sessionStore";
 import { sha256Hex } from "../extension/src/store/sessionStore";
 import type { MergedOutline } from "@agent-mindmap/core";

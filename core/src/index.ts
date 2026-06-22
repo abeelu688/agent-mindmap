@@ -66,6 +66,24 @@ export { createClaudeHost } from "./host/claudeHost";
 // LLM module (P1.4) — re-exported via a dedicated barrel under `core/src/llm/`.
 export * from "./llm/barrel";
 
+// Mindmap builders (P1.5):
+export { buildOutlineMindMap } from "./mindmap/buildOutlineMindMap";
+export { buildMergedOutlineMindMap } from "./mindmap/buildMergedOutlineMindMap";
+export { buildTopicMindMap } from "./mindmap/buildTopicMindMap";
+export { buildTurnMindMap, buildMindMapData } from "./mindmap/buildMindMapData";
+export {
+  dedupRefs,
+  leafRefs,
+  unionChildRefs,
+  withOrigin,
+  nodeOrigin,
+  type SessionMeta,
+} from "./mindmap/origin";
+export {
+  mindMapLabelsForOutputLanguage,
+  type MindMapLanguageLabels,
+} from "./mindmap/outputLanguageLabels";
+
 // Store types only (leaf — full store extraction lands later when llm hub
 // files are no longer in extension):
 export type {

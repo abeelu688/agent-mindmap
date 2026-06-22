@@ -11,8 +11,8 @@ import { exportMindMapPackage } from "../../extension/src/export/exportPackage";
 import { cursorHost } from "../../extension/src/host/cursorHost";
 import { getProvider } from "../../extension/src/llm";
 import { readLlmOptions } from "../../extension/src/llmOptions";
-import { buildOutlineMindMap } from "../../extension/src/mindmap/buildOutlineMindMap";
-import type { SessionMeta } from "../../extension/src/mindmap/origin";
+import { buildOutlineMindMap } from "@agent-mindmap/core";
+import type { SessionMeta } from "@agent-mindmap/core";
 import type { ProjectMergeMode } from "../../extension/src/pipeline/deltaMergePipeline";
 import { drainCodeRefQueue } from "../../extension/src/codeRefQueue";
 import {

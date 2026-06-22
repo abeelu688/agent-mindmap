@@ -6,11 +6,11 @@ import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { filterProjectCodeReferences } from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
-import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
+import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "@agent-mindmap/core";
 import {
   mindMapLabelsForOutputLanguage,
   type MindMapLanguageLabels,
-} from "../mindmap/outputLanguageLabels";
+} from "@agent-mindmap/core";
 import {
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology,

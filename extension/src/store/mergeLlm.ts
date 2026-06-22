@@ -2,7 +2,7 @@ import { createHeartbeat } from "../progress";
 import { buildMergePrompt, MERGE_PROMPT_VERSION } from "@agent-mindmap/core";
 import { PROMPT_VERSION } from "@agent-mindmap/core";
 import { LlmProviderError, type LlmProvider, type MergedOutline } from "@agent-mindmap/core";
-import { buildMergedOutlineMindMap } from "../mindmap/buildMergedOutlineMindMap";
+import { buildMergedOutlineMindMap } from "@agent-mindmap/core";
 import { t as safeT } from "../l10n/uiTranslate";
 import { sha256Hex } from "./sessionStore";
 import { getStoreForDir } from "./storeClient";

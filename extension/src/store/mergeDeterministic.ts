@@ -1,6 +1,6 @@
 import { uiTranslate } from "../l10n/uiTranslate";
-import { buildTopicMindMap } from "../mindmap/buildTopicMindMap";
-import { type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
+import { buildTopicMindMap } from "@agent-mindmap/core";
+import { type SessionMeta, unionChildRefs, withOrigin } from "@agent-mindmap/core";
 import { sanitizeSessionRecord } from "./sanitizeRecords";
 import type { MindMapNodeData, MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";

@@ -12,9 +12,9 @@ import {
   renderTranscriptMarkdown,
 } from "../extension/src/export/renderTranscriptMarkdown";
 import { markdownToTranscriptHtmlBody } from "../extension/src/export/renderTranscriptHtml";
-import { buildTopicMindMap } from "../extension/src/mindmap/buildTopicMindMap";
+import { buildTopicMindMap } from "@agent-mindmap/core";
 import { validateTopicGraph } from "@agent-mindmap/core";
-import type { SessionMeta } from "../extension/src/mindmap/origin";
+import type { SessionMeta } from "@agent-mindmap/core";
 
 describe("renderTranscriptMarkdown", () => {
   it("adds anchors and maps turn indices to display Q numbers", () => {

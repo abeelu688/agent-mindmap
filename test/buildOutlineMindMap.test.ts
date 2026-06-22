@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOutlineMindMap } from "../extension/src/mindmap/buildOutlineMindMap";
+import { buildOutlineMindMap } from "@agent-mindmap/core";
 import type { CodeReference, SessionOutline } from "@agent-mindmap/core";
 
 const sampleOutline: SessionOutline = {
