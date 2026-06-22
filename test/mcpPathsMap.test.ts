@@ -219,4 +219,26 @@ describe("createPathsResolver", () => {
       mode: "workspace",
     });
   });
+
+  it("resolveSlugFromPath reverse-lookups repo slug from folder path", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "repo" }));
+    fs.writeFileSync(
+      path.join(tmp, "repo-paths.json"),
+      JSON.stringify({ "org/repo.git": "/home/user/repo" })
+    );
+    const r = createPathsResolver();
+    expect(r.resolveSlugFromPath("/home/user/repo")).toBe("org/repo.git");
+  });
+
+  it("resolveSlugFromPath re-reads map on miss", () => {
+    fs.writeFileSync(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "repo" }));
+    fs.writeFileSync(path.join(tmp, "repo-paths.json"), JSON.stringify({}));
+    const r = createPathsResolver();
+    expect(r.resolveSlugFromPath("/home/user/repo")).toBeUndefined();
+    fs.writeFileSync(
+      path.join(tmp, "repo-paths.json"),
+      JSON.stringify({ "org/repo.git": "/home/user/repo" })
+    );
+    expect(r.resolveSlugFromPath("/home/user/repo")).toBe("org/repo.git");
+  });
 });

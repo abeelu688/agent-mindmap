@@ -9,6 +9,7 @@ import {
   resolveSlug,
   runProjectSearch,
 } from "../mcp-server/src/handlers";
+import { createPathsResolver } from "../mcp-server/src/pathsMap";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {
@@ -105,6 +106,39 @@ describe("resolveSlug", () => {
       const result = await bootstrapStore(tmp);
       const ctx = createMcpHandlerContext(result.store, tmp);
       const slug = await resolveSlug(ctx, {});
+      expect(slug).toBeUndefined();
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("resolves repo slug from repo-paths.json in repo mode (not workspace slug)", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      await fs.writeFile(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "repo" }));
+      await fs.writeFile(
+        path.join(tmp, "repo-paths.json"),
+        JSON.stringify({ "org/repo.git": "/home/test/proj" })
+      );
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp, createPathsResolver(tmp));
+      const slug = await resolveSlug(ctx, { projectPath: "/home/test/proj" });
+      expect(slug).toBe("org/repo.git");
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("does not fall back to workspace slug in repo mode when path is unknown", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      await fs.writeFile(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "repo" }));
+      await fs.writeFile(path.join(tmp, "repo-paths.json"), JSON.stringify({}));
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp, createPathsResolver(tmp));
+      const slug = await resolveSlug(ctx, { projectPath: "/unknown/path" });
       expect(slug).toBeUndefined();
       await (result.store as { close?: () => Promise<void> }).close?.();
     } finally {

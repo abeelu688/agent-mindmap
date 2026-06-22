@@ -6,14 +6,15 @@ import {
   computeStaleness,
   findProjectSlugByPath,
   McpSearchIndexCache,
-  resolveProjectSlug,
   searchProjectRecords,
+  workspaceToSlug,
   STORE_LAYOUT,
   type ProjectSearchIndex,
   type SearchHit,
   type Staleness,
   type Store,
 } from "@agent-mindmap/shared";
+import { readProjectMode } from "./pathsMap";
 
 export type McpHandlerContext = {
   store: Store;
@@ -32,6 +33,7 @@ export type McpHandlerContext = {
    */
   pathsResolver?: {
     resolvePath: (slug: string, relPath: string) => import("./pathsMap").ResolvePathResult;
+    resolveSlugFromPath: (folderPath: string) => string | undefined;
     resetCache: () => void;
   };
 };
@@ -108,13 +110,29 @@ export async function resolveSlug(
   ctx: McpHandlerContext,
   opts: { projectPath?: string; projectSlug?: string }
 ): Promise<string | undefined> {
-  const direct = resolveProjectSlug(opts);
-  if (direct) {
-    return direct;
+  if (opts.projectSlug?.trim()) {
+    return opts.projectSlug.trim();
   }
-  if (opts.projectPath) {
-    const summaries = await ctx.store.listProjectSummaries();
-    return findProjectSlugByPath(summaries, opts.projectPath);
+  const projectPath = opts.projectPath?.trim();
+  if (!projectPath) {
+    return undefined;
+  }
+
+  const fromMap = ctx.pathsResolver?.resolveSlugFromPath(projectPath);
+  if (fromMap) {
+    return fromMap;
+  }
+
+  const summaries = await ctx.store.listProjectSummaries();
+  const byPath = findProjectSlugByPath(summaries, projectPath);
+  if (byPath) {
+    return byPath;
+  }
+
+  // Workspace mode only: path-based slug before any sessions exist.
+  const mode = ctx.storeDir ? readProjectMode(ctx.storeDir) : "workspace";
+  if (mode === "workspace") {
+    return workspaceToSlug(projectPath);
   }
   return undefined;
 }

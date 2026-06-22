@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import { workspaceToSlug } from "@agent-mindmap/shared";
+import { getActiveHost, getWorkspaceSlug } from "../host";
 import { getStoreDir, getWorkspacePath } from "../paths";
 import { getStore } from "../store/storeClient";
 import {
@@ -52,7 +52,11 @@ export async function refreshMcpIndexForWorkspace(): Promise<
   if (!projectPath) {
     return undefined;
   }
-  const projectSlug = workspaceToSlug(projectPath);
+  const host = await getActiveHost();
+  const projectSlug = getWorkspaceSlug(host);
+  if (!projectSlug) {
+    return undefined;
+  }
   const store = await getStore();
   const records = await store.listRecordsForProject(projectSlug);
   if (!records.length) {

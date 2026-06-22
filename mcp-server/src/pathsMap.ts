@@ -46,8 +46,19 @@ export function readProjectMode(storeDirOverride?: string): ProjectMode {
  * No `fs.watch` — the read-on-miss keeps a manual refresh effective without
  * a file watcher.
  */
+function findSlugByFolderPath(map: Record<string, string>, folderPath: string): string | undefined {
+  const normalized = path.normalize(folderPath);
+  for (const [slug, root] of Object.entries(map)) {
+    if (path.normalize(root) === normalized) {
+      return slug;
+    }
+  }
+  return undefined;
+}
+
 export function createPathsResolver(storeDirOverride?: string): {
   resolvePath: (slug: string, relPath: string) => ResolvePathResult;
+  resolveSlugFromPath: (folderPath: string) => string | undefined;
   resetCache: () => void;
 } {
   const storeDir = storeDirOverride ?? resolveStoreDir();
@@ -126,12 +137,30 @@ export function createPathsResolver(storeDirOverride?: string): {
     return { kind: "miss", slug, mode };
   }
 
+  /**
+   * Reverse lookup: workspace folder path → store slug, using the mode-aware
+   * paths map the extension writes (`repo-paths.json` or `workspace-paths.json`).
+   */
+  function resolveSlugFromPath(folderPath: string): string | undefined {
+    if (!folderPath.trim()) {
+      return undefined;
+    }
+    const map = currentMap();
+    const hit = findSlugByFolderPath(map, folderPath);
+    if (hit) {
+      return hit;
+    }
+    // Read-on-miss: extension may have rewritten the map since startup.
+    cachedMap = loadMap(currentMode());
+    return findSlugByFolderPath(cachedMap, folderPath);
+  }
+
   function resetCache(): void {
     cachedMode = undefined;
     cachedMap = undefined;
   }
 
-  return { resolvePath, resetCache };
+  return { resolvePath, resolveSlugFromPath, resetCache };
 }
 
 export const __testing = {

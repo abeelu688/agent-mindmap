@@ -144,8 +144,13 @@ async function main(): Promise<void> {
     "get_project_briefing",
     descriptions.get_project_briefing,
     {
-      projectPath: z.string().optional().describe("Workspace filesystem path"),
-      projectSlug: z.string().optional().describe("Cursor project slug"),
+      projectPath: z.string().optional().describe("Workspace folder filesystem path"),
+      projectSlug: z
+        .string()
+        .optional()
+        .describe(
+          "Project store key (repo URI slug in repo mode, workspace slug in workspace mode)"
+        ),
       recentLimit: z.number().int().min(1).max(20).optional(),
       conceptLimit: z.number().int().min(1).max(30).optional(),
     },
