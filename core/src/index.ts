@@ -128,6 +128,8 @@ export * from "./store/pushQueue";
 export * from "./store/mergeDeterministic";
 export * from "./store/mergeConceptTrie";
 export * from "./store/prepareConceptMergeRecords";
+export * from "./store/sanitizeRecords";
+export * from "./store/mergeSnapshot";
 
 // UI types (P1.8):
 export * from "./ui/mindMapUiTypes";

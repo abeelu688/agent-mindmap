@@ -1,49 +1,33 @@
-import * as fs from "fs/promises";
-import { claudeHost } from "../host/claudeHost";
-import { cursorHost } from "../host/cursorHost";
-import { countUserQueries, sanitizeTopicGraph } from "@agent-mindmap/core";
-import { sanitizeSessionOutline } from "@agent-mindmap/core";
-import { outlineToTopicGraph } from "../llm/outlineToTopicGraph";
-import type { AgentHostId } from "@agent-mindmap/core";
+/**
+ * Extension-local adapter for `sanitizeRecords` from core.
+ *
+ * Injects the active host's `parseTranscript` method as the callback
+ * so core remains VS Code-free.
+ */
+import {
+  sanitizeSessionRecord as coreSanitize,
+  sanitizeRecordsForMerge as coreSanitizeAll,
+  resolveUserQueryCount as coreResolveUserQueryCount,
+  type TranscriptParser,
+} from "@agent-mindmap/core";
+import { getActiveHost } from "../host";
 import type { SessionRecord } from "./storeTypes";
 
-function hostFor(id?: AgentHostId) {
-  return id === "claude-code" ? claudeHost : cursorHost;
+export type { TranscriptParser } from "@agent-mindmap/core";
+
+function parserForHost(record: SessionRecord): TranscriptParser {
+  const host = getActiveHost(record.meta.hostId);
+  return (content: string) => host.parseTranscript(content);
 }
 
 export async function resolveUserQueryCount(record: SessionRecord): Promise<number> {
-  if (record.meta.userQueryCount !== undefined) {
-    return record.meta.userQueryCount;
-  }
-  try {
-    const content = await fs.readFile(record.meta.transcriptPath, "utf8");
-    const host = hostFor(record.meta.hostId);
-    const events = host.parseTranscript(content);
-    return countUserQueries(events);
-  } catch {
-    return 0;
-  }
+  return coreResolveUserQueryCount(record, parserForHost(record));
 }
 
 export async function sanitizeSessionRecord(record: SessionRecord): Promise<SessionRecord> {
-  const userQueryCount = await resolveUserQueryCount(record);
-  const outline = sanitizeSessionOutline(record.outline, userQueryCount);
-  const graph = sanitizeTopicGraph(outlineToTopicGraph(outline), userQueryCount);
-  if (
-    outline === record.outline &&
-    graph === record.graph &&
-    record.meta.userQueryCount === userQueryCount
-  ) {
-    return record;
-  }
-  return {
-    ...record,
-    meta: { ...record.meta, userQueryCount },
-    outline,
-    graph,
-  };
+  return coreSanitize(record, parserForHost(record));
 }
 
 export async function sanitizeRecordsForMerge(records: SessionRecord[]): Promise<SessionRecord[]> {
-  return Promise.all(records.map((r) => sanitizeSessionRecord(r)));
+  return Promise.all(records.map((r) => coreSanitize(r, parserForHost(r))));
 }
