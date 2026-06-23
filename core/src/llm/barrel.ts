@@ -66,3 +66,4 @@ export * from "./topicGraphValidate";
 export * from "./topicId";
 export * from "./trieReparentInput";
 export * from "./types";
+export { getProvider } from "./providerFactory";

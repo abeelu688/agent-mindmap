@@ -363,8 +363,8 @@ function buildCliMindMapSink(): MindMapSink {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function getLlmProvider(opts: import("@agent-mindmap/core").LlmProviderOptions) {
-  const mod = await importExtensionModule("../../extension/src/llm");
-  return mod.getProvider(opts);
+  const { getProvider } = await import("@agent-mindmap/core");
+  return getProvider(opts);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -417,8 +417,8 @@ export async function buildCliAnalyzeSessionDepsAsync(
   };
 
   // Pre-load the provider module and set up sync getProvider
-  const mod = await importExtensionModule("../../extension/src/llm");
-  deps.getProvider = (opts) => mod.getProvider(opts);
+  const { getProvider } = await import("@agent-mindmap/core");
+  deps.getProvider = (opts) => getProvider(opts);
   return deps;
 }
 

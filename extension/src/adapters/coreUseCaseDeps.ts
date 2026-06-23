@@ -9,7 +9,7 @@ import { ensureStore } from "@agent-mindmap/core";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "../host";
 import { getStore, getStoreForDir } from "../store/storeClient";
 import { getStoreDir } from "../paths";
-import { getProvider } from "../llm";
+import { getProvider } from "@agent-mindmap/core";
 import { agentLog } from "../log";
 import { mindMapLog } from "../webview/MindMapLog";
 import type {
