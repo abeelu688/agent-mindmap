@@ -185,6 +185,14 @@ export {
   type SessionPipelineResult,
 } from "./pipeline/sessionPipeline";
 export {
+  runMergePipeline,
+  computeBatchMergeCacheKey,
+  mindMapTopLevelCount,
+  type MergePipelineOpts,
+  type MergePipelineResult,
+  type MergeRefineMode,
+} from "./pipeline/mergePipeline";
+export {
   updateConceptTrie,
   updateConceptTrieAsync,
   prepareRecordsBeforeReattach,
