@@ -256,10 +256,12 @@ function buildCliRunFinalRootRefresh(): RunFinalRootRefreshFn {
 // Clear project cache
 // ────────────────────────────────────────────────────────────────────────────
 
-function buildCliClearProjectCache(): ClearProjectCacheFn {
-  return async (storeDir, projectSlug) => {
-    const mod = await importExtensionModule("../../extension/src/store/clearProjectAnalysisCache");
-    await mod.clearProjectAnalysisCache(storeDir, projectSlug);
+function buildCliClearProjectCache(storeDir: string): ClearProjectCacheFn {
+  return async (storeDirArg, projectSlug) => {
+    const { clearProjectAnalysisCache } = await import("@agent-mindmap/core");
+    const storeAccess = buildCliStoreAccess(storeDirArg || storeDir);
+    const store = await storeAccess.getStore();
+    await clearProjectAnalysisCache(storeDirArg || storeDir, projectSlug, store);
   };
 }
 

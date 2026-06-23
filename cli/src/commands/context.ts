@@ -23,33 +23,17 @@ export async function runContextSync(cwd: string, storeDir: string | undefined) 
   // Build MCP refresher adapter
   const mcpRefresher = {
     async refreshMcpIndex(projectSlug: string) {
-      // The MCP index refresh involves reading all records for a project
-      // and writing the MCP search index. We delegate to the extension's
-      // implementation via dynamic import.
-      try {
-        const mod = await import("../../extension/src/store/mcpSearchIndex");
-        const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
-        const { buildCliStoreAccess } = await import("../adapters/cliStore");
-        const storeAccess = buildCliStoreAccess(storeDirPath);
-        const store = await storeAccess.getStore();
-        const records = await store.listRecordsForProject(projectSlug);
+      // CLI does not have MCP index support (that's extension-only).
+      // Report the project slug + record count instead.
+      const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+      const { buildCliStoreAccess } = await import("../adapters/cliStore");
+      const storeAccess = buildCliStoreAccess(storeDirPath);
+      const store = await storeAccess.getStore();
+      const records = await store.listRecordsForProject(projectSlug);
 
-        if (records.length === 0) return undefined;
+      if (records.length === 0) return undefined;
 
-        await mod.bumpProjectRevision?.(storeDirPath, projectSlug, records.length);
-        return { projectSlug, recordCount: records.length };
-      } catch {
-        // Fallback: just report project slug + record count
-        const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
-        const { buildCliStoreAccess } = await import("../adapters/cliStore");
-        const storeAccess = buildCliStoreAccess(storeDirPath);
-        const store = await storeAccess.getStore();
-        const records = await store.listRecordsForProject(projectSlug);
-
-        if (records.length === 0) return undefined;
-
-        return { projectSlug, recordCount: records.length };
-      }
+      return { projectSlug, recordCount: records.length };
     },
   };
 
