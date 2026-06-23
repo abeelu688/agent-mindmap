@@ -9,7 +9,7 @@ import type { LlmProvider, SessionOutline, SessionTreeSnapshot } from "@agent-mi
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "../stageTimingOpts";
+import type { StageTimingOpts } from "@agent-mindmap/core";
 
 export type OrganizeByTreeOpts = StageTimingOpts & {
   events: ChatEvent[];

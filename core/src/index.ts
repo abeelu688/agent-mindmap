@@ -111,6 +111,7 @@ export {
   type PipelineTimingCollector,
   __testing as __testingPipelineTiming,
 } from "./pipeline/pipelineTiming";
+export type { StageTimingOpts } from "./pipeline/stageTimingOpts";
 export {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
   MERGE_DERIVE_SEGMENT_EQUIVALENCES,

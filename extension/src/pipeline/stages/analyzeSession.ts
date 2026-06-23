@@ -10,7 +10,7 @@ import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "../stageTimingOpts";
+import type { StageTimingOpts } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
 
 export type AnalyzeSessionOpts = StageTimingOpts & {

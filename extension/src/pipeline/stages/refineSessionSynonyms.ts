@@ -8,7 +8,7 @@ import type { LlmProvider, SessionConceptExtract, SessionSynonymRefine } from "@
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "../stageTimingOpts";
+import type { StageTimingOpts } from "@agent-mindmap/core";
 
 export type RefineSessionSynonymsOpts = StageTimingOpts & {
   events: ChatEvent[];
