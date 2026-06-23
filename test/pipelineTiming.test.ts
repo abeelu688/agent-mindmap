@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDurationMs } from "../extension/src/pipeline/pipelineTiming";
+import { formatDurationMs } from "@agent-mindmap/core";
 
 describe("pipelineTiming", () => {
   it("formatDurationMs uses ms below 1s and seconds above", () => {

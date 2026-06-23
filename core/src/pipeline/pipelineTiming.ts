@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { mindMapLog } from "../webview/MindMapLog";
+import { getCoreLogger } from "../logging";
 
 export type PipelineKind = "session" | "merge";
 
@@ -115,7 +115,7 @@ function logStageLine(
   durationMs: number,
   meta?: Record<string, unknown>
 ): void {
-  mindMapLog(
+  getCoreLogger().info(
     `[pipeline:${pipeline}] run=${runId} ${stage} ${formatDurationMs(durationMs)}${formatMeta(meta)}`
   );
 }
@@ -128,7 +128,7 @@ export function createPipelineTimingCollector(
   const runId = randomRunId();
   const entries: PipelineTimingEntry[] = [];
 
-  mindMapLog(
+  getCoreLogger().info(
     `[pipeline:${pipeline}] run=${runId} start ${contextLabel(context)}`.trim()
   );
 
@@ -166,14 +166,14 @@ export function createPipelineTimingCollector(
     async finish(): Promise<void> {
       const totalMs = entries.reduce((sum, e) => sum + e.durationMs, 0);
       const ctx = contextLabel(context);
-      mindMapLog(
+      getCoreLogger().info(
         `[pipeline:${pipeline}] run=${runId} finish total=${formatDurationMs(totalMs)}${ctx ? ` ${ctx}` : ""}`
       );
       if (entries.length > 1) {
         const breakdown = entries
           .map((e) => `${e.stage}=${formatDurationMs(e.durationMs)}`)
           .join(", ");
-        mindMapLog(`[pipeline:${pipeline}] run=${runId} breakdown ${breakdown}`);
+        getCoreLogger().info(`[pipeline:${pipeline}] run=${runId} breakdown ${breakdown}`);
       }
       await appendTimingNdjson(storeDir, {
         ts: Date.now(),

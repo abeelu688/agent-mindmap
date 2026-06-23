@@ -19,7 +19,7 @@ import {
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "./stages/mergeSessionAnalysis";
 import { prepareRecordsBeforeReattach, updateConceptTrieAsync } from "./stages/updateConceptTrie";
-import { createPipelineTimingCollector } from "./pipelineTiming";
+import { createPipelineTimingCollector } from "@agent-mindmap/core";
 import {
   finalizeSessionAnalysis,
   type FinalizedSessionAnalysis,

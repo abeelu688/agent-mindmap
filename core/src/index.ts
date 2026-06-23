@@ -103,6 +103,15 @@ export {
   pipelineVersionsMatch,
 } from "./pipeline/pipelineVersions";
 export {
+  createPipelineTimingCollector,
+  logPipelineStageTiming,
+  formatDurationMs,
+  type PipelineKind,
+  type PipelineTimingEntry,
+  type PipelineTimingCollector,
+  __testing as __testingPipelineTiming,
+} from "./pipeline/pipelineTiming";
+export {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
   MERGE_DERIVE_SEGMENT_EQUIVALENCES,
 } from "./pipeline/mergeSynonymPolicy";

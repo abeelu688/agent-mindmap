@@ -6,7 +6,7 @@ import { getHostById } from "../../host/registry";
 import { getStoreForDir } from "../../store/storeClient";
 import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { normalizeConceptPath } from "@agent-mindmap/core";
-import { logPipelineStageTiming } from "../pipelineTiming";
+import { logPipelineStageTiming } from "@agent-mindmap/core";
 import { organizeByTree } from "./organizeByTree";
 import type { CollectedMergeTerms } from "./collectMergeTerms";
 import type { SessionRecord } from "../../store/storeTypes";
