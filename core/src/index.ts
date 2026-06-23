@@ -167,6 +167,13 @@ export {
   type SessionPipelineOpts,
   type SessionPipelineResult,
 } from "./pipeline/sessionPipeline";
+export {
+  updateConceptTrie,
+  updateConceptTrieAsync,
+  prepareRecordsBeforeReattach,
+  type UpdateConceptTrieOpts,
+  type ConceptMergePrepOntology,
+} from "./pipeline/stages/updateConceptTrie";
 
 // Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";
