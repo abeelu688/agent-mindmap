@@ -4,7 +4,15 @@
 import { Command } from "commander";
 import * as os from "os";
 import * as path from "path";
-import { analyzeProject, listSessions } from "@agent-mindmap/core";
+import {
+  analyzeProject,
+  listSessions,
+  getCodeRefQueueDepth,
+  readSnapshotManifest,
+  readMergeSnapshot,
+  type SnapshotManifest,
+  type MergeSnapshot,
+} from "@agent-mindmap/core";
 import { CliConfigStore } from "../config/configStore";
 import {
   log,
@@ -21,7 +29,7 @@ import { buildCliHostAccess, buildCliAnalyzeProjectDeps } from "../adapters/anal
 // project analyze
 // ────────────────────────────────────────────────────────────────────────────
 
-async function runProjectAnalyze(
+export async function runProjectAnalyze(
   cwd: string,
   storeDir: string | undefined,
   options: { force?: boolean }
@@ -103,7 +111,7 @@ async function runProjectAnalyze(
 // project status
 // ────────────────────────────────────────────────────────────────────────────
 
-async function runProjectStatus(cwd: string, storeDir: string | undefined) {
+export async function runProjectStatus(cwd: string, storeDir: string | undefined) {
   const hostAccess = buildCliHostAccess(cwd);
   const result = await listSessions({ hostAccess });
 
@@ -113,13 +121,12 @@ async function runProjectStatus(cwd: string, storeDir: string | undefined) {
   }
 
   const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
-  const { ensureStore } = await import("@agent-mindmap/core");
+  const { ensureStore, readRecord } = await import("@agent-mindmap/core");
   await ensureStore(storeDirPath);
 
   let analyzedCount = 0;
   let staleCount = 0;
 
-  const { readRecord } = await import("@agent-mindmap/core");
   for (const session of result.sessions) {
     try {
       const record = await readRecord(storeDirPath, result.projectSlug, session.id);
@@ -133,6 +140,32 @@ async function runProjectStatus(cwd: string, storeDir: string | undefined) {
     }
   }
 
+  // Snapshot / merge status
+  let manifest: SnapshotManifest | undefined;
+  try {
+    manifest = await readSnapshotManifest(storeDirPath, result.projectSlug);
+  } catch {
+    // no manifest
+  }
+
+  let mergeSnapshot: MergeSnapshot | undefined;
+  try {
+    mergeSnapshot = await readMergeSnapshot(storeDirPath, result.projectSlug);
+  } catch {
+    // no merge snapshot
+  }
+
+  const lastMergeAt = mergeSnapshot?.meta?.builtAt;
+  // MergeSnapshot is always deterministic; kind="llm-refined" lives on MergeRecordMeta
+  const mergeMode: "deterministic" | null = mergeSnapshot ? "deterministic" : null;
+  const snapshotNodeCount = manifest?.nodes?.length ?? 0;
+  const latestSnapshotAt = manifest?.nodes?.length
+    ? Math.max(...manifest.nodes.map((n) => n.builtAt))
+    : undefined;
+
+  // Code-ref queue depth
+  const queueDepth = getCodeRefQueueDepth();
+
   const status = {
     projectSlug: result.projectSlug,
     scanDir: result.scanDir,
@@ -140,6 +173,11 @@ async function runProjectStatus(cwd: string, storeDir: string | undefined) {
     analyzed: analyzedCount,
     stale: staleCount,
     storeDir: storeDirPath,
+    mergeMode: mergeMode ?? null,
+    lastMergeAt: lastMergeAt ?? null,
+    latestSnapshotAt: latestSnapshotAt ?? null,
+    snapshotNodes: snapshotNodeCount,
+    codeRefQueueDepth: queueDepth,
   };
 
   if (isJsonMode()) {
@@ -148,11 +186,27 @@ async function runProjectStatus(cwd: string, storeDir: string | undefined) {
   }
 
   log(`Project: ${status.projectSlug}`);
-  log(`  Scan dir:  ${status.scanDir}`);
-  log(`  Sessions:  ${status.totalSessions} total`);
-  log(`  Analyzed:  ${analyzedCount}`);
-  log(`  Stale:     ${staleCount}`);
-  log(`  Store:     ${status.storeDir}`);
+  log(`  Scan dir:    ${status.scanDir}`);
+  log(`  Sessions:    ${status.totalSessions} total`);
+  log(`  Analyzed:    ${analyzedCount}`);
+  log(`  Stale:       ${staleCount}`);
+  log(`  Store:       ${status.storeDir}`);
+  if (mergeMode) {
+    log(`  Merge mode:  ${mergeMode}`);
+  }
+  if (lastMergeAt) {
+    log(`  Last merge:  ${new Date(lastMergeAt).toISOString()}`);
+  }
+  if (latestSnapshotAt) {
+    log(
+      `  Snapshot:    ${snapshotNodeCount} nodes, latest ${new Date(latestSnapshotAt).toISOString()}`
+    );
+  }
+  if (queueDepth > 0) {
+    logWarn(`  Code-ref queue: ${queueDepth} pending item(s)`);
+  } else {
+    log(`  Code-ref queue: empty`);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

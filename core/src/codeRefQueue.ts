@@ -196,6 +196,11 @@ let running = false;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Return the current number of items in the code-ref queue. Useful for diagnostics. */
+export function getCodeRefQueueDepth(): number {
+  return queue.length;
+}
+
 /** Wait until the background code-reference queue is idle (for headless scripts). */
 export function drainCodeRefQueue(): Promise<void> {
   return new Promise((resolve) => {

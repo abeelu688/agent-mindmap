@@ -21,7 +21,7 @@ import { buildCliHostAccess, buildCliAnalyzeSessionDepsAsync } from "../adapters
 // session list
 // ────────────────────────────────────────────────────────────────────────────
 
-async function runSessionList(
+export async function runSessionList(
   cwd: string,
   storeDir: string | undefined,
   options: { allHosts?: boolean; limit?: number; json?: boolean }
@@ -72,7 +72,7 @@ async function runSessionList(
 // session show
 // ────────────────────────────────────────────────────────────────────────────
 
-async function runSessionShow(cwd: string, storeDir: string | undefined, sessionId: string) {
+export async function runSessionShow(cwd: string, storeDir: string | undefined, sessionId: string) {
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
@@ -138,7 +138,7 @@ async function runSessionShow(cwd: string, storeDir: string | undefined, session
 // session analyze
 // ────────────────────────────────────────────────────────────────────────────
 
-async function runSessionAnalyze(
+export async function runSessionAnalyze(
   cwd: string,
   storeDir: string | undefined,
   options: { latest?: boolean; force?: boolean; sessionId?: string }

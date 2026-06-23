@@ -167,6 +167,7 @@ export {
   initCodeRefQueue,
   enqueueCodeRefUpdate,
   drainCodeRefQueue,
+  getCodeRefQueueDepth,
   purgeCodeRefQueueForProject,
   flushPendingCodeRefRefreshForProject,
   getProjectSessionIdsOnMap,
