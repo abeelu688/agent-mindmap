@@ -204,6 +204,18 @@ export * from "./store/prepareConceptMergeRecords";
 export * from "./store/sanitizeRecords";
 export * from "./store/mergeSnapshot";
 export { clearProjectAnalysisCache } from "./store/clearProjectAnalysisCache";
+export {
+  computeOntologyCacheKey,
+  findReusableOntologyBase,
+  isCompleteOntologyRecord,
+  readOntologyIndex,
+  readOntologyRecord,
+  writeOntologyRecord,
+  clearOntologyCache,
+  ensureOntologyMemory,
+  type OntologyIndex,
+  type EnsureOntologyMemoryFlags,
+} from "./store/ontologyStore";
 
 // UI types (P1.8):
 export * from "./ui/mindMapUiTypes";
