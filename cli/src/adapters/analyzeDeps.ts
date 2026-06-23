@@ -1,8 +1,7 @@
 /**
  * CLI adapter — builds core AnalyzeSessionDeps and AnalyzeProjectDeps.
  *
- * Pipeline/store/llm functions are loaded via dynamic import at runtime
- * so esbuild can bundle them from the extension source tree.
+ * All business logic is imported from @agent-mindmap/core.
  */
 import * as path from "path";
 import * as os from "os";
@@ -29,18 +28,6 @@ import {
 import { buildCliStoreAccess } from "./cliStore";
 import { buildCliLogger } from "../ui/logger";
 import { buildCliHost, detectHost } from "./cliHostAccess";
-
-// ────────────────────────────────────────────────────────────────────────────
-// Extension module dynamic import helpers
-// ────────────────────────────────────────────────────────────────────────────
-
-// These modules live in extension/src/ but have no vscode deps.
-// esbuild resolves them at bundle time; tsc can't see them, so we
-// use string literals that esbuild follows.
-
-async function importExtensionModule(modulePath: string) {
-  return import(modulePath);
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // HostAccess
