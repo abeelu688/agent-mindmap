@@ -29,6 +29,8 @@ export default tseslint.config(
   // ── TypeScript files (extension + webview + tests) ────────────────────────
   {
     files: [
+      "core/src/**/*.ts",
+      "cli/src/**/*.ts",
       "extension/src/**/*.ts",
       "webview/src/**/*.ts",
       "shared/src/**/*.ts",
@@ -50,6 +52,8 @@ export default tseslint.config(
         typescript: {
           alwaysTryTypes: true,
           project: [
+            "core/tsconfig.json",
+            "cli/tsconfig.json",
             "extension/tsconfig.json",
             "webview/tsconfig.json",
             "shared/tsconfig.json",
@@ -60,6 +64,33 @@ export default tseslint.config(
       },
     },
     rules: {
+      // ── Package boundary rules (A1–A9) ───────────────────────────────────
+      // Enforce import direction: cli → core → shared, extension → core → shared
+      "import/no-restricted-paths": [
+        "error",
+        {
+          zones: [
+            // A1: core/ must not import from extension, cli, webview, mcp-server
+            {
+              target: "./core/src",
+              from: ["./extension/src", "./cli/src", "./webview/src", "./mcp-server/src"],
+              message: "core/ must not import from surface packages (rule A1)",
+            },
+            // A2: cli/ must not import from extension
+            {
+              target: "./cli/src",
+              from: ["./extension/src"],
+              message: "cli/ must not import from extension/src (rule A2)",
+            },
+            // A6: no upward imports — extension must not import from cli
+            {
+              target: "./extension/src",
+              from: ["./cli/src"],
+              message: "extension/ must not import from cli/src (rule A6)",
+            },
+          ],
+        },
+      ],
       // ── Empty catch / blocks ──────────────────────────────────────────────
       // bare `catch {}` swallows errors silently. Existing call sites use this
       // pattern intentionally for "best-effort" cleanup; allow with `warn`
