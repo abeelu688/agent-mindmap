@@ -1,14 +1,13 @@
 import {
   MERGE_SNAPSHOT_SESSION_ID,
   isMergeSnapshotSessionId,
-  collectDistinctTopSegmentKeys,
-  buildConceptContextsFromAnalysis,
-  enrichAnalysisNodesFromOutline,
-} from "@agent-mindmap/core";
+} from "../store/mergeSnapshot";
+import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
+import { buildConceptContextsFromAnalysis } from "./buildConceptContexts";
+import { enrichAnalysisNodesFromOutline } from "./enrichNodeChildrenFromOutline";
 import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
-import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
+import type { ConceptContextForMerge, SessionRecord, OutlineNode, SessionAnalysis } from "@agent-mindmap/shared";
 import type { MergeInputMode } from "./trieReparentInput";
-import type { OutlineNode, SessionAnalysis } from "@agent-mindmap/core";
 
 const MAX_NODES_PER_SESSION = 48;
 const MAX_CONTEXTS_PER_SESSION = 40;
@@ -337,7 +336,7 @@ export function formatMergeSessionAnalysisInput(input: MergeSessionAnalysisInput
   return buildMergeSessionAnalysisTabularInput(input);
 }
 
-export const __testing = {
+export const __testingMergeSessionAnalysisInput = {
   MAX_SNAPSHOT_NODES,
   MAX_CONTEXTS_PER_SESSION,
   MAX_OUTLINE_LEAF_COUNT,

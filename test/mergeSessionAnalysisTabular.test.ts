@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMergeSessionAnalysisInput,
-} from "../extension/src/llm/mergeSessionAnalysisInput";
+} from "@agent-mindmap/core";
 import {
   buildMergeSessionAnalysisTabularInput,
-  __testing,
-} from "../extension/src/llm/mergeSessionAnalysisTabular";
-import { escapeTabularCell } from "../extension/src/llm/promptReattachTabular";
+  __testingMergeSessionAnalysisTabular as __testing,
+} from "@agent-mindmap/core";
+import { escapeTabularCell } from "@agent-mindmap/core";
 import {
   buildRecordMeta,
   buildSessionRecord,

@@ -1,136 +1,23 @@
-import { runLlmStage } from "../llmStage";
-import { buildMergeSessionAnalysisInput } from "../../llm/mergeSessionAnalysisInput";
-import {
-  buildMergeSessionAnalysisPrompt,
-  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
-} from "../../llm/promptMergeSessionAnalysis";
-import { validateSessionAnalysis } from "@agent-mindmap/core";
-import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
-import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "@agent-mindmap/core";
-import { scaleMergeSessionAnalysisTimeoutMs } from "@agent-mindmap/core";
-import { outputLanguageFromRecords } from "@agent-mindmap/core";
-import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "@agent-mindmap/core";
-import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type {
-  ConceptOntologyMapping,
-  ConceptOntologyNode,
-  LlmProvider,
-  SegmentEquivalence,
-  TopicPathDecision,
-} from "@agent-mindmap/core";
-import type { MindMapProgress } from "../../progress";
-import type { SessionRecord } from "../../store/storeTypes";
-import type { MergeInputMode } from "../../llm/trieReparentInput";
-import type { OutputLanguage } from "@agent-mindmap/core";
-
-export type MergeSessionAnalysisOpts = {
-  records: SessionRecord[];
-  projectSlug?: string;
-  model?: string;
-  hostId?: AgentHostId;
-  mergeMode?: MergeInputMode;
-  snapshotSessionId?: string;
-  ontologyNodes?: ConceptOntologyNode[];
-  ontologyMappings?: ConceptOntologyMapping[];
-  topicPaths?: TopicPathDecision[];
-  segmentEquivalences?: SegmentEquivalence[];
-  maxDomains?: number;
-  maxNodes?: number;
-  maxBranches?: number;
-  maxDetailsPerNode?: number;
-  cacheDir?: string;
-  cache?: boolean;
-  outputLanguage?: OutputLanguage;
-  /** Base LLM timeout (ms); scaled by session count / prompt size when set. */
-  llmTimeoutMs?: number;
-};
-
-const DEFAULT_PROMPT_OPTS = {
-  maxDomains: 8,
-  maxNodes: 64,
-  maxBranches: 8,
-  maxDetailsPerNode: 4,
-};
-
 /**
- * M-merge LLM: produce one virtual combined session (same schema as Part I).
+ * Extension adapter for mergeSessionAnalysis — pre-binds the extension's
+ * LlmDumpDeps so callers don't need to pass it every time.
  */
+import {
+  mergeSessionAnalysis as coreMergeSessionAnalysis,
+  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+  type MergeSessionAnalysisOpts,
+} from "@agent-mindmap/core";
+import { extensionLlmDumpDeps } from "../../llm/llmIoDumpAdapter";
+import type { LlmProvider, FinalizedSessionAnalysis, ProgressReporter } from "@agent-mindmap/core";
+
+export type { MergeSessionAnalysisOpts };
+export { MERGE_SESSION_ANALYSIS_PROMPT_VERSION };
+
 export async function mergeSessionAnalysis(
   opts: MergeSessionAnalysisOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<FinalizedSessionAnalysis | undefined> {
-  const mergeMode = opts.mergeMode ?? "full";
-  const recordsForInput = prepareRecordsBeforeReattach(opts.records, {
-    nodes: opts.ontologyNodes ?? [],
-    mappings: opts.ontologyMappings ?? [],
-    topicPaths: opts.topicPaths ?? [],
-    segmentEquivalences: opts.segmentEquivalences,
-  });
-
-  const realCount = recordsForInput.filter(
-    (r) => !isMergeSnapshotSessionId(r.meta.sessionId)
-  ).length;
-  if (recordsForInput.length < 2 && mergeMode !== "delta") {
-    return undefined;
-  }
-  if (mergeMode === "delta" && realCount === 0) {
-    return undefined;
-  }
-
-  const input = buildMergeSessionAnalysisInput(recordsForInput, mergeMode, opts.snapshotSessionId);
-  const promptOpts = {
-    maxDomains: opts.maxDomains ?? DEFAULT_PROMPT_OPTS.maxDomains,
-    maxNodes: opts.maxNodes ?? DEFAULT_PROMPT_OPTS.maxNodes,
-    maxBranches: opts.maxBranches ?? DEFAULT_PROMPT_OPTS.maxBranches,
-    maxDetailsPerNode: opts.maxDetailsPerNode ?? DEFAULT_PROMPT_OPTS.maxDetailsPerNode,
-  };
-  const hostId = opts.hostId ?? opts.records[0]?.meta.hostId ?? "cursor";
-  const outputLanguage = opts.outputLanguage ?? outputLanguageFromRecords(recordsForInput);
-  const prompt = buildMergeSessionAnalysisPrompt(input, promptOpts, hostId, outputLanguage);
-  const timeoutMs =
-    opts.llmTimeoutMs != null
-      ? scaleMergeSessionAnalysisTimeoutMs(opts.llmTimeoutMs, input.sessions.length, {
-          promptBytes: prompt.length,
-          mergeMode,
-        })
-      : undefined;
-
-  const analysis = await runLlmStage(
-    {
-      stageId: "merge-session-analysis",
-      promptVersion: MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
-      events: [],
-      prompt,
-      modelHint: opts.model,
-      cacheDir: opts.cacheDir,
-      cache: opts.cache ?? false,
-      hostId,
-      projectSlug: opts.projectSlug,
-      responseSchema: "session-analysis",
-      maxTopics: promptOpts.maxNodes,
-      maxItemsPerTopic: promptOpts.maxDetailsPerNode,
-      heartbeatMessage: "Merging sessions into virtual combined session…",
-      validate: (v: unknown) => validateSessionAnalysis(v, { requireOutline: false }),
-      timeoutMs,
-    },
-    provider,
-    signal,
-    progress
-  );
-
-  // Build outline deterministically from concept trie (Route 1: no outline from LLM)
-  if (!analysis.outline) {
-    analysis.outline = buildOutlineFromConceptTrie(analysis.domains, analysis.nodes);
-  }
-
-  return finalizeSessionAnalysis(analysis, {
-    sessionId: MERGE_SNAPSHOT_SESSION_ID,
-    projectSlug: opts.projectSlug ?? opts.records[0]?.meta.projectSlug ?? "",
-    userQueryCount: 0,
-  });
+  return coreMergeSessionAnalysis(opts, provider, signal, progress, extensionLlmDumpDeps);
 }
-
-export { MERGE_SESSION_ANALYSIS_PROMPT_VERSION };

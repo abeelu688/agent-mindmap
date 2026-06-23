@@ -4,16 +4,16 @@ import {
   formatMergeSessionAnalysisInput,
   prioritizeNodesForMergeInput,
   serializeOutlineTree,
-  __testing,
-} from "../extension/src/llm/mergeSessionAnalysisInput";
+  __testingMergeSessionAnalysisInput as __testing,
+} from "@agent-mindmap/core";
 import {
   buildMergeSessionAnalysisTabularInput,
   estimateMergeJsonInputBytes,
-} from "../extension/src/llm/mergeSessionAnalysisTabular";
+} from "@agent-mindmap/core";
 import {
   buildMergeSessionAnalysisPrompt,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
-} from "../extension/src/llm/promptMergeSessionAnalysis";
+} from "@agent-mindmap/core";
 import { snapConceptPathToVirtualSession } from "@agent-mindmap/core";
 import {
   buildRecordMeta,

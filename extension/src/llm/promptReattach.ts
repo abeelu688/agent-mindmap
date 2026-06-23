@@ -2,7 +2,7 @@ import {
   buildReattachDataTables,
   buildReattachHintTables,
   formatInputSchema,
-} from "./promptReattachTabular";
+} from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "@agent-mindmap/core";
 import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";

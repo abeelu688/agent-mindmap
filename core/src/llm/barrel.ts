@@ -2,6 +2,9 @@
 // transitively from `./llm/*`. Internal `__testing*` exports keep unique
 // names so namespaces don't collide.
 export * from "./applyReattachMoves";
+export * from "./mergeSessionAnalysisInput";
+export * from "./mergeSessionAnalysisTabular";
+export * from "./promptReattachTabular";
 export * from "./applySegmentEquivalencesToRecords";
 export * from "./applyVirtualSessionToRecords";
 export * from "./buildConceptContexts";

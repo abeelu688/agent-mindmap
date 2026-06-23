@@ -5,7 +5,7 @@ import type {
   MergeSessionInputNode,
   MergeSessionInputSession,
 } from "./mergeSessionAnalysisInput";
-import type { SegmentEquivalence } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/shared";
 
 export type MergeTabularSchema = {
   name: string;
@@ -227,7 +227,7 @@ export function estimateMergeJsonInputBytes(input: MergeSessionAnalysisInput): n
   return Buffer.byteLength(JSON.stringify(input), "utf8");
 }
 
-export const __testing = {
+export const __testingMergeSessionAnalysisTabular = {
   nodeRow,
   flattenOutlineNodes,
   outlineRows,

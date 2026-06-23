@@ -169,6 +169,11 @@ export {
   type RefineSessionSynonymsOpts,
 } from "./pipeline/stages/refineSessionSynonyms";
 export {
+  mergeSessionAnalysis,
+  MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
+  type MergeSessionAnalysisOpts,
+} from "./pipeline/stages/mergeSessionAnalysis";
+export {
   analyzeSession as analyzeSessionStage,
   type AnalyzeSessionOpts,
   type AnalyzeSessionResult,

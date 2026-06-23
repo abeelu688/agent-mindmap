@@ -6,7 +6,7 @@ import {
   countNumberedTreeEdges,
   escapeTabularCell,
   estimateReattachJsonInputBytes,
-} from "../extension/src/llm/promptReattachTabular";
+} from "@agent-mindmap/core";
 import { estimateReattachPromptBytes } from "../extension/src/llm/reattachChunking";
 import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import type {
