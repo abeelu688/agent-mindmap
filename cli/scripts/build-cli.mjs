@@ -43,11 +43,16 @@ const result = await esbuild.build({
   logLevel: "info",
   sourcemap: true,
   minify: false,
+  metafile: true,
 });
 
 if (result.errors.length > 0) {
   process.exit(1);
 }
+
+// Write metafile for boundary smoke test (scripts/smoke-cli-boundaries.mjs)
+const metaOut = path.join(cliDir, "dist", "meta.json");
+fs.writeFileSync(metaOut, JSON.stringify(result.metafile, null, 2));
 
 console.log("CLI bundle built successfully.");
 
