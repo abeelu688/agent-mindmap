@@ -84,15 +84,8 @@ function buildCliSanitizeSessionRecord(): SanitizeSessionRecordFn {
 
 function buildCliRunSessionPipeline(): RunSessionPipelineFn {
   return async (opts, provider, signal, progress) => {
-    const mod = await importExtensionModule("../../extension/src/pipeline/sessionPipeline");
-    const mindMapProgress = progress
-      ? {
-          report(update: string | { message?: string; increment?: number }) {
-            progress.report(update);
-          },
-        }
-      : undefined;
-    return mod.runSessionPipeline(opts, provider, signal, mindMapProgress);
+    const { runSessionPipeline } = await import("@agent-mindmap/core");
+    return runSessionPipeline(opts, provider, signal, progress);
   };
 }
 
@@ -103,9 +96,8 @@ function buildCliRunSessionPipeline(): RunSessionPipelineFn {
 function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
   return async (opts) => {
     try {
-      const { buildDeterministicMergeRecordAsync } = await import("@agent-mindmap/core");
+      const { buildDeterministicMergeRecordAsync, readSnapshotManifest } = await import("@agent-mindmap/core");
       const mod = await importExtensionModule("../../extension/src/pipeline/snapshotHierarchy");
-      const modStore = await importExtensionModule("../../extension/src/store/mergeSnapshot");
 
       const storeAccess = buildCliStoreAccess(storeDir);
       const store = await storeAccess.getStore();
@@ -121,7 +113,7 @@ function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
       );
       const records = projectRecords.length ? projectRecords : all;
 
-      const manifest = await modStore.readSnapshotManifest(storeDir, projectSlug);
+      const manifest = await readSnapshotManifest(storeDir, projectSlug);
       if (manifest?.sessionToLeafId[opts.record.meta.sessionId]) {
         await mod.refreshSnapshotForSession({
           storeDir,
@@ -288,8 +280,8 @@ function buildCliResolveProjectRecords(storeDir: string): ResolveProjectRecordsF
 
 function buildCliReadSnapshotManifest(): ReadSnapshotManifestFn {
   return async (storeDir, projectSlug) => {
-    const mod = await importExtensionModule("../../extension/src/store/mergeSnapshot");
-    return mod.readSnapshotManifest(storeDir, projectSlug);
+    const { readSnapshotManifest } = await import("@agent-mindmap/core");
+    return readSnapshotManifest(storeDir, projectSlug);
   };
 }
 
