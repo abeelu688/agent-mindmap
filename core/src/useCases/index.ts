@@ -55,4 +55,5 @@ export {
   type ResolveProjectRecordsFn,
   type ReadSnapshotManifestFn,
   type RefreshMcpIndexFn,
+  type ProjectMergeMode,
 } from "./analyzeProject";

@@ -25,7 +25,7 @@ import {
 import type { ProgressReporter } from "../ports/ProgressReporter";
 import type { Prompter, QuickPickItem } from "../ports/Prompter";
 
-import type { AgentHost } from "../host/types";
+import type { AgentHost, AgentHostId } from "../host/types";
 import type { TranscriptSession, LlmProvider, LlmProviderId, OutputLanguage } from "../index";
 
 import type { SessionRecord, SnapshotManifest } from "../store/storeTypes";
@@ -43,6 +43,12 @@ import { analyzeSession, readSettingsFromConfig, type AnalyzeSessionDeps } from 
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Merge mode — full on batch 1, delta for batch 2+.
+ * Matches the concrete type in extension/src/pipeline/deltaMergePipeline.ts.
+ */
+export type ProjectMergeMode = "full" | "delta";
+
+/**
  * Per-batch merge function — the extension provides the actual implementation
  * which calls `buildProjectConceptMergeForBatch`, `refreshSnapshotsForFreshSessions`,
  * `runBatchSnapshotPipeline`, etc.
@@ -57,14 +63,14 @@ export type RunBatchMergeFn = (opts: {
   conceptLlm: {
     providerId: LlmProviderId;
     model?: string;
-    hostId?: string;
+    hostId?: AgentHostId;
     outputLanguage?: OutputLanguage;
     timeoutMs?: number;
   };
   forceRefresh: boolean;
   forceReattach: boolean;
   batchRefineOntology: boolean;
-  mergeMode: string;
+  mergeMode: ProjectMergeMode;
   mergeFullReconcileEvery: number;
   leafAction?: string;
   leafId?: string;
@@ -84,7 +90,7 @@ export type RunFinalRootRefreshFn = (opts: {
   conceptLlm: {
     providerId: LlmProviderId;
     model?: string;
-    hostId?: string;
+    hostId?: AgentHostId;
     outputLanguage?: OutputLanguage;
   };
   signal: AbortSignal;
@@ -511,7 +517,8 @@ export async function analyzeProject(
   const projectRecordsById = new Map<string, SessionRecord>();
   const batchRefineOntology = deps.configStore.get<boolean>("library.batchRefineOntology") ?? true;
   const batchFinalRefine = deps.configStore.get<boolean>("library.batchFinalRefine") ?? true;
-  const mergeMode = deps.configStore.get<string>("library.mergeMode") ?? "delta";
+  const mergeMode = (deps.configStore.get<string>("library.mergeMode") ??
+    "delta") as ProjectMergeMode;
   const mergeFullReconcileEvery =
     deps.configStore.get<number>("library.mergeFullReconcileEvery") ?? 4;
   const autoRefreshMcp = deps.configStore.get<boolean>("mcp.autoRefreshOnAnalyze") ?? false;

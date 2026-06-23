@@ -11,6 +11,7 @@ extension/media/
 extension/mcp-server/
 shared/dist/
 cli/media/
+*tsconfig.tsbuildinfo
 
 # packaging
 *.vsix

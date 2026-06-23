@@ -12,10 +12,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "paths": {
-      "@agent-mindmap/shared": ["../shared/src/index.ts"],
-      "@agent-mindmap/core": ["../core/src/index.ts"]
+      "@agent-mindmap/shared": ["../shared/dist"],
+      "@agent-mindmap/core": ["../core/dist"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist"],
+  "references": [{ "path": "../shared" }, { "path": "../core" }]
 }

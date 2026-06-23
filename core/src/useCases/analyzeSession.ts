@@ -45,7 +45,7 @@ import type { MindMapSink } from "../ports/MindMapSink";
 import type { CodeRefQueueDeps } from "../ports/CodeRefQueueDeps";
 import type { LlmDumpDeps } from "../ports/LlmDumpDeps";
 
-import type { AgentHost } from "../host/types";
+import type { AgentHost, AgentHostId } from "../host/types";
 import type {
   TranscriptSession,
   ChatEvent,
@@ -92,7 +92,7 @@ export type RunSessionPipelineFn = (
     modelHint?: string;
     cacheDir?: string;
     cache: boolean;
-    hostId?: string;
+    hostId?: AgentHostId;
     storeDir?: string;
     outputLanguage?: OutputLanguage;
   },
