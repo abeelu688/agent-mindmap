@@ -96,8 +96,7 @@ function buildCliRunSessionPipeline(): RunSessionPipelineFn {
 function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
   return async (opts) => {
     try {
-      const { buildDeterministicMergeRecordAsync, readSnapshotManifest } = await import("@agent-mindmap/core");
-      const mod = await importExtensionModule("../../extension/src/pipeline/snapshotHierarchy");
+      const { buildDeterministicMergeRecordAsync, readSnapshotManifest, refreshSnapshotForSession } = await import("@agent-mindmap/core");
 
       const storeAccess = buildCliStoreAccess(storeDir);
       const store = await storeAccess.getStore();
@@ -115,8 +114,9 @@ function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
 
       const manifest = await readSnapshotManifest(storeDir, projectSlug);
       if (manifest?.sessionToLeafId[opts.record.meta.sessionId]) {
-        await mod.refreshSnapshotForSession({
+        await refreshSnapshotForSession({
           storeDir,
+          store,
           projectSlug,
           allRecords: records,
           provider: await getLlmProvider(opts.settings.llm),
@@ -126,6 +126,8 @@ function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
           outputLanguage: undefined,
           signal: opts.signal,
           sessionId: opts.record.meta.sessionId,
+          sanitizeRecord: buildCliSanitizeSessionRecord(),
+          dumpDeps: buildCliLlmDumpDeps(),
         });
       }
     } catch (err) {
@@ -141,9 +143,7 @@ function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
 function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
   return async (opts) => {
     const modBatch = await importExtensionModule("../../extension/src/batch/conceptMerge");
-    const modPipeline = await importExtensionModule(
-      "../../extension/src/pipeline/snapshotHierarchy"
-    );
+    const { runBatchSnapshotPipeline } = await import("@agent-mindmap/core");
 
     if (opts.forceRefresh) {
       return modBatch.buildProjectConceptMergeForBatch(
@@ -185,9 +185,12 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
     }
 
     if (opts.leafAction === "new") {
-      return modPipeline.runBatchSnapshotPipeline(
+      const storeAccess = buildCliStoreAccess(opts.storeDir);
+      const store = await storeAccess.getStore();
+      return runBatchSnapshotPipeline(
         {
           storeDir: opts.storeDir,
+          store,
           projectSlug: opts.projectSlug,
           allRecords: opts.allRecords,
           batchRecords: opts.batchRecords,
@@ -200,6 +203,8 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
           llmTimeoutMs: opts.conceptLlm.timeoutMs,
           signal: opts.signal,
           forceReattach: true,
+          sanitizeRecord: buildCliSanitizeSessionRecord(),
+          dumpDeps: buildCliLlmDumpDeps(),
         },
         opts.progress
       );
@@ -235,10 +240,13 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
 
 function buildCliRunFinalRootRefresh(): RunFinalRootRefreshFn {
   return async (opts) => {
-    const mod = await importExtensionModule("../../extension/src/pipeline/snapshotHierarchy");
-    return mod.runFinalRootRefresh(
+    const { runFinalRootRefresh } = await import("@agent-mindmap/core");
+    const storeAccess = buildCliStoreAccess(opts.storeDir);
+    const store = await storeAccess.getStore();
+    return runFinalRootRefresh(
       {
         storeDir: opts.storeDir,
+        store,
         projectSlug: opts.projectSlug,
         allRecords: opts.allRecords,
         provider: opts.provider,
@@ -246,6 +254,8 @@ function buildCliRunFinalRootRefresh(): RunFinalRootRefreshFn {
         model: opts.conceptLlm.model,
         hostId: opts.conceptLlm.hostId,
         signal: opts.signal,
+        sanitizeRecord: buildCliSanitizeSessionRecord(),
+        dumpDeps: buildCliLlmDumpDeps(),
       },
       opts.progress
     );

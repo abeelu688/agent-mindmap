@@ -199,6 +199,18 @@ export {
   type UpdateConceptTrieOpts,
   type ConceptMergePrepOntology,
 } from "./pipeline/stages/updateConceptTrie";
+export {
+  runLeafSnapshotMerge,
+  rebuildProjectRoot,
+  refreshSnapshotForSession,
+  runBatchSnapshotPipeline,
+  runFinalRootRefresh,
+  type SnapshotHierarchyLlmOpts,
+  type RunLeafSnapshotMergeOpts,
+  type RunBatchSnapshotPipelineOpts,
+  type TryReuseBatchMergeFn,
+  type SanitizeRecordFn,
+} from "./pipeline/snapshotHierarchy";
 
 // Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";
