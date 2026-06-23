@@ -205,7 +205,7 @@ export async function runMergePipeline(
     topicPaths: collected.topicPaths,
     segmentEquivalences,
   });
-  const allReparentInput = buildTrieReparentInput(allRecordsForReparent, {
+  const _allReparentInput = buildTrieReparentInput(allRecordsForReparent, {
     segmentEquivalences,
     ontologyNodes: collected.nodes,
     topicPaths: collected.topicPaths,
