@@ -10,7 +10,7 @@ import {
   collectSessionSegmentEquivalences,
   mergeSegmentEquivalencesLists,
 } from "@agent-mindmap/core";
-import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
+import { buildTrieReparentInput, type MergeInputMode } from "@agent-mindmap/core";
 import { MERGE_SNAPSHOT_SESSION_ID } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { collectMergeTerms } from "@agent-mindmap/core";
