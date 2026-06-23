@@ -113,6 +113,25 @@ export {
 } from "./pipeline/pipelineTiming";
 export type { StageTimingOpts } from "./pipeline/stageTimingOpts";
 export {
+  SNAPSHOT_ASSIGNMENT_VERSION,
+  leafSnapshotIdFromSlot,
+  batchNoFromLeafId,
+  sortSessionsForMerge,
+  sortTranscriptSessionsForMerge,
+  orderingKeysFromTranscriptSessions,
+  orderingKeysFromRecords,
+  computeLeafSlots,
+  getLeafMembersById,
+  leavesAffectedByFreshSessions,
+  manifestNeedsAssignmentRebuild,
+  validateManifestAssignments,
+  leafAssignmentForSession,
+  type SessionOrderingKey,
+  type LeafSlotAssignment,
+  type AffectedLeaf,
+  __testing as __testingSnapshotAssignment,
+} from "./pipeline/snapshotAssignment";
+export {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
   MERGE_DERIVE_SEGMENT_EQUIVALENCES,
 } from "./pipeline/mergeSynonymPolicy";
