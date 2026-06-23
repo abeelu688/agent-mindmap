@@ -212,6 +212,19 @@ export {
   type SanitizeRecordFn,
 } from "./pipeline/snapshotHierarchy";
 
+// Batch concept merge (R2):
+export {
+  resolveProjectRecordsForMerge,
+  toConceptMergeLlmOpts,
+  buildProjectConceptMergeFromCache,
+  buildProjectConceptMergeForBatch,
+  refreshSnapshotsForFreshSessions,
+  type ConceptMergeLlmOpts,
+  type ProjectMergeMode,
+  type BuildConceptMergeForRecordsFn,
+  type ConceptMergeDeps,
+} from "./batch/conceptMerge";
+
 // Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";
 export * from "./store/sessionStore";

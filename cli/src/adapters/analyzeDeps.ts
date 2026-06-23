@@ -23,6 +23,7 @@ import {
   type CodeRefQueueDeps,
   type LlmDumpDeps,
   type TranscriptParser,
+  type ConceptMergeDeps,
   sanitizeSessionRecord as coreSanitize,
 } from "@agent-mindmap/core";
 import { buildCliStoreAccess } from "./cliStore";
@@ -142,11 +143,22 @@ function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
 
 function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
   return async (opts) => {
-    const modBatch = await importExtensionModule("../../extension/src/batch/conceptMerge");
-    const { runBatchSnapshotPipeline } = await import("@agent-mindmap/core");
+    const {
+      buildProjectConceptMergeForBatch,
+      refreshSnapshotsForFreshSessions,
+      runBatchSnapshotPipeline,
+    } = await import("@agent-mindmap/core");
+    const storeAccess = buildCliStoreAccess(opts.storeDir);
+    const store = await storeAccess.getStore();
+    const deps: ConceptMergeDeps = {
+      store,
+      sanitizeRecord: buildCliSanitizeSessionRecord(),
+      localeResolver: undefined,
+    };
 
     if (opts.forceRefresh) {
-      return modBatch.buildProjectConceptMergeForBatch(
+      return buildProjectConceptMergeForBatch(
+        deps,
         opts.storeDir,
         opts.allRecords,
         opts.batchRecords,
@@ -169,7 +181,8 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
     }
 
     if (opts.leafAction === "rebuild" && opts.freshlyAnalyzedSessionIds.length > 0) {
-      return modBatch.refreshSnapshotsForFreshSessions(
+      return refreshSnapshotsForFreshSessions(
+        deps,
         opts.storeDir,
         opts.allRecords,
         opts.freshlyAnalyzedSessionIds,
@@ -185,8 +198,6 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
     }
 
     if (opts.leafAction === "new") {
-      const storeAccess = buildCliStoreAccess(opts.storeDir);
-      const store = await storeAccess.getStore();
       return runBatchSnapshotPipeline(
         {
           storeDir: opts.storeDir,
@@ -212,13 +223,12 @@ function buildCliRunBatchMerge(storeDir: string): RunBatchMergeFn {
 
     // Fallback: reuse or refresh
     if (opts.freshlyAnalyzedSessionIds.length === 0) {
-      const storeAccess = buildCliStoreAccess(storeDir);
-      const store = await storeAccess.getStore();
       const existing = await store.readConceptTrieMerge();
       return existing ?? undefined;
     }
 
-    return modBatch.refreshSnapshotsForFreshSessions(
+    return refreshSnapshotsForFreshSessions(
+      deps,
       opts.storeDir,
       opts.allRecords,
       opts.freshlyAnalyzedSessionIds,
@@ -281,8 +291,10 @@ function buildCliClearProjectCache(storeDir: string): ClearProjectCacheFn {
 
 function buildCliResolveProjectRecords(storeDir: string): ResolveProjectRecordsFn {
   return async (projectSlug, overlayById) => {
-    const mod = await importExtensionModule("../../extension/src/batch/conceptMerge");
-    return mod.resolveProjectRecordsForMerge(storeDir, projectSlug, overlayById);
+    const { resolveProjectRecordsForMerge } = await import("@agent-mindmap/core");
+    const storeAccess = buildCliStoreAccess(storeDir);
+    const store = await storeAccess.getStore();
+    return resolveProjectRecordsForMerge(store, projectSlug, overlayById);
   };
 }
 
