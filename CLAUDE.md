@@ -77,6 +77,20 @@ Press **F5** in VS Code to launch the Extension Development Host.
 | `npm run package`             | Build + package as VSIX                       |
 | `npm run package:vsix`        | Shell script wrapper for VSIX packaging       |
 
+### Project References & Build Order
+
+The workspace uses **TypeScript project references** for typecheck:
+
+```
+shared  →  core  →  extension / cli
+```
+
+- `shared/tsconfig.json` and `core/tsconfig.json` have `"composite": true`.
+- `extension/tsconfig.json` and `cli/tsconfig.json` declare `"references"` pointing at `../shared` and `../core`.
+- The `paths` aliases (`@agent-mindmap/shared`, `@agent-mindmap/core`) resolve to `dist/` directories for typecheck, not source.
+- **`core/dist` and `shared/dist` must exist before extension or CLI typecheck can succeed.** Run `npm run build:core` (which builds shared first) before `npm run typecheck:extension`.
+- esbuild bundles still resolve to source at runtime (alias in `esbuild.config.mjs` and `cli/scripts/build-cli.mjs`) for watch-mode HMR.
+
 ## Architecture & Data Flow
 
 ### Single-Session Pipeline
