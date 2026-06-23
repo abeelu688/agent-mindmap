@@ -11,7 +11,7 @@ import {
   mergeSegmentEquivalencesLists,
 } from "@agent-mindmap/core";
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
-import { MERGE_SNAPSHOT_SESSION_ID } from "../store/mergeSnapshot";
+import { MERGE_SNAPSHOT_SESSION_ID } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { collectMergeTerms } from "./stages/collectMergeTerms";
 import {
@@ -28,7 +28,7 @@ import type { AgentHostId } from "@agent-mindmap/core";
 import type { LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
-import type { ConceptOntologyRecord } from "../store/ontologyTypes";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 import type { MergeRecord, SessionRecord } from "../store/storeTypes";
 import type { MindMapRoot } from "@agent-mindmap/core";
 
@@ -64,7 +64,7 @@ export type MergePipelineOpts = {
 
 export type MergePipelineResult = {
   merge: MergeRecord;
-  ontology: ConceptOntologyRecord;
+  ontology: OntologyRecord;
   records: SessionRecord[];
   /** M-merge ran (1) or skipped (0). */
   reattachLlmStepCount?: number;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyTopicPathsFromOntology } from "@agent-mindmap/core";
-import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 import {
   buildRecordMeta,
   buildSessionRecord,
@@ -45,7 +45,7 @@ describe("applyTopicPathsFromOntology", () => {
     const r = makeRecord("s1", "proj");
     const artTopic = r.graph.topics[0];
     const artId = topicIdForTopic(r.meta.sessionId, artTopic as any);
-    const ontology: ConceptOntologyRecord = {
+    const ontology: OntologyRecord = {
       schemaVersion: 1,
       meta: {
         builtAt: 1,
@@ -80,7 +80,7 @@ describe("applyTopicPathsFromOntology", () => {
 
   it("leaves topics unchanged when no decision exists", () => {
     const r = makeRecord("s1", "proj");
-    const ontology: ConceptOntologyRecord = {
+    const ontology: OntologyRecord = {
       schemaVersion: 1,
       meta: {
         builtAt: 1,

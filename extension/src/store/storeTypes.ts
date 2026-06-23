@@ -6,7 +6,7 @@ import type {
   SessionAnalysis,
   SessionTreeSnapshot,
 } from "@agent-mindmap/core";
-import type { TopicConceptPathDecision } from "./ontologyTypes";
+import type { OntologyRecordTopicPath as TopicConceptPathDecision } from "@agent-mindmap/shared";
 
 // SessionRecord, SessionRecordMeta, ConceptContextForMerge, MergeRecord, and
 // the LLM payload types are canonical in `@agent-mindmap/shared`. Re-export

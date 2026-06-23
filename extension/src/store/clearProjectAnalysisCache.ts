@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs/promises";
 import { clearOntologyCache } from "./ontologyStore";
-import { deleteSnapshotHierarchy } from "./mergeSnapshot";
+import { deleteSnapshotHierarchy } from "@agent-mindmap/core";
 import { STORE_LAYOUT } from "@agent-mindmap/core";
 import { getStoreForDir } from "./storeClient";
 

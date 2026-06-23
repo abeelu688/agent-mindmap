@@ -18,7 +18,7 @@ import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
 import type { LlmProvider } from "@agent-mindmap/core";
-import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {
   return buildSessionRecord(
@@ -46,7 +46,7 @@ function sessionRecord(sessionId: string, slug = "proj-a") {
   );
 }
 
-function baseOntology(sessionIds: string[]): ConceptOntologyRecord {
+function baseOntology(sessionIds: string[]): OntologyRecord {
   return {
     schemaVersion: 1,
     meta: {

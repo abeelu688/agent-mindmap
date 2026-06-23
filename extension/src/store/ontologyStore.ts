@@ -14,7 +14,7 @@ import { recordFreshnessToken, sha256Hex } from "@agent-mindmap/core";
 import { getStoreForDir } from "./storeClient";
 import type { OutputLanguage, PromptLanguage } from "@agent-mindmap/core";
 import type { SessionRecord } from "./storeTypes";
-import type { ConceptOntologyRecord, TopicConceptPathDecision } from "./ontologyTypes";
+import type { OntologyRecord, OntologyRecordTopicPath } from "@agent-mindmap/shared";
 import type { MindMapProgress } from "../progress";
 import type { LlmProvider } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
@@ -56,7 +56,7 @@ export async function readOntologyIndex(storeDir: string): Promise<OntologyIndex
 export async function findReusableOntologyBase(
   storeDir: string,
   records: SessionRecord[]
-): Promise<ConceptOntologyRecord | undefined> {
+): Promise<OntologyRecord | undefined> {
   if (!records.length) {
     return undefined;
   }
@@ -84,13 +84,13 @@ export async function findReusableOntologyBase(
 }
 
 function filterTopicPathsForSessions(
-  topicPaths: TopicConceptPathDecision[],
+  topicPaths: OntologyRecordTopicPath[],
   sessionIds: Set<string>
-): TopicConceptPathDecision[] {
+): OntologyRecordTopicPath[] {
   return topicPaths.filter((p) => sessionIds.has(p.sessionId));
 }
 
-function sessionIdsWithTopicPaths(topicPaths: TopicConceptPathDecision[]): Set<string> {
+function sessionIdsWithTopicPaths(topicPaths: OntologyRecordTopicPath[]): Set<string> {
   return new Set(topicPaths.map((p) => p.sessionId));
 }
 
@@ -130,7 +130,7 @@ export function computeOntologyCacheKey(
 export async function readOntologyRecord(
   storeDir: string,
   cacheKey: string
-): Promise<ConceptOntologyRecord | undefined> {
+): Promise<OntologyRecord | undefined> {
   const store = await getStoreForDir(storeDir);
   return store.readOntologyRecord(cacheKey);
 }
@@ -159,7 +159,7 @@ export async function clearOntologyCache(storeDir: string): Promise<void> {
   await store.clearOntologyCache();
 }
 
-export function isCompleteOntologyRecord(record: ConceptOntologyRecord): boolean {
+export function isCompleteOntologyRecord(record: OntologyRecord): boolean {
   return (
     record.nodes.length > 0 &&
     record.topicPaths.length > 0 &&
@@ -180,7 +180,7 @@ export async function writeOntologyRecord(
   },
   provider: LlmProvider,
   payload: Pick<
-    ConceptOntologyRecord,
+    OntologyRecord,
     | "nodes"
     | "mappings"
     | "topicPaths"
@@ -189,8 +189,8 @@ export async function writeOntologyRecord(
     | "segmentEquivalences"
     | "mergeSessionAnalysis"
   >
-): Promise<ConceptOntologyRecord> {
-  const record: ConceptOntologyRecord = {
+): Promise<OntologyRecord> {
+  const record: OntologyRecord = {
     schemaVersion: 1,
     meta: {
       builtAt: Date.now(),
@@ -243,7 +243,7 @@ export async function ensureOntologyMemory(
   signal: AbortSignal,
   progress?: MindMapProgress,
   flags: EnsureOntologyMemoryFlags = {}
-): Promise<ConceptOntologyRecord> {
+): Promise<OntologyRecord> {
   // bootstrapStore() (via getStoreForDir) creates the DB + store dir on first
   // access, so there is no need for an explicit ensureStore() call here.
   progress?.report(safeT("ui.ontology.cache.check", "Checking concept ontology cache…"));
@@ -297,7 +297,7 @@ export async function ensureOntologyMemory(
   mappings = collected.mappings;
   topicPaths = collected.topicPaths;
 
-  let segmentEquivalences: ConceptOntologyRecord["segmentEquivalences"];
+  let segmentEquivalences: OntologyRecord["segmentEquivalences"];
   if (flags.forceRefine || cached?.segmentEquivalences === undefined) {
     segmentEquivalences = mergeSegmentEquivalencesLists(
       reusableBase?.segmentEquivalences ?? [],

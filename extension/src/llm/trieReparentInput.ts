@@ -9,7 +9,7 @@ import {
 } from "@agent-mindmap/core";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import type { ConceptOntologyNode, SegmentEquivalence } from "@agent-mindmap/core";
-import type { TopicConceptPathDecision } from "../store/ontologyTypes";
+import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
 
 export type { ReattachNodeCatalog, StructuralReattachHints };
 
@@ -332,7 +332,7 @@ export function buildTrieReparentInput(
   opts: {
     segmentEquivalences?: SegmentEquivalence[];
     ontologyNodes?: ConceptOntologyNode[];
-    topicPaths?: TopicConceptPathDecision[];
+    topicPaths?: OntologyRecordTopicPath[];
     projectSlug?: string;
     mergeMode?: MergeInputMode;
     snapshotSessionId?: string;

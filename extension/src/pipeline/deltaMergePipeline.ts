@@ -1,4 +1,4 @@
-import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
+import { filterRealSessionRecords, readSnapshotManifest } from "@agent-mindmap/core";
 import {
   runBatchSnapshotPipeline,
   runFinalRootRefresh,

@@ -284,7 +284,7 @@ function buildRunBackgroundMerge(): RunBackgroundMergeFn {
       const { resolveAndBuildConceptMergeAsync } = await import("../store/conceptMergeContext");
       const { runBatchSnapshotPipeline, refreshSnapshotForSession } =
         await import("../pipeline/snapshotHierarchy");
-      const { readSnapshotManifest } = await import("../store/mergeSnapshot");
+      const { readSnapshotManifest } = await import("@agent-mindmap/core");
       const config = vscode.workspace.getConfiguration("agentMindmap");
 
       const storeDir = opts.storeDir;
@@ -508,7 +508,7 @@ function buildResolveProjectRecords(): ResolveProjectRecordsFn {
 
 function buildReadSnapshotManifest(): ReadSnapshotManifestFn {
   return async (storeDir, projectSlug) => {
-    const { readSnapshotManifest } = await import("../store/mergeSnapshot");
+    const { readSnapshotManifest } = await import("@agent-mindmap/core");
     return readSnapshotManifest(storeDir, projectSlug);
   };
 }

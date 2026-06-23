@@ -14,7 +14,7 @@ import {
   writeMergeSnapshot,
   writeSnapshotByPath,
   writeSnapshotManifest,
-} from "../store/mergeSnapshot";
+} from "@agent-mindmap/core";
 import { buildOutlineFromConceptTrie } from "../store/mergeConceptTrie";
 import { mindMapLog } from "../webview/MindMapLog";
 import { conceptTrieMergePath, writeMergeRecord } from "@agent-mindmap/core";

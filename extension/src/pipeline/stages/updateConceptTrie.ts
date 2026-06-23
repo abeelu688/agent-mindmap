@@ -6,7 +6,7 @@ import {
   enrichRecordsWithTopicPaths,
   prepareRecordsForFinalTrie,
   type ConceptMergePrepOntology as PrepOntology,
-} from "../../store/prepareConceptMergeRecords";
+} from "@agent-mindmap/core";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "@agent-mindmap/core";
 import type {
   ReattachMove,
@@ -16,7 +16,7 @@ import type {
 } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "../../store/storeTypes";
 
-export type { ConceptMergePrepOntology } from "../../store/prepareConceptMergeRecords";
+export type { ConceptMergePrepOntology } from "@agent-mindmap/core";
 export {
   collectDistinctTopSegmentKeys,
   collectStaleReattachTopRoots,
@@ -24,7 +24,7 @@ export {
   prepareRecordsForFinalTrie,
   recordsSubsetOfOntologySessions,
   warnIfStaleReattachTopRoots,
-} from "../../store/prepareConceptMergeRecords";
+} from "@agent-mindmap/core";
 
 export type UpdateConceptTrieOpts = {
   records: SessionRecord[];

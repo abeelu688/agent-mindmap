@@ -10,7 +10,7 @@ import {
   sha256Hex,
 } from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
 import { topicIdForTopic } from "@agent-mindmap/core";
 
 function recordWithOutline(
@@ -82,7 +82,7 @@ describe("segmentContext", () => {
       title: "Android / ART runtime",
       items: [{ text: "dex2oat" }],
     });
-    const topicPaths: TopicConceptPathDecision[] = [
+    const topicPaths: OntologyRecordTopicPath[] = [
       {
         topicId,
         sessionId: "s1",
@@ -108,7 +108,7 @@ describe("segmentContext", () => {
 
   it("prioritizes ambiguous paths in refine samples", () => {
     const index = buildTopicContextIndex([]);
-    const topicPaths: TopicConceptPathDecision[] = [
+    const topicPaths: OntologyRecordTopicPath[] = [
       {
         topicId: "t-simple",
         sessionId: "s1",
@@ -127,7 +127,7 @@ describe("segmentContext", () => {
   });
 
   it("detects sibling root segments with shared downstream for refine hints", () => {
-    const topicPaths: TopicConceptPathDecision[] = [
+    const topicPaths: OntologyRecordTopicPath[] = [
       {
         topicId: "t1",
         sessionId: "s1",

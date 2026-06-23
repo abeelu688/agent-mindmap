@@ -14,7 +14,7 @@ import {
   ontologySliceForPrep,
   prepareRecordsForFinalTrie,
   recordsSubsetOfOntologySessions,
-} from "./prepareConceptMergeRecords";
+} from "@agent-mindmap/core";
 import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,
@@ -27,7 +27,7 @@ import {
   type EnsureOntologyMemoryFlags,
 } from "./ontologyStore";
 import { getStoreForDir } from "./storeClient";
-import type { ConceptOntologyRecord } from "./ontologyTypes";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 import type { MindMapProgress } from "../progress";
 import type { LlmProvider, SegmentEquivalence } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
@@ -45,7 +45,7 @@ export type ConceptMergeLlmOpts = {
 export type LoadedConceptMergeContext = {
   segmentEquivalences?: SegmentEquivalence[];
   /** Full ontology when cache key matches exactly (enables topicPaths apply). */
-  ontology?: ConceptOntologyRecord;
+  ontology?: OntologyRecord;
 };
 
 function sessionIdsSubsetOf(subset: string[], superset: string[]): boolean {

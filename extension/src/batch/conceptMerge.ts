@@ -1,6 +1,6 @@
 import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
 import { refreshSnapshotForSession, runBatchSnapshotPipeline } from "../pipeline/snapshotHierarchy";
-import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
+import { filterRealSessionRecords, readSnapshotManifest } from "@agent-mindmap/core";
 import { getStoreForDir } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import { mindMapLog } from "../webview/MindMapLog";

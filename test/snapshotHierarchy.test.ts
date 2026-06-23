@@ -9,7 +9,7 @@ import {
   snapshotVirtualSessionId,
   writeSnapshotManifest,
   readSnapshotManifest,
-} from "../extension/src/store/mergeSnapshot";
+} from "@agent-mindmap/core";
 import type { SnapshotManifest, SnapshotNode } from "../extension/src/store/storeTypes";
 
 function leafNode(id: string, sessionIds: string[]): SnapshotNode {

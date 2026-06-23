@@ -17,7 +17,7 @@ import {
   type MindMapRoot,
 } from "@agent-mindmap/core";
 import { sanitizeSessionRecord } from "./sanitizeRecords";
-import { prepareRecordsForFinalTrie } from "./prepareConceptMergeRecords";
+import { prepareRecordsForFinalTrie } from "@agent-mindmap/core";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type { ReattachMove, ReattachStep, SessionAnalysis } from "@agent-mindmap/core";
 

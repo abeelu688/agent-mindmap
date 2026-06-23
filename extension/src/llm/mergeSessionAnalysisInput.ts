@@ -1,8 +1,11 @@
-import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../store/mergeSnapshot";
-import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
+import {
+  MERGE_SNAPSHOT_SESSION_ID,
+  isMergeSnapshotSessionId,
+  collectDistinctTopSegmentKeys,
+  buildConceptContextsFromAnalysis,
+  enrichAnalysisNodesFromOutline,
+} from "@agent-mindmap/core";
 import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
-import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
-import { enrichAnalysisNodesFromOutline } from "@agent-mindmap/core";
 import type { ConceptContextForMerge, SessionRecord } from "../store/storeTypes";
 import type { MergeInputMode } from "./trieReparentInput";
 import type { OutlineNode, SessionAnalysis } from "@agent-mindmap/core";

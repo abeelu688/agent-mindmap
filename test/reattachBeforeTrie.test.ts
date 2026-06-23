@@ -3,7 +3,7 @@ import { buildConceptMergeRecord } from "../extension/src/store/mergeConceptTrie
 import {
   collectStaleReattachTopRoots,
   prepareRecordsForFinalTrie,
-} from "../extension/src/store/prepareConceptMergeRecords";
+} from "@agent-mindmap/core";
 import type { ReattachStep } from "@agent-mindmap/core";
 
 function topic(path: string[], title: string) {

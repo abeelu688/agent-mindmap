@@ -4,7 +4,7 @@ import {
   snapshotCoversCurrentSessions,
   type RunDeltaMergePipelineOpts,
 } from "../extension/src/pipeline/deltaMergePipeline";
-import { buildMergeSnapshotFromOntology } from "../extension/src/store/mergeSnapshot";
+import { buildMergeSnapshotFromOntology } from "@agent-mindmap/core";
 import {
   buildRecordMeta,
   buildSessionRecord,

@@ -11,7 +11,7 @@ import {
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { SegmentEquivalence } from "@agent-mindmap/core";
 import { topicIdForTopic } from "@agent-mindmap/core";
-import type { ConceptOntologyRecord } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 
@@ -106,7 +106,7 @@ describe("prepareRecordsForConceptMerge", () => {
         },
       ],
       segmentEquivalences: equivalences,
-    } satisfies ConceptOntologyRecord;
+    } satisfies OntologyRecord;
     const prepared = prepareRecordsForConceptMerge([record], { ontology });
     expect(prepared[0].graph.topics[0].conceptPath?.[0]).toBe("android");
   });

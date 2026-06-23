@@ -4,10 +4,10 @@ import {
   buildOrphanRootReparentRules,
   rulesToReparentMap,
 } from "@agent-mindmap/core";
-import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
 import type { ConceptOntologyNode } from "@agent-mindmap/core";
 
-function paths(...conceptPaths: string[][]): TopicConceptPathDecision[] {
+function paths(...conceptPaths: string[][]): OntologyRecordTopicPath[] {
   return conceptPaths.map((conceptPath, i) => ({
     topicId: `t${i}`,
     sessionId: `s${i}`,

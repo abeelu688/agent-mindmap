@@ -4,12 +4,12 @@ import {
   buildChainCollapseOverlapHints,
   deriveEquivalencesFromTopicPaths,
 } from "@agent-mindmap/core";
-import type { TopicConceptPathDecision } from "../extension/src/store/ontologyTypes";
+import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
 import type { ConceptOntologyNode } from "@agent-mindmap/core";
 
 describe("synonymHintDerive", () => {
   it("detects chain collapse outer/inner on same path prefix", () => {
-    const topicPaths: TopicConceptPathDecision[] = [
+    const topicPaths: OntologyRecordTopicPath[] = [
       {
         topicId: "t1",
         sessionId: "s1",
@@ -42,7 +42,7 @@ describe("synonymHintDerive", () => {
   });
 
   it("derives scoped equivalences for sibling and node-alias hints", () => {
-    const topicPaths: TopicConceptPathDecision[] = [
+    const topicPaths: OntologyRecordTopicPath[] = [
       {
         topicId: "t1",
         sessionId: "s1",

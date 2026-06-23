@@ -6,7 +6,7 @@ import {
 } from "../../llm/promptMergeSessionAnalysis";
 import { validateSessionAnalysis } from "@agent-mindmap/core";
 import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
-import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../../store/mergeSnapshot";
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "@agent-mindmap/core";
 import { scaleMergeSessionAnalysisTimeoutMs } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "./finalizeSessionAnalysis";
