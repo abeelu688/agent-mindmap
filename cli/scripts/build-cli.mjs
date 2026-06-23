@@ -50,3 +50,6 @@ if (result.errors.length > 0) {
 }
 
 console.log("CLI bundle built successfully.");
+
+// ── Bundle webview assets into cli/media/ ──────────────────────────────────
+import("./bundle-cli-assets.mjs");

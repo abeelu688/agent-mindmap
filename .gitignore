@@ -10,6 +10,7 @@ extension/dist/
 extension/media/
 extension/mcp-server/
 shared/dist/
+cli/media/
 
 # packaging
 *.vsix

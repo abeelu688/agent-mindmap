@@ -4,7 +4,13 @@
 import { Command } from "commander";
 import * as os from "os";
 import * as path from "path";
-import { listSessions, analyzeSession, type ListSessionsResult } from "@agent-mindmap/core";
+import {
+  listSessions,
+  analyzeSession,
+  buildOutlineMindMap,
+  exportMindMapPackage,
+  type ListSessionsResult,
+} from "@agent-mindmap/core";
 import { CliConfigStore } from "../config/configStore";
 import {
   log,
@@ -16,6 +22,7 @@ import {
   createSpinner,
 } from "../ui/logger";
 import { buildCliHostAccess, buildCliAnalyzeSessionDepsAsync } from "../adapters/analyzeDeps";
+import { resolveMediaDir } from "../mediaDir";
 
 // ────────────────────────────────────────────────────────────────────────────
 // session list
@@ -230,6 +237,116 @@ export async function runSessionAnalyze(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// session dump
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function runSessionDump(
+  cwd: string,
+  storeDir: string | undefined,
+  sessionId: string,
+  options: { output?: string; force?: boolean; withAnalyze?: boolean }
+) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+
+  const hostAccess = buildCliHostAccess(cwd);
+  const result = await listSessions({ hostAccess });
+
+  if (!result) {
+    logError("No sessions found.");
+    process.exit(1);
+  }
+
+  const session = result.sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
+  if (!session) {
+    logError(`Session not found: ${sessionId}`);
+    process.exit(1);
+  }
+
+  // Optionally analyze first
+  if (options.withAnalyze) {
+    await runSessionAnalyze(cwd, storeDir, {
+      latest: false,
+      force: false,
+      sessionId: session.id,
+    });
+  }
+
+  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const { readRecord, ensureStore } = await import("@agent-mindmap/core");
+  await ensureStore(storeDirPath);
+
+  const record = await readRecord(storeDirPath, result.projectSlug, session.id);
+  if (!record) {
+    logError(`Session not yet analyzed: ${session.id}`);
+    logError("Run `agent-mindmap session analyze` first, or use --with-analyze.");
+    process.exit(1);
+  }
+
+  // Build mind map from record
+  const sessionMeta = {
+    sessionId: record.meta.sessionId,
+    projectSlug: record.meta.projectSlug,
+    projectPath: record.meta.projectPath,
+    sessionLabel: record.meta.sessionLabel,
+    transcriptPath: record.meta.transcriptPath,
+  };
+
+  const mindMap = buildOutlineMindMap(
+    record.outline,
+    record.meta.sessionLabel,
+    sessionMeta,
+    record.sessionAnalysis?.codeReferences,
+    record.meta.projectPath,
+    record.meta.outputLanguage
+  );
+
+  // Resolve output directory
+  const defaultOutDir = path.join(
+    process.cwd(),
+    "agent-mindmap-export",
+    `${record.meta.hostId ?? "session"}-${session.id.slice(0, 8)}-${Date.now()}`
+  );
+  const outDir = options.output ?? defaultOutDir;
+
+  // Resolve media directory
+  const mediaDir = resolveMediaDir();
+
+  const spinner = createSpinner("Exporting mind map package…");
+  spinner.start();
+
+  try {
+    const exportResult = await exportMindMapPackage({
+      outDir,
+      mindMap,
+      mediaDir,
+      ui: { preset: "auto", direction: 2 },
+      onWarning: (msg) => logWarn(msg),
+      title: record.meta.sessionLabel,
+    });
+
+    spinner.succeed("Export complete");
+
+    if (isJsonMode()) {
+      printJson({ outDir: exportResult.outDir, transcripts: exportResult.transcriptCount });
+      return;
+    }
+
+    logSuccess(`Exported to: ${exportResult.outDir}`);
+    log(`  Transcripts: ${exportResult.transcriptCount}`);
+    log(`  Open:        ${path.join(exportResult.outDir, "index.html")}`);
+  } catch (err) {
+    spinner.fail("Export failed");
+    if (err instanceof Error) {
+      logError(err.message);
+    } else {
+      logError(String(err));
+    }
+    process.exit(1);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -289,6 +406,28 @@ export const sessionCommand = new Command("session")
           (opts.cwd as string) ?? process.cwd(),
           opts.storeDir as string | undefined,
           { latest: !sessionId, force: cmdOpts.force, sessionId }
+        );
+      })
+  )
+  .addCommand(
+    new Command("dump")
+      .description("Export session mind map as an offline HTML package")
+      .argument("<id>", "Session ID (or prefix)")
+      .option("-o, --output <dir>", "Output directory")
+      .option("--force", "Overwrite existing output directory")
+      .option("--with-analyze", "Analyze the session first if needed")
+      .action(async (sessionId: string) => {
+        const opts = sessionCommand.optsWithGlobals();
+        const cmdOpts = sessionCommand.commands.find((c) => c.name() === "dump")?.opts() ?? {};
+        await runSessionDump(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined,
+          sessionId,
+          {
+            output: cmdOpts.output as string | undefined,
+            force: cmdOpts.force as boolean | undefined,
+            withAnalyze: cmdOpts.withAnalyze as boolean | undefined,
+          }
         );
       })
   );

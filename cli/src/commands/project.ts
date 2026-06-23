@@ -10,6 +10,7 @@ import {
   getCodeRefQueueDepth,
   readSnapshotManifest,
   readMergeSnapshot,
+  exportMindMapPackage,
   type SnapshotManifest,
   type MergeSnapshot,
 } from "@agent-mindmap/core";
@@ -24,6 +25,7 @@ import {
   createSpinner,
 } from "../ui/logger";
 import { buildCliHostAccess, buildCliAnalyzeProjectDeps } from "../adapters/analyzeDeps";
+import { resolveMediaDir } from "../mediaDir";
 
 // ────────────────────────────────────────────────────────────────────────────
 // project analyze
@@ -210,6 +212,93 @@ export async function runProjectStatus(cwd: string, storeDir: string | undefined
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// project dump
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function runProjectDump(
+  cwd: string,
+  storeDir: string | undefined,
+  options: { output?: string; force?: boolean; withAnalyze?: boolean }
+) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+
+  const hostAccess = buildCliHostAccess(cwd);
+  const result = await listSessions({ hostAccess });
+
+  if (!result) {
+    logError("No workspace or host detected.");
+    process.exit(1);
+  }
+
+  // Optionally analyze first
+  if (options.withAnalyze) {
+    await runProjectAnalyze(cwd, storeDir, { force: false });
+  }
+
+  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const { ensureStore } = await import("@agent-mindmap/core");
+  await ensureStore(storeDirPath);
+
+  // Read the merged project mind map from store
+  const storeAccess = await import("../adapters/cliStore").then((m) =>
+    m.buildCliStoreAccess(storeDirPath)
+  );
+  const store = await storeAccess.getStore();
+  const mergeRecord = await store.readConceptTrieMerge();
+
+  if (!mergeRecord?.mindMap) {
+    logError("No merged project mind map available.");
+    logError("Run `agent-mindmap project analyze` first, or use --with-analyze.");
+    process.exit(1);
+  }
+
+  // Resolve output directory
+  const defaultOutDir = path.join(
+    process.cwd(),
+    "agent-mindmap-export",
+    `${result.projectSlug}-${Date.now()}`
+  );
+  const outDir = options.output ?? defaultOutDir;
+
+  // Resolve media directory
+  const mediaDir = resolveMediaDir();
+
+  const spinner = createSpinner("Exporting project mind map package…");
+  spinner.start();
+
+  try {
+    const exportResult = await exportMindMapPackage({
+      outDir,
+      mindMap: mergeRecord.mindMap,
+      mediaDir,
+      ui: { preset: "auto", direction: 2 },
+      onWarning: (msg) => logWarn(msg),
+      title: mergeRecord.meta.title ?? result.projectSlug,
+    });
+
+    spinner.succeed("Export complete");
+
+    if (isJsonMode()) {
+      printJson({ outDir: exportResult.outDir, transcripts: exportResult.transcriptCount });
+      return;
+    }
+
+    logSuccess(`Exported to: ${exportResult.outDir}`);
+    log(`  Transcripts: ${exportResult.transcriptCount}`);
+    log(`  Open:        ${path.join(exportResult.outDir, "index.html")}`);
+  } catch (err) {
+    spinner.fail("Export failed");
+    if (err instanceof Error) {
+      logError(err.message);
+    } else {
+      logError(String(err));
+    }
+    process.exit(1);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Command registration
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -237,4 +326,24 @@ export const projectCommand = new Command("project")
         opts.storeDir as string | undefined
       );
     })
+  )
+  .addCommand(
+    new Command("dump")
+      .description("Export project mind map as an offline HTML package")
+      .option("-o, --output <dir>", "Output directory")
+      .option("--force", "Overwrite existing output directory")
+      .option("--with-analyze", "Analyze the project first if needed")
+      .action(async () => {
+        const opts = projectCommand.optsWithGlobals();
+        const cmdOpts = projectCommand.commands.find((c) => c.name() === "dump")?.opts() ?? {};
+        await runProjectDump(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined,
+          {
+            output: cmdOpts.output as string | undefined,
+            force: cmdOpts.force as boolean | undefined,
+            withAnalyze: cmdOpts.withAnalyze as boolean | undefined,
+          }
+        );
+      })
   );
