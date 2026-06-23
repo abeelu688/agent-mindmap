@@ -13,6 +13,9 @@ import { hostCommand } from "./commands/host";
 import { modelCommand } from "./commands/model";
 import { sessionCommand } from "./commands/session";
 import { projectCommand } from "./commands/project";
+import { teamCommand } from "./commands/team";
+import { mcpCommand } from "./commands/mcp";
+import { contextCommand } from "./commands/context";
 import { resolveGlobalFlags } from "./ui/flags";
 import { applyGlobalFlags, setJsonMode } from "./ui/logger";
 
@@ -41,6 +44,9 @@ program.addCommand(hostCommand);
 program.addCommand(modelCommand);
 program.addCommand(sessionCommand);
 program.addCommand(projectCommand);
+program.addCommand(teamCommand);
+program.addCommand(mcpCommand);
+program.addCommand(contextCommand);
 
 // Global flag handling
 program.hook("preAction", () => {
