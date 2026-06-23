@@ -1,17 +1,17 @@
-import { runLlmStage } from "../llmStage";
+import { runLlmStage } from "../../llm/llmStage";
 import {
   buildSessionAnalysisPrompt,
   SESSION_ANALYSIS_PROMPT_VERSION,
   type SessionAnalysisPromptOptions,
-} from "@agent-mindmap/core";
-import { validateSessionAnalysis } from "@agent-mindmap/core";
-import { buildPendingCodeReferencesFromEvents } from "../../llm/extractCodeReferences";
-import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type { ChatEvent } from "@agent-mindmap/core";
-import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "@agent-mindmap/core";
-import type { OutputLanguage } from "@agent-mindmap/core";
+} from "../../llm/barrel";
+import { validateSessionAnalysis } from "../../llm/barrel";
+import { buildPendingCodeReferencesFromEvents } from "../../llm/barrel";
+import type { CodeReference, LlmProvider, SessionAnalysis } from "../../llm/barrel";
+import type { AgentHostId } from "../../host/types";
+import type { ChatEvent } from "../../transcript/types";
+import type { ProgressReporter } from "../../ports/ProgressReporter";
+import type { StageTimingOpts } from "../stageTimingOpts";
+import type { OutputLanguage } from "../../llm/barrel";
 
 export type AnalyzeSessionOpts = StageTimingOpts & {
   events: ChatEvent[];
@@ -36,7 +36,7 @@ export async function analyzeSession(
   opts: AnalyzeSessionOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<AnalyzeSessionResult> {
   const prompt = buildSessionAnalysisPrompt(
     opts.events,

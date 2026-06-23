@@ -156,6 +156,17 @@ export {
   type FinalizedSessionAnalysis,
 } from "./pipeline/stages/finalizeSessionAnalysis";
 export { collectMergeTerms, type CollectedMergeTerms } from "./pipeline/stages/collectMergeTerms";
+export {
+  analyzeSession as analyzeSessionStage,
+  type AnalyzeSessionOpts,
+  type AnalyzeSessionResult,
+} from "./pipeline/stages/analyzeSession";
+export {
+  runSessionPipeline,
+  type SessionPipelinePromptOpts,
+  type SessionPipelineOpts,
+  type SessionPipelineResult,
+} from "./pipeline/sessionPipeline";
 
 // Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";

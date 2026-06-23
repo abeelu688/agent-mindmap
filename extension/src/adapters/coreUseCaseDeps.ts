@@ -264,16 +264,8 @@ function buildLlmDumpDeps(): LlmDumpDeps {
 
 function buildRunSessionPipeline(): RunSessionPipelineFn {
   return async (opts, provider, signal, progress) => {
-    const { runSessionPipeline } = await import("../pipeline/sessionPipeline");
-    // Adapt ProgressReporter → MindMapProgress if needed
-    const mindMapProgress = progress
-      ? {
-          report(update: string | { message?: string; increment?: number }) {
-            progress.report(update);
-          },
-        }
-      : undefined;
-    return runSessionPipeline(opts, provider, signal, mindMapProgress);
+    const { runSessionPipeline } = await import("@agent-mindmap/core");
+    return runSessionPipeline(opts, provider, signal, progress);
   };
 }
 

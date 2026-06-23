@@ -1,21 +1,20 @@
-import { countUserQueries } from "@agent-mindmap/core";
+import { countUserQueries } from "../llm/sanitizeTopicGraph";
 import { analyzeSession } from "./stages/analyzeSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
-import { currentPipelineVersions } from "@agent-mindmap/core";
-import { createPipelineTimingCollector } from "@agent-mindmap/core";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type { CodeReference, LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
-import type { MindMapProgress } from "../progress";
-import type { ChatEvent } from "@agent-mindmap/core";
+import { currentPipelineVersions } from "./pipelineVersions";
+import { createPipelineTimingCollector } from "./pipelineTiming";
+import type { AgentHostId } from "../host/types";
+import type { CodeReference, LlmProvider, SessionAnalysis, LlmStageTimingOut } from "../llm/barrel";
+import type { ProgressReporter } from "../ports/ProgressReporter";
+import type { ChatEvent } from "../transcript/types";
 import type {
   SessionConceptExtract,
   SessionOutline,
   SessionSynonymRefine,
   SessionTreeSnapshot,
-} from "@agent-mindmap/core";
-import type { ConceptContextForMerge } from "../store/storeTypes";
-import type { LlmStageTimingOut } from "./llmStage";
-import type { OutputLanguage } from "@agent-mindmap/core";
+} from "../llm/barrel";
+import type { ConceptContextForMerge } from "@agent-mindmap/shared";
+import type { OutputLanguage } from "../llm/barrel";
 
 export type SessionPipelinePromptOpts = {
   maxDomains: number;
@@ -58,7 +57,7 @@ export async function runSessionPipeline(
   opts: SessionPipelineOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<SessionPipelineResult> {
   const timing = opts.skipTiming
     ? undefined
