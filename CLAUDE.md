@@ -17,25 +17,39 @@ This file provides guidance to Claude Code (and any AI coding assistant) working
 
 ```
 agent-mindmap/
-├── extension/               ← VS Code extension (Node.js side)
-│   ├── src/
-│   │   ├── extension.ts     ← Entry point (activate/deactivate + command registration)
-│   │   ├── commands/        ← Command handlers (being refactored from extension.ts)
-│   │   ├── host/            ← Cursor / Claude Code host abstraction
-│   │   ├── llm/             ← LLM CLI dispatch, prompt templates, JSON parsing, validation
-│   │   ├── pipeline/        ← Session analysis pipeline (S1→S2 stages)
-│   │   ├── store/           ← Persistent library (SessionRecord, merge snapshots, ontology)
-│   │   ├── mindmap/         ← Mind map data builders (Topic/Turn/Merge views)
-│   │   ├── webview/         ← WebView panel management (MindMapPanel, MindMapHost)
-│   │   ├── export/          ← Offline HTML package export
-│   │   ├── transcript/      ← JSONL parsing, session listing, Cursor state.vscdb
-│   │   ├── ui/              ← Theme, layout direction, UI settings
-│   │   ├── l10n/            ← UI translation (t() / uiTranslate())
-│   │   ├── jumpToOrigin.ts  ← Click node → open transcript at matching turn
-│   │   ├── sessionLoader.ts ← Session loading + LLM orchestration
-│   │   └── paths.ts         ← Store directory resolution
-│   ├── l10n/                ← VS Code l10n bundles (en, zh-cn)
-│   └── package.json         ← Extension manifest + settings
+├── shared/                  ← Shared types and constants (SQLite schema, store types)
+│   └── src/
+├── core/                    ← VS Code-free business logic (see core/README.md)
+│   └── src/
+│       ├── pipeline/        ← Session analysis pipeline, merge pipeline, snapshot hierarchy
+│       ├── batch/           ← Batch concept merge orchestrators
+│       ├── store/           ← Store types, session record, ontology, merge snapshot
+│       ├── llm/             ← LLM provider factory, prompt builders, headless CLI dispatch
+│       ├── transcript/      ← JSONL parsing, session listing, Cursor state.vscdb
+│       ├── host/            ← Host abstraction (AgentHost), registry, slug derivation
+│       ├── mindmap/         ← Mind map data builders (Topic/Turn/Merge views)
+│       ├── export/          ← Offline HTML package export
+│       ├── mcp/             ← MCP config core logic
+│       ├── useCases/        ← Thin orchestrators consumed by command handlers
+│       ├── ports/           ← Port interfaces (ProgressReporter, LlmDumpDeps, etc.)
+│       └── ui/              ← Theme/layout direction types
+├── extension/               ← VS Code extension (adapter layer)
+│   └── src/
+│       ├── extension.ts     ← Entry point (activate/deactivate + command registration)
+│       ├── commands/        ← Command handlers (delegates to core useCases)
+│       ├── adapters/        ← Wire core ports to VS Code APIs
+│       ├── webview/         ← WebView panel management (MindMapPanel, MindMapHost)
+│       ├── l10n/            ← UI translation (vscode.l10n)
+│       ├── host/            ← VS Code-specific host wrappers
+│       ├── pipeline/        ← Remaining adapters (llmStage, deltaMergePipeline, batchMergeCache)
+│       ├── store/           ← Adapters injecting getHostById (sanitizeRecords, mergeConceptTrie)
+│       └── llm/             ← VS Code UI for CLI install guide
+├── cli/                     ← Command-line interface
+│   └── src/
+│       ├── commands/        ← CLI command implementations
+│       ├── adapters/        ← Wire core ports to terminal (ora spinner, JSON config)
+│       ├── config/          ← CLI-specific config store
+│       └── ui/              ← Terminal UI (logger, prompter)
 ├── webview/                 ← WebView (browser side, loaded in iframe)
 │   └── src/
 │       ├── main.ts          ← Bootstrap mind-elixir
@@ -45,10 +59,27 @@ agent-mindmap/
 │       ├── exportBootstrap.ts ← Offline export bootstrap
 │       ├── offlineJump.ts   ← Offline transcript jump
 │       └── uiContextMenu.ts ← Canvas context menu
+├── mcp-server/              ← MCP server package
 ├── test/                    ← Test files (vitest + node test runner)
 ├── docs/                    ← Architecture docs, release & maintenance guides
-└── scripts/                 ← Build/packaging scripts
+└── scripts/                 ← Build/packaging/boundary-check scripts
 ```
+
+### Package boundary rules
+
+The workspace follows a strict dependency direction:
+
+```
+cli → core → shared    (cli depends on core, core depends on shared)
+extension → core → shared
+mcp-server → core → shared
+```
+
+No upward imports, no lateral imports between surface packages. These rules are
+enforced by CI (`npm run check:boundaries`) and eslint (`import/no-restricted-paths`).
+
+See `plans/cli-refactor-cleanup-master.md` § Architecture rules A1–A10 for the
+full specification.
 
 ## Development Setup
 
