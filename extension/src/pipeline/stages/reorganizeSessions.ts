@@ -8,7 +8,7 @@ import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { normalizeConceptPath } from "@agent-mindmap/core";
 import { logPipelineStageTiming } from "@agent-mindmap/core";
 import { organizeByTree } from "./organizeByTree";
-import type { CollectedMergeTerms } from "./collectMergeTerms";
+import type { CollectedMergeTerms } from "@agent-mindmap/core";
 import type { SessionRecord } from "../../store/storeTypes";
 import type { MindMapProgress } from "../../progress";
 import type { LlmProvider, SegmentEquivalence, SessionTreeSnapshot } from "@agent-mindmap/core";

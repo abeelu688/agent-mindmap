@@ -4,7 +4,7 @@ import { TOPIC_PATHS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { MERGE_SESSION_ANALYSIS_PROMPT_VERSION } from "../llm/promptMergeSessionAnalysis";
 import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { OUTLINE_PROMPT_VERSION } from "@agent-mindmap/core";
-import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
+import { collectMergeTerms } from "@agent-mindmap/core";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   collectSessionSegmentEquivalences,

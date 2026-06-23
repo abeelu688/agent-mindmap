@@ -3,7 +3,7 @@ import {
   analysisToConceptExtract,
   analysisToSessionSynonyms,
   finalizeSessionAnalysis,
-} from "../extension/src/pipeline/stages/finalizeSessionAnalysis";
+} from "@agent-mindmap/core";
 import type { SessionAnalysis } from "@agent-mindmap/core";
 
 const analysis: SessionAnalysis = {

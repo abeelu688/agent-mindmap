@@ -13,7 +13,7 @@ import {
 import { buildTrieReparentInput, type MergeInputMode } from "../llm/trieReparentInput";
 import { MERGE_SNAPSHOT_SESSION_ID } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
-import { collectMergeTerms } from "./stages/collectMergeTerms";
+import { collectMergeTerms } from "@agent-mindmap/core";
 import {
   mergeSessionAnalysis,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
@@ -23,7 +23,7 @@ import { createPipelineTimingCollector } from "@agent-mindmap/core";
 import {
   finalizeSessionAnalysis,
   type FinalizedSessionAnalysis,
-} from "./stages/finalizeSessionAnalysis";
+} from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { LlmProvider, SessionAnalysis } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";

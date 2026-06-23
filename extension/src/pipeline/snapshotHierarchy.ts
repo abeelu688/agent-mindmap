@@ -22,7 +22,7 @@ import { getStoreForDir } from "../store/storeClient";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
 import { runMergePipeline } from "./mergePipeline";
 import { tryReuseBatchMerge } from "./batchMergeCache";
-import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
+import { finalizeSessionAnalysis } from "@agent-mindmap/core";
 import { updateConceptTrieAsync } from "./stages/updateConceptTrie";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { LlmProvider, Topic } from "@agent-mindmap/core";
@@ -35,7 +35,7 @@ import type {
   SnapshotManifest,
   SnapshotNode,
 } from "../store/storeTypes";
-import type { FinalizedSessionAnalysis } from "./stages/finalizeSessionAnalysis";
+import type { FinalizedSessionAnalysis } from "@agent-mindmap/core";
 
 export type SnapshotHierarchyLlmOpts = {
   storeDir: string;

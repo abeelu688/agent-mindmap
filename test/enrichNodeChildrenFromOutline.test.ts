@@ -5,7 +5,7 @@ import {
   collectChildEdgesFromOutline,
   enrichAnalysisNodesFromOutline,
 } from "@agent-mindmap/core";
-import { finalizeSessionAnalysis } from "../extension/src/pipeline/stages/finalizeSessionAnalysis";
+import { finalizeSessionAnalysis } from "@agent-mindmap/core";
 
 test("collectChildEdgesFromOutline reads conceptPath on leaves", () => {
   const edges = collectChildEdgesFromOutline({

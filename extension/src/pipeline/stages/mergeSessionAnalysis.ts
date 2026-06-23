@@ -9,7 +9,7 @@ import { buildOutlineFromConceptTrie } from "../../store/mergeConceptTrie";
 import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "@agent-mindmap/core";
 import { scaleMergeSessionAnalysisTimeoutMs } from "@agent-mindmap/core";
 import { outputLanguageFromRecords } from "@agent-mindmap/core";
-import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "./finalizeSessionAnalysis";
+import { finalizeSessionAnalysis, type FinalizedSessionAnalysis } from "@agent-mindmap/core";
 import { prepareRecordsBeforeReattach } from "./updateConceptTrie";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type {

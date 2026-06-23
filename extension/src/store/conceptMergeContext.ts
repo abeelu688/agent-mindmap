@@ -1,5 +1,5 @@
 import { runMergePipeline, type MergeRefineMode } from "../pipeline/mergePipeline";
-import { collectMergeTerms } from "../pipeline/stages/collectMergeTerms";
+import { collectMergeTerms } from "@agent-mindmap/core";
 import {
   collectSessionSegmentEquivalences,
   enhanceSegmentEquivalencesForMerge,
