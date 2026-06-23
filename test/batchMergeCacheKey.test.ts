@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { computeBatchMergeCacheKey } from "../extension/src/pipeline/mergePipeline";
+import { computeBatchMergeCacheKey } from "@agent-mindmap/core";
 import { ontologyCachePath } from "@agent-mindmap/core";
 import { writeJsonAtomic } from "@agent-mindmap/core";
 
