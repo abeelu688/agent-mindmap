@@ -1,9 +1,9 @@
-import type { NodeObj } from "mind-elixir";
 import { describe, expect, it } from "vitest";
 import {
   assignSideDirectionsPreferLeft,
   assignSideDirectionsPreferRight,
 } from "../webview/src/sideLayout";
+import type { NodeObj } from "mind-elixir";
 
 function rootWithChildCount(n: number): NodeObj {
   const children: NodeObj[] = [];

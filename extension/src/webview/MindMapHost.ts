@@ -1,10 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import { getCuratedModels } from "@agent-mindmap/core";
 import { applyUiSettingToWorkspace } from "../ui/applyUiSettingWorkspace";
 import { readMindMapUiConfig, resolveThemeFilePath } from "../ui/mindMapUiConfig";
 import { t } from "../l10n/uiTranslate";
-import { getCuratedModels } from "@agent-mindmap/core";
 import { buildMindMapHtml } from "./mindMapHtml";
 import { mindMapLog } from "./MindMapLog";
 import type { MindMapUiOptions } from "@agent-mindmap/core";

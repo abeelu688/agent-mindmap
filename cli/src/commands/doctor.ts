@@ -1,10 +1,10 @@
 /**
  * `agent-mindmap doctor` — diagnostics check.
  */
-import { Command } from "commander";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import { Command } from "commander";
 import {
   createCursorHost,
   createClaudeHost,

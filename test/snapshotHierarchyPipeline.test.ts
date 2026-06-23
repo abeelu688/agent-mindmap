@@ -2,17 +2,10 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
+import { readSnapshotById, readSnapshotManifest } from "@agent-mindmap/core";
 import { runLeafSnapshotMerge } from "../extension/src/pipeline/snapshotHierarchy";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import {
-  readSnapshotById,
-  readSnapshotManifest,
-} from "@agent-mindmap/core";
 import { __resetStoreForTest } from "../extension/src/store/storeClient";
 import type { LlmProvider, SessionAnalysis, SessionOutline } from "@agent-mindmap/core";
 import type { SessionRecord } from "../extension/src/store/storeTypes";
@@ -130,7 +123,9 @@ describe("snapshotHierarchy pipeline", () => {
     };
 
     const batch = [analyzedSessionRecord("session-a", ["platform", "a"])];
-    const { leafId, snapshot } = await runLeafSnapshotMerge(leafMergeOpts(storeDir, batch, provider));
+    const { leafId, snapshot } = await runLeafSnapshotMerge(
+      leafMergeOpts(storeDir, batch, provider)
+    );
 
     expect(summarizeCalls).toBe(0);
     expect(leafId).toBe("l1-0001");
@@ -164,7 +159,9 @@ describe("snapshotHierarchy pipeline", () => {
       analyzedSessionRecord("session-a", ["platform", "a"]),
       analyzedSessionRecord("session-b", ["platform", "b"]),
     ];
-    const { leafId, snapshot } = await runLeafSnapshotMerge(leafMergeOpts(storeDir, batch, provider));
+    const { leafId, snapshot } = await runLeafSnapshotMerge(
+      leafMergeOpts(storeDir, batch, provider)
+    );
 
     expect(schemas).toEqual(["session-analysis"]);
     expect(leafId).toBe("l1-0001");
@@ -191,8 +188,6 @@ describe("snapshotHierarchy pipeline", () => {
       analyzedSessionRecord("session-b", ["platform", "b"]),
     ];
 
-    await expect(
-      runLeafSnapshotMerge(leafMergeOpts(storeDir, batch, provider))
-    ).rejects.toThrow();
+    await expect(runLeafSnapshotMerge(leafMergeOpts(storeDir, batch, provider))).rejects.toThrow();
   });
 });

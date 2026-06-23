@@ -55,7 +55,6 @@ class CliStore {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async writeConceptTrieMerge(_merge: MergeRecord): Promise<void> {
     // Will be implemented when needed for project analyze
   }
@@ -71,7 +70,6 @@ class CliStore {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async writeDeterministicMerge(_merge: MergeRecord): Promise<void> {
     // Will be implemented when needed
   }

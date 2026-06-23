@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { mindMapLog } from "../webview/MindMapLog";
 import {
   directionFromSetting,
   presetFromSetting,
@@ -8,6 +7,7 @@ import {
 } from "@agent-mindmap/core";
 import { parseThemeFileJson } from "@agent-mindmap/core";
 import { resolveThemeFilePath } from "@agent-mindmap/core";
+import { mindMapLog } from "../webview/MindMapLog";
 import type { MindMapUiOptions } from "@agent-mindmap/core";
 
 export type { MindMapUiOptions } from "@agent-mindmap/core";

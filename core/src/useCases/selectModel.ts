@@ -5,9 +5,6 @@
  * User interaction (CLI picker, model picker) goes through the Prompter port.
  * Persistence goes through ConfigStore.
  */
-import type { Prompter, QuickPickItem } from "../ports/Prompter";
-import type { ConfigStore } from "../ports/ConfigStore";
-import type { Logger } from "../ports/Logger";
 import {
   detectAvailableClis,
   fetchModelList,
@@ -15,6 +12,9 @@ import {
   type DetectedCli,
   type LlmProviderId,
 } from "../index";
+import type { Prompter, QuickPickItem } from "../ports/Prompter";
+import type { ConfigStore } from "../ports/ConfigStore";
+import type { Logger } from "../ports/Logger";
 
 export type SelectModelDeps = {
   prompter: Prompter;

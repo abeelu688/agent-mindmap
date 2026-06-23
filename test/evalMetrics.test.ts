@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import {
   countMindMapNodes,
   countTrieNodes,
@@ -7,11 +8,6 @@ import {
   collectSessionIdsAtTerminalTopics,
 } from "../extension/src/eval/metrics";
 import { buildConceptTrieStructure } from "../extension/src/store/mergeConceptTrie";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { Topic, TopicGraph } from "@agent-mindmap/core";
 import type { MindMapNodeData } from "@agent-mindmap/core";

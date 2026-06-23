@@ -2,8 +2,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RemoteStore, SqliteStore, type SessionRecord } from "../../shared/src";
 import { PushQueue, __testing } from "@agent-mindmap/core";
+import { RemoteStore, SqliteStore, type SessionRecord } from "../../shared/src";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {

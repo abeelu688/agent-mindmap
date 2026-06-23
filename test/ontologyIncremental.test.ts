@@ -2,20 +2,16 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   computeOntologyCacheKey,
   ensureOntologyMemory,
   findReusableOntologyBase,
   isCompleteOntologyRecord,
 } from "../extension/src/store/ontologyStore";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import { __resetStoreForTest, getStoreForDir } from "../extension/src/store/storeClient";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
 import type { LlmProvider } from "@agent-mindmap/core";
 import type { OntologyRecord } from "@agent-mindmap/shared";

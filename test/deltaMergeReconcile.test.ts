@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { buildMergeSnapshotFromOntology } from "@agent-mindmap/core";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   shouldFullReconcile,
   snapshotCoversCurrentSessions,
   type RunDeltaMergePipelineOpts,
 } from "../extension/src/pipeline/deltaMergePipeline";
-import { buildMergeSnapshotFromOntology } from "@agent-mindmap/core";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { MergeSnapshot } from "../extension/src/store/storeTypes";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
+import type { MergeSnapshot } from "../extension/src/store/storeTypes";
 
 function sessionRecord(sessionId: string) {
   return buildSessionRecord(
@@ -85,9 +81,7 @@ function minimalSnapshot(sessionIds: string[]): MergeSnapshot {
   );
 }
 
-function baseOpts(
-  overrides: Partial<RunDeltaMergePipelineOpts> = {}
-): RunDeltaMergePipelineOpts {
+function baseOpts(overrides: Partial<RunDeltaMergePipelineOpts> = {}): RunDeltaMergePipelineOpts {
   return {
     storeDir: "/tmp",
     projectSlug: "proj-a",
@@ -107,17 +101,13 @@ describe("shouldFullReconcile", () => {
     const snap = minimalSnapshot(["old-1", "old-2"]);
     const current = [sessionRecord("new-1")];
     expect(snapshotCoversCurrentSessions(snap, current)).toBe(false);
-    expect(
-      shouldFullReconcile(baseOpts({ batchNo: 1 }), snap, current)
-    ).toBe(true);
+    expect(shouldFullReconcile(baseOpts({ batchNo: 1 }), snap, current)).toBe(true);
   });
 
   it("batch 2 can delta when snapshot matches library", () => {
     const snap = minimalSnapshot(["s1"]);
     const current = [sessionRecord("s1"), sessionRecord("s2")];
-    expect(
-      shouldFullReconcile(baseOpts({ batchNo: 2 }), snap, current)
-    ).toBe(false);
+    expect(shouldFullReconcile(baseOpts({ batchNo: 2 }), snap, current)).toBe(false);
   });
 
   it("batch 2 stays delta when batch adds new top-level segments (wide delta)", () => {
@@ -156,18 +146,14 @@ describe("shouldFullReconcile", () => {
 
   it("batch 2 stays delta when snapshot missing (no full re-merge)", () => {
     const current = [sessionRecord("s1"), sessionRecord("s2")];
-    expect(
-      shouldFullReconcile(baseOpts({ batchNo: 2 }), undefined, current)
-    ).toBe(false);
+    expect(shouldFullReconcile(baseOpts({ batchNo: 2 }), undefined, current)).toBe(false);
   });
 
   it("batch 2 stays delta when snapshot session set is stale", () => {
     const snap = minimalSnapshot(["old-1"]);
     const current = [sessionRecord("s1"), sessionRecord("s2")];
     expect(snapshotCoversCurrentSessions(snap, current)).toBe(false);
-    expect(
-      shouldFullReconcile(baseOpts({ batchNo: 2 }), snap, current)
-    ).toBe(false);
+    expect(shouldFullReconcile(baseOpts({ batchNo: 2 }), snap, current)).toBe(false);
   });
 
   it("forceRefresh does not trigger full reconcile on batch 2+", () => {
@@ -185,8 +171,6 @@ describe("shouldFullReconcile", () => {
   it("batch 4 stays delta (no periodic full reconcile)", () => {
     const snap = minimalSnapshot(["s1"]);
     const current = [sessionRecord("s1")];
-    expect(
-      shouldFullReconcile(baseOpts({ batchNo: 4 }), snap, current)
-    ).toBe(false);
+    expect(shouldFullReconcile(baseOpts({ batchNo: 4 }), snap, current)).toBe(false);
   });
 });

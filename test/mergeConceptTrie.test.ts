@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
+import { canonicalizeConceptSegment, segmentKeyForMerge } from "@agent-mindmap/core";
 import {
   buildConceptMergeRecord,
   buildConceptTrieMindMap,
 } from "../extension/src/store/mergeConceptTrie";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import {
-  canonicalizeConceptSegment,
-  segmentKeyForMerge,
-} from "@agent-mindmap/core";
-import type { SessionRecord } from "../extension/src/store/storeTypes";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import type { SessionRecord } from "../extension/src/store/storeTypes";
 import type { Topic, TopicGraph } from "@agent-mindmap/core";
 
 function topic(
@@ -77,9 +70,7 @@ describe("buildConceptTrieMindMap", () => {
   it("groups topics by common conceptPath prefix into a trie", () => {
     const records = [
       makeRecord("s1", "proj-a", {
-        topics: [
-          topic("Binder 调研", ["android", "ipc", "binder"], ["tr.code 字段"]),
-        ],
+        topics: [topic("Binder 调研", ["android", "ipc", "binder"], ["tr.code 字段"])],
       }),
       makeRecord("s2", "proj-a", {
         topics: [
@@ -91,9 +82,7 @@ describe("buildConceptTrieMindMap", () => {
         ],
       }),
       makeRecord("s3", "proj-b", {
-        topics: [
-          topic("AIDL 代码生成", ["Android", "ipc", "aidl"], ["aidl 命令"]),
-        ],
+        topics: [topic("AIDL 代码生成", ["Android", "ipc", "aidl"], ["aidl 命令"])],
       }),
     ];
 
@@ -122,15 +111,9 @@ describe("buildConceptTrieMindMap", () => {
     const binder = ipc.children![0];
     const binderChildren = binder.children?.map((c) => c.data.text) ?? [];
     // s1 topic (Binder 调研) is attached at the binder node, after deeper buckets
-    expect(
-      binderChildren.some((t) => t.startsWith("binder 驱动 ("))
-    ).toBe(true);
-    expect(
-      binderChildren.some((t) => t.includes("Binder 调研"))
-    ).toBe(true);
-    const topicNode = binder.children?.find(
-      (c) => !isTrieSegmentLabel(c.data.text)
-    );
+    expect(binderChildren.some((t) => t.startsWith("binder 驱动 ("))).toBe(true);
+    expect(binderChildren.some((t) => t.includes("Binder 调研"))).toBe(true);
+    const topicNode = binder.children?.find((c) => !isTrieSegmentLabel(c.data.text));
     expect(topicNode?.data.text).toBe("Binder 调研");
     expect(topicNode?.data.text).not.toContain("s1-label");
     expect(topicNode?.data.text).not.toContain("[");
@@ -156,9 +139,7 @@ describe("buildConceptTrieMindMap", () => {
     ];
     const { mindMap } = buildConceptTrieMindMap(records);
     const boot = mindMap.children?.[0]?.children?.[0];
-    const topicNode = boot?.children?.find(
-      (c) => !isTrieSegmentLabel(c.data.text)
-    );
+    const topicNode = boot?.children?.find((c) => !isTrieSegmentLabel(c.data.text));
     expect(topicNode?.data.text).toBe(longSummary);
     expect(topicNode?.data.text).not.toMatch(/\.\.\.$/);
   });
@@ -178,9 +159,7 @@ describe("buildConceptTrieMindMap", () => {
     ];
     const { mindMap } = buildConceptTrieMindMap(records);
     const binder = mindMap.children?.[0]?.children?.[0]?.children?.[0];
-    const topicNode = binder?.children?.find(
-      (c) => !isTrieSegmentLabel(c.data.text)
-    );
+    const topicNode = binder?.children?.find((c) => !isTrieSegmentLabel(c.data.text));
     expect(topicNode?.data.text).toBe("Binder 通信要点");
     const leafTexts = topicNode?.children?.map((c) => c.data.text) ?? [];
     expect(leafTexts).toEqual(["tr.code 字段"]);
@@ -264,9 +243,7 @@ describe("buildConceptTrieMindMap", () => {
       makeRecord("jit-session", "aosp", {
         topics: [
           topic("JIT概念", ["android", "runtime", "art", "jit"], ["x"]),
-          topic("编译模型", ["android", "runtime", "art", "compilation modes"], [
-            "y",
-          ]),
+          topic("编译模型", ["android", "runtime", "art", "compilation modes"], ["y"]),
         ],
       }),
       makeRecord("hook-session", "aosp", {
@@ -288,9 +265,7 @@ describe("buildConceptTrieMindMap", () => {
         },
       ],
     });
-    const android = mindMap.children?.find((c) =>
-      c.data.text.startsWith("android (")
-    );
+    const android = mindMap.children?.find((c) => c.data.text.startsWith("android ("));
     expect(android).toBeDefined();
     const androidChildren = android!.children?.map((c) => c.data.text) ?? [];
     expect(androidChildren.filter((l) => l.startsWith("art ("))).toHaveLength(1);
@@ -300,9 +275,7 @@ describe("buildConceptTrieMindMap", () => {
     expect(art).toBeDefined();
     const artChildKeys = art!.children?.map((c) => c.data.text) ?? [];
     expect(artChildKeys.some((l) => l.startsWith("jit ("))).toBe(true);
-    expect(artChildKeys.some((l) => l.startsWith("instrumentation ("))).toBe(
-      true
-    );
+    expect(artChildKeys.some((l) => l.startsWith("instrumentation ("))).toBe(true);
   });
 
   it("does not merge runtime and art siblings when applySegmentEquivalences is off", () => {
@@ -324,12 +297,9 @@ describe("buildConceptTrieMindMap", () => {
         },
       ],
     });
-    const android = mindMap.children?.find((c) =>
-      c.data.text.startsWith("android (")
-    );
+    const android = mindMap.children?.find((c) => c.data.text.startsWith("android ("));
     const childLabels =
-      android?.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
-      [];
+      android?.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ?? [];
     expect(childLabels).toContain("art");
     expect(childLabels).toContain("runtime");
   });

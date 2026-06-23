@@ -1,6 +1,6 @@
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
-import type { TopicPathContext } from "../llm/resolveConceptPathWithEquivalences";
 import { segmentKeyForMerge } from "../llm/topicGraphValidate";
+import type { TopicPathContext } from "../llm/resolveConceptPathWithEquivalences";
 import type { SegmentEquivalence, Topic } from "../llm/types";
 import type { SessionRecord } from "./storeTypes";
 

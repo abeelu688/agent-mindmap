@@ -15,13 +15,9 @@ import {
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "@agent-mindmap/core";
 import { snapConceptPathToVirtualSession } from "@agent-mindmap/core";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { MERGE_SNAPSHOT_SESSION_ID } from "@agent-mindmap/core";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { ConceptContextForMerge } from "../extension/src/store/storeTypes";
 import type { OutlineNode } from "@agent-mindmap/core";
 

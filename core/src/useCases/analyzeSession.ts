@@ -16,7 +16,6 @@
  */
 import * as fs from "fs/promises";
 import * as path from "path";
-
 import {
   readSessionFile,
   sanitizeSessionOutline,
@@ -35,7 +34,6 @@ import {
   LlmProviderError,
   ensureStore,
 } from "../index";
-
 import type { Logger } from "../ports/Logger";
 import type { ProgressReporter } from "../ports/ProgressReporter";
 import type { ConfigStore } from "../ports/ConfigStore";
@@ -44,7 +42,6 @@ import type { HostAccess } from "../ports/HostAccess";
 import type { MindMapSink } from "../ports/MindMapSink";
 import type { CodeRefQueueDeps } from "../ports/CodeRefQueueDeps";
 import type { LlmDumpDeps } from "../ports/LlmDumpDeps";
-
 import type { AgentHost, AgentHostId } from "../host/types";
 import type {
   TranscriptSession,
@@ -62,9 +59,7 @@ import type {
   SessionOutline,
   CodeReference,
 } from "../index";
-
 import type { ConceptContextForMerge } from "../store/storeTypes";
-
 import type { AnalysisHandle, LoadedSession, LoadSessionOptions } from "./types";
 
 // ────────────────────────────────────────────────────────────────────────────

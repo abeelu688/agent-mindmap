@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { applyTopicPathsFromOntology } from "@agent-mindmap/core";
-import type { OntologyRecord } from "@agent-mindmap/shared";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { topicIdForTopic } from "@agent-mindmap/core";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 
 function makeRecord(sessionId: string, projectSlug: string) {
   const graph = {
@@ -105,4 +101,3 @@ describe("applyTopicPathsFromOntology", () => {
     expect(out[0].graph.topics[1].conceptPath).toBeUndefined();
   });
 });
-

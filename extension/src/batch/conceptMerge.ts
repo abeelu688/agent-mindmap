@@ -3,10 +3,6 @@
  * extension-specific dependencies (store resolution, sanitize, locale,
  * conceptMergeContext).
  */
-import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
-import { sanitizeSessionRecord } from "../store/sanitizeRecords";
-import { getStoreForDir } from "../store/storeClient";
-import { t } from "../l10n/uiTranslate";
 import {
   resolveProjectRecordsForMerge as coreResolveProjectRecordsForMerge,
   buildProjectConceptMergeFromCache as coreBuildProjectConceptMergeFromCache,
@@ -17,6 +13,10 @@ import {
   type ProjectMergeMode,
   type ConceptMergeDeps,
 } from "@agent-mindmap/core";
+import { buildConceptMergeForRecords } from "../store/conceptMergeContext";
+import { sanitizeSessionRecord } from "../store/sanitizeRecords";
+import { getStoreForDir } from "../store/storeClient";
+import { t } from "../l10n/uiTranslate";
 import type { LlmProviderOptions, LlmProvider } from "@agent-mindmap/core";
 import type { MindMapProgress } from "../progress";
 import type { SessionRecord } from "../store/storeTypes";
@@ -107,13 +107,7 @@ export async function buildProjectConceptMergeForBatch(
   }
 ): Promise<MergeRecord> {
   const deps = await buildConceptMergeDeps(storeDir);
-  return coreBuildProjectConceptMergeForBatch(
-    deps,
-    storeDir,
-    allRecords,
-    batchRecords,
-    opts
-  );
+  return coreBuildProjectConceptMergeForBatch(deps, storeDir, allRecords, batchRecords, opts);
 }
 
 /**
@@ -140,11 +134,5 @@ export async function refreshSnapshotsForFreshSessions(
   }
 ): Promise<MergeRecord | undefined> {
   const deps = await buildConceptMergeDeps(storeDir);
-  return coreRefreshSnapshotsForFreshSessions(
-    deps,
-    storeDir,
-    allRecords,
-    freshSessionIds,
-    opts
-  );
+  return coreRefreshSnapshotsForFreshSessions(deps, storeDir, allRecords, freshSessionIds, opts);
 }

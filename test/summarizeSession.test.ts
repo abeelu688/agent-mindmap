@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import {
   LlmProviderError,
   type LlmProvider,
@@ -10,6 +9,7 @@ import {
   type SessionOutline,
   type SummarizeInput,
 } from "@agent-mindmap/core";
+import { summarizeSession } from "../extension/src/llm/summarizeSession";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 const events: ChatEvent[] = [

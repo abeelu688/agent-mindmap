@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import {
   buildDeterministicMergeMindMap,
   buildDeterministicMergeRecord,
 } from "../extension/src/store/mergeDeterministic";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import type { SessionRecord } from "../extension/src/store/storeTypes";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import type { SessionRecord } from "../extension/src/store/storeTypes";
 import type { TopicGraph } from "@agent-mindmap/core";
 
 const graphA: TopicGraph = {
@@ -72,14 +68,10 @@ describe("buildDeterministicMergeMindMap", () => {
   });
 
   it("orders sessions within a project newest first", () => {
-    const records = [
-      makeRecord("older", "p", 100, graphA),
-      makeRecord("newer", "p", 200, graphB),
-    ];
+    const records = [makeRecord("older", "p", 100, graphA), makeRecord("newer", "p", 200, graphB)];
     const root = buildDeterministicMergeMindMap(records);
     const projectChild = root.children?.[0];
-    const sessionLabels =
-      projectChild?.children?.map((c) => c.data.text) ?? [];
+    const sessionLabels = projectChild?.children?.map((c) => c.data.text) ?? [];
     expect(sessionLabels[0]).toContain("AIDL");
     expect(sessionLabels[1]).toContain("Binder");
   });
@@ -98,9 +90,7 @@ describe("buildDeterministicMergeMindMap", () => {
 
   it("shows a placeholder when library is empty", () => {
     const root = buildDeterministicMergeMindMap([]);
-    expect(root.children?.[0].data.text).toContain(
-      "(No analyzed sessions in the library)"
-    );
+    expect(root.children?.[0].data.text).toContain("(No analyzed sessions in the library)");
   });
 
   it("buildDeterministicMergeRecord captures meta", () => {

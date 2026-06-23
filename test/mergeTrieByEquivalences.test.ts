@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { buildConceptTrieMindMap } from "../extension/src/store/mergeConceptTrie";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { SegmentEquivalence } from "@agent-mindmap/core";
 
@@ -58,13 +54,10 @@ describe("mergeTrieSiblingsByEquivalences", () => {
       applySegmentEquivalences: true,
       segmentEquivalences: equivalences,
     });
-    const android = mindMap.children?.find((c) =>
-      c.data.text.startsWith("android (")
-    );
+    const android = mindMap.children?.find((c) => c.data.text.startsWith("android ("));
     expect(android).toBeDefined();
     const childLabels =
-      android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
-      [];
+      android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ?? [];
     expect(childLabels.filter((l) => l === "art")).toHaveLength(1);
     expect(childLabels).not.toContain("runtime");
   });
@@ -83,20 +76,15 @@ describe("mergeTrieSiblingsByEquivalences", () => {
     ];
     const records = [
       record("s1", "ART", ["android", "art", "jit"]),
-      record("s2", "Runtime path", ["android", "runtime", "start"], [
-        "libart.so",
-      ]),
+      record("s2", "Runtime path", ["android", "runtime", "start"], ["libart.so"]),
     ];
     const { mindMap } = buildConceptTrieMindMap(records, {
       applySegmentEquivalences: true,
       segmentEquivalences: withEvidence,
     });
-    const android = mindMap.children?.find((c) =>
-      c.data.text.startsWith("android (")
-    );
+    const android = mindMap.children?.find((c) => c.data.text.startsWith("android ("));
     const childLabels =
-      android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
-      [];
+      android!.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ?? [];
     expect(childLabels.filter((l) => l === "art")).toHaveLength(1);
     expect(childLabels).not.toContain("runtime");
   });

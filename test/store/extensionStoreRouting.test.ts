@@ -2,12 +2,8 @@ import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, writeRecord } from "@agent-mindmap/core";
 import { bootstrapStore, STORE_LAYOUT, type SessionRecord } from "../../shared/src";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  writeRecord,
-} from "@agent-mindmap/core";
 import type { SessionOutline } from "@agent-mindmap/core";
 
 /**

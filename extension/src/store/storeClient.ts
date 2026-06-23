@@ -6,9 +6,9 @@ import {
   type PushQueueLike,
   type Store,
 } from "@agent-mindmap/shared";
+import { PushQueue } from "@agent-mindmap/core";
 import { getStoreDir } from "../paths";
 import { getRemoteStoreIfEnabled } from "./storeFactory";
-import { PushQueue } from "@agent-mindmap/core";
 
 /**
  * Process-wide accessor for the extension's `Store`.

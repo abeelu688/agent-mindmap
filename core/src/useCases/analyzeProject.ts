@@ -21,22 +21,18 @@ import {
   purgeCodeRefQueueForProject,
   LlmProviderError,
 } from "../index";
-
+import { analyzeSession, readSettingsFromConfig, type AnalyzeSessionDeps } from "./analyzeSession";
 import type { ProgressReporter } from "../ports/ProgressReporter";
 import type { Prompter, QuickPickItem } from "../ports/Prompter";
-
 import type { AgentHost, AgentHostId } from "../host/types";
 import type { TranscriptSession, LlmProvider, LlmProviderId, OutputLanguage } from "../index";
-
 import type { SessionRecord, SnapshotManifest } from "../store/storeTypes";
-
 import type {
   AnalysisHandle,
   AnalyzeProjectResult,
   AnalyzeProjectBatchInfo,
   AnalyzeProjectOptions,
 } from "./types";
-import { analyzeSession, readSettingsFromConfig, type AnalyzeSessionDeps } from "./analyzeSession";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Deps interface

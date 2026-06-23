@@ -5,12 +5,12 @@
  * The Prompter is used for folder selection (extension: VS Code file dialog;
  * CLI: path argument or default directory).
  */
+import { exportMindMapPackage, type ExportPackageResult } from "../export/exportPackage";
 import type { MindMapSink } from "../ports/MindMapSink";
 import type { Prompter } from "../ports/Prompter";
 import type { Logger } from "../ports/Logger";
 import type { MindMapRoot } from "../transcript/types";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import { exportMindMapPackage, type ExportPackageResult } from "../export/exportPackage";
 
 export type ExportSessionDeps = {
   mindMapSink: MindMapSink;

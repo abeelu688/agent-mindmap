@@ -2,6 +2,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { parseJsonl } from "@agent-mindmap/core";
 import { listCursorSessions, readSessionFile } from "@agent-mindmap/core";
+import { PROMPT_VERSION } from "@agent-mindmap/core";
+import { buildRecordMeta, buildSessionRecord, listRecords, sha256Hex } from "@agent-mindmap/core";
 import {
   diffAgainstBaseline,
   measureConceptMerge,
@@ -18,14 +20,7 @@ import {
   type EvalPaths,
 } from "../../extension/src/eval/loadEvalConfig";
 import { getProvider } from "../../extension/src/llm";
-import { PROMPT_VERSION } from "@agent-mindmap/core";
 import { summarizeSession } from "../../extension/src/llm/summarizeSession";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  listRecords,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import type { TranscriptSession } from "@agent-mindmap/core";
 import type { SessionRecord } from "../../extension/src/store/storeTypes";
 

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { collectStaleReattachTopRoots, prepareRecordsForFinalTrie } from "@agent-mindmap/core";
 import { buildConceptMergeRecord } from "../extension/src/store/mergeConceptTrie";
-import {
-  collectStaleReattachTopRoots,
-  prepareRecordsForFinalTrie,
-} from "@agent-mindmap/core";
 import type { ReattachStep } from "@agent-mindmap/core";
 
 function topic(path: string[], title: string) {

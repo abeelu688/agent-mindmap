@@ -1,10 +1,8 @@
-import { runMergePipeline, type MergeRefineMode } from "../pipeline/mergePipeline";
 import { collectMergeTerms } from "@agent-mindmap/core";
 import {
   collectSessionSegmentEquivalences,
   enhanceSegmentEquivalencesForMerge,
 } from "@agent-mindmap/core";
-import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
 import { segmentKeyForMerge } from "@agent-mindmap/core";
 import {
   MERGE_APPLY_SEGMENT_EQUIVALENCES,
@@ -15,6 +13,8 @@ import {
   prepareRecordsForFinalTrie,
   recordsSubsetOfOntologySessions,
 } from "@agent-mindmap/core";
+import { REATTACH_PROMPT_VERSION } from "../llm/promptReattach";
+import { runMergePipeline, type MergeRefineMode } from "../pipeline/mergePipeline";
 import {
   buildConceptMergeRecord,
   buildConceptMergeRecordAsync,

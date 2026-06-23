@@ -10,6 +10,8 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHeartbeat, type ProgressReporter } from "../ports/ProgressReporter";
+import { agentDebugLog } from "../debugLog";
+import { writeJsonAtomic } from "../store/atomicWrite";
 import {
   LlmProviderError,
   type LlmProvider,
@@ -17,8 +19,6 @@ import {
   type LlmSummarizeResult,
 } from "./types";
 import { dumpLlmReplay } from "./llmIoDump";
-import { agentDebugLog } from "../debugLog";
-import { writeJsonAtomic } from "../store/atomicWrite";
 import type { ChatEvent } from "../transcript/types";
 import type { AgentHostId } from "../host/types";
 import type { LlmDumpDeps } from "../ports/LlmDumpDeps";

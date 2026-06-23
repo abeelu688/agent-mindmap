@@ -3,15 +3,15 @@ import { normalizeConceptPath } from "../llm/normalizeConceptPath";
 import { resolveConceptPathWithEquivalences } from "../llm/resolveConceptPathWithEquivalences";
 import { filterProjectCodeReferences } from "../llm/filterCodeReferences";
 import { MERGE_APPLY_SEGMENT_EQUIVALENCES } from "../pipeline/mergeSynonymPolicy";
-import type { ConceptMergePrepOntology } from "./prepareConceptMergeRecords";
 import { outputLanguageFromRecords } from "../llm/outputLanguageFromRecords";
 import { leafRefs, type SessionMeta, unionChildRefs, withOrigin } from "../mindmap/origin";
 import {
   mindMapLabelsForOutputLanguage,
   type MindMapLanguageLabels,
 } from "../mindmap/outputLanguageLabels";
-import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
 import { getCoreLogger } from "../logging";
+import { mergeTrieSiblingsByEquivalences } from "./mergeTrieByEquivalences";
+import type { ConceptMergePrepOntology } from "./prepareConceptMergeRecords";
 import type { MindMapNodeData, MindMapRoot } from "../transcript/types";
 import type { MergeRecord, SessionRecord } from "./storeTypes";
 import type {

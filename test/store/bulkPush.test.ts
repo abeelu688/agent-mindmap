@@ -3,9 +3,9 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
+import { PushQueue, WATERMARK_PREFIX, PENDING_PREFIX } from "@agent-mindmap/core";
 import { RemoteStore, SqliteStore, type SessionRecord } from "../../shared/src";
 import { pushLocalRecordsToTeam } from "../../extension/src/store/bulkPush";
-import { PushQueue, WATERMARK_PREFIX, PENDING_PREFIX } from "@agent-mindmap/core";
 
 function sampleRecord(overrides?: Partial<SessionRecord["meta"]>): SessionRecord {
   return {

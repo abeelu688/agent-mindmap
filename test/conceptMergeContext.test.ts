@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
+import { topicIdForTopic } from "@agent-mindmap/core";
+import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
 import {
   buildConceptMergeWithOntology,
   prepareRecordsForConceptMerge,
 } from "../extension/src/store/conceptMergeContext";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { SegmentEquivalence } from "@agent-mindmap/core";
-import { topicIdForTopic } from "@agent-mindmap/core";
-import type { OntologyRecord } from "@agent-mindmap/shared";
 import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
-import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
+import type { SegmentEquivalence } from "@agent-mindmap/core";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 
 const equivalences: SegmentEquivalence[] = [
   {
@@ -61,12 +57,8 @@ describe("buildConceptMergeWithOntology", () => {
       { projectSlug: "aosp", applySegmentEquivalences: true },
       { segmentEquivalences: equivalences }
     );
-    const android = merge.mindMap.children?.find((c) =>
-      c.data.text.startsWith("android (")
-    );
-    const labels =
-      android?.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ??
-      [];
+    const android = merge.mindMap.children?.find((c) => c.data.text.startsWith("android ("));
+    const labels = android?.children?.map((c) => c.data.text.split(" ")[0].toLowerCase()) ?? [];
     expect(labels.filter((l) => l === "art")).toHaveLength(1);
     expect(labels).not.toContain("runtime");
   });

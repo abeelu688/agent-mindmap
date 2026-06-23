@@ -1,10 +1,10 @@
 /**
  * `agent-mindmap mcp` — MCP server install/uninstall/status commands.
  */
-import { Command } from "commander";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import { Command } from "commander";
 import {
   cursorMcpConfigPath,
   claudeMcpConfigPath,

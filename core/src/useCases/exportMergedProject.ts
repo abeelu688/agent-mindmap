@@ -3,12 +3,12 @@
  *
  * Same flow as `exportSession` but reads the merged project mind map from the store.
  */
+import { exportMindMapPackage, type ExportPackageResult } from "../export/exportPackage";
 import type { MindMapSink } from "../ports/MindMapSink";
 import type { StoreAccess } from "../ports/StoreAccess";
 import type { Prompter } from "../ports/Prompter";
 import type { Logger } from "../ports/Logger";
 import type { MindMapUiOptions } from "../ui/mindMapUiTypes";
-import { exportMindMapPackage, type ExportPackageResult } from "../export/exportPackage";
 
 export type ExportMergedProjectDeps = {
   mindMapSink: MindMapSink;

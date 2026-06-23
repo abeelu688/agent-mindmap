@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { directionFromSetting, presetFromSetting } from "@agent-mindmap/core";
 import { parseUiSettingUpdate } from "../extension/src/ui/applyUiSetting";
-import {
-  directionFromSetting,
-  presetFromSetting,
-} from "@agent-mindmap/core";
 
 describe("parseUiSettingUpdate", () => {
   it("accepts valid preset values", () => {

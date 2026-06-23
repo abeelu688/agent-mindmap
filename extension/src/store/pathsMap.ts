@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 import { getStoreDir } from "../paths";
 import { getActiveHost } from "../host";
 import {
@@ -9,7 +10,6 @@ import {
   normalizeRepoUriToSlug,
 } from "../host/slugDerivation";
 import { mindMapLog } from "../webview/MindMapLog";
-import { writeJsonAtomic } from "@agent-mindmap/core";
 
 const WORKSPACE_MAP_FILENAME = "workspace-paths.json";
 const REPO_MAP_FILENAME = "repo-paths.json";

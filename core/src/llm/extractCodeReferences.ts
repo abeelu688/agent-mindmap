@@ -6,8 +6,8 @@
  * Uses ProgressReporter from core ports; plain English strings for progress.
  * Uses getCoreLogger() for logging instead of VS Code output channels.
  */
-import { runLlmStage } from "./llmStage";
 import { getCoreLogger } from "../logging";
+import { runLlmStage } from "./llmStage";
 import { groupTurns, toRelPath, isProjectRelativePath } from "./prompt";
 import { filterProjectCodeReferences } from "./filterCodeReferences";
 import { LlmProviderError } from "./types";

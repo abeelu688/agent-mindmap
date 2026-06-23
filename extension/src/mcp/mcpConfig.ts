@@ -1,9 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import { getActiveHost, getWorkspaceSlug } from "../host";
-import { getStoreDir, getWorkspacePath } from "../paths";
-import { getStore } from "../store/storeClient";
 import {
   claudeMcpConfigPath,
   cursorMcpConfigPath,
@@ -11,6 +8,9 @@ import {
   type McpInstallResult,
   type McpServersConfig,
 } from "@agent-mindmap/core";
+import { getActiveHost, getWorkspaceSlug } from "../host";
+import { getStoreDir, getWorkspacePath } from "../paths";
+import { getStore } from "../store/storeClient";
 
 export {
   claudeMcpConfigPath,

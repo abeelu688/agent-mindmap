@@ -1,9 +1,9 @@
 /**
  * `agent-mindmap host` — manage host detection and selection.
  */
-import { Command } from "commander";
 import * as os from "os";
 import * as path from "path";
+import { Command } from "commander";
 import {
   selectHost,
   createCursorHost,

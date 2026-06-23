@@ -1,12 +1,12 @@
 import { readSessionFile } from "@agent-mindmap/core";
-import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { sanitizeSessionOutline } from "@agent-mindmap/core";
 import { countUserQueries } from "@agent-mindmap/core";
-import { getHostById } from "../../host/registry";
-import { getStoreForDir } from "../../store/storeClient";
 import { resolveConceptPathWithEquivalences } from "@agent-mindmap/core";
 import { normalizeConceptPath } from "@agent-mindmap/core";
 import { logPipelineStageTiming } from "@agent-mindmap/core";
+import { getStoreForDir } from "../../store/storeClient";
+import { getHostById } from "../../host/registry";
+import { outlineToTopicGraph } from "../../llm/outlineToTopicGraph";
 import { organizeByTree } from "./organizeByTree";
 import type { CollectedMergeTerms } from "@agent-mindmap/core";
 import type { SessionRecord } from "../../store/storeTypes";

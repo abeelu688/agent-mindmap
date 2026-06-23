@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { t } from "../l10n/uiTranslate";
 import { PENDING_PREFIX } from "@agent-mindmap/core";
+import { t } from "../l10n/uiTranslate";
 import type { SessionRecord, SqliteStore } from "@agent-mindmap/shared";
 
 /**

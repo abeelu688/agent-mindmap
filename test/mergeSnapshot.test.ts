@@ -9,15 +9,11 @@ import {
   snapshotToSessionRecord,
   topRootsFromRecords,
 } from "@agent-mindmap/core";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { OntologyRecord } from "@agent-mindmap/shared";
-import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { SESSION_ANALYSIS_PROMPT_VERSION } from "@agent-mindmap/core";
+import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import { REATTACH_PROMPT_VERSION } from "../extension/src/llm/promptReattach";
+import type { OntologyRecord } from "@agent-mindmap/shared";
 
 function sessionRecord(sessionId: string, slug = "proj-a") {
   return buildSessionRecord(
@@ -100,10 +96,7 @@ describe("mergeSnapshot", () => {
         "proj-a"
       )
     );
-    const list = filterRealSessionRecords([
-      sessionRecord("s1"),
-      virtual,
-    ]);
+    const list = filterRealSessionRecords([sessionRecord("s1"), virtual]);
     expect(list).toHaveLength(1);
     expect(list[0]!.meta.sessionId).toBe("s1");
   });
@@ -216,9 +209,7 @@ describe("mergeSnapshot", () => {
       "proj-a"
     );
     expect(snap.topicPaths[0]?.conceptPath?.[0]).toBe("android");
-    expect(topRootsFromRecords([snapshotToSessionRecord(snap)])).toEqual([
-      "android",
-    ]);
+    expect(topRootsFromRecords([snapshotToSessionRecord(snap)])).toEqual(["android"]);
   });
 
   it("batchIntroducesNewTopRoots detects new batch top segments", () => {

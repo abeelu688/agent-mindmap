@@ -1,5 +1,5 @@
-import { isCompleteOntologyRecord } from "../store/ontologyStore";
 import { conceptTrieMergePath, recordFreshnessToken } from "@agent-mindmap/core";
+import { isCompleteOntologyRecord } from "../store/ontologyStore";
 import { getStoreForDir } from "../store/storeClient";
 import { mindMapLog } from "../webview/MindMapLog";
 import { computeBatchMergeCacheKey } from "./mergePipeline";

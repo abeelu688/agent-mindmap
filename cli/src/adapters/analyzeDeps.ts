@@ -25,8 +25,8 @@ import {
   type ConceptMergeDeps,
   sanitizeSessionRecord as coreSanitize,
 } from "@agent-mindmap/core";
-import { buildCliStoreAccess } from "./cliStore";
 import { buildCliLogger } from "../ui/logger";
+import { buildCliStoreAccess } from "./cliStore";
 import { buildCliHost, detectHost } from "./cliHostAccess";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -84,7 +84,11 @@ function buildCliRunSessionPipeline(): RunSessionPipelineFn {
 function buildCliRunBackgroundMerge(storeDir: string): RunBackgroundMergeFn {
   return async (opts) => {
     try {
-      const { buildDeterministicMergeRecordAsync, readSnapshotManifest, refreshSnapshotForSession } = await import("@agent-mindmap/core");
+      const {
+        buildDeterministicMergeRecordAsync,
+        readSnapshotManifest,
+        refreshSnapshotForSession,
+      } = await import("@agent-mindmap/core");
 
       const storeAccess = buildCliStoreAccess(storeDir);
       const store = await storeAccess.getStore();
@@ -300,7 +304,6 @@ function buildCliReadSnapshotManifest(): ReadSnapshotManifestFn {
 // Code ref queue deps
 // ────────────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildCliCodeRefQueueDeps(_storeDir: string): CodeRefQueueDeps {
   return {
     logInfo: (msg) => {
@@ -332,7 +335,7 @@ function buildCliCodeRefQueueDeps(_storeDir: string): CodeRefQueueDeps {
     async getStore(dir: string) {
       return buildCliStoreAccess(dir).getStore();
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     async rebuildProjectMerge(_storeDir: string, _projectSlug: string) {
       return undefined;
     },
@@ -402,7 +405,7 @@ export async function buildCliAnalyzeSessionDeps(
     runSessionPipeline: buildCliRunSessionPipeline(),
     runBackgroundMerge: buildCliRunBackgroundMerge(storeDir),
     sanitizeSessionRecord: buildCliSanitizeSessionRecord(),
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     getProvider: (_opts) => {
       // This is sync in the extension but we need async in CLI;
       // the use case calls it synchronously, so we throw and catch.

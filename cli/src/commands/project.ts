@@ -1,9 +1,9 @@
 /**
  * `agent-mindmap project` — project-level commands.
  */
-import { Command } from "commander";
 import * as os from "os";
 import * as path from "path";
+import { Command } from "commander";
 import {
   analyzeProject,
   listSessions,

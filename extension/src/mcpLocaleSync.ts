@@ -1,9 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import { writeJsonAtomic } from "@agent-mindmap/core";
 import { resolveUiLocale, type UiLocale } from "./l10n/uiTranslate";
 import { getStoreDir } from "./paths";
-import { writeJsonAtomic } from "@agent-mindmap/core";
 
 const LOCALE_FILENAME = "mcp-locale.json";
 

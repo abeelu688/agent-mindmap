@@ -1,9 +1,9 @@
 /**
  * `agent-mindmap context` — AI context sync commands.
  */
-import { Command } from "commander";
 import * as path from "path";
 import * as os from "os";
+import { Command } from "commander";
 import { syncAiContext } from "@agent-mindmap/core";
 import { CliConfigStore } from "../config/configStore";
 import { log, logSuccess, logError, isJsonMode, printJson, createSpinner } from "../ui/logger";

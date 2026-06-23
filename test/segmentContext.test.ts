@@ -4,14 +4,10 @@ import {
   buildSiblingSegmentOverlapHints,
   buildTopicContextIndex,
 } from "@agent-mindmap/core";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
-import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
-import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { topicIdForTopic } from "@agent-mindmap/core";
+import type { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
+import type { OntologyRecordTopicPath } from "@agent-mindmap/shared";
 
 function recordWithOutline(
   sessionId: string,
@@ -90,11 +86,7 @@ describe("segmentContext", () => {
         conceptPath: ["android", "art", "runtime", "start"],
       },
     ];
-    const samples = buildRefineContextSamples(
-      topicPaths,
-      buildTopicContextIndex([record]),
-      10
-    );
+    const samples = buildRefineContextSamples(topicPaths, buildTopicContextIndex([record]), 10);
     expect(samples).toHaveLength(1);
     const runtimeSlice = samples[0].segments.find((s) => s.segment === "runtime");
     expect(runtimeSlice).toEqual({

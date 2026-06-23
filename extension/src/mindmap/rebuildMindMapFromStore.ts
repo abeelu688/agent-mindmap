@@ -1,11 +1,11 @@
 import { conceptTrieMergePath } from "@agent-mindmap/core";
+import { buildOutlineMindMap, type SessionMeta } from "@agent-mindmap/core";
 import { getStoreForDir } from "../store/storeClient";
 import { sanitizeSessionRecord } from "../store/sanitizeRecords";
 import {
   buildConceptMergeWithOntology,
   loadSegmentEquivalencesForRecords,
 } from "../store/conceptMergeContext";
-import { buildOutlineMindMap, type SessionMeta } from "@agent-mindmap/core";
 import type { OutputLanguage } from "@agent-mindmap/core";
 import type { MindMapRoot } from "@agent-mindmap/core";
 import type { MergeRecord } from "../store/storeTypes";
