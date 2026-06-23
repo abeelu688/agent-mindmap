@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
+import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import {
   estimateReattachPromptBytes,
   planReattachChunks,
   REATTACH_PROMPT_TARGET_BYTES,
 } from "../extension/src/llm/reattachChunking";
-import { buildReattachNodeCatalog } from "@agent-mindmap/core";
-import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
+import type { ReparentChain, TrieReparentInput } from "@agent-mindmap/core";
 
 function makeChain(chainIndex: number, from: string, sessionIds: string[]): ReparentChain {
   return {

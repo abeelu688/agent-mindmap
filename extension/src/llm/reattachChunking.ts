@@ -1,17 +1,17 @@
-import { buildReattachPrompt } from "./promptReattach";
 import {
   buildRootChildSynonymHints,
   buildTopBranchSynonymHints,
   type MergeInputMode,
   type ReparentChain,
   type TrieReparentInput,
-} from "./trieReparentInput";
+} from "@agent-mindmap/core";
 import { buildReattachNodeCatalog } from "@agent-mindmap/core";
 import {
   buildStructuralReattachHints,
   enrichStructuralHintsWithNodeIds,
 } from "@agent-mindmap/core";
 import { segmentKeyForMerge } from "@agent-mindmap/core";
+import { buildReattachPrompt } from "./promptReattach";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "@agent-mindmap/core";
 

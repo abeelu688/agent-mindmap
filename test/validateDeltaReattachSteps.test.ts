@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildReattachNodeCatalog } from "@agent-mindmap/core";
-import type { ReparentChain, TrieReparentInput } from "../extension/src/llm/trieReparentInput";
 import {
   DeltaReattachValidationError,
   validateDeltaReattachSteps,
 } from "../extension/src/llm/validateDeltaReattachSteps";
+import type { ReparentChain, TrieReparentInput } from "@agent-mindmap/core";
 
 function chain(from: string, sessionIds: string[], chainIndex: number): ReparentChain {
   return {
@@ -31,10 +31,7 @@ function deltaInput(
   newFrom: string,
   snapshotId = "__snap__"
 ): TrieReparentInput {
-  const chains = [
-    chain(frozenFrom, [snapshotId], 1),
-    chain(newFrom, ["s-new"], 2),
-  ];
+  const chains = [chain(frozenFrom, [snapshotId], 1), chain(newFrom, ["s-new"], 2)];
   const nodeCatalog = buildReattachNodeCatalog(chains);
   return {
     mergeMode: "delta",

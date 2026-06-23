@@ -1,6 +1,6 @@
 import { segmentKeyForMerge } from "@agent-mindmap/core";
 import type { ReattachStep } from "@agent-mindmap/core";
-import type { TrieReparentInput } from "./trieReparentInput";
+import type { TrieReparentInput } from "@agent-mindmap/core";
 
 export class DeltaReattachValidationError extends Error {
   readonly issues: string[];

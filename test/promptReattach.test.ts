@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { buildReattachPrompt } from "../extension/src/llm/promptReattach";
 import {
   buildReattachDataTables,
   buildReattachHintTables,
@@ -7,12 +6,10 @@ import {
   escapeTabularCell,
   estimateReattachJsonInputBytes,
 } from "@agent-mindmap/core";
-import { estimateReattachPromptBytes } from "../extension/src/llm/reattachChunking";
 import { buildReattachNodeCatalog } from "@agent-mindmap/core";
-import type {
-  ReparentChain,
-  TrieReparentInput,
-} from "../extension/src/llm/trieReparentInput";
+import { buildReattachPrompt } from "../extension/src/llm/promptReattach";
+import { estimateReattachPromptBytes } from "../extension/src/llm/reattachChunking";
+import type { ReparentChain, TrieReparentInput } from "@agent-mindmap/core";
 
 function makeChain(
   chainIndex: number,
@@ -101,10 +98,7 @@ describe("escapeTabularCell", () => {
 
 describe("buildReattachPrompt tabular input", () => {
   it("includes input schema once and avoids repeated JSON kind keys in hints", () => {
-    const input = makeInput([
-      makeChain(1, "android", ["s1"]),
-      makeChain(2, "art", ["s2"]),
-    ]);
+    const input = makeInput([makeChain(1, "android", ["s1"]), makeChain(2, "art", ["s2"])]);
     const prompt = buildReattachPrompt(input);
     expect(prompt.match(/## 输入 schema/g)?.length).toBe(1);
     expect(prompt).toContain("### ontologySubordinates");
@@ -116,23 +110,28 @@ describe("buildReattachPrompt tabular input", () => {
 
   it("treeEdges row count matches numbered subtree edge count", () => {
     const input = makeInput([
-      makeChain(1, "android", ["s1"], [
-        {
-          segment: "art",
-          label: "ART",
-          topicCount: 2,
-          childSegments: ["oat"],
-          children: [
-            {
-              segment: "oat",
-              label: "OAT",
-              topicCount: 1,
-              childSegments: [],
-              children: [],
-            },
-          ],
-        },
-      ]),
+      makeChain(
+        1,
+        "android",
+        ["s1"],
+        [
+          {
+            segment: "art",
+            label: "ART",
+            topicCount: 2,
+            childSegments: ["oat"],
+            children: [
+              {
+                segment: "oat",
+                label: "OAT",
+                topicCount: 1,
+                childSegments: [],
+                children: [],
+              },
+            ],
+          },
+        ]
+      ),
       makeChain(2, "cpp", ["s2"]),
     ]);
     const expected = countNumberedTreeEdges(input.nodeCatalog.numberedChains);
@@ -143,10 +142,7 @@ describe("buildReattachPrompt tabular input", () => {
 
   it("delta prompt lists frozen top root ids and forbids parallel hubs", () => {
     const input = makeInput(
-      [
-        makeChain(1, "androidplatform", ["__snap__"]),
-        makeChain(2, "android", ["s-new"]),
-      ],
+      [makeChain(1, "androidplatform", ["__snap__"]), makeChain(2, "android", ["s-new"])],
       {
         mergeMode: "delta",
         snapshotSessionId: "__snap__",
@@ -167,30 +163,35 @@ describe("buildReattachPrompt tabular input", () => {
   it("tabular input blocks are smaller than legacy JSON payload at scale", () => {
     const chains = Array.from({ length: 10 }, (_, i) => {
       const root = `domain-${i}`;
-      return makeChain(i + 1, root, [`s${i}`], [
-        {
-          segment: `${root}-child-a`,
-          label: `${root}-child-a`,
-          topicCount: 2,
-          childSegments: [`${root}-leaf`],
-          children: [
-            {
-              segment: `${root}-leaf`,
-              label: `${root}-leaf`,
-              topicCount: 1,
-              childSegments: [],
-              children: [],
-            },
-          ],
-        },
-        {
-          segment: `${root}-child-b`,
-          label: `${root}-child-b`,
-          topicCount: 1,
-          childSegments: [],
-          children: [],
-        },
-      ]);
+      return makeChain(
+        i + 1,
+        root,
+        [`s${i}`],
+        [
+          {
+            segment: `${root}-child-a`,
+            label: `${root}-child-a`,
+            topicCount: 2,
+            childSegments: [`${root}-leaf`],
+            children: [
+              {
+                segment: `${root}-leaf`,
+                label: `${root}-leaf`,
+                topicCount: 1,
+                childSegments: [],
+                children: [],
+              },
+            ],
+          },
+          {
+            segment: `${root}-child-b`,
+            label: `${root}-child-b`,
+            topicCount: 1,
+            childSegments: [],
+            children: [],
+          },
+        ]
+      );
     });
     const input = makeInput(chains);
     input.segmentEquivalences = chains.map((c, i) => ({
@@ -222,10 +223,7 @@ describe("buildReattachPrompt tabular input", () => {
   });
 
   it("full prompt stays under chunking byte budget for moderate fixtures", () => {
-    const input = makeInput([
-      makeChain(1, "a", ["s1"]),
-      makeChain(2, "b", ["s2"]),
-    ]);
+    const input = makeInput([makeChain(1, "a", ["s1"]), makeChain(2, "b", ["s2"])]);
     expect(estimateReattachPromptBytes(input)).toBeLessThan(90 * 1024);
   });
 });

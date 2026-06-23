@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildPrefixSubordinateHints,
-  buildStructuralReattachHints,
-} from "@agent-mindmap/core";
-import {
-  applyReattachStepsToRecords,
-  inferPrefixSubordinateSteps,
-} from "../extension/src/llm/reattachSteps";
+import { buildPrefixSubordinateHints, buildStructuralReattachHints } from "@agent-mindmap/core";
+import { applyReattachStepsToRecords, inferPrefixSubordinateSteps } from "@agent-mindmap/core";
 
 function chain(from: string) {
   return {
@@ -50,10 +44,7 @@ describe("buildPrefixSubordinateHints", () => {
   });
 
   it("does not treat art as prefix hub for artificial", () => {
-    const hints = buildPrefixSubordinateHints([
-      chain("art"),
-      chain("artificial-intelligence"),
-    ]);
+    const hints = buildPrefixSubordinateHints([chain("art"), chain("artificial-intelligence")]);
     expect(hints).toHaveLength(0);
   });
 });

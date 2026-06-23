@@ -3,7 +3,7 @@ import {
   buildDuplicateTopRootHints,
   deriveEquivalencesFromOntologyNodes,
 } from "@agent-mindmap/core";
-import type { ReparentChain } from "../extension/src/llm/trieReparentInput";
+import type { ReparentChain } from "@agent-mindmap/core";
 
 describe("reattachStructuralHints", () => {
   it("detects parallel top root listed under another chain childSegments", () => {

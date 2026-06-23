@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyReattachStepsToRecords } from "../extension/src/llm/reattachSteps";
+import { applyReattachStepsToRecords } from "@agent-mindmap/core";
 import type { ReattachStep } from "@agent-mindmap/core";
 
 function topic(path: string[], title: string) {
@@ -111,9 +111,7 @@ describe("applyReattachStepsToRecords batch", () => {
     ];
 
     const moved = applyReattachStepsToRecords(records, steps, chains);
-    const roots = new Set(
-      moved[0].graph.topics.map((t) => t.conceptPath?.[0]).filter(Boolean)
-    );
+    const roots = new Set(moved[0].graph.topics.map((t) => t.conceptPath?.[0]).filter(Boolean));
     expect(roots.has("art")).toBe(false);
     expect(roots.has("aosp")).toBe(false);
     expect(roots.has("android")).toBe(true);

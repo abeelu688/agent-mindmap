@@ -5,7 +5,7 @@ import {
   collapseConsecutiveDuplicateSegments,
   normalizeHubAttachMoves,
   resolveChainedReattachMoves,
-} from "../extension/src/llm/applyReattachMoves";
+} from "@agent-mindmap/core";
 
 function topic(path: string[], title: string) {
   return { title, summary: title, items: [], conceptPath: path };
@@ -29,10 +29,11 @@ function record(sessionId: string, topics: ReturnType<typeof topic>[]) {
 
 describe("applyReattachMoves", () => {
   it("rewrites orphan root onto nested chain", () => {
-    const next = applyReattachMoveToPath(
-      ["inner", "runtime"],
-      { from: "inner", toPath: ["wrapper", "inner"], confidence: 0.9 }
-    );
+    const next = applyReattachMoveToPath(["inner", "runtime"], {
+      from: "inner",
+      toPath: ["wrapper", "inner"],
+      confidence: 0.9,
+    });
     expect(next).toEqual(["wrapper", "inner", "runtime"]);
   });
 
@@ -46,9 +47,10 @@ describe("applyReattachMoves", () => {
   });
 
   it("collapses consecutive duplicate segment keys in paths", () => {
-    expect(
-      collapseConsecutiveDuplicateSegments(["platform-a", "platform-a", "module"])
-    ).toEqual(["platform-a", "module"]);
+    expect(collapseConsecutiveDuplicateSegments(["platform-a", "platform-a", "module"])).toEqual([
+      "platform-a",
+      "module",
+    ]);
   });
 
   it("applies chained moves from LLM without duplicate synonym segments in path", () => {
@@ -63,15 +65,9 @@ describe("applyReattachMoves", () => {
       { from: "platform-b", toPath: ["platform-a"], confidence: 0.9 },
       { from: "runtime-module", toPath: ["platform-b", "runtime-module"], confidence: 0.88 },
     ]);
-    const roots = new Set(
-      moved[0].graph.topics.map((t) => t.conceptPath?.[0]).filter(Boolean)
-    );
+    const roots = new Set(moved[0].graph.topics.map((t) => t.conceptPath?.[0]).filter(Boolean));
     expect(roots).toEqual(new Set(["platform-a"]));
-    expect(moved[0].graph.topics[0].conceptPath).toEqual([
-      "platform-a",
-      "runtime-module",
-      "jit",
-    ]);
+    expect(moved[0].graph.topics[0].conceptPath).toEqual(["platform-a", "runtime-module", "jit"]);
   });
 
   it("does not rewrite roots when LLM omitted a synonym move (mechanical apply only)", () => {
@@ -169,10 +165,6 @@ describe("applyReattachMoves", () => {
     const moved = applyReattachMovesToRecords(records, [
       { from: "inner", toPath: ["wrapper", "inner"], confidence: 0.9 },
     ]);
-    expect(moved[0].graph.topics[0].conceptPath).toEqual([
-      "wrapper",
-      "inner",
-      "module",
-    ]);
+    expect(moved[0].graph.topics[0].conceptPath).toEqual(["wrapper", "inner", "module"]);
   });
 });

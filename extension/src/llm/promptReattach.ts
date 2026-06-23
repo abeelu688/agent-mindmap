@@ -5,7 +5,7 @@ import {
 } from "@agent-mindmap/core";
 import type { AgentHostId } from "@agent-mindmap/core";
 import type { PromptLanguage } from "@agent-mindmap/core";
-import type { MergeInputMode, TrieReparentInput } from "./trieReparentInput";
+import type { MergeInputMode, TrieReparentInput } from "@agent-mindmap/core";
 
 // Re-export version constant so extension modules that import from this
 // file still find it.
