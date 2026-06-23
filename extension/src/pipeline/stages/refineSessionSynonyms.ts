@@ -1,51 +1,21 @@
-import { runLlmStage } from "../llmStage";
+/**
+ * Extension adapter for refineSessionSynonyms — pre-binds the extension's
+ * LlmDumpDeps so callers don't need to pass it every time.
+ */
 import {
-  buildSessionSynonymsPrompt,
-  SESSION_SYNONYM_PROMPT_VERSION,
+  refineSessionSynonyms as coreRefineSessionSynonyms,
+  type RefineSessionSynonymsOpts,
 } from "@agent-mindmap/core";
-import { validateSessionSynonymRefine } from "@agent-mindmap/core";
-import type { LlmProvider, SessionConceptExtract, SessionSynonymRefine } from "@agent-mindmap/core";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type { ChatEvent } from "@agent-mindmap/core";
-import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "@agent-mindmap/core";
+import { extensionLlmDumpDeps } from "../../llm/llmIoDumpAdapter";
+import type { LlmProvider, SessionSynonymRefine, ProgressReporter } from "@agent-mindmap/core";
 
-export type RefineSessionSynonymsOpts = StageTimingOpts & {
-  events: ChatEvent[];
-  extract: SessionConceptExtract;
-  modelHint?: string;
-  cacheDir?: string;
-  cache: boolean;
-  hostId?: AgentHostId;
-};
+export type { RefineSessionSynonymsOpts };
 
 export async function refineSessionSynonyms(
   opts: RefineSessionSynonymsOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<SessionSynonymRefine> {
-  const prompt = buildSessionSynonymsPrompt(opts.extract, opts.hostId ?? "cursor");
-  return runLlmStage(
-    {
-      stageId: "session-synonym-refine",
-      promptVersion: SESSION_SYNONYM_PROMPT_VERSION,
-      events: opts.events,
-      prompt,
-      modelHint: opts.modelHint,
-      cacheDir: opts.cacheDir,
-      cache: opts.cache,
-      hostId: opts.hostId,
-      responseSchema: "session-synonym-refine",
-      maxTopics: 8,
-      maxItemsPerTopic: 8,
-      heartbeatMessage: "Refining session synonyms…",
-      validate: validateSessionSynonymRefine,
-      timingRunId: opts.timingRunId,
-      timingOut: opts.timingOut,
-    },
-    provider,
-    signal,
-    progress
-  );
+  return coreRefineSessionSynonyms(opts, provider, signal, progress, extensionLlmDumpDeps);
 }

@@ -157,6 +157,18 @@ export {
 } from "./pipeline/stages/finalizeSessionAnalysis";
 export { collectMergeTerms, type CollectedMergeTerms } from "./pipeline/stages/collectMergeTerms";
 export {
+  extractConcepts,
+  type ExtractConceptsOpts,
+} from "./pipeline/stages/extractConcepts";
+export {
+  organizeByTree,
+  type OrganizeByTreeOpts,
+} from "./pipeline/stages/organizeByTree";
+export {
+  refineSessionSynonyms,
+  type RefineSessionSynonymsOpts,
+} from "./pipeline/stages/refineSessionSynonyms";
+export {
   analyzeSession as analyzeSessionStage,
   type AnalyzeSessionOpts,
   type AnalyzeSessionResult,

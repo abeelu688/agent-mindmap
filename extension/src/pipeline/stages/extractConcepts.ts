@@ -1,52 +1,21 @@
-import { runLlmStage } from "../llmStage";
+/**
+ * Extension adapter for extractConcepts — pre-binds the extension's
+ * LlmDumpDeps so callers don't need to pass it every time.
+ */
 import {
-  buildSessionExtractPrompt,
-  EXTRACT_PROMPT_VERSION,
-  type SessionExtractPromptOptions,
+  extractConcepts as coreExtractConcepts,
+  type ExtractConceptsOpts,
 } from "@agent-mindmap/core";
-import { validateSessionConceptExtract } from "@agent-mindmap/core";
-import type { LlmProvider, SessionConceptExtract } from "@agent-mindmap/core";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type { ChatEvent } from "@agent-mindmap/core";
-import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "@agent-mindmap/core";
+import { extensionLlmDumpDeps } from "../../llm/llmIoDumpAdapter";
+import type { LlmProvider, SessionConceptExtract, ProgressReporter } from "@agent-mindmap/core";
 
-export type ExtractConceptsOpts = StageTimingOpts & {
-  events: ChatEvent[];
-  prompt: SessionExtractPromptOptions;
-  modelHint?: string;
-  cacheDir?: string;
-  cache: boolean;
-  hostId?: AgentHostId;
-};
+export type { ExtractConceptsOpts };
 
 export async function extractConcepts(
   opts: ExtractConceptsOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<SessionConceptExtract> {
-  const prompt = buildSessionExtractPrompt(opts.events, opts.prompt, opts.hostId ?? "cursor");
-  return runLlmStage(
-    {
-      stageId: "session-concept-extract",
-      promptVersion: EXTRACT_PROMPT_VERSION,
-      events: opts.events,
-      prompt,
-      modelHint: opts.modelHint,
-      cacheDir: opts.cacheDir,
-      cache: opts.cache,
-      hostId: opts.hostId,
-      responseSchema: "session-concept-extract",
-      maxTopics: opts.prompt.maxTerms,
-      maxItemsPerTopic: opts.prompt.maxEvidencePerTerm,
-      heartbeatMessage: "Extracting domains and terms…",
-      validate: validateSessionConceptExtract,
-      timingRunId: opts.timingRunId,
-      timingOut: opts.timingOut,
-    },
-    provider,
-    signal,
-    progress
-  );
+  return coreExtractConcepts(opts, provider, signal, progress, extensionLlmDumpDeps);
 }

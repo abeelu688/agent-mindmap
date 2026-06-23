@@ -1,58 +1,21 @@
-import { runLlmStage } from "../llmStage";
+/**
+ * Extension adapter for organizeByTree — pre-binds the extension's
+ * LlmDumpDeps so callers don't need to pass it every time.
+ */
 import {
-  buildOrganizeByTreePrompt,
-  ORGANIZE_PROMPT_VERSION,
-  type OrganizeByTreePromptOptions,
+  organizeByTree as coreOrganizeByTree,
+  type OrganizeByTreeOpts,
 } from "@agent-mindmap/core";
-import { validateSessionOutline } from "@agent-mindmap/core";
-import type { LlmProvider, SessionOutline, SessionTreeSnapshot } from "@agent-mindmap/core";
-import type { AgentHostId } from "@agent-mindmap/core";
-import type { ChatEvent } from "@agent-mindmap/core";
-import type { MindMapProgress } from "../../progress";
-import type { StageTimingOpts } from "@agent-mindmap/core";
+import { extensionLlmDumpDeps } from "../../llm/llmIoDumpAdapter";
+import type { LlmProvider, SessionOutline, ProgressReporter } from "@agent-mindmap/core";
 
-export type OrganizeByTreeOpts = StageTimingOpts & {
-  events: ChatEvent[];
-  tree: SessionTreeSnapshot;
-  prompt: OrganizeByTreePromptOptions;
-  modelHint?: string;
-  cacheDir?: string;
-  cache: boolean;
-  hostId?: AgentHostId;
-};
+export type { OrganizeByTreeOpts };
 
 export async function organizeByTree(
   opts: OrganizeByTreeOpts,
   provider: LlmProvider,
   signal: AbortSignal,
-  progress?: MindMapProgress
+  progress?: ProgressReporter
 ): Promise<SessionOutline> {
-  const prompt = buildOrganizeByTreePrompt(
-    opts.events,
-    opts.tree,
-    opts.prompt,
-    opts.hostId ?? "cursor"
-  );
-  return runLlmStage(
-    {
-      stageId: "session-outline-by-tree",
-      promptVersion: ORGANIZE_PROMPT_VERSION,
-      events: opts.events,
-      prompt,
-      modelHint: opts.modelHint,
-      cacheDir: opts.cacheDir,
-      cache: opts.cache,
-      hostId: opts.hostId,
-      responseSchema: "session-outline-by-tree",
-      maxTopics: opts.prompt.maxBranches,
-      maxItemsPerTopic: opts.prompt.maxDetailsPerNode,
-      heartbeatMessage: "Organizing outline by concept tree…",
-      validate: validateSessionOutline,
-      timingRunId: opts.timingRunId,
-      timingOut: opts.timingOut,
-    },
-    provider,
-    signal,
-    progress
-  );
+  return coreOrganizeByTree(opts, provider, signal, progress, extensionLlmDumpDeps);
 }
