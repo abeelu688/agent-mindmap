@@ -9,6 +9,7 @@
  * - `ConfigStore` — configuration read/write
  * - `StoreAccess` — Store instance access
  * - `HostAccess` — active host / workspace resolution
+ * - `LocalizedStringResolver` — i18n string resolution
  * - `LlmDumpDeps` — LLM IO dump configuration
  * - `CodeRefQueueDeps` — code-reference queue operations
  */
@@ -29,6 +30,13 @@ export type { ConfigStore } from "./ConfigStore";
 export type { StoreAccess } from "./StoreAccess";
 
 export type { HostAccess } from "./HostAccess";
+
+export type { LocalizedStringResolver } from "./LocalizedStringResolver";
+export {
+  passthroughLocaleResolver,
+  setCoreLocaleResolver,
+  getCoreLocaleResolver,
+} from "./LocalizedStringResolver";
 
 export type { LlmDumpDeps } from "./LlmDumpDeps";
 
