@@ -6,12 +6,14 @@
  */
 import * as vscode from "vscode";
 import { ensureStore } from "@agent-mindmap/core";
+import { getProvider } from "@agent-mindmap/core";
 import { getActiveHost, getWorkspacePath, getWorkspaceSlug } from "../host";
 import { getStore, getStoreForDir } from "../store/storeClient";
 import { getStoreDir } from "../paths";
-import { getProvider } from "@agent-mindmap/core";
 import { agentLog } from "../log";
 import { mindMapLog } from "../webview/MindMapLog";
+import { extensionCodeRefQueueDeps } from "../codeRefQueueAdapter";
+import { extensionLlmDumpDeps } from "../llm/llmIoDumpAdapter";
 import type {
   Logger,
   Prompter,
@@ -253,13 +255,12 @@ function buildMindMapSink(panel: MindMapPanel) {
   };
 }
 
-function buildCodeRefQueueDeps(panel: MindMapPanel): CodeRefQueueDeps {
-  // Re-use the existing adapter
-  return extensionCodeRefQueueDeps(panel);
+function buildCodeRefQueueDeps(_panel: MindMapPanel): CodeRefQueueDeps {
+  return extensionCodeRefQueueDeps;
 }
 
 function buildLlmDumpDeps(): LlmDumpDeps {
-  return extensionLlmDumpDeps();
+  return extensionLlmDumpDeps;
 }
 
 function buildRunSessionPipeline(): RunSessionPipelineFn {
@@ -510,22 +511,4 @@ function buildRefreshMcpIndex(): RefreshMcpIndexFn {
     const { refreshMcpIndexForProject } = await import("../mcp/mcpConfig");
     await refreshMcpIndexForProject(projectSlug);
   };
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Inline adapters (imported by reference from other adapter modules)
-// ────────────────────────────────────────────────────────────────────────────
-
-function extensionCodeRefQueueDeps(panel: MindMapPanel): CodeRefQueueDeps {
-  const { extensionCodeRefQueueDeps } = require("../codeRefQueueAdapter") as {
-    extensionCodeRefQueueDeps: (panel: MindMapPanel) => CodeRefQueueDeps;
-  }; // eslint-disable-line @typescript-eslint/no-require-imports
-  return extensionCodeRefQueueDeps(panel);
-}
-
-function extensionLlmDumpDeps(): LlmDumpDeps {
-  const { extensionLlmDumpDeps } = require("../llm/llmIoDumpAdapter") as {
-    extensionLlmDumpDeps: () => LlmDumpDeps;
-  }; // eslint-disable-line @typescript-eslint/no-require-imports
-  return extensionLlmDumpDeps();
 }
