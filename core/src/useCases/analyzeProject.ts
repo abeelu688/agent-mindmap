@@ -627,8 +627,13 @@ export async function analyzeProject(
           return;
         }
         const detail = err instanceof Error ? err.message : String(err);
-        deps.logger.error(`Batch ${info.batchNo} concept merge failed`, err);
-        deps.mindMapSink.showInfo(`Batch ${info.batchNo} concept merge failed: ${detail}`);
+        deps.logger.error(
+          `Batch ${info.batchNo} concept merge failed: ${detail || "(unknown)"}`,
+          err
+        );
+        deps.mindMapSink.showInfo(
+          `Batch ${info.batchNo} concept merge failed: ${detail || "(unknown)"}`
+        );
         return;
       }
 
