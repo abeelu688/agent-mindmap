@@ -33,10 +33,20 @@ function resolveLlmProviderId(setting: string, hostDefault: LlmProviderId): LlmP
 
 export type EnsureModelConfiguredResult =
   | { ok: true; provider: LlmProviderId }
-  | { ok: false; available: DetectedCli[]; missing: DetectedCli[] };
+  | {
+      ok: false;
+      reason: "not-configured" | "cli-missing";
+      available: DetectedCli[];
+      missing: DetectedCli[];
+    };
 
 /**
- * Check whether the configured LLM provider's CLI is actually available.
+ * Check whether the user has explicitly configured an LLM provider and its CLI
+ * is actually available on this machine.
+ *
+ * Returns `ok: false` when:
+ *  - `reason: "not-configured"` — provider is still "auto" (user never chose)
+ *  - `reason: "cli-missing"`   — provider was chosen but its binary is gone
  *
  * Unlike a sticky boolean flag, this probes the filesystem every time,
  * so it catches cases where the CLI was uninstalled or the provider changed.
@@ -47,13 +57,20 @@ export async function ensureModelConfigured(deps: {
   cliPath?: string;
 }): Promise<EnsureModelConfiguredResult> {
   const providerSetting = deps.configStore.get<string>("llm.provider") ?? "auto";
+
+  // If provider is still "auto" the user has never explicitly chosen one.
+  if (providerSetting === "auto") {
+    const { available, missing } = await detectAvailableClis(deps.cliPath ?? "");
+    return { ok: false, reason: "not-configured", available, missing };
+  }
+
   const resolved = resolveLlmProviderId(providerSetting, deps.hostDefaultProvider);
   const { available, missing } = await detectAvailableClis(deps.cliPath ?? "");
   const hasCli = available.some((c) => c.providerId === resolved);
   if (hasCli) {
     return { ok: true, provider: resolved };
   }
-  return { ok: false, available, missing };
+  return { ok: false, reason: "cli-missing", available, missing };
 }
 
 // ── selectModel ────────────────────────────────────────────────────────────

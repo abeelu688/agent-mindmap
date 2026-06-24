@@ -49,9 +49,11 @@ export async function runProjectAnalyze(
     cliPath: (config.get<string>("llm.cliPath") ?? "").trim() || undefined,
   });
   if (!modelCheck.ok) {
-    logError(
-      "No LLM CLI found. Run `agent-mindmap model select` to configure a provider and model."
-    );
+    if (modelCheck.reason === "not-configured") {
+      logError("No LLM provider configured. Run `agent-mindmap model select` to choose one.");
+    } else {
+      logError("Configured LLM CLI not found. Run `agent-mindmap model select` to reconfigure.");
+    }
     process.exit(1);
   }
 
