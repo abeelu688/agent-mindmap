@@ -1,28 +1,17 @@
 import { HeadlessCliProvider } from "./headlessCli";
-import type {
-  LlmProvider,
-  LlmProviderOptions,
-  LlmSummarizeResult,
-} from "./types";
+import type { LlmProvider, LlmProviderOptions, LlmSummarizeResult } from "./types";
 import type { SummarizeInput } from "./types";
 
 const DEFAULT_BINARIES = ["claude"];
 
 function buildArgs(opts: LlmProviderOptions, prompt: string): string[] {
-  const args = [
-    "-p",
-    "--bare",
-    "--output-format",
-    "json",
-    "--max-turns",
-    "1",
-    "--tools",
-    "",
-  ];
+  const args = ["-p", "--bare", "--output-format", "json", "--max-turns", "1"];
   if (opts.model && opts.model.trim()) {
     args.push("--model", opts.model.trim());
   }
-  args.push(prompt);
+  // Prompt MUST come before --tools because --tools is variadic
+  // and would consume the prompt as another tool name.
+  args.push(prompt, "--tools", "");
   return args;
 }
 
@@ -31,19 +20,20 @@ export class ClaudeCliProvider implements LlmProvider {
   private readonly inner: HeadlessCliProvider;
 
   constructor(options: LlmProviderOptions) {
-    this.inner = new HeadlessCliProvider("claude-cli", {
-      providerLabel: "claude",
-      defaultBinaries: DEFAULT_BINARIES,
-      missingInstallHint:
-        "Claude Code CLI not found. Install from https://code.claude.com/docs/en/headless",
-      buildArgs,
-    }, options);
+    this.inner = new HeadlessCliProvider(
+      "claude-cli",
+      {
+        providerLabel: "claude",
+        defaultBinaries: DEFAULT_BINARIES,
+        missingInstallHint:
+          "Claude Code CLI not found. Install from https://code.claude.com/docs/en/headless",
+        buildArgs,
+      },
+      options
+    );
   }
 
-  summarize(
-    input: SummarizeInput,
-    signal: AbortSignal
-  ): Promise<LlmSummarizeResult> {
+  summarize(input: SummarizeInput, signal: AbortSignal): Promise<LlmSummarizeResult> {
     return this.inner.summarize(input, signal);
   }
 }
