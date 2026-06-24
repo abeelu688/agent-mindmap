@@ -8,7 +8,6 @@
 import {
   detectAvailableClis,
   fetchModelList,
-  getCuratedModels,
   type DetectedCli,
   type LlmProviderId,
 } from "../index";
@@ -114,7 +113,7 @@ export async function selectModel(deps: SelectModelDeps): Promise<SelectModelRes
     return undefined;
   }
 
-  // Build QuickPick items: available + missing
+  // Build QuickPick items: only available CLIs are selectable
   const items: CliPickItem[] = [];
 
   for (const cli of available) {
@@ -127,10 +126,11 @@ export async function selectModel(deps: SelectModelDeps): Promise<SelectModelRes
     });
   }
 
+  // Show missing CLIs as non-selectable hints (if Prompter supports disabled items)
   for (const cli of missing) {
     items.push({
       label: cli.label,
-      description: "not found",
+      description: "(not installed)",
       cli,
       isCurrent: false,
     });
@@ -144,7 +144,16 @@ export async function selectModel(deps: SelectModelDeps): Promise<SelectModelRes
     return undefined;
   }
 
-  const selectedProvider = (picked as CliPickItem).cli.providerId;
+  const pickedItem = picked as CliPickItem;
+  // Reject selection of a missing CLI
+  if (!available.some((c) => c.providerId === pickedItem.cli.providerId)) {
+    deps.logger.warn(
+      `${pickedItem.cli.label} is not installed. Install it first, then run model select again.`
+    );
+    return undefined;
+  }
+
+  const selectedProvider = pickedItem.cli.providerId;
 
   // Update the provider setting if it changed
   if (selectedProvider !== currentProvider) {
@@ -162,11 +171,8 @@ async function pickModel(
 ): Promise<SelectModelResult | undefined> {
   const currentModel = (deps.configStore.get<string>("llm.model") ?? "").trim();
 
-  // Try live fetch; fall back to curated list
-  let models = await fetchModelList(providerId, "");
-  if (models.length === 0) {
-    models = getCuratedModels(providerId);
-  }
+  // Fetch models dynamically from the CLI
+  const models = await fetchModelList(providerId, "");
 
   const CUSTOM_KEY = "__custom__";
 
