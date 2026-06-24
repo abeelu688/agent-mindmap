@@ -16,6 +16,48 @@ import type { Prompter, QuickPickItem } from "../ports/Prompter";
 import type { ConfigStore } from "../ports/ConfigStore";
 import type { Logger } from "../ports/Logger";
 
+// ── ensureModelConfigured ──────────────────────────────────────────────────
+
+/**
+ * Resolve the effective LLM provider from config (handles "auto" → host default).
+ */
+function resolveLlmProviderId(setting: string, hostDefault: LlmProviderId): LlmProviderId {
+  if (setting === "auto") {
+    return hostDefault;
+  }
+  if (setting === "cursor-cli" || setting === "claude-cli") {
+    return setting;
+  }
+  return hostDefault;
+}
+
+export type EnsureModelConfiguredResult =
+  | { ok: true; provider: LlmProviderId }
+  | { ok: false; available: DetectedCli[]; missing: DetectedCli[] };
+
+/**
+ * Check whether the configured LLM provider's CLI is actually available.
+ *
+ * Unlike a sticky boolean flag, this probes the filesystem every time,
+ * so it catches cases where the CLI was uninstalled or the provider changed.
+ */
+export async function ensureModelConfigured(deps: {
+  configStore: ConfigStore;
+  hostDefaultProvider: LlmProviderId;
+  cliPath?: string;
+}): Promise<EnsureModelConfiguredResult> {
+  const providerSetting = deps.configStore.get<string>("llm.provider") ?? "auto";
+  const resolved = resolveLlmProviderId(providerSetting, deps.hostDefaultProvider);
+  const { available, missing } = await detectAvailableClis(deps.cliPath ?? "");
+  const hasCli = available.some((c) => c.providerId === resolved);
+  if (hasCli) {
+    return { ok: true, provider: resolved };
+  }
+  return { ok: false, available, missing };
+}
+
+// ── selectModel ────────────────────────────────────────────────────────────
+
 export type SelectModelDeps = {
   prompter: Prompter;
   configStore: ConfigStore;

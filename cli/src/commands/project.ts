@@ -11,6 +11,7 @@ import {
   readSnapshotManifest,
   readMergeSnapshot,
   exportMindMapPackage,
+  ensureModelConfigured,
   type SnapshotManifest,
   type MergeSnapshot,
 } from "@agent-mindmap/core";
@@ -38,6 +39,21 @@ export async function runProjectAnalyze(
 ) {
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
+
+  // ── Gate: ensure LLM CLI is configured and available ───────────────────
+  const hostAccess = buildCliHostAccess(cwd);
+  const host = await hostAccess.getActiveHost();
+  const modelCheck = await ensureModelConfigured({
+    configStore: config,
+    hostDefaultProvider: host.defaultLlmProvider,
+    cliPath: (config.get<string>("llm.cliPath") ?? "").trim() || undefined,
+  });
+  if (!modelCheck.ok) {
+    logError(
+      "No LLM CLI found. Run `agent-mindmap model select` to configure a provider and model."
+    );
+    process.exit(1);
+  }
 
   const spinner = createSpinner("Analyzing project…");
   spinner.start();

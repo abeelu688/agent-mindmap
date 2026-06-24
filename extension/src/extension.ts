@@ -34,7 +34,6 @@ import { commandPushToTeam } from "./commands/pushToTeam";
 import { refreshStaleMcpInstall } from "./mcp/mcpConfig";
 import { applyPendingUpdatesToPanel } from "./batch/applyPendingUpdates";
 import { wrapCommand } from "./commands/commandWrapper";
-import { markModelSelected } from "./llmOptions";
 import { affectsMcpLocale, syncMcpLocaleFile } from "./mcpLocaleSync";
 import { affectsPathsMap, writePathsMaps } from "./store/pathsMap";
 import { isStoreRekeyedToRepo, runRekeyMigration } from "./store/rekeyMigration";
@@ -214,10 +213,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   MindMapPanel.onSelectModelRequested(() => {
     void vscode.commands.executeCommand("agent-mindmap.selectModel");
-  });
-
-  MindMapPanel.onModelUpdated(() => {
-    void markModelSelected(context);
   });
 
   // ── Initial provider resolution ────────────────────────────────────────

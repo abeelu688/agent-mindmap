@@ -16,7 +16,13 @@ export type {
 
 export { listSessions, type ListSessionsDeps, type ListSessionsResult } from "./listSessions";
 export { selectHost, type SelectHostDeps } from "./selectHost";
-export { selectModel, type SelectModelDeps, type SelectModelResult } from "./selectModel";
+export {
+  selectModel,
+  ensureModelConfigured,
+  type SelectModelDeps,
+  type SelectModelResult,
+  type EnsureModelConfiguredResult,
+} from "./selectModel";
 export {
   syncAiContext,
   type SyncAiContextDeps,

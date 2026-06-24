@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { selectModel, CLI_SETTINGS_KEY } from "@agent-mindmap/core";
-import { readLlmOptions, markModelSelected } from "../llmOptions";
+import { readLlmOptions } from "../llmOptions";
 import { showCliInstallGuide } from "../llm/cliInstallGuideUi";
 import { notifyInfo } from "../notify";
 import { t } from "../l10n/uiTranslate";
@@ -42,7 +42,6 @@ export async function commandSelectModel(context: vscode.ExtensionContext): Prom
     },
   });
   if (result) {
-    await markModelSelected(context);
     notifyInfo(
       t(
         "ui.selectModel.applied",
