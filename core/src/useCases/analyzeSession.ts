@@ -83,6 +83,7 @@ export type RunSessionPipelineFn = (
       maxEvidencePerTerm: number;
       maxBranches: number;
       maxDetailsPerNode: number;
+      maxTurnsPerChunk?: number;
     };
     modelHint?: string;
     cacheDir?: string;
@@ -204,6 +205,7 @@ export function readSettingsFromConfig(config: ConfigStore, host: AgentHost): Se
       ),
       maxTopics: Math.max(1, config.get<number>("maxTopics") ?? 6),
       maxItemsPerTopic: Math.max(1, config.get<number>("maxItemsPerTopic") ?? 6),
+      maxTurnsPerChunk: Math.max(0, config.get<number>("llm.maxTurnsPerChunk") ?? 12) || undefined,
       hostId: host.id,
     },
     cache: config.get<boolean>("cacheLlmResult") ?? true,
@@ -428,6 +430,7 @@ export async function analyzeSession(
           maxEvidencePerTerm: 4,
           maxBranches: settings.llm.maxTopics,
           maxDetailsPerNode: settings.llm.maxItemsPerTopic,
+          maxTurnsPerChunk: settings.llm.maxTurnsPerChunk,
         },
         modelHint: settings.llm.model || undefined,
         cacheDir,

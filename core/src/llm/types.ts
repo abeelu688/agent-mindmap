@@ -127,6 +127,8 @@ export type LlmProviderOptions = {
   retryBackoffMs: number;
   maxTopics: number;
   maxItemsPerTopic: number;
+  /** Max turns per chunk for sub-session splitting. Default: 12. Set 0 to disable. */
+  maxTurnsPerChunk?: number;
   hostId?: AgentHostId;
 };
 

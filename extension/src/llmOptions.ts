@@ -31,6 +31,8 @@ export async function readLlmOptions(
     ),
     maxTopics: Math.max(2, config.get<number>("merge.llm.maxTopics", 8) ?? 8),
     maxItemsPerTopic: Math.max(1, config.get<number>("merge.llm.maxItemsPerTopic", 6) ?? 6),
+    maxTurnsPerChunk:
+      Math.max(0, config.get<number>("llm.maxTurnsPerChunk", 12) ?? 12) || undefined,
     hostId: host.id,
   };
 }

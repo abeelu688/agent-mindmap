@@ -1,5 +1,5 @@
 import { countUserQueries } from "../llm/sanitizeTopicGraph";
-import { analyzeSession } from "./stages/analyzeSession";
+import { analyzeSessionChunked } from "./stages/analyzeSessionChunked";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { currentPipelineVersions } from "./pipelineVersions";
 import { createPipelineTimingCollector } from "./pipelineTiming";
@@ -22,6 +22,8 @@ export type SessionPipelinePromptOpts = {
   maxEvidencePerTerm: number;
   maxBranches: number;
   maxDetailsPerNode: number;
+  /** Max turns per chunk for sub-session splitting. Default: 12. Set 0 to disable. */
+  maxTurnsPerChunk?: number;
 };
 
 export type SessionPipelineOpts = {
@@ -86,7 +88,7 @@ export async function runSessionPipeline(
     const s1Result = await runStage(
       "S1 analyze",
       () =>
-        analyzeSession(
+        analyzeSessionChunked(
           {
             events: opts.events,
             prompt: {
@@ -95,6 +97,7 @@ export async function runSessionPipeline(
               maxBranches: opts.prompt.maxBranches,
               maxDetailsPerNode: opts.prompt.maxDetailsPerNode,
             },
+            maxTurnsPerChunk: opts.prompt.maxTurnsPerChunk,
             modelHint: opts.modelHint,
             cacheDir: opts.cacheDir,
             cache: opts.cache,
