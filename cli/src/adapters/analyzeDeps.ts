@@ -429,8 +429,14 @@ export async function buildCliAnalyzeSessionDepsAsync(
   };
 
   // Pre-load the provider module and set up sync getProvider
-  const { getProvider } = await import("@agent-mindmap/core");
+  const { getProvider, initCodeRefQueue } = await import("@agent-mindmap/core");
   deps.getProvider = (opts) => getProvider(opts);
+
+  // Initialize the code-ref queue so background code-ref processing works
+  if (deps.codeRefDeps) {
+    initCodeRefQueue(deps.codeRefDeps);
+  }
+
   return deps;
 }
 
