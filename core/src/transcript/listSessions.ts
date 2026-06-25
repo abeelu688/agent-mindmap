@@ -28,7 +28,8 @@ export type ListSessionsContext = {
 const PREVIEW_MAX_LEN = 40;
 const PREVIEW_READ_BYTES = 8 * 1024;
 
-const ENTRYPOINT_READ_BYTES = 64 * 1024;
+const ENTRYPOINT_CHUNK_BYTES = 16 * 1024;
+const ENTRYPOINT_MAX_BYTES = 256 * 1024;
 
 /**
  * Check whether a transcript is a headless SDK/CLI call (not a real user
@@ -36,33 +37,45 @@ const ENTRYPOINT_READ_BYTES = 64 * 1024;
  * `entrypoint: "sdk-cli"` — these are agent-mindmap's own LLM calls and
  * should not be analysed as user conversations.
  *
- * Returns true if the transcript should be skipped.
+ * Reads the file in chunks, stopping as soon as an `entrypoint` field is
+ * found on any parsable JSON line. Falls back to false if no entrypoint is
+ * found within 256KB (arbitrary safety limit for pathological files).
  */
 async function isHeadlessSdkSession(filePath: string): Promise<boolean> {
   let handle: fs.FileHandle | undefined;
   try {
     handle = await fs.open(filePath, "r");
-    // Read up to 64KB — queue-operation lines (which precede the user line
-    // with entrypoint) can be >8KB each, so 8KB is insufficient.
-    const buffer = Buffer.alloc(ENTRYPOINT_READ_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, ENTRYPOINT_READ_BYTES, 0);
-    if (!bytesRead) {
-      return false;
-    }
-    const text = buffer.subarray(0, bytesRead).toString("utf8");
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
+    let offset = 0;
+    let carry = "";
+    while (offset < ENTRYPOINT_MAX_BYTES) {
+      const buffer = Buffer.alloc(ENTRYPOINT_CHUNK_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, ENTRYPOINT_CHUNK_BYTES, offset);
+      if (!bytesRead) {
+        break;
       }
-      let row: { entrypoint?: string };
-      try {
-        row = JSON.parse(trimmed);
-      } catch {
-        continue;
-      }
-      if (row.entrypoint === "sdk-cli") {
-        return true;
+      offset += bytesRead;
+      const chunk = carry + buffer.subarray(0, bytesRead).toString("utf8");
+      const lines = chunk.split("\n");
+      // Last element may be an incomplete line — carry it forward
+      carry = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+        let row: { entrypoint?: string };
+        try {
+          row = JSON.parse(trimmed);
+        } catch {
+          continue;
+        }
+        if (row.entrypoint === "sdk-cli") {
+          return true;
+        }
+        // Found a real entrypoint that is NOT sdk-cli → not a headless session
+        if (row.entrypoint) {
+          return false;
+        }
       }
     }
     return false;
