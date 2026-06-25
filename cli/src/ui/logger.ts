@@ -145,15 +145,15 @@ export function buildCliLogger(): Logger {
         // Always show LLM error details (code + cliCapture) even without --verbose
         if (data.code || data.cliCapture) {
           if (data.code) {
-            logDebug(`  code: ${data.code}`);
+            log(`  code: ${data.code}`);
           }
           if (data.cliCapture && typeof data.cliCapture === "object") {
             const cap = data.cliCapture as { stdout?: string; stderr?: string };
             if (cap.stderr) {
-              logDebug(`  stderr: ${cap.stderr.slice(0, 500)}`);
+              log(`  stderr: ${cap.stderr.slice(0, 500)}`);
             }
             if (cap.stdout) {
-              logDebug(`  stdout (first 500 chars): ${cap.stdout.slice(0, 500)}`);
+              log(`  stdout (first 500 chars): ${cap.stdout.slice(0, 500)}`);
             }
           }
         }
