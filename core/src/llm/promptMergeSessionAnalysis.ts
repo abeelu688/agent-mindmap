@@ -56,6 +56,8 @@ export function buildMergeSessionAnalysisPrompt(
       : "";
 
   return [
+    "IMPORTANT: You MUST respond with valid JSON only — no prose, no markdown, no explanation, no ``` fences. Start your response with { and end with }.",
+    "",
     `You are a cross-session synthesis assistant. Below are concept trees + outlines from ${sessionCount} ${agentLabel} sessions (TAB tables; column meanings are in the input schema).`,
     "Task: understand each session's structure and synthesize them into **one** virtual combined session, as if they were originally one long conversation.",
     "",

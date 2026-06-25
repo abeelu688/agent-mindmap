@@ -198,7 +198,7 @@ export function readSettingsFromConfig(config: ConfigStore, host: AgentHost): Se
       cliPath: (config.get<string>("llm.cliPath") ?? "").trim(),
       model: (config.get<string>("llm.model") ?? "").trim(),
       timeoutMs: Math.max(1000, config.get<number>("llm.timeoutMs") ?? 300000),
-      maxAttempts: Math.max(1, Math.min(10, config.get<number>("llm.maxAttempts") ?? 1)),
+      maxAttempts: Math.max(1, Math.min(10, config.get<number>("llm.maxAttempts") ?? 2)),
       retryBackoffMs: Math.max(
         0,
         Math.min(30000, config.get<number>("llm.retryBackoffMs") ?? 1000)
@@ -293,6 +293,37 @@ export async function analyzeSession(
   const content = await readSessionFile(session.filePath);
   const events = host.parseTranscript(content);
   deps.logger.info(`[analyzeSession] session=${session.id} events=${events.length}`);
+
+  // ── Empty transcript — skip LLM, go straight to turn fallback ──────────
+  if (events.length === 0) {
+    deps.logger.info(
+      `[analyzeSession] session=${session.id.slice(0, 8)} has 0 events, skipping LLM`
+    );
+    const outputLanguage = resolveOutputLanguageForEvents(events);
+    const ctx = resolveSessionContext(session, host);
+    const projectPath = ctx.projectPath ?? host.slugToWorkspacePath(ctx.projectSlug);
+    const sessionMeta: SessionMeta = {
+      sessionId: session.id,
+      projectSlug: ctx.projectSlug,
+      projectPath,
+      sessionLabel: session.label,
+      transcriptPath: session.filePath,
+    };
+    const settings = readSettingsFromConfig(deps.configStore, host);
+    const loadedSession: LoadedSession = {
+      session: { ...session, hostId: host.id, projectSlug: ctx.projectSlug, projectPath },
+      mindMap: buildTurnMindMap(
+        events,
+        settings.turnOptions,
+        session.label,
+        sessionMeta,
+        outputLanguage
+      ),
+      source: "turn",
+      llmErrorCode: "empty",
+    };
+    return { result: loadedSession, completed: () => Promise.resolve() };
+  }
 
   const settings = readSettingsFromConfig(deps.configStore, host);
   const useLlmCache = settings.cache && !options.forceRefresh;

@@ -109,6 +109,8 @@ export function buildOutlinePrompt(
 
   const text = TEXTS[promptLanguage];
   return [
+    "IMPORTANT: You MUST respond with valid JSON only — no prose, no markdown, no explanation, no ``` fences. Start your response with { and end with }.",
+    "",
     text.intro(chatLabel),
     text.taskHeader,
     ...text.bullets(maxBranches, maxDetails),

@@ -13,7 +13,7 @@ const HOST_CHAT_LABELS: Record<AgentHostId, string> = {
 };
 
 /** Bump when {@link buildSessionAnalysisPrompt} behavior or JSON schema changes. */
-export const SESSION_ANALYSIS_PROMPT_VERSION = 17;
+export const SESSION_ANALYSIS_PROMPT_VERSION = 18;
 
 export type SessionAnalysisPromptOptions = {
   maxDomains: number;
@@ -40,6 +40,8 @@ export function buildSessionAnalysisPrompt(
   const maxDetails = Math.max(1, options.maxDetailsPerNode);
 
   return [
+    "IMPORTANT: You MUST respond with valid JSON only — no prose, no markdown, no explanation, no ``` fences. Start your response with { and end with }.",
+    "",
     `You are a session synthesis assistant. Below is a sanitized ${chatLabel} chat transcript. Segment markers are [Q#]/[T#]/[F#]/[A#]; [F#] lists source file paths relative to the project root for that turn.`,
     "",
     "## Output language rule",
