@@ -281,7 +281,7 @@ function buildCliClearProjectCache(storeDir: string): ClearProjectCacheFn {
 // ────────────────────────────────────────────────────────────────────────────
 
 function buildCliResolveProjectRecords(storeDir: string): ResolveProjectRecordsFn {
-  return async (projectSlug, overlayById) => {
+  return async (_storeDir, projectSlug, overlayById) => {
     const { resolveProjectRecordsForMerge } = await import("@agent-mindmap/core");
     const storeAccess = buildCliStoreAccess(storeDir);
     const store = await storeAccess.getStore();
