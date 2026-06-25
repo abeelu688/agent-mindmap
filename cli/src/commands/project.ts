@@ -25,6 +25,7 @@ import {
   printJson,
   createSpinner,
 } from "../ui/logger";
+import { DualSpinner } from "../ui/dualSpinner";
 import { buildCliHostAccess, buildCliAnalyzeProjectDeps } from "../adapters/analyzeDeps";
 import { resolveMediaDir } from "../mediaDir";
 
@@ -57,38 +58,51 @@ export async function runProjectAnalyze(
     process.exit(1);
   }
 
-  const spinner = createSpinner("Analyzing project…");
-  spinner.start();
+  const dual = new DualSpinner("Analyzing project…");
+  dual.start();
 
   const controller = new AbortController();
   const signal = controller.signal;
 
   const onSigint = () => {
     controller.abort();
-    spinner.fail("Cancelled");
+    dual.fail("Cancelled");
     process.exit(130);
   };
   process.on("SIGINT", onSigint);
 
-  const progress: import("@agent-mindmap/core").ProgressReporter = {
+  const mainProgress: import("@agent-mindmap/core").ProgressReporter = {
     report(update) {
       const msg = typeof update === "string" ? update : (update.message ?? "");
-      spinner.text = msg || "Analyzing project…";
+      dual.updatePrimary(msg || "Analyzing project…");
+    },
+  };
+
+  const codeRefProgress: import("@agent-mindmap/core").ProgressReporter = {
+    report(update) {
+      const msg = typeof update === "string" ? update : (update.message ?? "");
+      if (msg) {
+        dual.updateSecondary(`Code refs: ${msg}`);
+      }
     },
   };
 
   try {
-    const deps = await buildCliAnalyzeProjectDeps(cwd, config, signal, progress);
+    const deps = await buildCliAnalyzeProjectDeps(
+      cwd,
+      config,
+      signal,
+      mainProgress,
+      codeRefProgress
+    );
     const handle = await analyzeProject(deps);
 
-    spinner.succeed("Project analysis complete");
+    dual.succeedPrimary("Project analysis complete");
 
     // Wait for background work
     if (handle.completed) {
-      const bgSpinner = createSpinner("Draining code-ref queue…");
-      bgSpinner.start();
       await handle.completed();
-      bgSpinner.succeed("Code-ref queue drained");
+      dual.succeedSecondary("Code-ref queue drained");
     }
 
     const result = handle.result;
@@ -114,7 +128,7 @@ export async function runProjectAnalyze(
       }
     }
   } catch (err) {
-    spinner.fail("Project analysis failed");
+    dual.fail("Project analysis failed");
     if (err instanceof Error) {
       logError(err.message);
     } else {

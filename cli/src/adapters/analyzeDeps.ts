@@ -304,7 +304,10 @@ function buildCliReadSnapshotManifest(): ReadSnapshotManifestFn {
 // Code ref queue deps
 // ────────────────────────────────────────────────────────────────────────────
 
-function buildCliCodeRefQueueDeps(_storeDir: string): CodeRefQueueDeps {
+function buildCliCodeRefQueueDeps(
+  _storeDir: string,
+  codeRefProgress?: ProgressReporter
+): CodeRefQueueDeps {
   return {
     logInfo: (msg) => {
       buildCliLogger().info(msg);
@@ -323,7 +326,12 @@ function buildCliCodeRefQueueDeps(_storeDir: string): CodeRefQueueDeps {
       const controller = new AbortController();
       const progress: ProgressReporter = {
         report(msg) {
-          buildCliLogger().info(typeof msg === "string" ? msg : (msg.message ?? initialMessage));
+          const text = typeof msg === "string" ? msg : (msg.message ?? initialMessage);
+          if (codeRefProgress) {
+            codeRefProgress.report(text);
+          } else {
+            buildCliLogger().info(text);
+          }
         },
       };
       try {
@@ -387,7 +395,8 @@ export async function buildCliAnalyzeSessionDeps(
   cwd: string,
   configStore: ConfigStore,
   signal?: AbortSignal,
-  progress?: ProgressReporter
+  progress?: ProgressReporter,
+  codeRefProgress?: ProgressReporter
 ): Promise<AnalyzeSessionDeps> {
   const storeDir =
     (configStore as { storeDir?: string }).storeDir ??
@@ -400,7 +409,7 @@ export async function buildCliAnalyzeSessionDeps(
     storeAccess: buildCliStoreAccess(storeDir),
     hostAccess: buildCliHostAccess(cwd),
     mindMapSink: buildCliMindMapSink(),
-    codeRefDeps: buildCliCodeRefQueueDeps(storeDir),
+    codeRefDeps: buildCliCodeRefQueueDeps(storeDir, codeRefProgress),
     llmDumpDeps: buildCliLlmDumpDeps(),
     runSessionPipeline: buildCliRunSessionPipeline(),
     runBackgroundMerge: buildCliRunBackgroundMerge(storeDir),
@@ -420,9 +429,16 @@ export async function buildCliAnalyzeSessionDepsAsync(
   cwd: string,
   configStore: ConfigStore,
   signal?: AbortSignal,
-  progress?: ProgressReporter
+  progress?: ProgressReporter,
+  codeRefProgress?: ProgressReporter
 ): Promise<AnalyzeSessionDeps> {
-  const deps = await buildCliAnalyzeSessionDeps(cwd, configStore, signal, progress);
+  const deps = await buildCliAnalyzeSessionDeps(
+    cwd,
+    configStore,
+    signal,
+    progress,
+    codeRefProgress
+  );
   deps.getProvider = () => {
     // Synchronous getProvider — overridden below after pre-loading module
     throw new Error("CLI getProvider requires async initialization.");
@@ -444,9 +460,16 @@ export async function buildCliAnalyzeProjectDeps(
   cwd: string,
   configStore: ConfigStore,
   signal?: AbortSignal,
-  progress?: ProgressReporter
+  progress?: ProgressReporter,
+  codeRefProgress?: ProgressReporter
 ): Promise<AnalyzeProjectDeps> {
-  const sessionDeps = await buildCliAnalyzeSessionDepsAsync(cwd, configStore, signal, progress);
+  const sessionDeps = await buildCliAnalyzeSessionDepsAsync(
+    cwd,
+    configStore,
+    signal,
+    progress,
+    codeRefProgress
+  );
   const storeDir =
     (configStore as { storeDir?: string }).storeDir ??
     path.join(os.homedir(), ".agent-mindmap-store");

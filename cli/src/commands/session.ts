@@ -22,6 +22,7 @@ import {
   printJson,
   createSpinner,
 } from "../ui/logger";
+import { DualSpinner } from "../ui/dualSpinner";
 import { buildCliHostAccess, buildCliAnalyzeSessionDepsAsync } from "../adapters/analyzeDeps";
 import { resolveMediaDir } from "../mediaDir";
 
@@ -190,8 +191,8 @@ export async function runSessionAnalyze(
     session = found;
   }
 
-  const spinner = createSpinner(`Analyzing session: ${session.label}`);
-  spinner.start();
+  const dual = new DualSpinner(`Analyzing session: ${session.label}`);
+  dual.start();
 
   const controller = new AbortController();
   const signal = controller.signal;
@@ -199,30 +200,43 @@ export async function runSessionAnalyze(
   // Handle SIGINT
   const onSigint = () => {
     controller.abort();
-    spinner.fail("Cancelled");
+    dual.fail("Cancelled");
     process.exit(130);
   };
   process.on("SIGINT", onSigint);
 
-  const progress: import("@agent-mindmap/core").ProgressReporter = {
+  const mainProgress: import("@agent-mindmap/core").ProgressReporter = {
     report(update) {
       const msg = typeof update === "string" ? update : (update.message ?? "");
-      spinner.text = msg || `Analyzing: ${session.label}`;
+      dual.updatePrimary(msg || `Analyzing: ${session.label}`);
+    },
+  };
+
+  const codeRefProgress: import("@agent-mindmap/core").ProgressReporter = {
+    report(update) {
+      const msg = typeof update === "string" ? update : (update.message ?? "");
+      if (msg) {
+        dual.updateSecondary(`Code refs: ${msg}`);
+      }
     },
   };
 
   try {
-    const deps = await buildCliAnalyzeSessionDepsAsync(cwd, config, signal, progress);
+    const deps = await buildCliAnalyzeSessionDepsAsync(
+      cwd,
+      config,
+      signal,
+      mainProgress,
+      codeRefProgress
+    );
     const handle = await analyzeSession(session, deps, { forceRefresh: options.force });
 
-    spinner.succeed("Analysis complete");
+    dual.succeedPrimary("Analysis complete");
 
     // Wait for background work (code-ref queue drain) — critical for CLI
-    const bgSpinner = createSpinner("Draining code-ref queue…");
     if (handle.completed) {
-      bgSpinner.start();
       await handle.completed();
-      bgSpinner.succeed("Code-ref queue drained");
+      dual.succeedSecondary("Code-ref queue drained");
     }
 
     const loaded = handle.result;
@@ -241,7 +255,7 @@ export async function runSessionAnalyze(
     log(`  Source: ${loaded.source}${loaded.fromLibrary ? " (from library)" : ""}`);
     log(`  Topics: ${loaded.mindMap?.children?.length ?? 0}`);
   } catch (err) {
-    spinner.fail("Analysis failed");
+    dual.fail("Analysis failed");
     if (err instanceof Error) {
       logError(err.message);
     } else {

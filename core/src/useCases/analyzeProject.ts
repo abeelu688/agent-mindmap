@@ -554,6 +554,13 @@ export async function analyzeProject(
 
   const backgroundWork: Promise<void>[] = [];
 
+  // ── Start code-ref queue drain early ─────────────────────────────────────
+  // Push drain before the session loop so that code-ref items are processed
+  // as soon as they are enqueued, while subsequent sessions are still being
+  // analyzed. The queue processes one item at a time (FIFO); drainCodeRefQueue()
+  // resolves when the queue is empty and idle.
+  backgroundWork.push(drainCodeRefQueue());
+
   // ── Run batch analysis with per-batch merge ────────────────────────────
   const result = await runProjectSessionBatches(sessions, slug, host, deps, {
     forceRefresh: mode.forceRefresh,
@@ -678,9 +685,6 @@ export async function analyzeProject(
   if (autoRefreshMcp && projectRecordsById.size > 0 && deps.refreshMcpIndex) {
     await deps.refreshMcpIndex(slug);
   }
-
-  // ── Drain code-ref queue ───────────────────────────────────────────────
-  backgroundWork.push(drainCodeRefQueue());
 
   return {
     result,
