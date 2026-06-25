@@ -28,6 +28,8 @@ export type ListSessionsContext = {
 const PREVIEW_MAX_LEN = 40;
 const PREVIEW_READ_BYTES = 8 * 1024;
 
+const ENTRYPOINT_READ_BYTES = 64 * 1024;
+
 /**
  * Check whether a transcript is a headless SDK/CLI call (not a real user
  * conversation). Claude Code records `--print` / SDK calls as sessions with
@@ -40,8 +42,10 @@ async function isHeadlessSdkSession(filePath: string): Promise<boolean> {
   let handle: fs.FileHandle | undefined;
   try {
     handle = await fs.open(filePath, "r");
-    const buffer = Buffer.alloc(PREVIEW_READ_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, PREVIEW_READ_BYTES, 0);
+    // Read up to 64KB — queue-operation lines (which precede the user line
+    // with entrypoint) can be >8KB each, so 8KB is insufficient.
+    const buffer = Buffer.alloc(ENTRYPOINT_READ_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, ENTRYPOINT_READ_BYTES, 0);
     if (!bytesRead) {
       return false;
     }
