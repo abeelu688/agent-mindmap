@@ -4,6 +4,7 @@
  * Uses the file-system-based store functions from core directly
  * (no SQLite, no vscode.ExtensionContext).
  */
+import * as fs from "fs/promises";
 import * as path from "path";
 import {
   ensureStore,
@@ -12,7 +13,12 @@ import {
   listRecords,
   type StoreAccess,
 } from "@agent-mindmap/core";
-import type { SessionRecord, MergeRecord } from "@agent-mindmap/shared";
+import type {
+  SessionRecord,
+  MergeRecord,
+  OntologyIndex,
+  OntologyRecord,
+} from "@agent-mindmap/shared";
 
 // ────────────────────────────────────────────────────────────────────────────
 // File-based store for CLI (no SQLite)
@@ -72,6 +78,113 @@ class CliStore {
 
   async writeDeterministicMerge(_merge: MergeRecord): Promise<void> {
     // Will be implemented when needed
+  }
+
+  // ── Ontology cache ────────────────────────────────────────────────────────
+
+  async readOntologyIndex(): Promise<OntologyIndex | undefined> {
+    try {
+      const filePath = path.join(this.storeDir, "ontology", "index.json");
+      const content = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(content) as OntologyIndex;
+      if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.entries)) {
+        return undefined;
+      }
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async writeOntologyIndex(index: OntologyIndex): Promise<void> {
+    const dir = path.join(this.storeDir, "ontology");
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, "index.json");
+    await fs.writeFile(filePath, JSON.stringify(index, null, 2), "utf-8");
+  }
+
+  async readOntologyRecord(cacheKey: string): Promise<OntologyRecord | undefined> {
+    try {
+      const filePath = path.join(this.storeDir, "ontology", "cache", `${cacheKey}.json`);
+      const content = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(content) as OntologyRecord;
+      if (parsed.schemaVersion !== 1) {
+        return undefined;
+      }
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async writeOntologyRecord(cacheKey: string, record: OntologyRecord): Promise<void> {
+    const dir = path.join(this.storeDir, "ontology", "cache");
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, `${cacheKey}.json`);
+    await fs.writeFile(filePath, JSON.stringify(record, null, 2), "utf-8");
+  }
+
+  async clearOntologyCache(): Promise<void> {
+    const dir = path.join(this.storeDir, "ontology", "cache");
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+    try {
+      const indexPath = path.join(this.storeDir, "ontology", "index.json");
+      await fs.unlink(indexPath);
+    } catch {
+      // ignore
+    }
+  }
+
+  async readLatestSegmentEquivalences(
+    _projectSlug: string
+  ): Promise<import("@agent-mindmap/shared").SegmentEquivalence[]> {
+    return [];
+  }
+
+  async bumpProjectRevision(
+    _projectSlug: string,
+    _recordCount: number,
+    _opts?: { lastAnalyzedAt?: number; projectPath?: string }
+  ): Promise<void> {
+    // No-op for CLI
+  }
+
+  // ── Missing Store methods (stubs) ────────────────────────────────────────
+
+  async listProjectSummaries(): Promise<import("@agent-mindmap/shared").ProjectSummary[]> {
+    return [];
+  }
+
+  async getProjectRevision(_projectSlug: string): Promise<number> {
+    return 0;
+  }
+
+  async getProjectRecordCount(_projectSlug: string): Promise<number | undefined> {
+    return undefined;
+  }
+
+  async deleteProjectRecords(_projectSlug: string): Promise<void> {
+    // Not implemented for CLI
+  }
+
+  async readLlmRefinedMerge(): Promise<MergeRecord | undefined> {
+    return undefined;
+  }
+
+  async writeLlmRefinedMerge(_merge: MergeRecord): Promise<void> {
+    // Not implemented for CLI
+  }
+
+  async readLlmMergeCache(_cacheKey: string): Promise<MergeRecord | undefined> {
+    return undefined;
+  }
+
+  async writeLlmMergeCache(_cacheKey: string, _merge: MergeRecord): Promise<void> {
+    // Not implemented for CLI
   }
 }
 
