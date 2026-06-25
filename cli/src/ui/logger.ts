@@ -141,8 +141,25 @@ export function buildCliLogger(): Logger {
     },
     warn(message: string, data?: Record<string, unknown>) {
       logWarn(message);
-      if (data && isVerbose()) {
-        logDebug(JSON.stringify(data));
+      if (data) {
+        // Always show LLM error details (code + cliCapture) even without --verbose
+        if (data.code || data.cliCapture) {
+          if (data.code) {
+            logDebug(`  code: ${data.code}`);
+          }
+          if (data.cliCapture && typeof data.cliCapture === "object") {
+            const cap = data.cliCapture as { stdout?: string; stderr?: string };
+            if (cap.stderr) {
+              logDebug(`  stderr: ${cap.stderr.slice(0, 500)}`);
+            }
+            if (cap.stdout) {
+              logDebug(`  stdout (first 500 chars): ${cap.stdout.slice(0, 500)}`);
+            }
+          }
+        }
+        if (isVerbose()) {
+          logDebug(JSON.stringify(data));
+        }
       }
     },
     error(message: string, err?: unknown, data?: Record<string, unknown>) {

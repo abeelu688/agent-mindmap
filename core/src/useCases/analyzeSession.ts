@@ -459,7 +459,17 @@ export async function analyzeSession(
         );
       }
     }
-    deps.logger.warn(`LLM failure, using turn fallback`, { error: String(err) });
+    deps.logger.warn(`LLM failure, using turn fallback`, {
+      error: String(err),
+      code: llmErrorCode,
+      cliCapture:
+        err instanceof LlmProviderError && err.cliCapture
+          ? {
+              stdout: err.cliCapture.stdout.slice(0, 2000),
+              stderr: err.cliCapture.stderr.slice(0, 2000),
+            }
+          : undefined,
+    });
 
     const loadedSession: LoadedSession = {
       session: { ...session, hostId: host.id },
