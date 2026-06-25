@@ -408,7 +408,10 @@ function tryParseJsonLoose(text: string): unknown | undefined {
 function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
   const payload = extractPayload(stdout);
   if (!payload.trim()) {
-    throw new LlmProviderError("empty", `${providerLabel} returned empty output`);
+    throw new LlmProviderError("empty", `${providerLabel} returned empty output`, undefined, {
+      stdout: stdout.slice(0, 2000),
+      stderr: "",
+    });
   }
   const jsonText = extractTopicsJson(payload);
   const parsed = tryParseJsonLoose(jsonText);
@@ -418,7 +421,9 @@ function parseJsonFromStdout(stdout: string, providerLabel: string): unknown {
 
   throw new LlmProviderError(
     "bad-json",
-    `Failed to parse JSON from ${providerLabel} (output may include prose or truncated JSON)`
+    `Failed to parse JSON from ${providerLabel} (output may include prose or truncated JSON)`,
+    undefined,
+    { stdout: payload.slice(0, 2000), stderr: "" }
   );
 }
 
@@ -627,6 +632,18 @@ export class HeadlessCliProvider {
               maxAttempts,
               durationMs,
             });
+            // Attach stdout/stderr to bad-shape errors so callers can see the
+            // raw LLM output for debugging
+            if (
+              parseErr instanceof LlmProviderError &&
+              parseErr.code === "bad-shape" &&
+              !parseErr.cliCapture
+            ) {
+              throw new LlmProviderError(parseErr.code, parseErr.message, parseErr.cause, {
+                stdout: stdout.slice(0, 2000),
+                stderr: stderr.slice(0, 500),
+              });
+            }
             throw parseErr;
           }
         } catch (err) {
