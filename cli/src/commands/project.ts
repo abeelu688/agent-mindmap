@@ -58,15 +58,23 @@ export async function runProjectAnalyze(
     process.exit(1);
   }
 
-  const dual = new DualSpinner("Analyzing project…");
-  dual.start();
-
   const controller = new AbortController();
   const signal = controller.signal;
 
+  // Lazy-init spinner: only starts when the first progress report arrives
+  // from the core pipeline (i.e. after mode selection completes).
+  let dual: DualSpinner | undefined;
+  const ensureDual = () => {
+    if (!dual) {
+      dual = new DualSpinner("Analyzing project…");
+      dual.start();
+    }
+    return dual;
+  };
+
   const onSigint = () => {
     controller.abort();
-    dual.fail("Cancelled");
+    dual?.fail("Cancelled");
     process.exit(130);
   };
   process.on("SIGINT", onSigint);
@@ -74,7 +82,7 @@ export async function runProjectAnalyze(
   const mainProgress: import("@agent-mindmap/core").ProgressReporter = {
     report(update) {
       const msg = typeof update === "string" ? update : (update.message ?? "");
-      dual.updatePrimary(msg || "Analyzing project…");
+      ensureDual().updatePrimary(msg || "Analyzing project…");
     },
   };
 
@@ -82,7 +90,7 @@ export async function runProjectAnalyze(
     report(update) {
       const msg = typeof update === "string" ? update : (update.message ?? "");
       if (msg) {
-        dual.updateSecondary(`Code refs: ${msg}`);
+        ensureDual().updateSecondary(`Code refs: ${msg}`);
       }
     },
   };
@@ -97,12 +105,12 @@ export async function runProjectAnalyze(
     );
     const handle = await analyzeProject(deps);
 
-    dual.succeedPrimary("Project analysis complete");
+    ensureDual().succeedPrimary("Project analysis complete");
 
     // Wait for background work
     if (handle.completed) {
       await handle.completed();
-      dual.succeedSecondary("Code-ref queue drained");
+      ensureDual().succeedSecondary("Code-ref queue drained");
     }
 
     const result = handle.result;
@@ -128,7 +136,7 @@ export async function runProjectAnalyze(
       }
     }
   } catch (err) {
-    dual.fail("Project analysis failed");
+    ensureDual().fail("Project analysis failed");
     if (err instanceof Error) {
       logError(err.message);
     } else {

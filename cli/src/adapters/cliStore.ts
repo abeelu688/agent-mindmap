@@ -61,8 +61,11 @@ class CliStore {
     }
   }
 
-  async writeConceptTrieMerge(_merge: MergeRecord): Promise<void> {
-    // Will be implemented when needed for project analyze
+  async writeConceptTrieMerge(merge: MergeRecord): Promise<void> {
+    const dir = path.join(this.storeDir, "merges");
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, "concept-trie-merge.json");
+    await fs.writeFile(filePath, JSON.stringify(merge, null, 2), "utf-8");
   }
 
   async readDeterministicMerge(): Promise<MergeRecord | undefined> {
@@ -76,8 +79,11 @@ class CliStore {
     }
   }
 
-  async writeDeterministicMerge(_merge: MergeRecord): Promise<void> {
-    // Will be implemented when needed
+  async writeDeterministicMerge(merge: MergeRecord): Promise<void> {
+    const dir = path.join(this.storeDir, "merges");
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, "deterministic-merge.json");
+    await fs.writeFile(filePath, JSON.stringify(merge, null, 2), "utf-8");
   }
 
   // ── Ontology cache ────────────────────────────────────────────────────────
