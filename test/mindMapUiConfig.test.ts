@@ -28,15 +28,11 @@ describe("parseThemeFileJson", () => {
   });
 
   it("rejects non-string cssVar values", () => {
-    expect(
-      parseThemeFileJson(JSON.stringify({ cssVar: { "--x": 1 } }))
-    ).toBeUndefined();
+    expect(parseThemeFileJson(JSON.stringify({ cssVar: { "--x": 1 } }))).toBeUndefined();
   });
 
   it("rejects invalid palette entries", () => {
-    expect(
-      parseThemeFileJson(JSON.stringify({ palette: ["#abc", 2] }))
-    ).toBeUndefined();
+    expect(parseThemeFileJson(JSON.stringify({ palette: ["#abc", 2] }))).toBeUndefined();
   });
 });
 
@@ -86,11 +82,7 @@ describe("resolveThemeFilePath", () => {
     const dir = mkdtempSync(join(tmpdir(), "agent-mindmap-theme-"));
     try {
       const file = join(dir, "theme.json");
-      writeFileSync(
-        file,
-        JSON.stringify({ palette: ["#aabbcc"] }),
-        "utf8"
-      );
+      writeFileSync(file, JSON.stringify({ palette: ["#aabbcc"] }), "utf8");
       const raw = readFileSync(file, "utf8");
       const overrides = parseThemeFileJson(raw);
       expect(overrides?.palette).toEqual(["#aabbcc"]);

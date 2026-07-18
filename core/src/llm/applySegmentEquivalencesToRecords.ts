@@ -23,16 +23,9 @@ export function applySegmentEquivalencesToRecords(
         items: topic.items?.map((i) => i.text),
         projectSlug: record.meta.projectSlug,
       };
-      const next = resolveConceptPathWithEquivalences(
-        topic.conceptPath,
-        equivalences,
-        ctx
-      );
+      const next = resolveConceptPathWithEquivalences(topic.conceptPath, equivalences, ctx);
       const prev = topic.conceptPath;
-      if (
-        next.length === prev.length &&
-        next.every((s, i) => s === prev[i])
-      ) {
+      if (next.length === prev.length && next.every((s, i) => s === prev[i])) {
         return topic;
       }
       changed = true;

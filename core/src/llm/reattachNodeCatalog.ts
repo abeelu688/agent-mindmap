@@ -93,21 +93,12 @@ function numberedSubtree(
 }
 
 /** Assign N1…Nn across all chain roots and subtrees (deterministic DFS). */
-export function buildReattachNodeCatalog(
-  chains: CatalogChainInput[]
-): ReattachNodeCatalog {
+export function buildReattachNodeCatalog(chains: CatalogChainInput[]): ReattachNodeCatalog {
   const nodes: ReattachCatalogNode[] = [];
   const nextId = { n: 1 };
 
   const numberedChains: NumberedReparentChain[] = chains.map((chain) => {
-    const tree = numberedSubtree(
-      chain.subtree,
-      [],
-      chain.chainIndex,
-      true,
-      nodes,
-      nextId
-    );
+    const tree = numberedSubtree(chain.subtree, [], chain.chainIndex, true, nodes, nextId);
 
     const childSegmentIds = chain.childSegments
       .map((seg) => {
@@ -161,9 +152,7 @@ export function resolveReattachStepWithCatalog(
 ): ReattachStep | undefined {
   const { byId } = catalog;
   const hasIds =
-    Boolean(step.sourceNodeId) ||
-    Boolean(step.targetNodeId) ||
-    Boolean(step.targetNodeIds?.length);
+    Boolean(step.sourceNodeId) || Boolean(step.targetNodeId) || Boolean(step.targetNodeIds?.length);
 
   if (!hasIds) {
     if (!step.sourceFrom || !step.targetPath?.length) {

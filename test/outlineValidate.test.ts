@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  validateMergedOutline,
-  validateSessionOutline,
-} from "@agent-mindmap/core";
+import { validateMergedOutline, validateSessionOutline } from "@agent-mindmap/core";
 import { LlmProviderError } from "@agent-mindmap/core";
 
 describe("validateSessionOutline", () => {
@@ -43,9 +40,7 @@ describe("validateMergedOutline", () => {
       outline: [
         {
           title: "Merged",
-          details: [
-            { text: "point", sources: [{ sessionIndex: 1, turnIndex: 2 }] },
-          ],
+          details: [{ text: "point", sources: [{ sessionIndex: 1, turnIndex: 2 }] }],
         },
       ],
     });

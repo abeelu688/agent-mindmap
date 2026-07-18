@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  outlineToTopicGraph,
-  topicGraphToOutline,
-} from "../extension/src/llm/outlineToTopicGraph";
+import { outlineToTopicGraph, topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { SessionOutline, TopicGraph } from "@agent-mindmap/core";
 
 const graph: TopicGraph = {

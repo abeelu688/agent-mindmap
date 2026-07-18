@@ -5,7 +5,11 @@
  * Extension-specific dependencies (logging, locale, store resolution, sanitize,
  * conceptMergeContext) are injected via callback parameters.
  */
-import { refreshSnapshotForSession, runBatchSnapshotPipeline, type SanitizeRecordFn } from "../pipeline/snapshotHierarchy";
+import {
+  refreshSnapshotForSession,
+  runBatchSnapshotPipeline,
+  type SanitizeRecordFn,
+} from "../pipeline/snapshotHierarchy";
 import { filterRealSessionRecords, readSnapshotManifest } from "../store/mergeSnapshot";
 import { getCoreLogger } from "../logging";
 import type { LocalizedStringResolver } from "../ports/LocalizedStringResolver";
@@ -106,7 +110,9 @@ export async function buildProjectConceptMergeFromCache(
   const sanitized = await Promise.all(records.map((r) => sanitize(r)));
 
   if (!deps.buildConceptMergeForRecordsFn) {
-    throw new Error("[core] buildConceptMergeForRecordsFn is required for buildProjectConceptMergeFromCache");
+    throw new Error(
+      "[core] buildConceptMergeForRecordsFn is required for buildProjectConceptMergeFromCache"
+    );
   }
   const { merge } = await deps.buildConceptMergeForRecordsFn(sanitized, {
     storeDir,

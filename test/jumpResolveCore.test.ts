@@ -44,8 +44,6 @@ describe("findBestTurnIndex", () => {
   });
 
   it("matches dex interpreter question", () => {
-    expect(
-      findBestTurnIndex(queries, "解释器执行 DEX CodeItem 指令 (Q4)")
-    ).toBe(3);
+    expect(findBestTurnIndex(queries, "解释器执行 DEX CodeItem 指令 (Q4)")).toBe(3);
   });
 });

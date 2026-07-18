@@ -15,10 +15,7 @@ let writeCounter = 0;
  * EPERM/EBUSY when the target exists, so we fall back to writing directly
  * and then renaming via `fs.copyFile` + delete.
  */
-export async function writeJsonAtomic(
-  filePath: string,
-  value: unknown
-): Promise<void> {
+export async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const data = JSON.stringify(value, null, 2);
   const tag = `${process.pid}-${Date.now()}-${++writeCounter}`;

@@ -31,12 +31,12 @@ describe("reparentOrphanRootPaths", () => {
     expect(subsystemRule?.parentKey).toBe("platformalpha");
 
     const map = rulesToReparentMap(rules);
-    expect(
-      applyOrphanRootReparent(
-        ["subsystem", "routing", "handlers"],
-        map
-      )
-    ).toEqual(["platform-alpha", "subsystem", "routing", "handlers"]);
+    expect(applyOrphanRootReparent(["subsystem", "routing", "handlers"], map)).toEqual([
+      "platform-alpha",
+      "subsystem",
+      "routing",
+      "handlers",
+    ]);
   });
 
   it("uses ontology parentKeys to pick parent when counts tie", () => {

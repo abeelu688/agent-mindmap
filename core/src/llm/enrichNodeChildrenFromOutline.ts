@@ -1,9 +1,4 @@
-import type {
-  ConceptOntologyNode,
-  OutlineNode,
-  SessionAnalysis,
-  SessionOutline,
-} from "./types";
+import type { ConceptOntologyNode, OutlineNode, SessionAnalysis, SessionOutline } from "./types";
 
 export function normalizeConceptKey(key: string): string {
   return key.toLowerCase().trim();
@@ -28,9 +23,7 @@ function addChildEdge(
 }
 
 /** Collect parent→child edges from outline conceptPath segments. */
-export function collectChildEdgesFromOutline(
-  outline: SessionOutline
-): Map<string, Set<string>> {
+export function collectChildEdgesFromOutline(outline: SessionOutline): Map<string, Set<string>> {
   const childKeysByParent = new Map<string, Set<string>>();
 
   const walk = (nodes: OutlineNode[]): void => {
@@ -68,9 +61,7 @@ export function collectChildEdgesFromParentKeys(
   return childKeysByParent;
 }
 
-function mergeChildEdgeMaps(
-  ...maps: Map<string, Set<string>>[]
-): Map<string, Set<string>> {
+function mergeChildEdgeMaps(...maps: Map<string, Set<string>>[]): Map<string, Set<string>> {
   const merged = new Map<string, Set<string>>();
   for (const map of maps) {
     for (const [parent, children] of map) {
@@ -95,9 +86,7 @@ function sortedChildKeys(set: Set<string> | undefined): string[] {
  * S2 DET: merge outline conceptPath + parentKeys inverse (+ existing childKeys)
  * into nodes[].childKeys; fill missing parentKeys when outline implies a parent.
  */
-export function enrichAnalysisNodesFromOutline(
-  analysis: SessionAnalysis
-): SessionAnalysis {
+export function enrichAnalysisNodesFromOutline(analysis: SessionAnalysis): SessionAnalysis {
   const nodes = analysis.nodes ?? [];
   const outline = analysis.outline;
   const fromParents = collectChildEdgesFromParentKeys(nodes);

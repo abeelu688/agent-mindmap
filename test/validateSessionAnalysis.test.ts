@@ -68,9 +68,7 @@ describe("validateSessionAnalysis", () => {
   it("silently drops segment equivalences without scope", () => {
     const result = validateSessionAnalysis({
       ...validAnalysis,
-      segmentEquivalences: [
-        { canonical: "hooks", aliases: ["react hooks"], evidence: ["x"] },
-      ],
+      segmentEquivalences: [{ canonical: "hooks", aliases: ["react hooks"], evidence: ["x"] }],
     });
     expect(result.segmentEquivalences).toHaveLength(0);
   });

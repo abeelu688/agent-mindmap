@@ -27,8 +27,7 @@ export type DumpLlmCallResultArgs = {
   dumpRoot?: string;
 };
 
-let dumper: (args: DumpLlmCallResultArgs) => Promise<void> = () =>
-  Promise.resolve();
+let dumper: (args: DumpLlmCallResultArgs) => Promise<void> = () => Promise.resolve();
 
 export function setLlmIoDumper(fn: (args: DumpLlmCallResultArgs) => Promise<void>): void {
   dumper = fn;

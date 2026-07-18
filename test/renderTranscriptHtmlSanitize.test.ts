@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  renderTranscriptMarkdownHtml,
-  escHtml,
-} from "@agent-mindmap/core";
+import { renderTranscriptMarkdownHtml, escHtml } from "@agent-mindmap/core";
 
 describe("sanitizeTranscriptHtml (via renderTranscriptMarkdownHtml)", () => {
   it("strips <script> tags", () => {

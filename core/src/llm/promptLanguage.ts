@@ -203,9 +203,7 @@ type QueryLanguageScore = {
  */
 let promptLanguageSettingProvider: () => PromptLanguageSetting = () => "auto";
 
-export function setPromptLanguageSettingProvider(
-  fn: () => PromptLanguageSetting
-): void {
+export function setPromptLanguageSettingProvider(fn: () => PromptLanguageSetting): void {
   promptLanguageSettingProvider = fn;
 }
 

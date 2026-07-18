@@ -24,7 +24,10 @@ import {
   mergeSessionAnalysis,
   MERGE_SESSION_ANALYSIS_PROMPT_VERSION,
 } from "../pipeline/stages/mergeSessionAnalysis";
-import { prepareRecordsBeforeReattach, updateConceptTrieAsync } from "../pipeline/stages/updateConceptTrie";
+import {
+  prepareRecordsBeforeReattach,
+  updateConceptTrieAsync,
+} from "../pipeline/stages/updateConceptTrie";
 import { createPipelineTimingCollector } from "../pipeline/pipelineTiming";
 import {
   finalizeSessionAnalysis,

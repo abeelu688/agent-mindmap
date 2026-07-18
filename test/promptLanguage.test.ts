@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { __testingPromptLanguage as __testing, resolveOutputLanguageForEvents } from "@agent-mindmap/core";
+import {
+  __testingPromptLanguage as __testing,
+  resolveOutputLanguageForEvents,
+} from "@agent-mindmap/core";
 import type { ChatEvent } from "@agent-mindmap/core";
 
 describe("output language detection", () => {

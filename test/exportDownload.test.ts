@@ -2,15 +2,9 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { parseJsonl } from "@agent-mindmap/core";
-import {
-  collectOriginRefs,
-  sanitizeSessionFileName,
-} from "@agent-mindmap/core";
+import { collectOriginRefs, sanitizeSessionFileName } from "@agent-mindmap/core";
 import { buildTranscriptJumpHref } from "@agent-mindmap/core";
-import {
-  anchorForTurnIndex,
-  renderTranscriptMarkdown,
-} from "@agent-mindmap/core";
+import { anchorForTurnIndex, renderTranscriptMarkdown } from "@agent-mindmap/core";
 import { markdownToTranscriptHtmlBody } from "@agent-mindmap/core";
 import { buildTopicMindMap } from "@agent-mindmap/core";
 import { validateTopicGraph } from "@agent-mindmap/core";

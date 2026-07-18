@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { buildConceptContextsFromAnalysis } from "@agent-mindmap/core";
-import {
-  collectChildEdgesFromOutline,
-  enrichAnalysisNodesFromOutline,
-} from "@agent-mindmap/core";
+import { collectChildEdgesFromOutline, enrichAnalysisNodesFromOutline } from "@agent-mindmap/core";
 import { finalizeSessionAnalysis } from "@agent-mindmap/core";
 
 test("collectChildEdgesFromOutline reads conceptPath on leaves", () => {

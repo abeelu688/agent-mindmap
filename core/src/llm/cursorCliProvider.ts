@@ -1,9 +1,5 @@
 import { HeadlessCliProvider } from "./headlessCli";
-import type {
-  LlmProvider,
-  LlmProviderOptions,
-  LlmSummarizeResult,
-} from "./types";
+import type { LlmProvider, LlmProviderOptions, LlmSummarizeResult } from "./types";
 import type { SummarizeInput } from "./types";
 
 export {
@@ -31,19 +27,20 @@ export class CursorCliProvider implements LlmProvider {
   private readonly inner: HeadlessCliProvider;
 
   constructor(options: LlmProviderOptions) {
-    this.inner = new HeadlessCliProvider("cursor-cli", {
-      providerLabel: "cursor-agent",
-      defaultBinaries: DEFAULT_BINARIES,
-      missingInstallHint:
-        "cursor-agent CLI not found. Install via: curl https://cursor.com/install -fsS | bash",
-      buildArgs,
-    }, options);
+    this.inner = new HeadlessCliProvider(
+      "cursor-cli",
+      {
+        providerLabel: "cursor-agent",
+        defaultBinaries: DEFAULT_BINARIES,
+        missingInstallHint:
+          "cursor-agent CLI not found. Install via: curl https://cursor.com/install -fsS | bash",
+        buildArgs,
+      },
+      options
+    );
   }
 
-  summarize(
-    input: SummarizeInput,
-    signal: AbortSignal
-  ): Promise<LlmSummarizeResult> {
+  summarize(input: SummarizeInput, signal: AbortSignal): Promise<LlmSummarizeResult> {
     return this.inner.summarize(input, signal);
   }
 }

@@ -97,5 +97,14 @@ export async function ensureOntologyMemory(
 ): Promise<OntologyRecord> {
   const store = await getStoreForDir(storeDir);
   const localeResolver = { t: safeT };
-  return coreEnsureOntologyMemory(records, opts, provider, store, signal, progress, localeResolver, flags);
+  return coreEnsureOntologyMemory(
+    records,
+    opts,
+    provider,
+    store,
+    signal,
+    progress,
+    localeResolver,
+    flags
+  );
 }

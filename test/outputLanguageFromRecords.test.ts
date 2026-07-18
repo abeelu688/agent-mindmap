@@ -35,20 +35,12 @@ describe("outputLanguageFromRecords", () => {
   });
 
   it("picks the language with the most votes", () => {
-    const records = [
-      record("s1", "English"),
-      record("s2", "Chinese"),
-      record("s3", "Chinese"),
-    ];
+    const records = [record("s1", "English"), record("s2", "Chinese"), record("s3", "Chinese")];
     expect(outputLanguageFromRecords(records)).toBe("Chinese");
   });
 
   it("breaks ties toward the latest session index", () => {
-    const records = [
-      record("s1", "English"),
-      record("s2", "Chinese"),
-      record("s3", "English"),
-    ];
+    const records = [record("s1", "English"), record("s2", "Chinese"), record("s3", "English")];
     expect(outputLanguageFromRecords(records)).toBe("English");
   });
 

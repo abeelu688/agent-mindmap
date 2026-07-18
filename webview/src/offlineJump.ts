@@ -34,18 +34,13 @@ function hasOfflineJumpHref(href: string | undefined): boolean {
   return href.includes("transcripts/") && href.includes(".html");
 }
 
-function pickRef(
-  refs: NodeOriginRef[],
-  nodeLabel?: string
-): NodeOriginRef | undefined {
+function pickRef(refs: NodeOriginRef[], nodeLabel?: string): NodeOriginRef | undefined {
   if (refs.length === 1) {
     return refs[0];
   }
   const qTags = nodeLabel ? parseQTagsFromNodeLabel(nodeLabel) : [];
   if (qTags.length) {
-    const match = refs.find(
-      (r) => r.turnIndex !== undefined && qTags.includes(r.turnIndex)
-    );
+    const match = refs.find((r) => r.turnIndex !== undefined && qTags.includes(r.turnIndex));
     if (hasOfflineJumpHref(match?.jumpHref)) {
       return match;
     }
@@ -54,10 +49,7 @@ function pickRef(
 }
 
 /** Resolve offline jump href from node origin (export bundles only). */
-export function resolveOfflineJumpHref(
-  origin: NodeOrigin,
-  nodeLabel?: string
-): string | undefined {
+export function resolveOfflineJumpHref(origin: NodeOrigin, nodeLabel?: string): string | undefined {
   const refs = origin.refs.filter((r) => hasOfflineJumpHref(r.jumpHref));
   if (!refs.length) {
     return undefined;

@@ -3,12 +3,7 @@ import type { MindMapUiDirectionName, MindMapUiPreset } from "@agent-mindmap/cor
 export type UiSettingKey = "preset" | "direction";
 
 const PRESETS: readonly MindMapUiPreset[] = ["auto", "dark", "light"];
-const DIRECTIONS: readonly MindMapUiDirectionName[] = [
-  "side",
-  "side-lr",
-  "left",
-  "right",
-];
+const DIRECTIONS: readonly MindMapUiDirectionName[] = ["side", "side-lr", "left", "right"];
 
 export type ParsedUiSettingUpdate = {
   configKey: "ui.preset" | "ui.direction";
@@ -34,6 +29,4 @@ export function parseUiSettingUpdate(
   return undefined;
 }
 
-export type ApplyUiSettingResult =
-  | { ok: true }
-  | { ok: false; reason: "invalid" | "no_workspace" };
+export type ApplyUiSettingResult = { ok: true } | { ok: false; reason: "invalid" | "no_workspace" };

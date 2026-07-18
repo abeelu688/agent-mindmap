@@ -26,9 +26,7 @@ export function presetFromSetting(value: string | undefined): MindMapUiPreset {
   return "auto";
 }
 
-export function directionFromSetting(
-  value: string | undefined
-): MindMapDirection {
+export function directionFromSetting(value: string | undefined): MindMapDirection {
   const name = (value ?? "side") as MindMapUiDirectionName;
   switch (name) {
     case "left":
@@ -42,8 +40,6 @@ export function directionFromSetting(
   }
 }
 
-export function sideBranchOrderFromSetting(
-  value: string | undefined
-): SideBranchOrder {
+export function sideBranchOrderFromSetting(value: string | undefined): SideBranchOrder {
   return value === "side-lr" ? "left-first" : "right-first";
 }

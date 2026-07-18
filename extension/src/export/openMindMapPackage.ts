@@ -16,8 +16,6 @@ export async function openMindMapPackage(outDir: string): Promise<void> {
 
   const ok = await vscode.env.openExternal(vscode.Uri.file(indexPath));
   if (!ok) {
-    void vscode.window.showErrorMessage(
-      "Agent Mind Map: 无法用系统浏览器打开 index.html。"
-    );
+    void vscode.window.showErrorMessage("Agent Mind Map: 无法用系统浏览器打开 index.html。");
   }
 }

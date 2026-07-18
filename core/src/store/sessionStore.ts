@@ -7,10 +7,21 @@ import {
   looksLikeSessionRecord,
 } from "@agent-mindmap/shared";
 import { getCoreLogger } from "../logging";
-import { currentPipelineVersions, pipelineVersionsMatch, PIPELINE_VERSION } from "../pipeline/pipelineVersions";
+import {
+  currentPipelineVersions,
+  pipelineVersionsMatch,
+  PIPELINE_VERSION,
+} from "../pipeline/pipelineVersions";
 import { writeJsonAtomic } from "./atomicWrite";
 import type { PipelineVersions } from "@agent-mindmap/shared";
-import type { SessionAnalysis, SessionConceptExtract, SessionOutline, SessionSynonymRefine, SessionTreeSnapshot, TopicGraph } from "../llm/types";
+import type {
+  SessionAnalysis,
+  SessionConceptExtract,
+  SessionOutline,
+  SessionSynonymRefine,
+  SessionTreeSnapshot,
+  TopicGraph,
+} from "../llm/types";
 import type {
   ConceptContextForMerge,
   MergeRecord,

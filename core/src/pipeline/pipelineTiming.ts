@@ -30,7 +30,9 @@ export type PipelineTimingCollector = {
 const RUN_ID_BYTES = 6;
 
 function randomRunId(): string {
-  return Math.random().toString(36).slice(2, 2 + RUN_ID_BYTES);
+  return Math.random()
+    .toString(36)
+    .slice(2, 2 + RUN_ID_BYTES);
 }
 
 export function formatDurationMs(ms: number): string {
@@ -128,9 +130,7 @@ export function createPipelineTimingCollector(
   const runId = randomRunId();
   const entries: PipelineTimingEntry[] = [];
 
-  getCoreLogger().info(
-    `[pipeline:${pipeline}] run=${runId} start ${contextLabel(context)}`.trim()
-  );
+  getCoreLogger().info(`[pipeline:${pipeline}] run=${runId} start ${contextLabel(context)}`.trim());
 
   return {
     runId,
@@ -148,8 +148,7 @@ export function createPipelineTimingCollector(
         return await fn();
       } finally {
         const durationMs = performance.now() - started;
-        const resolvedMeta =
-          typeof meta === "function" ? meta() : meta;
+        const resolvedMeta = typeof meta === "function" ? meta() : meta;
         const entry: PipelineTimingEntry = {
           ts: Date.now(),
           runId,

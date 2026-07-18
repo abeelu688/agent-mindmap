@@ -34,9 +34,7 @@ function convertNode(node: MindMapNodeData): NodeObj<NodeMetadata> {
   const text = node.data?.text?.trim() || "(empty)";
   const expanded = node.data?.expand !== false;
   const origin = node.data?.origin;
-  const children = (node.children ?? [])
-    .map((child) => convertNode(child))
-    .filter(Boolean);
+  const children = (node.children ?? []).map((child) => convertNode(child)).filter(Boolean);
 
   const obj: NodeObj<NodeMetadata> = {
     id: uid(),

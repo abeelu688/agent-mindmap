@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  computeStableBatchPartition,
-  computeBatchGroups,
-} from "@agent-mindmap/core";
+import { computeStableBatchPartition, computeBatchGroups } from "@agent-mindmap/core";
 import type { SnapshotManifest, SnapshotNode } from "../extension/src/store/storeTypes";
 import type { TranscriptSession } from "@agent-mindmap/core";
 

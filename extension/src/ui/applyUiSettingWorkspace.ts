@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-  parseUiSettingUpdate,
-  type ApplyUiSettingResult,
-} from "./applyUiSetting";
+import { parseUiSettingUpdate, type ApplyUiSettingResult } from "./applyUiSetting";
 
 export async function applyUiSettingToWorkspace(
   key: string,

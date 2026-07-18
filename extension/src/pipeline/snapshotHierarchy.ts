@@ -43,10 +43,7 @@ export type RunBatchSnapshotPipelineOpts = SnapshotHierarchyLlmOpts & {
   batchNo: number;
 };
 
-function toCoreOpts(
-  opts: SnapshotHierarchyLlmOpts,
-  store: Store
-): CoreSnapshotHierarchyLlmOpts {
+function toCoreOpts(opts: SnapshotHierarchyLlmOpts, store: Store): CoreSnapshotHierarchyLlmOpts {
   return {
     ...opts,
     store,

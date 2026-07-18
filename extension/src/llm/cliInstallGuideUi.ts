@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-  buildCliInstallGuide,
-  type TranslateFn,
-} from "@agent-mindmap/core";
+import { buildCliInstallGuide, type TranslateFn } from "@agent-mindmap/core";
 import { uiTranslate } from "../l10n/uiTranslate";
 import type { AgentHostId } from "@agent-mindmap/core";
 

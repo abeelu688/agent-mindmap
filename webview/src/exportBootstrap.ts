@@ -12,8 +12,6 @@ declare global {
   }
 }
 
-export function readExportBootstrap():
-  | AgentMindMapExportBootstrap
-  | undefined {
+export function readExportBootstrap(): AgentMindMapExportBootstrap | undefined {
   return window.__AGENT_MINDMAP_EXPORT__;
 }

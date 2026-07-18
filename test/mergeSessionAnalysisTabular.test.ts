@@ -1,22 +1,19 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildMergeSessionAnalysisInput,
-} from "@agent-mindmap/core";
+import { buildMergeSessionAnalysisInput } from "@agent-mindmap/core";
 import {
   buildMergeSessionAnalysisTabularInput,
   __testingMergeSessionAnalysisTabular as __testing,
 } from "@agent-mindmap/core";
 import { escapeTabularCell } from "@agent-mindmap/core";
-import {
-  buildRecordMeta,
-  buildSessionRecord,
-  sha256Hex,
-} from "@agent-mindmap/core";
+import { buildRecordMeta, buildSessionRecord, sha256Hex } from "@agent-mindmap/core";
 import { topicGraphToOutline } from "../extension/src/llm/outlineToTopicGraph";
 import type { OutlineNode, SessionOutline } from "@agent-mindmap/core";
 
 function recordWithOutline(sessionId: string, tree: OutlineNode[]) {
-  const outline: SessionOutline = { title: "t", outline: tree.length ? tree : [{ title: "t", summary: "s", details: [{ text: "d" }] }] };
+  const outline: SessionOutline = {
+    title: "t",
+    outline: tree.length ? tree : [{ title: "t", summary: "s", details: [{ text: "d" }] }],
+  };
   return buildSessionRecord(
     buildRecordMeta({
       sessionId,
@@ -34,9 +31,7 @@ function recordWithOutline(sessionId: string, tree: OutlineNode[]) {
     {
       sessionAnalysis: {
         domains: ["d"],
-        nodes: [
-          { key: "a", label: "A", parentKeys: [], evidence: ["e"] },
-        ],
+        nodes: [{ key: "a", label: "A", parentKeys: [], evidence: ["e"] }],
         segmentEquivalences: [
           {
             canonical: "android",

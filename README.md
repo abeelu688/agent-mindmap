@@ -37,13 +37,13 @@ The extension runs the matching **headless CLI** as a subprocess, so **no separa
 
 ## Commands
 
-| Command                                                    | Description                                                                                       |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Agent Mind Map: Open Latest Session**                    | Load the most recent transcript and show a single-session mind map                                |
-| **Agent Mind Map: Choose Session…**                        | Pick a transcript by title + time                                                                 |
-| **Agent Mind Map: Analyze All Sessions (Current Project)** | Scan every transcript, run per-session LLM analysis, then build and open the **Concept Mind Map** |
+| Command                                                       | Description                                                                                                         |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Agent Mind Map: Open Latest Session**                       | Load the most recent transcript and show a single-session mind map                                                  |
+| **Agent Mind Map: Choose Session…**                           | Pick a transcript by title + time                                                                                   |
+| **Agent Mind Map: Analyze All Sessions (Current Project)**    | Scan every transcript, run per-session LLM analysis, then build and open the **Concept Mind Map**                   |
 | **Agent Mind Map: Install MCP Server (Cursor & Claude Code)** | Write `.cursor/mcp.json` and `.mcp.json` so Cursor Agent and Claude Code can query analyzed project history via MCP |
-| **Agent Mind Map: Sync AI Context (Current Project)**      | Refresh the MCP search index for the current workspace after new analysis                         |
+| **Agent Mind Map: Sync AI Context (Current Project)**         | Refresh the MCP search index for the current workspace after new analysis                                           |
 
 Loading commands that call the LLM show a **cancellable progress notification** with step-by-step status text.
 
@@ -74,13 +74,13 @@ Optional: enable **Agent Mind Map: Sync AI Context (Current Project)** after ana
 
 ### MCP tools
 
-| Tool | Purpose |
-| ---- | ------- |
-| `list_projects` | List analyzed projects with session counts |
-| `get_project_briefing` | Project overview: concept map top level + recent sessions |
-| `search_project_history` | Keyword search across outlines and concept evidence |
-| `get_concept_detail` | Deep dive on one concept node |
-| `get_session_outline` | Structured markdown outline for one session |
+| Tool                     | Purpose                                                   |
+| ------------------------ | --------------------------------------------------------- |
+| `list_projects`          | List analyzed projects with session counts                |
+| `get_project_briefing`   | Project overview: concept map top level + recent sessions |
+| `search_project_history` | Keyword search across outlines and concept evidence       |
+| `get_concept_detail`     | Deep dive on one concept node                             |
+| `get_session_outline`    | Structured markdown outline for one session               |
 
 Manual config (if you prefer editing config files yourself):
 

@@ -83,7 +83,11 @@ export const agentLog = {
       ...data,
       ...(err instanceof Error ? { stack: err.stack, name: err.name } : {}),
     };
-    write("error", detail ? `${msg}: ${detail}` : msg, Object.keys(merged).length ? merged : undefined);
+    write(
+      "error",
+      detail ? `${msg}: ${detail}` : msg,
+      Object.keys(merged).length ? merged : undefined
+    );
   },
 };
 

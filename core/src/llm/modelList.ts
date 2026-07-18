@@ -81,10 +81,7 @@ export async function fetchModelList(
   }
 
   if (providerId === "cursor-cli") {
-    if (
-      cachedCursorModels &&
-      Date.now() - cachedCursorModels.fetchedAt < CACHE_TTL_MS
-    ) {
+    if (cachedCursorModels && Date.now() - cachedCursorModels.fetchedAt < CACHE_TTL_MS) {
       return cachedCursorModels.entries;
     }
     const entries = await fetchCursorModels(cliPath);
@@ -164,9 +161,7 @@ const CLI_CANDIDATES: CliCandidate[] = [
  * @param cliPathSetting Optional user-configured `agentMindmap.llm.cliPath`.
  * @returns Available CLIs (found) and missing CLIs (not found, for UI hints).
  */
-export async function detectAvailableClis(
-  cliPathSetting?: string
-): Promise<CliProbeResult> {
+export async function detectAvailableClis(cliPathSetting?: string): Promise<CliProbeResult> {
   const available: DetectedCli[] = [];
   const missing: DetectedCli[] = [];
   const seenProviders = new Set<LlmProviderId>();
@@ -176,8 +171,7 @@ export async function detectAvailableClis(
     const resolved = await resolveBinary(cliPathSetting.trim());
     // Guess provider from the binary name
     const lower = cliPathSetting.toLowerCase();
-    const providerId: LlmProviderId =
-      lower.includes("claude") ? "claude-cli" : "cursor-cli";
+    const providerId: LlmProviderId = lower.includes("claude") ? "claude-cli" : "cursor-cli";
     if (resolved) {
       available.push({
         providerId,

@@ -27,9 +27,7 @@ function resolveDomainKeys(
       break;
     }
     const node = nodesByKey.get(current);
-    const parent = node?.parentKeys?.[0]
-      ? normalizeConceptKey(node.parentKeys[0])
-      : "";
+    const parent = node?.parentKeys?.[0] ? normalizeConceptKey(node.parentKeys[0]) : "";
     if (!parent || parent === current) {
       break;
     }
@@ -49,9 +47,7 @@ function resolveDomainKeys(
   return firstDomain ? [firstDomain] : [];
 }
 
-function unionChildKeys(
-  ...lists: (string[] | undefined)[]
-): string[] {
+function unionChildKeys(...lists: (string[] | undefined)[]): string[] {
   const set = new Set<string>();
   for (const list of lists) {
     for (const k of list ?? []) {
@@ -83,9 +79,7 @@ export function buildConceptContextsFromAnalysis(
     nodesByKey.set(k, node);
   }
 
-  const childKeysByParent = collectChildEdgesFromParentKeys(
-    analysis.nodes ?? []
-  );
+  const childKeysByParent = collectChildEdgesFromParentKeys(analysis.nodes ?? []);
 
   const contexts: ConceptContextForMerge[] = [];
   for (const node of nodesByKey.values()) {
@@ -94,12 +88,8 @@ export function buildConceptContextsFromAnalysis(
       .map(normalizeConceptKey)
       .filter((p) => p && p !== key);
     const fromInverse = childKeysByParent.get(key);
-    const childKeys = unionChildKeys(
-      node.childKeys,
-      fromInverse ? [...fromInverse] : []
-    );
-    const evidence =
-      node.evidence?.length ? node.evidence : [node.label || key];
+    const childKeys = unionChildKeys(node.childKeys, fromInverse ? [...fromInverse] : []);
+    const evidence = node.evidence?.length ? node.evidence : [node.label || key];
     contexts.push({
       key,
       label: node.label || key,
@@ -117,9 +107,7 @@ export function buildConceptContextsFromAnalysis(
 }
 
 /** Aggregate concept contexts from records (persisted or backfill from sessionAnalysis). */
-export function collectConceptContextsForMerge(
-  records: SessionRecord[]
-): ConceptContextForMerge[] {
+export function collectConceptContextsForMerge(records: SessionRecord[]): ConceptContextForMerge[] {
   const out: ConceptContextForMerge[] = [];
   for (const record of records) {
     if (record.conceptContexts?.length) {

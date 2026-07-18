@@ -324,9 +324,7 @@ export async function exportMindMapPackage(
   }
 
   if (failures.length) {
-    onWarning?.(
-      `Agent Mind Map: 部分对话导出失败（${failures.length}/${sessionRefs.length}）`
-    );
+    onWarning?.(`Agent Mind Map: 部分对话导出失败（${failures.length}/${sessionRefs.length}）`);
   }
 
   const exportData = cloneWithJumpHrefs(mindMap, sessionHtmlPath, turnMaps);

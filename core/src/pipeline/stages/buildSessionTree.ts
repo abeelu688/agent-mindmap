@@ -14,10 +14,7 @@ export type BuildSessionTreeMeta = {
   projectSlug: string;
 };
 
-function mergeAliases(
-  node: ConceptOntologyNode,
-  extra: string[]
-): ConceptOntologyNode {
+function mergeAliases(node: ConceptOntologyNode, extra: string[]): ConceptOntologyNode {
   const set = new Set((node.aliases ?? []).map((a) => a.toLowerCase()));
   for (const a of extra) {
     const lower = a.toLowerCase();
@@ -52,9 +49,7 @@ export function buildSessionTree(
   for (const term of extract.terms) {
     const key = term.key.toLowerCase();
     const parentKeys: string[] = [];
-    const parent =
-      term.suggestedParentKey?.toLowerCase() ??
-      extract.domains[0]?.toLowerCase();
+    const parent = term.suggestedParentKey?.toLowerCase() ?? extract.domains[0]?.toLowerCase();
     if (parent && parent !== key) {
       parentKeys.push(parent);
       if (!nodesByKey.has(parent)) {
@@ -62,9 +57,7 @@ export function buildSessionTree(
       }
     }
 
-    const mentionAliases = term.mentions.filter(
-      (m) => m.toLowerCase() !== key
-    );
+    const mentionAliases = term.mentions.filter((m) => m.toLowerCase() !== key);
     const existing = nodesByKey.get(key);
     if (existing) {
       nodesByKey.set(key, mergeAliases(existing, mentionAliases));
@@ -116,14 +109,10 @@ export function buildSessionTree(
     segments.push(term.key.toLowerCase());
 
     let conceptPath = normalizeConceptPath(segments);
-    conceptPath = resolveConceptPathWithEquivalences(
-      conceptPath,
-      synonyms.segmentEquivalences,
-      {
-        projectSlug: meta.projectSlug,
-        items: term.evidence,
-      }
-    );
+    conceptPath = resolveConceptPathWithEquivalences(conceptPath, synonyms.segmentEquivalences, {
+      projectSlug: meta.projectSlug,
+      items: term.evidence,
+    });
 
     topicPathDecisions.push({
       topicId: `term:${term.key}`,

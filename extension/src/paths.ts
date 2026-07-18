@@ -13,7 +13,9 @@ export function getProjectsRoot(): string {
   return path.join(os.homedir(), ".cursor", "projects");
 }
 
-export function getWorkspaceSlug(host?: { getWorkspaceSlug?: () => string | undefined }): string | undefined {
+export function getWorkspaceSlug(host?: {
+  getWorkspaceSlug?: () => string | undefined;
+}): string | undefined {
   if (host?.getWorkspaceSlug) {
     return host.getWorkspaceSlug();
   }

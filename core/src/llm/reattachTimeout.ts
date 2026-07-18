@@ -5,10 +5,7 @@ export const REATTACH_TIMEOUT_CAP_MS = 600_000;
 export const REATTACH_TIMEOUT_CHAINS_PER_SLOT = 6;
 
 /** Scale M-merge CLI timeout by draft chain count (full reconcile batch 1 often needs >90s). */
-export function scaleReattachTimeoutMs(
-  baseTimeoutMs: number,
-  chainCount: number
-): number {
+export function scaleReattachTimeoutMs(baseTimeoutMs: number, chainCount: number): number {
   const base = Math.max(1000, baseTimeoutMs);
   const slots = Math.max(1, Math.ceil(chainCount / REATTACH_TIMEOUT_CHAINS_PER_SLOT));
   return Math.min(REATTACH_TIMEOUT_CAP_MS, base * slots);
@@ -27,10 +24,7 @@ export function scaleMergeSessionAnalysisTimeoutMs(
   opts?: { promptBytes?: number; mergeMode?: "full" | "delta" }
 ): number {
   const base = Math.max(1000, baseTimeoutMs);
-  let slots = Math.max(
-    1,
-    Math.ceil(sessionCount / MERGE_SESSION_TIMEOUT_SESSIONS_PER_SLOT)
-  );
+  let slots = Math.max(1, Math.ceil(sessionCount / MERGE_SESSION_TIMEOUT_SESSIONS_PER_SLOT));
   if (opts?.mergeMode === "delta") {
     slots += 1;
   }

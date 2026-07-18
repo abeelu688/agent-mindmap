@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildReattachNodeCatalog,
-  resolveReattachStepsWithCatalog,
-} from "@agent-mindmap/core";
+import { buildReattachNodeCatalog, resolveReattachStepsWithCatalog } from "@agent-mindmap/core";
 import type { CatalogChainInput } from "@agent-mindmap/core";
 
 describe("reattachNodeCatalog", () => {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  flattenCandidates,
-  formatPickerLabel,
-  type JumpCandidate,
-} from "@agent-mindmap/core";
+import { flattenCandidates, formatPickerLabel, type JumpCandidate } from "@agent-mindmap/core";
 import type { NodeOriginRef } from "@agent-mindmap/core";
 
 const sessA: Omit<NodeOriginRef, "turnIndex"> = {

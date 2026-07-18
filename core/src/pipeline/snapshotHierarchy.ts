@@ -59,10 +59,7 @@ export type TryReuseBatchMergeFn = (opts: {
     hostId?: AgentHostId;
     outputLanguage?: OutputLanguage;
   };
-}) => Promise<
-  | { hit: true; merge: MergeRecord }
-  | { hit: false; reason: string }
->;
+}) => Promise<{ hit: true; merge: MergeRecord } | { hit: false; reason: string }>;
 
 /**
  * Callback type for sanitizing a session record — extension injects host-specific

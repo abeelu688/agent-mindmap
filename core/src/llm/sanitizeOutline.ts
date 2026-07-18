@@ -1,9 +1,6 @@
 import type { OutlineDetail, OutlineNode, SessionOutline } from "./types";
 
-function sanitizeDetail(
-  detail: OutlineDetail,
-  userQueryCount: number
-): OutlineDetail {
+function sanitizeDetail(detail: OutlineDetail, userQueryCount: number): OutlineDetail {
   if (!detail.sourceTurnIndices?.length || userQueryCount <= 0) {
     if (!detail.sourceTurnIndices?.length) {
       return detail;

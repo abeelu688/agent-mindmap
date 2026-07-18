@@ -10,10 +10,7 @@ export function getProvider(options: LlmProviderOptions): LlmProvider {
       return new ClaudeCliProvider(options);
     default: {
       const exhaustive: never = options.provider;
-      throw new LlmProviderError(
-        "cli-failed",
-        `Unknown LLM provider: ${String(exhaustive)}`
-      );
+      throw new LlmProviderError("cli-failed", `Unknown LLM provider: ${String(exhaustive)}`);
     }
   }
 }

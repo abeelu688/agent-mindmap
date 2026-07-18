@@ -40,9 +40,7 @@ describe("prepareRecordsForFinalTrie", () => {
       },
     ];
 
-    const records = [
-      record("s1", [topic(["art", "jit"], "art jit")]),
-    ];
+    const records = [record("s1", [topic(["art", "jit"], "art jit")])];
 
     const ontology = {
       nodes: [],

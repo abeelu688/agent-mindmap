@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSessionTree } from "@agent-mindmap/core";
-import type {
-  SessionConceptExtract,
-  SessionSynonymRefine,
-} from "@agent-mindmap/core";
+import type { SessionConceptExtract, SessionSynonymRefine } from "@agent-mindmap/core";
 
 describe("buildSessionTree", () => {
   it("builds nodes and topic paths from extract + synonyms", () => {

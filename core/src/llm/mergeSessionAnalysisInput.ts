@@ -1,12 +1,14 @@
-import {
-  MERGE_SNAPSHOT_SESSION_ID,
-  isMergeSnapshotSessionId,
-} from "../store/mergeSnapshot";
+import { MERGE_SNAPSHOT_SESSION_ID, isMergeSnapshotSessionId } from "../store/mergeSnapshot";
 import { collectDistinctTopSegmentKeys } from "../store/prepareConceptMergeRecords";
 import { buildConceptContextsFromAnalysis } from "./buildConceptContexts";
 import { enrichAnalysisNodesFromOutline } from "./enrichNodeChildrenFromOutline";
 import { buildMergeSessionAnalysisTabularInput } from "./mergeSessionAnalysisTabular";
-import type { ConceptContextForMerge, SessionRecord, OutlineNode, SessionAnalysis } from "@agent-mindmap/shared";
+import type {
+  ConceptContextForMerge,
+  SessionRecord,
+  OutlineNode,
+  SessionAnalysis,
+} from "@agent-mindmap/shared";
 import type { MergeInputMode } from "./trieReparentInput";
 
 const MAX_NODES_PER_SESSION = 48;

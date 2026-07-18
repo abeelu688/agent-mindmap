@@ -42,10 +42,7 @@ const CODE_LEVEL: Partial<Record<string, NotifyLevel>> = {
  *
  * Cancellation errors are silently ignored.
  */
-export function notify(
-  err: unknown,
-  fallbackLevel: NotifyLevel = "error"
-): void {
+export function notify(err: unknown, fallbackLevel: NotifyLevel = "error"): void {
   if (isCancellationError(err)) {
     return;
   }
@@ -103,14 +100,7 @@ function resolveMessage(err: unknown): string {
     return (err as Error).message;
   }
   if (err instanceof Error) {
-    return t(
-      "notify.unexpected",
-      "Agent Mind Map: An unexpected error occurred: {0}",
-      err.message
-    );
+    return t("notify.unexpected", "Agent Mind Map: An unexpected error occurred: {0}", err.message);
   }
-  return t(
-    "notify.unexpected",
-    "Agent Mind Map: An unexpected error occurred."
-  );
+  return t("notify.unexpected", "Agent Mind Map: An unexpected error occurred.");
 }

@@ -11,10 +11,7 @@ export function expandHome(p: string): string {
   return p;
 }
 
-export function resolveThemeFilePath(
-  raw: string,
-  workspaceRoot?: string
-): string | undefined {
+export function resolveThemeFilePath(raw: string, workspaceRoot?: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) {
     return undefined;
