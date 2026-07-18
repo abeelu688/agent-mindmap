@@ -4,8 +4,10 @@ import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { bootstrapStore, STORE_LAYOUT, type SessionRecord } from "../shared/src";
 import {
+  backFillStaleness,
   createMcpHandlerContext,
   ensureProjectIndex,
+  readSessionRecord,
   resolveSlug,
   runProjectSearch,
 } from "../mcp-server/src/handlers";
@@ -255,6 +257,151 @@ describe("runProjectSearch", () => {
       await (result.store as { close?: () => Promise<void> }).close?.();
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("readSessionRecord", () => {
+  it("returns the record when sessionId exists in the project", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp);
+      const record = await readSessionRecord(ctx, "home-test-proj", "sess-1");
+      expect(record).toBeDefined();
+      expect(record?.meta.sessionId).toBe("sess-1");
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("returns undefined when sessionId does not exist", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp);
+      const record = await readSessionRecord(ctx, "home-test-proj", "nonexistent");
+      expect(record).toBeUndefined();
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("returns undefined when project slug does not exist", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp);
+      const record = await readSessionRecord(ctx, "nonexistent-proj", "sess-1");
+      expect(record).toBeUndefined();
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("backFillStaleness", () => {
+  it("is a no-op when ctx has no pathsResolver", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp);
+      const hits = [
+        {
+          kind: "code",
+          projectSlug: "home-test-proj",
+          codePath: "src/auth.ts",
+          codeMarkCode: ["line1"],
+          staleness: undefined,
+        },
+      ];
+      await backFillStaleness(ctx, hits);
+      expect(hits[0].staleness).toBeUndefined();
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("marks staleness as stale when the resolved file is missing", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mcp-ws-"));
+      await fs.writeFile(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+      await fs.writeFile(
+        path.join(tmp, "workspace-paths.json"),
+        JSON.stringify({ "home-test-proj": workspaceDir })
+      );
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp, createPathsResolver(tmp));
+      const hits = [
+        {
+          kind: "code",
+          projectSlug: "home-test-proj",
+          codePath: "src/missing.ts",
+          codeMarkCode: ["line1"],
+          staleness: undefined,
+        },
+      ];
+      await backFillStaleness(ctx, hits);
+      expect(hits[0].staleness).toBe("stale");
+      await (result.store as { close?: () => Promise<void> }).close?.();
+      await fs.rm(workspaceDir, { recursive: true, force: true });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("marks staleness as unknown when the slug is not in the paths map", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      await fs.writeFile(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "workspace" }));
+      await fs.writeFile(path.join(tmp, "workspace-paths.json"), JSON.stringify({}));
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp, createPathsResolver(tmp));
+      const hits = [
+        {
+          kind: "code",
+          projectSlug: "home-test-proj",
+          codePath: "src/auth.ts",
+          codeMarkCode: ["line1"],
+          staleness: undefined,
+        },
+      ];
+      await backFillStaleness(ctx, hits);
+      expect(hits[0].staleness).toBe("unknown");
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("skips non-code hits", async () => {
+    const { tmp, cleanup } = await setupTempStore();
+    try {
+      const result = await bootstrapStore(tmp);
+      const ctx = createMcpHandlerContext(result.store, tmp);
+      const hits = [
+        {
+          kind: "concept",
+          projectSlug: "home-test-proj",
+          staleness: undefined,
+        },
+        {
+          kind: "topic",
+          projectSlug: "home-test-proj",
+          staleness: undefined,
+        },
+      ];
+      await backFillStaleness(ctx, hits);
+      expect(hits[0].staleness).toBeUndefined();
+      expect(hits[1].staleness).toBeUndefined();
+      await (result.store as { close?: () => Promise<void> }).close?.();
+    } finally {
+      await cleanup();
     }
   });
 });
