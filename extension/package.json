@@ -347,7 +347,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/patch-sqlite3-binding.js",
-    "build": "node esbuild.config.mjs && node ../scripts/build-eval-run.mjs && node ../scripts/build-multilingual-html-run.mjs",
+    "build": "node esbuild.config.mjs && node ../scripts/build-eval-run.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "test": "npx vitest run --config ../vitest.config.ts",
     "package": "node node_modules/@vscode/vsce/vsce package"

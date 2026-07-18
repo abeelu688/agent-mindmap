@@ -11,10 +11,10 @@ test/fixtures/multilingual-jsonl/workspaces/demo-app/src/...   # shared code tre
 
 Projects (user_query language only):
 
-- `zh-inventory-admin` — Chinese, 5 sessions
-- `en-payments-api` — English, 5 sessions
-- `ja-docs-portal` — Japanese, 5 sessions
-- `ko-observability-hub` — Korean, 5 sessions
+- `zh-inventory-admin` - Chinese, 5 sessions
+- `en-payments-api` - English, 5 sessions
+- `ja-docs-portal` - Japanese, 5 sessions
+- `ko-observability-hub` - Korean, 5 sessions
 
 **Testing uniformity:** for each session number (001–005), all four projects share the same
 `tool_use` paths, StrReplace/Write payloads, and assistant summary text. Only `user_query`
@@ -36,66 +36,19 @@ Each session includes:
 
 ## Manual extension testing
 
-**Requires a headless LLM CLI** (`agent` / `cursor-agent`, or `claude`). Without it, analysis fails and **no HTML is written**.
+The former `npm run fixtures:html` harness was removed because it depended on the deleted
+`extension/src/sessionLoader.ts` orchestration (now living in `@agent-mindmap/core`
+use cases). To exercise these fixtures today:
 
-If only `claude` is installed (common on Homebrew Mac), the script auto-selects `claude-cli`:
+1. Symlink them into your Cursor project layout:
 
-```bash
-npm run build
-npm run fixtures:html -- \
-  --project zh-inventory-admin \
-  --session zh-inventory-admin-003 \
-  --model sonnet \
-  --force-refresh
-```
+   ```bash
+   chmod +x scripts/setup-multilingual-fixtures.sh
+   ./scripts/setup-multilingual-fixtures.sh
+   ```
 
-Explicit CLI + model:
+2. Open the target project in Cursor, run an analysis via the extension, and inspect the
+   rendered mind map / exported HTML package.
 
-```bash
-npm run fixtures:html -- \
-  --provider claude-cli \
-  --cli-path /opt/homebrew/bin/claude \
-  --model sonnet \
-  --project zh-inventory-admin \
-  --session zh-inventory-admin-003 \
-  --force-refresh
-
-open test/fixtures/multilingual-jsonl/html-out/zh-inventory-admin/sessions/zh-inventory-admin-003/index.html
-```
-
-Environment alternatives: `AGENT_MINDMAP_LLM_PROVIDER`, `AGENT_MINDMAP_LLM_CLI_PATH`, `AGENT_MINDMAP_LLM_MODEL`.
-
-Output directory (gitignored): `test/fixtures/multilingual-jsonl/html-out/`
-
-### Single session (session-analysis + code-ref LLM)
-
-Code-heavy scenario: `*-003` in any project (same code paths in all languages).
-
-```bash
-npm run fixtures:html -- \
-  --project zh-inventory-admin \
-  --session zh-inventory-admin-003 \
-  --force-refresh
-
-open test/fixtures/multilingual-jsonl/html-out/zh-inventory-admin/sessions/zh-inventory-admin-003/index.html
-```
-
-Same code, different language:
-
-```bash
-npm run fixtures:html -- --project en-payments-api --session en-payments-api-003 --force-refresh
-```
-
-### Full project (all sessions + merge)
-
-```bash
-npm run fixtures:html -- --project zh-inventory-admin --force-refresh
-open test/fixtures/multilingual-jsonl/html-out/zh-inventory-admin/merged/index.html
-```
-
-### Legacy: symlink fixtures into Cursor project layout
-
-```bash
-chmod +x scripts/setup-multilingual-fixtures.sh
-./scripts/setup-multilingual-fixtures.sh
-```
+The JSONL fixtures themselves are still valid and cover the same scenarios (code-heavy
+`*-003`, mixed-language voting, etc.).
