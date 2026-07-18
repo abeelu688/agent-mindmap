@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   readSnapshotManifest: vi.fn(),
   readMergeSnapshot: vi.fn(),
   getCodeRefQueueDepth: vi.fn(),
+  ensureModelConfigured: vi.fn(),
   buildCliHostAccess: vi.fn(),
   buildCliAnalyzeSessionDepsAsync: vi.fn(),
   buildCliAnalyzeProjectDeps: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock("@agent-mindmap/core", () => ({
   readSnapshotManifest: mocks.readSnapshotManifest,
   readMergeSnapshot: mocks.readMergeSnapshot,
   getCodeRefQueueDepth: mocks.getCodeRefQueueDepth,
+  ensureModelConfigured: mocks.ensureModelConfigured,
 }));
 
 vi.mock("../../cli/src/adapters/analyzeDeps", () => ({
@@ -90,7 +92,13 @@ vi.mock("../../cli/src/ui/logger", () => ({
   logSuccess: (msg: string) => capturedLogs.push(`✓ ${msg}`),
   logError: (msg: string) => capturedLogs.push(`✗ ${msg}`),
   logWarn: (msg: string) => capturedLogs.push(`⚠ ${msg}`),
+  logInfo: (msg: string) => capturedLogs.push(msg),
+  logDebug: () => {},
   isJsonMode: () => false,
+  isQuiet: () => false,
+  isVerbose: () => false,
+  useColor: () => false,
+  useProgress: () => false,
   printJson: (data: unknown) => capturedLogs.push(JSON.stringify(data)),
   createSpinner: () => ({
     start: () => {},
@@ -204,10 +212,11 @@ describe("session analyze (P3.3)", () => {
     capturedLogs.length = 0;
     mocks.listSessions.mockResolvedValue(mockListSessionsResult);
     mocks.buildCliHostAccess.mockReturnValue({
-      getActiveHost: vi.fn(),
+      getActiveHost: vi.fn().mockResolvedValue({ defaultLlmProvider: "cursor-cli" }),
       getWorkspacePath: vi.fn().mockReturnValue("/home/user/project"),
       getWorkspaceSlug: vi.fn().mockReturnValue("my-project"),
     });
+    mocks.ensureModelConfigured.mockResolvedValue({ ok: true, provider: "cursor-cli" });
     mocks.buildCliAnalyzeSessionDepsAsync.mockResolvedValue({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       progress: { report: vi.fn() },
@@ -306,6 +315,12 @@ describe("session analyze (P3.3)", () => {
 describe("project analyze (P3.4)", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
+    mocks.buildCliHostAccess.mockReturnValue({
+      getActiveHost: vi.fn().mockResolvedValue({ defaultLlmProvider: "cursor-cli" }),
+      getWorkspacePath: vi.fn().mockReturnValue("/home/user/project"),
+      getWorkspaceSlug: vi.fn().mockReturnValue("my-project"),
+    });
+    mocks.ensureModelConfigured.mockResolvedValue({ ok: true, provider: "cursor-cli" });
     mocks.buildCliAnalyzeProjectDeps.mockResolvedValue({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       progress: { report: vi.fn() },
