@@ -21,17 +21,33 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
+            shared/package-lock.json
+            core/package-lock.json
+            cli/package-lock.json
             extension/package-lock.json
             webview/package-lock.json
+            mcp-server/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Install shared dependencies
+        run: npm ci --prefix shared
+
+      - name: Install core dependencies
+        run: npm ci --prefix core
+
+      - name: Install cli dependencies
+        run: npm ci --prefix cli
 
       - name: Install extension dependencies
         run: npm ci --prefix extension
 
       - name: Install webview dependencies
         run: npm ci --prefix webview
+
+      - name: Install mcp-server dependencies
+        run: npm ci --prefix mcp-server
 
       # ── Strict checks (must pass) ────────────────────────────────────────
       - name: Verify version sync across package.json files
