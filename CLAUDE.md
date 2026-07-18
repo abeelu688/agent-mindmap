@@ -259,6 +259,6 @@ See the **Roadmap** section in `README.md` for open community contribution items
 
 ## Git Conventions
 
-- **Commit messages**: Use conventional commits style (`feat:`, `fix:`, `refactor:`, `docs:`, `i18n:`, `chore:`).
+- **Commit messages**: Use conventional commits style (`feat:`, `fix:`, `refactor:`, `docs:`, `i18n:`, `chore:`). Each commit message is a single English sentence starting with the category prefix (e.g. `fix: drop broken multilingual-html fixture blocking build`). No body, no Co-Authored-By or other AI attribution lines.
 - **Branch naming**: `feature/<short-desc>`, `fix/<short-desc>`, `i18n/<locale>`.
 - **PRs**: One logical change per PR. Pure refactors must not change behavior.
