@@ -26,6 +26,7 @@ import {
   PIPELINE_VERSION,
   resolveOutputLanguageForEvents,
   isRecordFresh,
+  isRecordPipelineFresh,
   recordFreshnessToken,
   buildRecordMeta,
   buildSessionRecord,
@@ -33,6 +34,16 @@ import {
   drainCodeRefQueue,
   LlmProviderError,
   ensureStore,
+  computeTurnHashes,
+  listVirtualSessions,
+  buildStoredTurnHashes,
+  detectTurnDelta,
+  sliceEventsByTurns,
+  buildContextPrimerFromRecords,
+  nextVirtualSessionIndex,
+  virtualSessionId,
+  readMergedSessionRecord,
+  type VirtualSessionContextPrimer,
 } from "../index";
 import type { Logger } from "../ports/Logger";
 import type { ProgressReporter } from "../ports/ProgressReporter";
@@ -91,6 +102,11 @@ export type RunSessionPipelineFn = (
     hostId?: AgentHostId;
     storeDir?: string;
     outputLanguage?: OutputLanguage;
+    /** If set, S1 runs as virtual session analysis (delta turns of a parent). */
+    virtualSession?: {
+      contextPrimer: VirtualSessionContextPrimer;
+      startTurnIndex: number;
+    };
   },
   provider: LlmProvider,
   signal: AbortSignal,
@@ -348,6 +364,21 @@ export async function analyzeSession(
   };
   const storeDir = deps.storeAccess.getStoreDir();
   const cacheDir = getCacheDir(deps.configStore, storeDir);
+  const currentTurnHashes = computeTurnHashes(events);
+
+  // ── Virtual session delta detection ─────────────────────────────────────
+  // If the original session has `meta.turnHashes` and the pipeline hasn't
+  // changed, we can analyze just the new turns (delta) as a new virtual
+  // session instead of re-analyzing the whole transcript. See
+  // `plans/virtual-session-incremental-analysis.md` (D1=A, D2=B, D3=A+B).
+  type VirtualSessionPlan = {
+    startTurnIndex: number;
+    endTurnIndex: number;
+    contextPrimer: VirtualSessionContextPrimer;
+    virtualIndex: number;
+    newEvents: ChatEvent[];
+  };
+  let virtualSessionPlan: VirtualSessionPlan | null = null;
 
   // ── Library cache check ────────────────────────────────────────────────
   if (settings.library.enabled && !options.forceRefresh) {
@@ -383,23 +414,27 @@ export async function analyzeSession(
         })
       ) {
         // ── Cache hit ─────────────────────────────────────────────────────
+        // Use merged view (original + virtual sessions) so the user sees the
+        // full outline even when the original record only covers turns [0, K).
+        const merged =
+          (await readMergedSessionRecord(store, ctx.projectSlug, session.id)) ?? existing;
         const userQueryCount = countUserQueries(events);
         progress.report("Cache hit, generating mind map…");
-        const outline = sanitizeSessionOutline(existing.outline, userQueryCount);
+        const outline = sanitizeSessionOutline(merged.outline, userQueryCount);
 
-        const retryCodeRefs = needsCodeRefRetry(existing.sessionAnalysis?.codeReferences);
+        const retryCodeRefs = needsCodeRefRetry(merged.sessionAnalysis?.codeReferences);
         const backgroundWork: Promise<void>[] = [];
 
         if (retryCodeRefs) {
           const provider = deps.getProvider(settings.llm);
           enqueueCodeRefUpdate({
-            sessionId: existing.meta.sessionId,
-            projectSlug: existing.meta.projectSlug,
-            projectPath: existing.meta.projectPath,
-            sessionLabel: existing.meta.sessionLabel,
-            transcriptPath: existing.meta.transcriptPath,
+            sessionId: merged.meta.sessionId,
+            projectSlug: merged.meta.projectSlug,
+            projectPath: merged.meta.projectPath,
+            sessionLabel: merged.meta.sessionLabel,
+            transcriptPath: merged.meta.transcriptPath,
             events,
-            outline: existing.outline,
+            outline: merged.outline,
             provider,
             model: settings.llm.model || undefined,
             cacheDir,
@@ -410,10 +445,7 @@ export async function analyzeSession(
           });
           backgroundWork.push(drainCodeRefQueue());
         } else {
-          deps.clearPendingMindMapIfForSession?.(
-            existing.meta.projectSlug,
-            existing.meta.sessionId
-          );
+          deps.clearPendingMindMapIfForSession?.(merged.meta.projectSlug, merged.meta.sessionId);
         }
 
         const loadedSession: LoadedSession = {
@@ -427,7 +459,7 @@ export async function analyzeSession(
             outline,
             session.label,
             sessionMeta,
-            existing.sessionAnalysis?.codeReferences,
+            merged.sessionAnalysis?.codeReferences,
             projectPath,
             outputLanguage
           ),
@@ -447,6 +479,96 @@ export async function analyzeSession(
     }
   }
 
+  // ── Virtual session delta detection (fallback when isRecordFresh fails) ─
+  // isRecordFresh returns false when transcriptFreshnessToken (event count)
+  // mismatches. If the original session has turnHashes and the pipeline is
+  // otherwise fresh, we can analyze just the new turns as a virtual session.
+  if (settings.library.enabled && !options.forceRefresh && !virtualSessionPlan) {
+    try {
+      const store = await deps.storeAccess.getStore();
+      const existing = await store.getRecord(ctx.projectSlug, session.id);
+      if (existing?.meta.turnHashes?.length) {
+        const pipelineFresh = isRecordPipelineFresh(existing, {
+          promptParams: {
+            maxTopics: settings.llm.maxTopics,
+            maxItemsPerTopic: settings.llm.maxItemsPerTopic,
+          },
+          promptVersion: PIPELINE_VERSION,
+          pipelineVersions: currentPipelineVersions(),
+          llm: {
+            provider: settings.llm.provider,
+            model: settings.llm.model || undefined,
+          },
+          hostId: host.id,
+          outputLanguage,
+        });
+        if (pipelineFresh) {
+          const priorVirtuals = await listVirtualSessions(store, ctx.projectSlug, session.id);
+          const storedHashes = buildStoredTurnHashes(existing, priorVirtuals);
+          if (storedHashes) {
+            const delta = detectTurnDelta(storedHashes, currentTurnHashes);
+            if (delta.kind === "fresh") {
+              // Token mismatched (e.g. metadata-only events added) but turn
+              // content is unchanged. Treat as cache hit - return merged view
+              // (original + any prior virtual sessions).
+              deps.logger.info(
+                `[analyzeSession] virtual delta=fresh session=${session.id.slice(0, 8)}`
+              );
+              const merged =
+                (await readMergedSessionRecord(store, ctx.projectSlug, session.id)) ?? existing;
+              const userQueryCount = countUserQueries(events);
+              const outline = sanitizeSessionOutline(merged.outline, userQueryCount);
+              const loadedSession: LoadedSession = {
+                session: {
+                  ...session,
+                  hostId: host.id,
+                  projectSlug: ctx.projectSlug,
+                  projectPath,
+                },
+                mindMap: buildOutlineMindMap(
+                  outline,
+                  session.label,
+                  sessionMeta,
+                  merged.sessionAnalysis?.codeReferences,
+                  projectPath,
+                  outputLanguage
+                ),
+                source: "topic",
+                fromLibrary: true,
+              };
+              return {
+                result: loadedSession,
+                completed: () => Promise.resolve(),
+              };
+            } else if (delta.kind === "append") {
+              const newEvents = sliceEventsByTurns(
+                events,
+                delta.startTurnIndex,
+                currentTurnHashes.length
+              );
+              if (newEvents.length > 0) {
+                deps.logger.info(
+                  `[analyzeSession] virtual delta=append session=${session.id.slice(0, 8)} ` +
+                    `startTurn=${delta.startTurnIndex} newTurns=${currentTurnHashes.length - delta.startTurnIndex}`
+                );
+                virtualSessionPlan = {
+                  startTurnIndex: delta.startTurnIndex,
+                  endTurnIndex: currentTurnHashes.length,
+                  contextPrimer: buildContextPrimerFromRecords(existing, priorVirtuals),
+                  virtualIndex: nextVirtualSessionIndex(priorVirtuals),
+                  newEvents,
+                };
+              }
+            }
+            // "edit" falls through to full re-analysis
+          }
+        }
+      }
+    } catch (err) {
+      deps.logger.error("Virtual session detection failed", err);
+    }
+  }
+
   // ── Run LLM pipeline ───────────────────────────────────────────────────
   const provider = deps.getProvider(settings.llm);
   let pipelineResult: SessionPipelineResult;
@@ -454,11 +576,12 @@ export async function analyzeSession(
 
   try {
     deps.logger.info(
-      `[analyzeSession] Calling LLM for session ${session.id}: provider=${provider.id}`
+      `[analyzeSession] Calling LLM for session ${session.id}: provider=${provider.id}` +
+        (virtualSessionPlan ? ` (virtual #${virtualSessionPlan.virtualIndex})` : "")
     );
     pipelineResult = await deps.runSessionPipeline(
       {
-        events,
+        events: virtualSessionPlan?.newEvents ?? events,
         sessionId: session.id,
         projectSlug: ctx.projectSlug,
         projectPath,
@@ -476,6 +599,12 @@ export async function analyzeSession(
         hostId: host.id,
         storeDir,
         outputLanguage,
+        virtualSession: virtualSessionPlan
+          ? {
+              contextPrimer: virtualSessionPlan.contextPrimer,
+              startTurnIndex: virtualSessionPlan.startTurnIndex,
+            }
+          : undefined,
       },
       provider,
       signal,
@@ -537,8 +666,12 @@ export async function analyzeSession(
   if (settings.library.enabled) {
     progress.report("Writing to library…");
     try {
+      const isVirtual = virtualSessionPlan !== null;
+      const recordSessionId = isVirtual
+        ? virtualSessionId(session.id, virtualSessionPlan!.virtualIndex)
+        : session.id;
       const meta = buildRecordMeta({
-        sessionId: session.id,
+        sessionId: recordSessionId,
         projectSlug: ctx.projectSlug,
         projectPath,
         transcriptPath: session.filePath,
@@ -558,6 +691,23 @@ export async function analyzeSession(
         hostId: host.id,
         userQueryCount,
         outputLanguage,
+        // Virtual-session metadata (D2 = B). Original sessions set `turnHashes`
+        // so future runs can detect deltas; virtual sessions additionally set
+        // parentSessionId / virtualSessionIndex / turn range.
+        turnHashes: isVirtual
+          ? currentTurnHashes.slice(
+              virtualSessionPlan!.startTurnIndex,
+              virtualSessionPlan!.endTurnIndex
+            )
+          : currentTurnHashes,
+        ...(isVirtual
+          ? {
+              parentSessionId: session.id,
+              virtualSessionIndex: virtualSessionPlan!.virtualIndex,
+              startTurnIndex: virtualSessionPlan!.startTurnIndex,
+              endTurnIndex: virtualSessionPlan!.endTurnIndex,
+            }
+          : {}),
       });
       const record = buildSessionRecord(meta, outline, {
         sessionAnalysis: pipelineResult.sessionAnalysis,
@@ -571,15 +721,15 @@ export async function analyzeSession(
       const store = await deps.storeAccess.getStoreForDir(storeDir);
       await store.upsertRecord(record);
 
-      // Enqueue code refs
+      // Enqueue code refs (use the events the LLM actually saw)
       if (pipelineResult.initialCodeReferences?.length) {
         enqueueCodeRefUpdate({
-          sessionId: session.id,
+          sessionId: recordSessionId,
           projectSlug: ctx.projectSlug,
           projectPath,
           sessionLabel: session.label,
           transcriptPath: session.filePath,
-          events,
+          events: virtualSessionPlan?.newEvents ?? events,
           outline,
           provider,
           model: settings.llm.model || undefined,
@@ -592,15 +742,17 @@ export async function analyzeSession(
         backgroundWork.push(drainCodeRefQueue());
       }
 
-      // Background deterministic + concept merge rebuild
+      // Background deterministic + concept merge rebuild. For virtual
+      // sessions, the original session's leaf is frozen; the new virtual
+      // session enters batch merge as a normal new record (D4 = C).
       if (settings.library.autoRebuildDeterministic && !options.skipAutoMerge) {
         backgroundWork.push(
           deps.runBackgroundMerge({
             storeDir,
             projectSlug: ctx.projectSlug,
-            sessionId: session.id,
+            sessionId: recordSessionId,
             record,
-            events,
+            events: virtualSessionPlan?.newEvents ?? events,
             settings,
             host,
             signal,

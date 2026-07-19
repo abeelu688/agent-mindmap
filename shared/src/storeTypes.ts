@@ -121,6 +121,25 @@ export type SessionRecordMeta = {
   userQueryCount?: number;
   /** Natural language requested for user-visible LLM output fields. */
   outputLanguage?: string;
+  /**
+   * Virtual-session linkage (D2 = sub-ID independent records). Set ONLY on
+   * virtual sessions (`<sid>#v2`, `<sid>#v3`, ...); original sessions leave
+   * these absent.
+   *
+   * - `parentSessionId`: the original session id (`<sid>`).
+   * - `virtualSessionIndex`: 1-based ordinal among the parent's virtual sessions.
+   * - `startTurnIndex` / `endTurnIndex`: turn range this virtual session covers
+   *   (inclusive start, exclusive end; turn index from `groupTurns()`).
+   * - `turnHashes`: sha256 hex of each covered turn's content (for delta detection).
+   *
+   * Original sessions have these absent; readers treat absence as "this is an
+   * original session" - no schema version bump required.
+   */
+  parentSessionId?: string;
+  virtualSessionIndex?: number;
+  startTurnIndex?: number;
+  endTurnIndex?: number;
+  turnHashes?: string[];
 };
 
 /**

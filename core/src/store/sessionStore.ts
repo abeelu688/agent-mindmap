@@ -374,6 +374,66 @@ export function isRecordFresh(
   return true;
 }
 
+/**
+ * Check pipeline-level freshness (everything except `transcriptFreshnessToken`).
+ *
+ * Used by the virtual-session path to decide whether delta detection is safe:
+ * if the prompt version, provider, model, host, or output language changed, we
+ * must fall back to full re-analysis (D3). Only the transcript token is
+ * allowed to mismatch - that's exactly the case virtual sessions handle.
+ */
+export function isRecordPipelineFresh(
+  record: SessionRecord,
+  current: {
+    promptParams: { maxTopics: number; maxItemsPerTopic: number };
+    promptVersion: number;
+    pipelineVersions?: PipelineVersions;
+    llm: { provider: string; model?: string };
+    hostId?: string;
+    outputLanguage?: string;
+  }
+): boolean {
+  if (
+    record.meta.promptParams.maxTopics !== current.promptParams.maxTopics ||
+    record.meta.promptParams.maxItemsPerTopic !== current.promptParams.maxItemsPerTopic
+  ) {
+    return false;
+  }
+  const expectedPipeline = current.pipelineVersions ?? currentPipelineVersions();
+  if (record.meta.pipelineVersions) {
+    if (!pipelineVersionsMatch(record.meta.pipelineVersions, expectedPipeline)) {
+      return false;
+    }
+    if (expectedPipeline.sessionAnalysis !== undefined && !record.sessionAnalysis) {
+      return false;
+    }
+  } else {
+    const recVersion = record.meta.promptVersion ?? 1;
+    if (recVersion !== current.promptVersion) {
+      return false;
+    }
+  }
+  if (record.meta.llm.provider !== current.llm.provider) {
+    return false;
+  }
+  const recHost = record.meta.hostId ?? "cursor";
+  const curHost = current.hostId ?? "cursor";
+  if (recHost !== curHost) {
+    return false;
+  }
+  const recOutputLanguage = record.meta.outputLanguage ?? "Chinese";
+  const curOutputLanguage = current.outputLanguage ?? "Chinese";
+  if (recOutputLanguage !== curOutputLanguage) {
+    return false;
+  }
+  const recModel = record.meta.llm.model?.trim() || "";
+  const curModel = current.llm.model?.trim() || "";
+  if (recModel !== curModel) {
+    return false;
+  }
+  return true;
+}
+
 export async function writeMergeRecord(filePath: string, record: MergeRecord): Promise<void> {
   await writeJsonAtomic(filePath, record);
 }

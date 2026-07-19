@@ -1,10 +1,17 @@
 import { countUserQueries } from "../llm/sanitizeTopicGraph";
 import { analyzeSessionChunked } from "./stages/analyzeSessionChunked";
+import { analyzeVirtualSession } from "./stages/analyzeVirtualSession";
 import { finalizeSessionAnalysis } from "./stages/finalizeSessionAnalysis";
 import { currentPipelineVersions } from "./pipelineVersions";
 import { createPipelineTimingCollector } from "./pipelineTiming";
 import type { AgentHostId } from "../host/types";
-import type { CodeReference, LlmProvider, SessionAnalysis, LlmStageTimingOut } from "../llm/barrel";
+import type {
+  CodeReference,
+  LlmProvider,
+  SessionAnalysis,
+  LlmStageTimingOut,
+  VirtualSessionContextPrimer,
+} from "../llm/barrel";
 import type { ProgressReporter } from "../ports/ProgressReporter";
 import type { ChatEvent } from "../transcript/types";
 import type {
@@ -26,6 +33,17 @@ export type SessionPipelinePromptOpts = {
   maxTurnsPerChunk?: number;
 };
 
+/**
+ * When set, S1 runs {@link analyzeVirtualSession} instead of
+ * {@link analyzeSessionChunked}. The events passed to the pipeline must
+ * already be sliced to the new turns (caller responsibility).
+ */
+export type VirtualSessionPipelineOpts = {
+  contextPrimer: VirtualSessionContextPrimer;
+  /** 0-based turn index in the parent transcript where this virtual session starts. */
+  startTurnIndex: number;
+};
+
 export type SessionPipelineOpts = {
   events: ChatEvent[];
   sessionId: string;
@@ -41,6 +59,8 @@ export type SessionPipelineOpts = {
   outputLanguage?: OutputLanguage;
   /** Skip LLM when full analysis already available (tests). */
   preloaded?: SessionAnalysis;
+  /** If set, run S1 as virtual session analysis (delta turns of a parent session). */
+  virtualSession?: VirtualSessionPipelineOpts;
 };
 
 export type SessionPipelineResult = {
@@ -87,8 +107,38 @@ export async function runSessionPipeline(
     const s1Timing: LlmStageTimingOut = {};
     const s1Result = await runStage(
       "S1 analyze",
-      () =>
-        analyzeSessionChunked(
+      () => {
+        if (opts.virtualSession) {
+          // Virtual session path: analyze only the delta turns with a context
+          // primer. `opts.events` must already be sliced to the new turns.
+          return analyzeVirtualSession(
+            {
+              events: opts.events,
+              prompt: {
+                maxDomains: opts.prompt.maxDomains,
+                maxNodes: opts.prompt.maxTerms,
+                maxBranches: opts.prompt.maxBranches,
+                maxDetailsPerNode: opts.prompt.maxDetailsPerNode,
+              },
+              contextPrimer: opts.virtualSession.contextPrimer,
+              startTurnIndex: opts.virtualSession.startTurnIndex,
+              modelHint: opts.modelHint,
+              cacheDir: opts.cacheDir,
+              cache: opts.cache,
+              hostId: opts.hostId,
+              sessionId: opts.sessionId,
+              projectSlug: opts.projectSlug,
+              projectPath: opts.projectPath,
+              outputLanguage: opts.outputLanguage,
+              timingRunId: timing?.runId,
+              timingOut: s1Timing,
+            },
+            provider,
+            signal,
+            progress
+          );
+        }
+        return analyzeSessionChunked(
           {
             events: opts.events,
             prompt: {
@@ -112,7 +162,8 @@ export async function runSessionPipeline(
           provider,
           signal,
           progress
-        ),
+        );
+      },
       () => ({ kind: "llm", ...s1Timing })
     );
     analysis = s1Result.analysis;

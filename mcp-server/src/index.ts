@@ -2,6 +2,7 @@
 import {
   bootstrapStore,
   collectConceptContexts,
+  mergeOutlinesForDisplay,
   renderConceptDetail,
   renderMemoryRetrieval,
   renderProjectBriefing,
@@ -191,23 +192,29 @@ async function main(): Promise<void> {
       projectSlug: z.string().optional(),
       limit: z.number().int().min(1).max(100).optional(),
       offset: z.number().int().min(0).optional(),
+      includeVirtual: z.boolean().optional(),
     },
-    withErrorHandler(async ({ projectPath, projectSlug, limit = 20, offset = 0 }) => {
-      const slug = await resolveSlug(ctx, { projectPath, projectSlug });
-      if (!slug) {
-        return errorResult("provide projectPath or projectSlug.");
+    withErrorHandler(
+      async ({ projectPath, projectSlug, limit = 20, offset = 0, includeVirtual = false }) => {
+        const slug = await resolveSlug(ctx, { projectPath, projectSlug });
+        if (!slug) {
+          return errorResult("provide projectPath or projectSlug.");
+        }
+        const index = await ensureProjectIndex(ctx, slug);
+        const filtered = includeVirtual
+          ? index.records
+          : index.records.filter((r) => r.meta.parentSessionId === undefined);
+        const sorted = [...filtered].sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
+        const page = sorted.slice(offset, offset + limit);
+        return textResult(
+          renderProjectSessionsList(slug, page, {
+            limit,
+            offset,
+            total: sorted.length,
+          })
+        );
       }
-      const index = await ensureProjectIndex(ctx, slug);
-      const sorted = [...index.records].sort((a, b) => b.meta.analyzedAt - a.meta.analyzedAt);
-      const page = sorted.slice(offset, offset + limit);
-      return textResult(
-        renderProjectSessionsList(slug, page, {
-          limit,
-          offset,
-          total: sorted.length,
-        })
-      );
-    })
+    )
   );
 
   // @ts-expect-error TS2589: zod + MCP SDK deep type instantiation; withErrorHandler keeps inference shallow
@@ -292,7 +299,20 @@ async function main(): Promise<void> {
       if (!record) {
         return errorResult(`session \`${sessionId}\` not found for project \`${slug}\`.`);
       }
-      return textResult(renderSessionOutlineMarkdown(record));
+      // If this is an original session (no parent), merge in any virtual
+      // sessions so the caller sees the full outline covering all turns.
+      let view = record;
+      if (!record.meta.parentSessionId && record.meta.turnHashes) {
+        const all = await ctx.store.listRecordsForProject(slug);
+        const virtuals = all.filter((r) => r.meta.parentSessionId === sessionId);
+        if (virtuals.length > 0) {
+          virtuals.sort(
+            (a, b) => (a.meta.virtualSessionIndex ?? 0) - (b.meta.virtualSessionIndex ?? 0)
+          );
+          view = mergeOutlinesForDisplay([record, ...virtuals]) ?? record;
+        }
+      }
+      return textResult(renderSessionOutlineMarkdown(view));
     })
   );
 
@@ -353,12 +373,25 @@ async function main(): Promise<void> {
           ],
         };
       }
+      // Merge virtual sessions for original sessions so the rendered outline
+      // covers all turns, not just the original's [0, K) slice.
+      let view = record;
+      if (!record.meta.parentSessionId && record.meta.turnHashes) {
+        const all = await ctx.store.listRecordsForProject(projectSlug);
+        const virtuals = all.filter((r) => r.meta.parentSessionId === sessionId);
+        if (virtuals.length > 0) {
+          virtuals.sort(
+            (a, b) => (a.meta.virtualSessionIndex ?? 0) - (b.meta.virtualSessionIndex ?? 0)
+          );
+          view = mergeOutlinesForDisplay([record, ...virtuals]) ?? record;
+        }
+      }
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "text/markdown",
-            text: renderSessionOutlineMarkdown(record),
+            text: renderSessionOutlineMarkdown(view),
           },
         ],
       };

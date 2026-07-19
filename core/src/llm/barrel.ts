@@ -42,6 +42,7 @@ export * from "./prompt";
 export * from "./promptLanguage";
 export * from "./promptMerge";
 export * from "./promptMergeSessionAnalysis";
+export * from "./promptAnalyzeVirtualSession";
 export * from "./promptOntology";
 export * from "./promptOntologyRefine";
 export * from "./promptOrganizeByTree";

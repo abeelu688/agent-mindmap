@@ -86,7 +86,8 @@ export type LlmResponseSchema =
   | "topic-paths"
   | "reattach-moves"
   | "ontology-refine"
-  | "code-ref-descriptions";
+  | "code-ref-descriptions"
+  | "virtual-session-analysis";
 
 export type LlmDumpMeta = {
   stageId: string;

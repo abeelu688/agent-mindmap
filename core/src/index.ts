@@ -227,6 +227,7 @@ export {
 // Store (P1.7) — leaf files + hub modules.
 export * from "./store/atomicWrite";
 export * from "./store/sessionStore";
+export * from "./store/virtualSession";
 export * from "./store/applyOntology";
 export * from "./store/mergeTrieByEquivalences";
 export * from "./store/pushQueue";

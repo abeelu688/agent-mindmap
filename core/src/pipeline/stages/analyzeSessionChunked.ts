@@ -92,8 +92,13 @@ export function splitEventsByTurns(events: ChatEvent[], maxTurnsPerChunk: number
  * Remap `sourceTurnIndices` in outline details by adding `offset`.
  * Each sub-session's prompt starts turns from [Q1] (index 0),
  * but in the original session they start at `offset`.
+ *
+ * Also used by the virtual-session stage: the virtual session's prompt shows
+ * new turns starting from [Q1], but in the parent transcript they start at
+ * `startTurnIndex`. Remapping makes `sourceTurnIndices` point to the correct
+ * turn in the parent transcript for jump-to-transcript features.
  */
-function remapOutlineTurnIndices(outline: SessionOutline, offset: number): SessionOutline {
+export function remapOutlineTurnIndices(outline: SessionOutline, offset: number): SessionOutline {
   if (offset === 0) return outline;
 
   function remapNode(node: OutlineNode): OutlineNode {

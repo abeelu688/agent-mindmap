@@ -20,7 +20,7 @@ export const TOOL_DESCRIPTIONS = {
   get_project_briefing:
     "Summarize recent sessions and key concepts of one project. Use when the user asks 'what have we been working on' or wants a high-level recap of a project. Examples: {examples}\nDo NOT use for targeted queries about a specific topic — call `search_project_history` for that.",
   list_project_sessions:
-    "List analyzed sessions for a project, paged by recency. Use when the user wants to browse session history or pick a specific `sessionId`. Examples: {examples}\nDo NOT use for content search — call `search_project_history`.",
+    "List analyzed sessions for a project, paged by recency. Virtual sessions (incremental analysis fragments of a long session) are hidden by default; pass includeVirtual=true to see them. Use when the user wants to browse session history or pick a specific `sessionId`. Examples: {examples}\nDo NOT use for content search — call `search_project_history`.",
   search_project_history:
     "Search past session history by query (semantic + keyword matching across outlines, concepts, evidence, and code references). Use when the user asks about past work, decisions, or debugging in a project — the primary tool for 'what did we do about X' / 'did we ever solve Y' questions. Examples: {examples}\nDo NOT use for current-file questions or live code lookup — this server indexes past AI agent sessions only.",
   retrieve_project_memory:

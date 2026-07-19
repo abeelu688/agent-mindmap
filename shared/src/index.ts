@@ -85,6 +85,7 @@ export type {
 } from "./llmTypes";
 export { type Store } from "./store/store";
 export { SqliteStore } from "./store/sqliteStore";
+export { mergeOutlinesForDisplay } from "./store/mergeOutlinesForDisplay";
 export {
   RemoteStore,
   RemoteStoreHttpError,

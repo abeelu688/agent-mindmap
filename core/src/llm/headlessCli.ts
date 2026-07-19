@@ -501,6 +501,11 @@ function parseBySchema(
     case "session-analysis":
       // Parse JSON only; validation is handled by the caller (runLlmStage.validate)
       return parseJsonFromStdout(stdout, providerLabel);
+    case "virtual-session-analysis":
+      // Same output schema as session-analysis; validation is handled by the
+      // caller (runLlmStage.validate). Kept as a separate case so dump logs
+      // distinguish virtual-session calls from full-session calls.
+      return parseJsonFromStdout(stdout, providerLabel);
     case "code-ref-descriptions":
       return parseJsonFromStdout(stdout, providerLabel);
     case "session-outline":
