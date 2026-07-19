@@ -20,7 +20,10 @@ import { syncMcpConfigFiles } from "../adapters/mcpConfigSync";
 // ────────────────────────────────────────────────────────────────────────────
 
 function resolveMcpServerEntry(): string {
-  // The MCP server binary — resolve relative to the CLI package
+  // The MCP server entry - the esbuild-bundled mcp-server/dist/index.js
+  // declared as `bin` in mcp-server/package.json. Each surface package
+  // ships its own @vscode/sqlite3, so the bundle resolves the native module
+  // from mcp-server/node_modules without reaching into extension/.
   const cliDir = path.resolve(__dirname, "..");
   const mcpServerPath = path.resolve(cliDir, "..", "mcp-server", "dist", "index.js");
   return mcpServerPath;

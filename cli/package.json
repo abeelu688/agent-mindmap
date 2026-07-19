@@ -13,12 +13,14 @@
     "build": "node scripts/build-cli.mjs",
     "dev": "node --loader ts-node/esm src/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/patch-sqlite3-binding.js"
   },
   "dependencies": {
     "@agent-mindmap/core": "file:../core",
     "@agent-mindmap/shared": "file:../shared",
     "@inquirer/prompts": "^7.0.0",
+    "@vscode/sqlite3": "^5.1.12-vscode",
     "commander": "^12.1.0",
     "ora": "^8.0.1",
     "picocolors": "^1.0.0"
