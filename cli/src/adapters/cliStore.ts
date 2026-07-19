@@ -68,7 +68,11 @@ class CliStore {
 
   async upsertRecord(record: SessionRecord): Promise<{ revision: number }> {
     await writeRecord(this.storeDir, record);
-    return { revision: 1 };
+    // Also write to SQLite so the MCP server (which reads from SQLite) sees
+    // the new record. Without this, list_project_sessions returns stale data
+    // because the sessions table never gains the row.
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.upsertRecord(record);
   }
 
   // Merge records are stored as files too
