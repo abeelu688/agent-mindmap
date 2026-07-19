@@ -6,13 +6,7 @@
  */
 import * as fs from "fs/promises";
 import * as path from "path";
-import {
-  ensureStore,
-  readRecord,
-  writeRecord,
-  listRecords,
-  type StoreAccess,
-} from "@agent-mindmap/core";
+import { ensureStore, readRecord, writeRecord, type StoreAccess } from "@agent-mindmap/core";
 import { bootstrapStore, type SqliteStore } from "@agent-mindmap/shared";
 import type {
   SessionRecord,
@@ -54,16 +48,23 @@ class CliStore {
   constructor(private storeDir: string) {}
 
   async getRecord(projectSlug: string, sessionId: string): Promise<SessionRecord | undefined> {
+    // Prefer SQLite (the extension writes here too, so it has the union of all
+    // records). Fall back to the JSON file if SQLite doesn't have it (e.g.
+    // the record was written by an older CLI that only wrote JSON).
+    const sqlite = await getSqliteStore(this.storeDir);
+    const fromSqlite = await sqlite.getRecord(projectSlug, sessionId);
+    if (fromSqlite) return fromSqlite;
     return readRecord(this.storeDir, projectSlug, sessionId);
   }
 
   async listAllRecords(): Promise<SessionRecord[]> {
-    return listRecords(this.storeDir);
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.listAllRecords();
   }
 
   async listRecordsForProject(projectSlug: string): Promise<SessionRecord[]> {
-    const all = await listRecords(this.storeDir);
-    return all.filter((r) => r.meta.projectSlug === projectSlug);
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.listRecordsForProject(projectSlug);
   }
 
   async upsertRecord(record: SessionRecord): Promise<{ revision: number }> {

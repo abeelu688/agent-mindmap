@@ -224,32 +224,38 @@ export function buildSessionRecord(
 }
 
 /**
- * Walk `<storeDir>/sessions/*` and yield every parseable SessionRecord.
- * Bad files are skipped silently — they'll be overwritten on next analysis.
+ * Walk `<storeDir>/sessions/**` and yield every parseable SessionRecord.
+ * Bad files are skipped silently - they'll be overwritten on next analysis.
+ *
+ * Walks recursively because repo-mode slugs contain `/` (e.g.
+ * `owner/repo.git`), which `path.join` turns into nested directories
+ * (`sessions/owner/repo.git/<id>.json`). A single-level walk would miss
+ * every record under a repo-mode slug.
  */
 export async function listRecords(storeDir: string): Promise<SessionRecord[]> {
   const sessionsRoot = path.join(storeDir, STORE_LAYOUT.sessionsDir);
   if (!(await pathExists(sessionsRoot))) {
     return [];
   }
-  const projectDirs = await fs.readdir(sessionsRoot, { withFileTypes: true });
   const out: SessionRecord[] = [];
-  for (const projectDir of projectDirs) {
-    if (!projectDir.isDirectory()) {
-      continue;
-    }
-    const slugDir = path.join(sessionsRoot, projectDir.name);
-    let files: string[];
+  const queue: string[] = [sessionsRoot];
+  while (queue.length > 0) {
+    const dir = queue.shift()!;
+    let entries: import("fs").Dirent[];
     try {
-      files = await fs.readdir(slugDir);
+      entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
       continue;
     }
-    for (const file of files) {
-      if (!file.endsWith(".json")) {
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(full);
         continue;
       }
-      const full = path.join(slugDir, file);
+      if (!entry.isFile() || !entry.name.endsWith(".json")) {
+        continue;
+      }
       const parsed = await readJson<unknown>(full);
       if (!parsed || !looksLikeSessionRecord(parsed)) {
         continue;
