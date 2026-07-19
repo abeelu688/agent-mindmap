@@ -122,6 +122,36 @@ shared  →  core  →  extension / cli
 - **`core/dist` and `shared/dist` must exist before extension or CLI typecheck can succeed.** Run `npm run build:core` (which builds shared first) before `npm run typecheck:extension`.
 - esbuild bundles still resolve to source at runtime (alias in `esbuild.config.mjs` and `cli/scripts/build-cli.mjs`) for watch-mode HMR.
 
+## Workflow
+
+### Consult agent-mindmap MCP before non-trivial work
+
+**Read `AMIND_HINT.md` for the full consultation guide** (scenarios, tool
+selection, citing prior work, anti-patterns). The short version:
+
+Before starting any non-trivial work - planning, debugging, implementation,
+code review, refactoring, onboarding - **first call the `agent-mindmap` MCP
+tools** to find prior sessions, decisions, and related code for the area you're
+touching. The project's own sessions are the authoritative source of design
+rationale and known pitfalls.
+
+Standard workflow:
+
+1. `list_projects` + `get_project_briefing` to orient on the current project.
+2. `search_project_history` (keyword/semantic) or `retrieve_project_memory`
+   (synthesized recall) with specific keywords related to your task.
+3. `get_session_outline` for relevant sessions; `get_concept_detail` to drill
+   into specific concepts.
+4. If other MCP servers are available (context7, Linear, GitHub, etc.), consult
+   them as well when they'd inform the design.
+
+This is a **blocking step** before implementation. Cite consulted sessions in
+design notes / PR descriptions so reviewers can verify the rationale. Trivial
+fixes (typos, obvious bugs, one-line tweaks) can skip - when in doubt, consult.
+
+`AMIND_HINT.md` is the canonical template (also reusable by other projects
+using agent-mindmap); this section is the project-specific reminder.
+
 ## Architecture & Data Flow
 
 ### Single-Session Pipeline

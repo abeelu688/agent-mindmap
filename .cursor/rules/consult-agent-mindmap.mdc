@@ -1,0 +1,36 @@
+---
+description: Consult agent-mindmap MCP before non-trivial work (planning, debugging, implementation, review, refactoring)
+globs: agent-mindmap/**/*
+alwaysApply: true
+---
+
+# Consult agent-mindmap MCP before non-trivial work
+
+Before starting any non-trivial work in this repo - planning, debugging,
+implementation, code review, refactoring, onboarding - **first consult the
+`agent-mindmap` MCP server** to find prior sessions, decisions, and related
+code for the area you're touching.
+
+**Read `@AMIND_HINT.md` for the full consultation guide**: scenarios, tool
+selection table, query tips, citing prior work, and anti-patterns. This rule
+is the trigger; `AMIND_HINT.md` is the manual.
+
+## Short version
+
+1. `list_projects` + `get_project_briefing` to orient.
+2. `search_project_history` (keyword/semantic) or `retrieve_project_memory`
+   (synthesized recall) with specific keywords.
+3. `get_session_outline` for relevant sessions; `get_concept_detail` to drill
+   into specific concepts.
+4. Cite consulted session ids in design notes / PR descriptions.
+
+## When to skip
+
+Trivial fixes only: typos, one-line tweaks, auto-generated updates, mechanical
+renames with no behavior change. When in doubt, consult - one MCP call is
+cheap; reworking a misaligned design is not.
+
+## Related rules
+
+- Development phase fail-loud: [`dev-fail-loud.mdc`](dev-fail-loud.mdc)
+- Merge delta contract: [`merge-snapshot-delta.mdc`](merge-snapshot-delta.mdc)
