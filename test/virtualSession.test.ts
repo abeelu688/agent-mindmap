@@ -14,6 +14,7 @@ import {
   buildContextPrimerFromRecords,
   readMergedSessionRecord,
 } from "../core/src/store/virtualSession";
+import { remapOutlineTurnIndices } from "../core/src/pipeline/stages/analyzeSessionChunked";
 import type { ChatEvent } from "../core/src/transcript/types";
 import type { SessionRecord, Store } from "@agent-mindmap/shared";
 
@@ -548,5 +549,84 @@ describe("readMergedSessionRecord", () => {
     expect(merged?.outline.outline[1]?.title).toBe("Part 2");
     // Meta comes from original
     expect(merged?.meta.sessionId).toBe("sid-1");
+  });
+});
+
+// ── remapOutlineTurnIndices ──────────────────────────────────────────────────
+// Virtual session prompt shows new turns starting from [Q1] (index 0), but in
+// the parent transcript they start at `startTurnIndex`. The remap offsets
+// `sourceTurnIndices` so jump-to-transcript points to the correct turn.
+
+describe("remapOutlineTurnIndices", () => {
+  it("offsets sourceTurnIndices by the given startTurnIndex", () => {
+    const outline = {
+      title: "T",
+      outline: [
+        {
+          title: "Topic",
+          details: [{ text: "d1", sourceTurnIndices: [0, 2] }],
+          children: [
+            {
+              title: "Child",
+              details: [{ text: "d2", sourceTurnIndices: [1] }],
+            },
+          ],
+        },
+      ],
+    };
+    const remapped = remapOutlineTurnIndices(outline as any, 3);
+    // Top-level detail indices offset by 3
+    expect(remapped.outline[0]!.details![0]!.sourceTurnIndices).toEqual([3, 5]);
+    // Nested child detail indices also offset
+    expect(remapped.outline[0]!.children![0]!.details![0]!.sourceTurnIndices).toEqual([4]);
+  });
+
+  it("returns outline unchanged when offset is 0 (no virtual session, or virtual at start)", () => {
+    const outline = {
+      title: "T",
+      outline: [
+        {
+          title: "Topic",
+          details: [{ text: "d1", sourceTurnIndices: [0, 1] }],
+        },
+      ],
+    };
+    const remapped = remapOutlineTurnIndices(outline as any, 0);
+    // Same reference (early return) - no copy needed
+    expect(remapped).toBe(outline);
+    expect(remapped.outline[0]!.details![0]!.sourceTurnIndices).toEqual([0, 1]);
+  });
+
+  it("handles outline nodes without details or children gracefully", () => {
+    const outline = {
+      title: "T",
+      outline: [
+        { title: "No details" },
+        { title: "Empty details", details: [] },
+        { title: "Empty children", children: [] },
+      ],
+    };
+    const remapped = remapOutlineTurnIndices(outline as any, 5);
+    expect(remapped.outline).toHaveLength(3);
+    expect(remapped.outline[0]!.title).toBe("No details");
+    expect(remapped.outline[1]!.details).toEqual([]);
+    expect(remapped.outline[2]!.children).toEqual([]);
+  });
+
+  it("preserves non-sourceTurnIndices fields on details", () => {
+    const outline = {
+      title: "T",
+      outline: [
+        {
+          title: "Topic",
+          details: [{ text: "d1", sourceTurnIndices: [0], note: "keep me" } as any],
+        },
+      ],
+    };
+    const remapped = remapOutlineTurnIndices(outline as any, 2);
+    const detail = remapped.outline[0]!.details![0]! as any;
+    expect(detail.sourceTurnIndices).toEqual([2]);
+    expect(detail.note).toBe("keep me");
+    expect(detail.text).toBe("d1");
   });
 });

@@ -40,9 +40,16 @@ vi.mock("@agent-mindmap/core", async (importOriginal) => {
   };
 });
 
-import { SqliteStore, type SessionRecord, type Store } from "@agent-mindmap/shared";
+import {
+  SqliteStore,
+  LlmProviderError,
+  type CodeReference,
+  type SessionRecord,
+  type Store,
+} from "@agent-mindmap/shared";
 import { analyzeSession } from "../core/src/useCases/analyzeSession";
 import { currentPipelineVersions } from "../core/src/pipeline/pipelineVersions";
+import { setPromptLanguageSettingProvider } from "../core/src/llm/promptLanguage";
 import type {
   AnalyzeSessionDeps,
   SessionPipelineResult,
@@ -113,16 +120,20 @@ function makeInMemoryStore(): InMemoryStore {
 function buildDeps(
   store: Store,
   runSessionPipeline: ReturnType<typeof vi.fn>,
-  overrides?: { autoRebuildDeterministic?: boolean }
+  overrides?: {
+    autoRebuildDeterministic?: boolean;
+    provider?: string;
+    maxTopics?: number;
+  }
 ): AnalyzeSessionDeps {
   return {
     logger: { info: () => {}, warn: () => {}, error: () => {} },
     progress: { report: () => {} },
     configStore: {
       get: (key: string) => {
-        if (key === "llm.provider") return "cursor-cli";
+        if (key === "llm.provider") return overrides?.provider ?? "cursor-cli";
         if (key === "llm.model") return "test-model";
-        if (key === "maxTopics") return 6;
+        if (key === "maxTopics") return overrides?.maxTopics ?? 6;
         if (key === "maxItemsPerTopic") return 6;
         if (key === "library.enabled") return true;
         if (key === "cacheLlmResult") return true;
@@ -176,10 +187,13 @@ function buildSession(): TranscriptSession {
   };
 }
 
-function fakePipelineResult(topicTitle: string = "Topic"): SessionPipelineResult {
+function fakePipelineResult(
+  topicTitle: string = "Topic",
+  codeRefs: CodeReference[] = []
+): SessionPipelineResult {
   return {
     sessionAnalysis: {
-      codeReferences: [],
+      codeReferences: codeRefs,
       domains: [],
       nodes: [],
       segmentEquivalences: [],
@@ -497,6 +511,432 @@ describe("virtual session incremental analysis (integration)", () => {
     expect(mergeArg.record.meta.virtualSessionIndex).toBe(1);
     // Events passed to background merge are the delta events (2 new turns)
     expect(mergeArg.events).toHaveLength(6);
+  });
+
+  it("forceRefresh: true bypasses virtual session detection and does full re-analysis", async () => {
+    const store = makeInMemoryStore();
+    const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+    const runSessionPipeline = vi.fn().mockImplementation(async (opts: unknown) => {
+      pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+      return fakePipelineResult();
+    });
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session -> original record ─────────────────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    expect(store.records.get("sess-1")!.meta.turnHashes).toHaveLength(3);
+
+    // ── Run 2: 5-turn session with forceRefresh ─────────────────────────
+    // Should NOT create a virtual session. Should overwrite original with full
+    // 5-turn analysis. The `!options.forceRefresh` guards at lines 384 and 486
+    // skip both the cache-hit path and the virtual-session detection path.
+    const events5 = buildEvents(5);
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    await (await analyzeSession(session, deps5, { forceRefresh: true })).completed();
+
+    // Pipeline called with full 15 events, no virtualSession option
+    expect(pipelineCalls).toHaveLength(2);
+    expect(pipelineCalls[1]!.virtualSession).toBeUndefined();
+    expect(pipelineCalls[1]!.events).toHaveLength(15); // full 5 turns × 3 events
+
+    // No virtual session created
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // Original record overwritten with 5-turn analysis
+    const rewritten = store.records.get("sess-1")!;
+    expect(rewritten.meta.turnHashes).toHaveLength(5);
+    expect(rewritten.meta.parentSessionId).toBeUndefined();
+  });
+
+  it("falls back to turn view when LLM fails during virtual session analysis", async () => {
+    const store = makeInMemoryStore();
+    const runSessionPipeline = vi
+      .fn()
+      .mockResolvedValueOnce(fakePipelineResult()) // run 1 succeeds
+      .mockRejectedValueOnce(new LlmProviderError("cli-failed", "boom")); // run 2 fails
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session -> original record ─────────────────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    const original = store.records.get("sess-1")!;
+    expect(original.meta.turnHashes).toHaveLength(3);
+
+    // ── Run 2: 5-turn session, pipeline throws -> turn fallback ──────────
+    const events5 = buildEvents(5);
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    const handle2 = await analyzeSession(session, deps5, {});
+
+    // Result is turn fallback, not topic
+    expect(handle2.result.source).toBe("turn");
+    expect(handle2.result.llmErrorCode).toBe("cli-failed");
+
+    // No virtual session record written (LLM failed before record write)
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // Original record UNCHANGED (not overwritten by failed run)
+    const originalAfter = store.records.get("sess-1")!;
+    expect(originalAfter.meta.turnHashes).toHaveLength(3);
+  });
+
+  it("falls back to full re-analysis when a middle turn is modified (edit delta)", async () => {
+    const store = makeInMemoryStore();
+    const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+    const runSessionPipeline = vi.fn().mockImplementation(async (opts: unknown) => {
+      pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+      return fakePipelineResult();
+    });
+
+    const session = buildSession();
+
+    // ── Run 1: 5-turn session -> original record with 5 turnHashes ───────
+    const events5 = buildEvents(5);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    expect(store.records.get("sess-1")!.meta.turnHashes).toHaveLength(5);
+
+    // ── Run 2: delete turn 3 (the middle one) -> edit delta ─────────────
+    // buildEvents(5) produces 15 events (5 turns × 3). Removing the 3rd turn
+    // (events at indices 6,7,8 = Q3,tool_2,Summary3) leaves 12 events / 4 turns.
+    // Event count changes (15->12) so isRecordFresh returns false -> falls
+    // through to virtual session detection. detectTurnDelta compares hashes:
+    //   stored: [h1,h2,h3,h4,h5]
+    //   current: [h1,h2,h4,h5]   (turn 3 removed)
+    //   i=0: match, i=1: match, i=2: h3 !== h4 -> kind="edit", startTurnIndex=2
+    // Edit delta falls through to full re-analysis (no virtual session).
+    const events4 = buildEvents(5).filter((_, idx) => idx < 6 || idx > 8);
+
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events4);
+    await (await analyzeSession(session, deps5, {})).completed();
+
+    // Pipeline called with full 12 events (not sliced), no virtual session
+    expect(pipelineCalls).toHaveLength(2);
+    expect(pipelineCalls[1]!.virtualSession).toBeUndefined();
+    expect(pipelineCalls[1]!.events).toHaveLength(12);
+
+    // No virtual session created
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // Original record overwritten with 4-turn analysis
+    const rewritten = store.records.get("sess-1")!;
+    expect(rewritten.meta.turnHashes).toHaveLength(4);
+    expect(rewritten.meta.parentSessionId).toBeUndefined();
+  });
+
+  it("cache hit with no virtual sessions returns the original record unchanged", async () => {
+    const store = makeInMemoryStore();
+    const runSessionPipeline = vi.fn().mockResolvedValue(fakePipelineResult());
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session -> original record (no virtuals) ───────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // ── Run 2: same 3-turn session -> cache hit, no virtuals to merge ────
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    const handle2 = await analyzeSession(session, deps5, {});
+
+    // Pipeline not called again (cache hit)
+    expect(runSessionPipeline).toHaveBeenCalledTimes(1);
+    // Returns topic view from library
+    expect(handle2.result.source).toBe("topic");
+    expect(handle2.result.fromLibrary).toBe(true);
+    // No virtual session was created
+    expect(store.records.has("sess-1#v1")).toBe(false);
+  });
+
+  it("provider change triggers full re-analysis (not virtual session)", async () => {
+    const store = makeInMemoryStore();
+    const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+    const runSessionPipeline = vi.fn().mockImplementation(async (opts: unknown) => {
+      pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+      return fakePipelineResult();
+    });
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session with cursor-cli ────────────────────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline, { provider: "cursor-cli" });
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    expect(store.records.get("sess-1")!.meta.llm.provider).toBe("cursor-cli");
+
+    // ── Run 2: same 3-turn session but provider=claude-cli ───────────────
+    // isRecordPipelineFresh should return false (provider mismatch) -> full
+    // re-analysis. Virtual session path is also skipped because pipelineFresh
+    // gates it.
+    const deps5 = buildDeps(store, runSessionPipeline, { provider: "claude-cli" });
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps5, {})).completed();
+
+    // Pipeline called again (full re-analysis, not cache hit)
+    expect(pipelineCalls).toHaveLength(2);
+    expect(pipelineCalls[1]!.virtualSession).toBeUndefined();
+    expect(pipelineCalls[1]!.events).toHaveLength(9); // full 3 turns
+
+    // No virtual session
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // Original record overwritten with new provider
+    const rewritten = store.records.get("sess-1")!;
+    expect(rewritten.meta.llm.provider).toBe("claude-cli");
+  });
+
+  it("outputLanguage change triggers full re-analysis (not virtual session)", async () => {
+    // Save and restore the prompt-language setting provider so this test
+    // doesn't leak state into other tests.
+    const originalProvider = (globalThis as { __originalLangProvider?: () => string })
+      .__originalLangProvider;
+    setPromptLanguageSettingProvider(() => "auto");
+
+    try {
+      const store = makeInMemoryStore();
+      const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+      const runSessionPipeline = vi.fn().mockImplementation(async (opts: unknown) => {
+        pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+        return fakePipelineResult();
+      });
+
+      const session = buildSession();
+
+      // ── Run 1: 3-turn session, language=auto (resolves to English) ─────
+      const events3 = buildEvents(3);
+      const deps3 = buildDeps(store, runSessionPipeline);
+      (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+        async () => makeHost(events3);
+      await (await analyzeSession(session, deps3, {})).completed();
+
+      const original = store.records.get("sess-1")!;
+      const lang1 = original.meta.outputLanguage;
+      expect(lang1).toBeDefined();
+
+      // ── Run 2: same session but language forced to "zh" ─────────────────
+      setPromptLanguageSettingProvider(() => "zh");
+      const deps5 = buildDeps(store, runSessionPipeline);
+      (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+        async () => makeHost(events3);
+      await (await analyzeSession(session, deps5, {})).completed();
+
+      // Pipeline called again (full re-analysis, not cache hit)
+      expect(pipelineCalls).toHaveLength(2);
+      expect(pipelineCalls[1]!.virtualSession).toBeUndefined();
+      expect(pipelineCalls[1]!.events).toHaveLength(9);
+
+      // No virtual session
+      expect(store.records.has("sess-1#v1")).toBe(false);
+
+      // Original record overwritten with new outputLanguage
+      const rewritten = store.records.get("sess-1")!;
+      expect(rewritten.meta.outputLanguage).not.toBe(lang1);
+    } finally {
+      // Restore default - vitest will reset modules between files, but be safe.
+      setPromptLanguageSettingProvider(originalProvider ?? (() => "auto"));
+    }
+  });
+
+  it("maxTopics change triggers full re-analysis (not virtual session)", async () => {
+    const store = makeInMemoryStore();
+    const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+    const runSessionPipeline = vi.fn().mockImplementation(async (opts: unknown) => {
+      pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+      return fakePipelineResult();
+    });
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session with maxTopics=6 ───────────────────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline, { maxTopics: 6 });
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    expect(store.records.get("sess-1")!.meta.promptParams.maxTopics).toBe(6);
+
+    // ── Run 2: same session but maxTopics=8 ──────────────────────────────
+    // isRecordPipelineFresh should return false (promptParams mismatch).
+    const deps5 = buildDeps(store, runSessionPipeline, { maxTopics: 8 });
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps5, {})).completed();
+
+    // Pipeline called again (full re-analysis)
+    expect(pipelineCalls).toHaveLength(2);
+    expect(pipelineCalls[1]!.virtualSession).toBeUndefined();
+    expect(pipelineCalls[1]!.events).toHaveLength(9);
+
+    // No virtual session
+    expect(store.records.has("sess-1#v1")).toBe(false);
+
+    // Original record overwritten with new maxTopics
+    const rewritten = store.records.get("sess-1")!;
+    expect(rewritten.meta.promptParams.maxTopics).toBe(8);
+  });
+
+  it("merges code refs from original and virtual sessions (deduped by path, original first)", async () => {
+    const store = makeInMemoryStore();
+    // Use absolute paths under /tmp/ so filterProjectCodeReferences keeps
+    // them (relative paths would be filtered out since the files don't exist
+    // on disk under projectPath="/tmp").
+    const originalRef: CodeReference = {
+      path: "/tmp/src/original.ts",
+      lines: "1-10",
+      description: "Original file",
+    };
+    const sharedRef: CodeReference = {
+      path: "/tmp/src/shared.ts",
+      lines: "5-15",
+      description: "From original",
+    };
+    const virtualRef: CodeReference = {
+      path: "/tmp/src/virtual.ts",
+      lines: "20-30",
+      description: "Virtual-only file",
+    };
+    const virtualDuplicateRef: CodeReference = {
+      path: "/tmp/src/shared.ts",
+      lines: "99",
+      description: "DUPLICATE - should be dropped (original wins)",
+    };
+
+    const runSessionPipeline = vi
+      .fn()
+      .mockResolvedValueOnce(fakePipelineResult("Original Topic", [originalRef, sharedRef]))
+      .mockResolvedValueOnce(
+        fakePipelineResult("Virtual Topic", [virtualRef, virtualDuplicateRef])
+      );
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session with [originalRef, sharedRef] ──────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    // ── Run 2: 5-turn session -> virtual #v1 with [virtualRef, duplicate sharedRef]
+    const events5 = buildEvents(5);
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    await (await analyzeSession(session, deps5, {})).completed();
+
+    // ── Run 3: cache hit -> merged view should have 3 unique code refs ───
+    const deps6 = buildDeps(store, runSessionPipeline);
+    (deps6.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    const handle3 = await analyzeSession(session, deps6, {});
+
+    expect(runSessionPipeline).toHaveBeenCalledTimes(2);
+
+    // Verify the merged record's code refs directly via readMergedSessionRecord.
+    // This is the same function analyzeSession calls on cache hit.
+    const { readMergedSessionRecord } = await import("../core/src/store/virtualSession");
+    const merged = await readMergedSessionRecord(
+      store as unknown as Store,
+      "test-project",
+      "sess-1"
+    );
+    expect(merged).toBeDefined();
+    const mergedRefs = merged!.sessionAnalysis?.codeReferences ?? [];
+    // 3 unique paths: original.ts, shared.ts, virtual.ts (shared.ts deduped)
+    expect(mergedRefs).toHaveLength(3);
+    const paths = mergedRefs.map((r) => r.path).sort();
+    expect(paths).toEqual(["/tmp/src/original.ts", "/tmp/src/shared.ts", "/tmp/src/virtual.ts"]);
+    // shared.ts keeps original's description ("From original"), not the duplicate
+    const sharedEntry = mergedRefs.find((r) => r.path === "/tmp/src/shared.ts")!;
+    expect(sharedEntry.description).toBe("From original");
+
+    // The mind map should also include the code refs node (3 file branches)
+    const children = handle3.result.mindMap?.children ?? [];
+    // Find the code refs root node (its children are file paths)
+    const codeRefNode = children.find((c) =>
+      c.children?.some((cc) => cc.data.text.includes("/tmp/src/"))
+    );
+    expect(codeRefNode).toBeDefined();
+    const codeRefPaths = (codeRefNode!.children ?? []).map((c) => c.data.text);
+    expect(codeRefPaths).toHaveLength(3);
+    expect(codeRefPaths).toContain("/tmp/src/original.ts");
+    expect(codeRefPaths).toContain("/tmp/src/shared.ts");
+    expect(codeRefPaths).toContain("/tmp/src/virtual.ts");
+  });
+
+  it("passes original session outline as contextPrimer to the virtual session pipeline", async () => {
+    const store = makeInMemoryStore();
+    const pipelineCalls: Parameters<ReturnType<typeof vi.fn>>[0][] = [];
+    const runSessionPipeline = vi
+      .fn()
+      .mockImplementationOnce(async (opts: unknown) => {
+        pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+        return fakePipelineResult("Run 1 Distinctive Topic");
+      })
+      .mockImplementationOnce(async (opts: unknown) => {
+        pipelineCalls.push(opts as Parameters<ReturnType<typeof vi.fn>>[0]);
+        return fakePipelineResult("Virtual Topic");
+      });
+
+    const session = buildSession();
+
+    // ── Run 1: 3-turn session with a distinctive topic title ─────────────
+    const events3 = buildEvents(3);
+    const deps3 = buildDeps(store, runSessionPipeline);
+    (deps3.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events3);
+    await (await analyzeSession(session, deps3, {})).completed();
+
+    // ── Run 2: 5-turn session -> virtual #v1 ─────────────────────────────
+    const events5 = buildEvents(5);
+    const deps5 = buildDeps(store, runSessionPipeline);
+    (deps5.hostAccess as unknown as { getActiveHost: () => Promise<unknown> }).getActiveHost =
+      async () => makeHost(events5);
+    await (await analyzeSession(session, deps5, {})).completed();
+
+    // Verify the virtual session pipeline call received a contextPrimer
+    expect(pipelineCalls).toHaveLength(2);
+    const virtualCall = pipelineCalls[1]!;
+    expect(virtualCall.virtualSession).toBeDefined();
+    const primer = virtualCall.virtualSession.contextPrimer;
+    // Primer should carry the original session label
+    expect(primer.originalSessionLabel).toBe("Test Session");
+    // virtualSessionIndex for the first virtual is 1
+    expect(primer.virtualSessionIndex).toBe(1);
+    // priorTopics should include the distinctive topic from run 1
+    expect(primer.priorTopics).toBeDefined();
+    const topicTitles = primer.priorTopics.map((t: { title: string }) => t.title);
+    expect(topicTitles).toContain("Run 1 Distinctive Topic");
   });
 });
 
