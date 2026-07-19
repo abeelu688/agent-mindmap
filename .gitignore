@@ -13,6 +13,9 @@ shared/dist/
 cli/media/
 *tsconfig.tsbuildinfo
 
+# CLI mind-map dump output (session/project dump default target)
+/agent-mindmap-export/
+
 # packaging
 *.vsix
 
