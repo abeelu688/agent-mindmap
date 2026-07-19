@@ -1,11 +1,7 @@
-import * as fs from "fs";
-import * as path from "path";
 import * as vscode from "vscode";
-import { writeJsonAtomic } from "@agent-mindmap/core";
-import { resolveUiLocale, type UiLocale } from "./l10n/uiTranslate";
+import { writeMcpLocaleFile } from "@agent-mindmap/core";
+import { resolveUiLocale } from "./l10n/uiTranslate";
 import { getStoreDir } from "./paths";
-
-const LOCALE_FILENAME = "mcp-locale.json";
 
 /**
  * Write the active UI locale to `~/.agent-mindmap/mcp-locale.json` so the
@@ -17,17 +13,17 @@ const LOCALE_FILENAME = "mcp-locale.json";
  * (the MCP server falls back to English when the file is missing).
  */
 export async function syncMcpLocaleFile(): Promise<void> {
-  const locale: UiLocale = resolveUiLocale();
+  const locale = resolveUiLocale();
   const storeDir = getStoreDir();
-  try {
-    await fs.promises.mkdir(storeDir, { recursive: true });
-    await writeJsonAtomic(path.join(storeDir, LOCALE_FILENAME), { locale });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    void vscode.window.showWarningMessage(
-      `Agent Mind Map: failed to sync MCP locale file: ${detail}`
-    );
-  }
+  await writeMcpLocaleFile({
+    storeDir,
+    locale,
+    onError: (err) => {
+      void vscode.window.showWarningMessage(
+        `Agent Mind Map: failed to sync MCP locale file: ${err.message}`
+      );
+    },
+  });
 }
 
 /** Returns true when the configuration change affects MCP locale sync. */

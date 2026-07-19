@@ -158,6 +158,13 @@ export type AnalyzeSessionDeps = {
   showCliInstallGuide?: (hostId: string, opts: { modal: boolean }) => Promise<void>;
   /** Clear pending mind map for a session (optional). */
   clearPendingMindMapIfForSession?: (projectSlug: string, sessionId: string) => void;
+  /**
+   * Refresh MCP server's project index after a write (optional).
+   * Called when the session record is actually written to the store
+   * (not on cache-hit early returns) so the MCP server's in-memory
+   * index cache invalidates and subsequent searches see the new session.
+   */
+  refreshMcpIndex?: (projectSlug: string) => Promise<void>;
   signal?: AbortSignal;
 };
 
@@ -599,6 +606,13 @@ export async function analyzeSession(
             signal,
           })
         );
+      }
+
+      // Invalidate MCP server's in-memory index cache now that a new record
+      // is in the store. Bounded to the write branch (cache hits above return
+      // without writing, so they must not bump the revision either).
+      if (deps.refreshMcpIndex) {
+        backgroundWork.push(deps.refreshMcpIndex(ctx.projectSlug));
       }
     } catch (err) {
       deps.logger.error("Library write failed", err);

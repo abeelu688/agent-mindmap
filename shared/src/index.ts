@@ -6,7 +6,7 @@ export {
   resolveProjectSlug,
   findProjectSlugByPath,
 } from "./paths";
-export { STORE_LAYOUT, MCP_INDEX_SCHEMA_VERSION } from "./storeLayout";
+export { STORE_LAYOUT, MCP_INDEX_SCHEMA_VERSION, MCP_CONFIG_FILES } from "./storeLayout";
 export {
   renderConceptDetail,
   renderConceptTrieTopLevel,

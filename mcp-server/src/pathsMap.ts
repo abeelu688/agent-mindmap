@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { resolveStoreDir } from "@agent-mindmap/shared";
+import { resolveStoreDir, MCP_CONFIG_FILES } from "@agent-mindmap/shared";
 
 export type ProjectMode = "workspace" | "repo";
 
-const WORKSPACE_MAP_FILENAME = "workspace-paths.json";
-const REPO_MAP_FILENAME = "repo-paths.json";
-const MCP_MODE_FILENAME = "mcp-mode.json";
+const WORKSPACE_MAP_FILENAME = MCP_CONFIG_FILES.workspacePaths;
+const REPO_MAP_FILENAME = MCP_CONFIG_FILES.repoPaths;
+const MCP_MODE_FILENAME = MCP_CONFIG_FILES.mode;
 
 export type ResolvePathResult =
   | { kind: "ok"; absPath: string }

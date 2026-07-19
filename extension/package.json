@@ -70,6 +70,11 @@
         "category": "Agent Mind Map"
       },
       {
+        "command": "agent-mindmap.selectProjectMode",
+        "title": "Agent Mind Map: Select Project Mode (Workspace/Repo)",
+        "category": "Agent Mind Map"
+      },
+      {
         "command": "agent-mindmap.refreshRepoPaths",
         "title": "Agent Mind Map: Refresh Repo Paths",
         "category": "Agent Mind Map"

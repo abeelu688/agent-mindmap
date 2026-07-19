@@ -1,7 +1,6 @@
 /**
  * `agent-mindmap project` — project-level commands.
  */
-import * as os from "os";
 import * as path from "path";
 import { Command } from "commander";
 import {
@@ -27,6 +26,7 @@ import {
 } from "../ui/logger";
 import { DualSpinner } from "../ui/dualSpinner";
 import { buildCliHostAccess, buildCliAnalyzeProjectDeps } from "../adapters/analyzeDeps";
+import { syncMcpConfigFiles } from "../adapters/mcpConfigSync";
 import { resolveMediaDir } from "../mediaDir";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ export async function runProjectAnalyze(
   await config.load();
 
   // ── Gate: ensure LLM CLI is configured and available ───────────────────
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const host = await hostAccess.getActiveHost();
   const modelCheck = await ensureModelConfigured({
     configStore: config,
@@ -57,6 +57,11 @@ export async function runProjectAnalyze(
     }
     process.exit(1);
   }
+
+  // Refresh MCP paths map + locale so the MCP server can resolve this
+  // workspace's slug and localize tool examples after analysis writes new
+  // records (mirrors the extension's `writePathsMaps()` + `syncMcpLocaleFile()`).
+  await syncMcpConfigFiles(cwd, config);
 
   const controller = new AbortController();
   const signal = controller.signal;
@@ -154,7 +159,9 @@ export async function runProjectAnalyze(
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function runProjectStatus(cwd: string, storeDir: string | undefined) {
-  const hostAccess = buildCliHostAccess(cwd);
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const result = await listSessions({ hostAccess });
 
   if (!result) {
@@ -162,7 +169,7 @@ export async function runProjectStatus(cwd: string, storeDir: string | undefined
     return;
   }
 
-  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDirPath = config.storeDir;
   const { ensureStore, readRecord } = await import("@agent-mindmap/core");
   await ensureStore(storeDirPath);
 
@@ -263,7 +270,7 @@ export async function runProjectDump(
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const result = await listSessions({ hostAccess });
 
   if (!result) {
@@ -271,12 +278,11 @@ export async function runProjectDump(
     process.exit(1);
   }
 
-  // Optionally analyze first
   if (options.withAnalyze) {
     await runProjectAnalyze(cwd, storeDir, { force: false });
   }
 
-  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDirPath = config.storeDir;
   const { ensureStore } = await import("@agent-mindmap/core");
   await ensureStore(storeDirPath);
 

@@ -26,6 +26,7 @@ import { commandPickSession } from "./commands/pickSession";
 import { commandDownloadPackage } from "./commands/downloadPackage";
 import { commandSelectHost } from "./commands/selectHost";
 import { commandSelectModel } from "./commands/selectModel";
+import { commandSelectProjectMode } from "./commands/selectProjectMode";
 import { commandConfigureTeamService } from "./commands/configureTeamService";
 import { commandAnalyzeAndMergeCurrentProject } from "./commands/analyzeProject";
 import { commandInstallMcp } from "./commands/installMcp";
@@ -247,6 +248,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "agent-mindmap.selectModel",
       wrapCommand(() => commandSelectModel(context))
+    ),
+    vscode.commands.registerCommand(
+      "agent-mindmap.selectProjectMode",
+      wrapCommand(() => commandSelectProjectMode())
     ),
     vscode.commands.registerCommand(
       "agent-mindmap.refreshRepoPaths",

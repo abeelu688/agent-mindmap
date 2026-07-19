@@ -13,12 +13,34 @@ import {
   listRecords,
   type StoreAccess,
 } from "@agent-mindmap/core";
+import { bootstrapStore, type SqliteStore } from "@agent-mindmap/shared";
 import type {
   SessionRecord,
   MergeRecord,
   OntologyIndex,
   OntologyRecord,
 } from "@agent-mindmap/shared";
+
+// ────────────────────────────────────────────────────────────────────────────
+// SQLite store accessor (shared with MCP server)
+// ────────────────────────────────────────────────────────────────────────────
+
+const sqliteCache = new Map<string, SqliteStore>();
+
+/**
+ * Open (or reuse) the SQLite store at `storeDir`. The MCP server uses the
+ * same `bootstrapStore()` path, so revision bumps and project metadata
+ * written here are visible to the MCP server's index cache.
+ */
+async function getSqliteStore(storeDir: string): Promise<SqliteStore> {
+  let cached = sqliteCache.get(storeDir);
+  if (!cached) {
+    const result = await bootstrapStore(storeDir);
+    cached = result.store as SqliteStore;
+    sqliteCache.set(storeDir, cached);
+  }
+  return cached;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // File-based store for CLI (no SQLite)
@@ -151,26 +173,36 @@ class CliStore {
     return [];
   }
 
+  /**
+   * Delegate to the SQLite store so the MCP server (which uses SQLite) sees
+   * the revision bump. The CLI's session records currently live as JSON
+   * files (see `writeRecord`), but the revision counter is shared via
+   * SQLite so the MCP server's index cache invalidates correctly.
+   */
   async bumpProjectRevision(
-    _projectSlug: string,
-    _recordCount: number,
-    _opts?: { lastAnalyzedAt?: number; projectPath?: string }
-  ): Promise<void> {
-    // No-op for CLI
+    projectSlug: string,
+    recordCount: number,
+    opts?: { lastAnalyzedAt?: number; projectPath?: string }
+  ): Promise<import("@agent-mindmap/shared").McpIndexFile> {
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.bumpProjectRevision(projectSlug, recordCount, opts);
   }
 
   // ── Missing Store methods (stubs) ────────────────────────────────────────
 
   async listProjectSummaries(): Promise<import("@agent-mindmap/shared").ProjectSummary[]> {
-    return [];
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.listProjectSummaries();
   }
 
-  async getProjectRevision(_projectSlug: string): Promise<number> {
-    return 0;
+  async getProjectRevision(projectSlug: string): Promise<number> {
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.getProjectRevision(projectSlug);
   }
 
-  async getProjectRecordCount(_projectSlug: string): Promise<number | undefined> {
-    return undefined;
+  async getProjectRecordCount(projectSlug: string): Promise<number | undefined> {
+    const sqlite = await getSqliteStore(this.storeDir);
+    return sqlite.getProjectRecordCount(projectSlug);
   }
 
   async deleteProjectRecords(_projectSlug: string): Promise<void> {

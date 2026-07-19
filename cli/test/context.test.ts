@@ -7,6 +7,7 @@ const capturedLogs: string[] = [];
 
 const mocks = vi.hoisted(() => ({
   syncAiContext: vi.fn(),
+  syncMcpConfigFiles: vi.fn(),
   buildCliHostAccess: vi.fn(),
   buildCliStoreAccess: vi.fn(),
   configLoad: vi.fn(),
@@ -14,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@agent-mindmap/core", () => ({
   syncAiContext: mocks.syncAiContext,
+}));
+
+vi.mock("../../cli/src/adapters/mcpConfigSync", () => ({
+  syncMcpConfigFiles: mocks.syncMcpConfigFiles,
 }));
 
 vi.mock("../../cli/src/config/configStore", () => ({
@@ -70,6 +75,7 @@ describe("context sync", () => {
     capturedLogs.length = 0;
     vi.clearAllMocks();
     mocks.configLoad.mockResolvedValue(undefined);
+    mocks.syncMcpConfigFiles.mockResolvedValue(undefined);
     mocks.buildCliHostAccess.mockReturnValue({
       getActiveHost: vi.fn(),
       getWorkspacePath: vi.fn().mockReturnValue("/home/user/project"),

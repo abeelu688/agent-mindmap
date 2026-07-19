@@ -3,7 +3,6 @@
  */
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as os from "os";
 import { Command } from "commander";
 import {
   cursorMcpConfigPath,
@@ -14,6 +13,7 @@ import {
 import { CliConfigStore } from "../config/configStore";
 import { log, logSuccess, logWarn, isJsonMode, printJson } from "../ui/logger";
 import { buildCliPrompter } from "../ui/prompter";
+import { syncMcpConfigFiles } from "../adapters/mcpConfigSync";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -53,7 +53,7 @@ export async function runMcpInstall(
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDirPath = config.storeDir;
   const serverEntry = resolveMcpServerEntry();
   const workspaceRoot = cwd;
 
@@ -239,6 +239,31 @@ export async function runMcpStatus(cwd: string, storeDir: string | undefined) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// mcp refresh-paths
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Rewrite `mcp-mode.json`, `workspace-paths.json`, `repo-paths.json`, and
+ * `mcp-locale.json` under the store dir so the stdio MCP server can resolve
+ * this workspace's slug and localize tool examples. Mirrors the extension's
+ * `writePathsMaps()` + `syncMcpLocaleFile()` triggered on activate / config
+ * change / analyze.
+ */
+export async function runMcpRefreshPaths(cwd: string, storeDir: string | undefined) {
+  const config = new CliConfigStore({ cwd, storeDir });
+  await config.load();
+  await syncMcpConfigFiles(cwd, config);
+
+  const storeDirPath = config.storeDir;
+  if (isJsonMode()) {
+    printJson({ storeDir: storeDirPath, cwd });
+    return;
+  }
+
+  logSuccess(`MCP paths map synced to ${storeDirPath}`);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Command registration
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -280,4 +305,15 @@ export const mcpCommand = new Command("mcp")
         opts.storeDir as string | undefined
       );
     })
+  )
+  .addCommand(
+    new Command("refresh-paths")
+      .description("Rewrite MCP paths map + locale file under the store dir")
+      .action(async () => {
+        const opts = mcpCommand.optsWithGlobals();
+        await runMcpRefreshPaths(
+          (opts.cwd as string) ?? process.cwd(),
+          opts.storeDir as string | undefined
+        );
+      })
   );

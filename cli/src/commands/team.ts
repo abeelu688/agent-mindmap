@@ -3,7 +3,6 @@
  */
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as os from "os";
 import { Command } from "commander";
 import { CliConfigStore, userConfigDir } from "../config/configStore";
 import {
@@ -176,7 +175,7 @@ export async function runTeamPush(cwd: string, storeDir: string | undefined) {
     const { RemoteStore } = await import("@agent-mindmap/shared");
     const { buildCliStoreAccess } = await import("../adapters/cliStore");
 
-    const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+    const storeDirPath = config.storeDir;
     const remoteStore = new RemoteStore(serverUrl, token);
     const localStoreAccess = buildCliStoreAccess(storeDirPath);
     const localStore = await localStoreAccess.getStore();

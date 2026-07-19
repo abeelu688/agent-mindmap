@@ -12,6 +12,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import { resolveStoreDir } from "@agent-mindmap/shared";
 import type { ConfigStore } from "@agent-mindmap/core";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ export class CliConfigStore implements ConfigStore {
 
   /** Get the resolved store directory. */
   get storeDir(): string {
-    return this._storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+    return this._storeDir ?? resolveStoreDir();
   }
 
   /** Get the user config path. */

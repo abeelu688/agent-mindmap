@@ -1,5 +1,5 @@
 /**
- * `agent-mindmap doctor` — diagnostics check.
+ * `agent-mindmap doctor` - diagnostics check.
  */
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -11,8 +11,10 @@ import {
   type AgentHostId,
   CORE_PACKAGE_VERSION,
 } from "@agent-mindmap/core";
+import { resolveStoreDir } from "@agent-mindmap/shared";
 import { CliConfigStore } from "../config/configStore";
 import { log, logSuccess, logError, logWarn, isJsonMode, printJson } from "../ui/logger";
+import { resolveWorkspaceSlug, type ProjectMode } from "../adapters/cliSlugResolver";
 
 function getCursorProjectsRoot(): string {
   return path.join(os.homedir(), ".cursor");
@@ -31,6 +33,7 @@ type DoctorResult = {
   configPath: string;
   configExists: boolean;
   cwd: string;
+  projectMode: ProjectMode;
   workspaceSlug: string | null;
 };
 
@@ -40,7 +43,7 @@ async function runDoctor(cwd: string, storeDirOverride?: string): Promise<Doctor
   const pkgPath = pathModule.join(__dirname, "..", "..", "package.json");
   const pkg = JSON.parse(fsModule.readFileSync(pkgPath, "utf-8")) as { version: string };
 
-  const storeDir = storeDirOverride ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDir = storeDirOverride ?? resolveStoreDir();
   let storeExists = false;
   try {
     await fs.access(storeDir);
@@ -100,35 +103,45 @@ async function runDoctor(cwd: string, storeDirOverride?: string): Promise<Doctor
     configExists = false;
   }
 
+  // Determine active host for slug resolution
   const activeHostId = config.get<string>("host") ?? "auto";
-  let workspaceSlug: string | null = null;
+  let activeHost = cursorHost;
   if (activeHostId === "cursor") {
-    workspaceSlug = cursorHost.encodeWorkspacePath(cwd);
+    activeHost = cursorHost;
   } else if (activeHostId === "claude-code") {
-    workspaceSlug = claudeHost.encodeWorkspacePath(cwd);
+    activeHost = claudeHost;
   } else {
     // Auto-detect
     const cursorDir = cursorHost.getSessionsScanDir(cwd);
+    let cursorExists = false;
     if (cursorDir) {
       try {
         await fs.access(cursorDir);
-        workspaceSlug = cursorHost.encodeWorkspacePath(cwd);
+        cursorExists = true;
       } catch {
-        // Try claude
+        /* not found */
       }
     }
-    if (!workspaceSlug) {
-      const claudeDir = claudeHost.getSessionsScanDir(cwd);
-      if (claudeDir) {
-        try {
-          await fs.access(claudeDir);
-          workspaceSlug = claudeHost.encodeWorkspacePath(cwd);
-        } catch {
-          // No hosts detected
-        }
+    const claudeDir = claudeHost.getSessionsScanDir(cwd);
+    let claudeExists = false;
+    if (claudeDir) {
+      try {
+        await fs.access(claudeDir);
+        claudeExists = true;
+      } catch {
+        /* not found */
       }
     }
+    if (cursorExists && !claudeExists) activeHost = cursorHost;
+    else if (claudeExists && !cursorExists) activeHost = claudeHost;
   }
+
+  const projectMode = (
+    config.get<string>("project.mode") === "repo" ? "repo" : "workspace"
+  ) as ProjectMode;
+  // resolveWorkspaceSlug handles both modes; in repo mode it falls back to
+  // workspace slug if git/origin checks fail.
+  const workspaceSlug = await resolveWorkspaceSlug(cwd, config, activeHost);
 
   return {
     cliVersion: pkg.version,
@@ -139,6 +152,7 @@ async function runDoctor(cwd: string, storeDirOverride?: string): Promise<Doctor
     configPath,
     configExists,
     cwd,
+    projectMode,
     workspaceSlug,
   };
 }
@@ -192,6 +206,7 @@ export const doctorCommand = new Command("doctor")
     log("");
     log("Workspace:");
     log(`  CWD: ${result.cwd}`);
+    log(`  Project mode: ${result.projectMode}`);
     log(`  Slug: ${result.workspaceSlug ?? "(not resolved)"}`);
 
     // Exit non-zero if no hosts have transcripts

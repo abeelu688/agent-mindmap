@@ -25,6 +25,15 @@ vi.mock("../extension/src/host/slugDerivation", () => ({
   normalizeRepoUriToSlug: (uri: string) => uri,
 }));
 
+// `writeMcpConfigFiles` (in core) imports `checkRepoPrerequisites` +
+// `normalizeRepoUriToSlug` from `core/src/host/repoSlug`. Mock at the source
+// path so the core writer uses our test doubles instead of running real
+// `git config --get remote.origin.url` subprocesses.
+vi.mock("../core/src/host/repoSlug", () => ({
+  checkRepoPrerequisites: prereqMock,
+  normalizeRepoUriToSlug: (uri: string) => uri,
+}));
+
 // getStoreDir reads from env AGENT_MINDMAP_STORE_DIR, so we don't mock paths.
 
 // vi.mock calls above are hoisted; this top-level await import picks up the

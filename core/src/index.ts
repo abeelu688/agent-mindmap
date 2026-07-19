@@ -74,6 +74,11 @@ export type { AgentHost, AgentHostId, HostSetting } from "./host/types";
 export { encodeClaudeProjectPath, decodeClaudeProjectPath } from "./host/claudePath";
 export { createCursorHost } from "./host/cursorHost";
 export { createClaudeHost } from "./host/claudeHost";
+export {
+  normalizeRepoUriToSlug,
+  checkRepoPrerequisites,
+  type RepoPrereqResult,
+} from "./host/repoSlug";
 
 // LLM module (P1.4) — re-exported via a dedicated barrel under `core/src/llm/`.
 export * from "./llm/barrel";
@@ -265,6 +270,13 @@ export {
 
 // MCP config core (P1.9):
 export * from "./mcp/mcpConfigCore";
+export {
+  writeMcpConfigFiles,
+  writeMcpLocaleFile,
+  type ProjectMode,
+  type WriteMcpConfigFilesOpts,
+  type WriteMcpLocaleFileOpts,
+} from "./mcp/mcpConfigFiles";
 
 // Code-ref queue (P1.10):
 export {

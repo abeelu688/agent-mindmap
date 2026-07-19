@@ -1,14 +1,13 @@
 /**
  * `agent-mindmap context` — AI context sync commands.
  */
-import * as path from "path";
-import * as os from "os";
 import { Command } from "commander";
 import { syncAiContext } from "@agent-mindmap/core";
 import { CliConfigStore } from "../config/configStore";
 import { log, logSuccess, logError, isJsonMode, printJson, createSpinner } from "../ui/logger";
 import { buildCliHostAccess } from "../adapters/analyzeDeps";
 import { buildCliLogger } from "../ui/logger";
+import { syncMcpConfigFiles } from "../adapters/mcpConfigSync";
 
 // ────────────────────────────────────────────────────────────────────────────
 // context sync
@@ -18,20 +17,33 @@ export async function runContextSync(cwd: string, storeDir: string | undefined) 
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
+
+  // Refresh MCP paths map + locale so the MCP server can resolve this
+  // workspace's slug and localize tool examples (mirrors the extension's
+  // `writePathsMaps()` + `syncMcpLocaleFile()`).
+  await syncMcpConfigFiles(cwd, config);
 
   // Build MCP refresher adapter
   const mcpRefresher = {
     async refreshMcpIndex(projectSlug: string) {
-      // CLI does not have MCP index support (that's extension-only).
-      // Report the project slug + record count instead.
-      const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+      // Delegate to the SQLite-backed store so the MCP server (which uses
+      // the same SQLite db) sees the revision bump and invalidates its
+      // in-memory index cache.
+      const storeDirPath = config.storeDir;
       const { buildCliStoreAccess } = await import("../adapters/cliStore");
       const storeAccess = buildCliStoreAccess(storeDirPath);
       const store = await storeAccess.getStore();
       const records = await store.listRecordsForProject(projectSlug);
 
       if (records.length === 0) return undefined;
+
+      const lastAnalyzedAt = Math.max(...records.map((r) => r.meta.analyzedAt));
+      const projectPath = records.find((r) => r.meta.projectPath)?.meta.projectPath;
+      await store.bumpProjectRevision(projectSlug, records.length, {
+        lastAnalyzedAt,
+        projectPath,
+      });
 
       return { projectSlug, recordCount: records.length };
     },

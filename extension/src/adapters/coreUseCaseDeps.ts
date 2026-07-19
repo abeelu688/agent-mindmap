@@ -191,6 +191,7 @@ export function buildAnalyzeSessionDeps(
         clearPendingMindMapIfForSession(projectSlug, sessionId);
       });
     },
+    refreshMcpIndex: buildRefreshMcpIndex(),
     signal,
   };
 }

@@ -4,6 +4,18 @@
 import { Command } from "commander";
 import { CliConfigStore } from "../config/configStore";
 import { log, logSuccess, isJsonMode, printJson } from "../ui/logger";
+import { syncMcpConfigFiles } from "../adapters/mcpConfigSync";
+
+// Config keys that affect MCP server resolution / localization. When these
+// change, the MCP paths map + locale file must be rewritten so the stdio MCP
+// server picks up the new value on its next request.
+const MCP_RELEVANT_KEYS = new Set([
+  "project.mode",
+  "host",
+  "ui.locale",
+  "projectsDir",
+  "claudeProjectsDir",
+]);
 
 export const configCommand = new Command("config")
   .description("Manage CLI configuration")
@@ -41,6 +53,12 @@ export const configCommand = new Command("config")
         }
         await config.set(key, value);
         logSuccess(`Set ${key} = ${JSON.stringify(value)}`);
+
+        // If the key affects MCP server resolution / localization, rewrite
+        // the MCP config files so the next MCP request uses the new value.
+        if (MCP_RELEVANT_KEYS.has(key)) {
+          await syncMcpConfigFiles(opts.cwd as string, config);
+        }
       })
   )
   .addCommand(

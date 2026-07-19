@@ -1,7 +1,6 @@
 /**
  * `agent-mindmap session` — session-related commands.
  */
-import * as os from "os";
 import * as path from "path";
 import { Command } from "commander";
 import {
@@ -38,7 +37,7 @@ export async function runSessionList(
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
 
   const result: ListSessionsResult | undefined = await listSessions({ hostAccess });
 
@@ -85,7 +84,7 @@ export async function runSessionShow(cwd: string, storeDir: string | undefined, 
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const result = await listSessions({ hostAccess });
 
   if (!result) {
@@ -100,7 +99,7 @@ export async function runSessionShow(cwd: string, storeDir: string | undefined, 
   }
 
   // Check library for existing record
-  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDirPath = config.storeDir;
   let record: import("@agent-mindmap/shared").SessionRecord | undefined;
   try {
     const { readRecord } = await import("@agent-mindmap/core");
@@ -156,7 +155,7 @@ export async function runSessionAnalyze(
   await config.load();
 
   // ── Gate: ensure LLM CLI is configured and available ───────────────────
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const host = await hostAccess.getActiveHost();
   const modelCheck = await ensureModelConfigured({
     configStore: config,
@@ -280,7 +279,7 @@ export async function runSessionDump(
   const config = new CliConfigStore({ cwd, storeDir });
   await config.load();
 
-  const hostAccess = buildCliHostAccess(cwd);
+  const hostAccess = await buildCliHostAccess(cwd, config);
   const result = await listSessions({ hostAccess });
 
   if (!result) {
@@ -303,7 +302,7 @@ export async function runSessionDump(
     });
   }
 
-  const storeDirPath = storeDir ?? path.join(os.homedir(), ".agent-mindmap-store");
+  const storeDirPath = config.storeDir;
   const { readRecord, ensureStore } = await import("@agent-mindmap/core");
   await ensureStore(storeDirPath);
 

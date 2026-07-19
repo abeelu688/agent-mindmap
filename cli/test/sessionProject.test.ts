@@ -54,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   readMergeSnapshot: vi.fn(),
   getCodeRefQueueDepth: vi.fn(),
   ensureModelConfigured: vi.fn(),
+  syncMcpConfigFiles: vi.fn(),
   buildCliHostAccess: vi.fn(),
   buildCliAnalyzeSessionDepsAsync: vi.fn(),
   buildCliAnalyzeProjectDeps: vi.fn(),
@@ -69,6 +70,10 @@ vi.mock("@agent-mindmap/core", () => ({
   readMergeSnapshot: mocks.readMergeSnapshot,
   getCodeRefQueueDepth: mocks.getCodeRefQueueDepth,
   ensureModelConfigured: mocks.ensureModelConfigured,
+}));
+
+vi.mock("../../cli/src/adapters/mcpConfigSync", () => ({
+  syncMcpConfigFiles: mocks.syncMcpConfigFiles,
 }));
 
 vi.mock("../../cli/src/adapters/analyzeDeps", () => ({
@@ -211,6 +216,7 @@ describe("session analyze (P3.3)", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
     mocks.listSessions.mockResolvedValue(mockListSessionsResult);
+    mocks.syncMcpConfigFiles.mockResolvedValue(undefined);
     mocks.buildCliHostAccess.mockReturnValue({
       getActiveHost: vi.fn().mockResolvedValue({ defaultLlmProvider: "cursor-cli" }),
       getWorkspacePath: vi.fn().mockReturnValue("/home/user/project"),
