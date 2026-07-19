@@ -117,7 +117,7 @@ export async function runSessionShow(cwd: string, storeDir: string | undefined, 
     mtimeMs: session.mtimeMs,
     analyzed: !!record,
     analyzedAt: record?.meta.analyzedAt,
-    outlineTopics: record?.outline?.topics?.length ?? 0,
+    outlineTopics: record?.outline?.outline?.length ?? 0,
     llmProvider: record?.meta.llm?.provider,
     llmModel: record?.meta.llm?.model,
   };
@@ -180,8 +180,9 @@ export async function runSessionAnalyze(
 
   let session = result.sessions[0]!;
   if (!options.latest && options.sessionId) {
+    const sessionIdPrefix = options.sessionId;
     const found = result.sessions.find(
-      (s) => s.id === options.sessionId || s.id.startsWith(options.sessionId)
+      (s) => s.id === sessionIdPrefix || s.id.startsWith(sessionIdPrefix)
     );
     if (!found) {
       logError(`Session not found: ${options.sessionId}`);

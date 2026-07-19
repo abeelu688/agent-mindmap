@@ -86,21 +86,18 @@ export async function runMcpInstall(
       },
     ];
 
-    const picked = await prompter.showQuickPick(
-      items as import("@agent-mindmap/core").QuickPickItem[],
-      {
-        canPickMany: true,
-        title: "Select which AI products to configure",
-      }
-    );
+    const picked = await prompter.showQuickPick(items, {
+      canPickMany: true,
+      title: "Select which AI products to configure",
+    });
 
     if (!picked || !Array.isArray(picked) || picked.length === 0) {
       logWarn("No targets selected.");
       return;
     }
 
-    installCursor = (picked as { target: string }[]).some((p) => p.target === "cursor");
-    installClaude = (picked as { target: string }[]).some((p) => p.target === "claude");
+    installCursor = picked.some((p) => p.target === "cursor");
+    installClaude = picked.some((p) => p.target === "claude");
   }
 
   if (!installCursor && !installClaude) {

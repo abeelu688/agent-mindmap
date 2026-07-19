@@ -218,7 +218,7 @@ export async function runTeamPush(cwd: string, storeDir: string | undefined) {
         const sqliteStore = store as import("@agent-mindmap/shared").SqliteStore;
         for (const [slug, maxAt] of projectMaxAt) {
           const pendingKey = PENDING_PREFIX + slug;
-          const current = (await sqliteStore.readKvJson?.(pendingKey)) ?? 0;
+          const current = ((await sqliteStore.readKvJson<number>(pendingKey)) ?? 0) as number;
           if (maxAt > current) {
             await sqliteStore.writeKvJson?.(pendingKey, maxAt);
           }
