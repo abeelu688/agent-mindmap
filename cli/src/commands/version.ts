@@ -15,7 +15,12 @@ type VersionInfo = {
 function getVersionInfo(): VersionInfo {
   const fs = require("fs"); // eslint-disable-line @typescript-eslint/no-require-imports
   const path = require("path"); // eslint-disable-line @typescript-eslint/no-require-imports
-  const pkgPath = path.join(__dirname, "..", "..", "package.json");
+  // In the bundled layout (cli/dist/index.js or a global npm install) the
+  // package.json is one level up; in source (cli/src/commands) it is two.
+  let pkgPath = path.join(__dirname, "..", "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    pkgPath = path.join(__dirname, "..", "..", "package.json");
+  }
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as { version: string };
   return {
     cli: pkg.version,

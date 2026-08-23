@@ -40,7 +40,12 @@ type DoctorResult = {
 async function runDoctor(cwd: string, storeDirOverride?: string): Promise<DoctorResult> {
   const fsModule = require("fs"); // eslint-disable-line @typescript-eslint/no-require-imports
   const pathModule = require("path"); // eslint-disable-line @typescript-eslint/no-require-imports
-  const pkgPath = pathModule.join(__dirname, "..", "..", "package.json");
+  // In the bundled layout (cli/dist/index.js or a global npm install) the
+  // package.json is one level up; in source (cli/src/commands) it is two.
+  let pkgPath = pathModule.join(__dirname, "..", "package.json");
+  if (!fsModule.existsSync(pkgPath)) {
+    pkgPath = pathModule.join(__dirname, "..", "..", "package.json");
+  }
   const pkg = JSON.parse(fsModule.readFileSync(pkgPath, "utf-8")) as { version: string };
 
   const storeDir = storeDirOverride ?? resolveStoreDir();
