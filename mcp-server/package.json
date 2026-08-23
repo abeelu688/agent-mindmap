@@ -12,6 +12,7 @@
     "postinstall": "node scripts/patch-sqlite3-binding.js"
   },
   "dependencies": {
+    "@agent-mindmap/core": "file:../core",
     "@agent-mindmap/shared": "file:../shared",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@vscode/sqlite3": "^5.1.12-vscode",

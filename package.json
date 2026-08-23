@@ -27,7 +27,7 @@
     "typecheck:core": "npm run build --prefix shared && tsc --noEmit --project core/tsconfig.json",
     "typecheck:extension": "npm run build:core && tsc --noEmit --project extension/tsconfig.json",
     "typecheck:webview": "tsc --noEmit --project webview/tsconfig.json",
-    "typecheck:mcp": "npm run build --prefix shared && tsc --noEmit --project mcp-server/tsconfig.json",
+    "typecheck:mcp": "npm run build:core && tsc --noEmit --project mcp-server/tsconfig.json",
     "check:concept-nodes": "node scripts/check-hardcoded-concept-nodes.mjs",
     "check:l10n": "node scripts/check-l10n-keys.mjs",
     "checklist:l10n": "node scripts/generate-multilingual-checklist.mjs",

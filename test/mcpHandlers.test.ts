@@ -139,7 +139,12 @@ describe("resolveSlug", () => {
       await fs.writeFile(path.join(tmp, "mcp-mode.json"), JSON.stringify({ mode: "repo" }));
       await fs.writeFile(path.join(tmp, "repo-paths.json"), JSON.stringify({}));
       const result = await bootstrapStore(tmp);
-      const ctx = createMcpHandlerContext(result.store, tmp, createPathsResolver(tmp));
+      const ctx = createMcpHandlerContext(
+        result.store,
+        tmp,
+        createPathsResolver(tmp),
+        async () => undefined
+      );
       const slug = await resolveSlug(ctx, { projectPath: "/unknown/path" });
       expect(slug).toBeUndefined();
       await (result.store as { close?: () => Promise<void> }).close?.();
