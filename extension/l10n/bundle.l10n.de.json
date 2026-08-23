@@ -205,5 +205,12 @@
   "team.push.allPushed": "All sessions are already pushed.",
   "team.push.title": "Agent Mind Map: Pushing sessions to team service…",
   "team.push.done": "Pushed {0} session(s) to team service.",
-  "team.push.partialFail": "Some sessions failed to push. Re-run the command to retry remaining sessions. Error: {0}"
+  "team.push.partialFail": "Some sessions failed to push. Re-run the command to retry remaining sessions. Error: {0}",
+  "ui.selectProjectMode.placeholder": "Select project mode (current: {0})",
+  "ui.selectProjectMode.title": "Agent Mind Map: Select Project Mode",
+  "ui.selectProjectMode.confirm": "Switch to repo mode",
+  "ui.info.selectProjectMode.applied": "Agent Mind Map: project mode set to {0}.",
+  "ui.warning.selectProjectMode.noFolder": "Agent Mind Map: open a workspace folder before switching to repo mode.",
+  "ui.warning.selectProjectMode.prereqFailed": "Agent Mind Map: repo mode requires every workspace folder to be a git repo with origin at the repo root. Fix or stay in workspace mode.\n{0}",
+  "ui.warning.selectProjectMode.rekeyConfirm": "Switching to repo mode re-keys existing sessions to git origin slugs. This is one-way - you cannot revert to workspace mode for this store. Continue?"
 }
