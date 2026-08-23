@@ -271,6 +271,7 @@ export {
 
 // MCP config core (P1.9):
 export * from "./mcp/mcpConfigCore";
+export { writeJsonAtomic } from "./store/atomicWrite";
 export {
   writeMcpConfigFiles,
   writeMcpLocaleFile,

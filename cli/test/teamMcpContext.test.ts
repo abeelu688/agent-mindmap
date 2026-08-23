@@ -28,9 +28,10 @@ const mocks = vi.hoisted(() => ({
   buildCliLogger: vi.fn(),
   pushToTeam: vi.fn(),
   syncAiContext: vi.fn(),
-  cursorMcpConfigPath: vi.fn(),
-  claudeMcpConfigPath: vi.fn(),
+  resolveCursorMcpConfigPath: vi.fn(),
+  resolveClaudeMcpConfigPath: vi.fn(),
   mergeAgentMindmapIntoConfig: vi.fn(),
+  writeJsonAtomic: vi.fn(),
   RemoteStore: vi.fn(),
 }));
 
@@ -40,9 +41,10 @@ vi.mock("@agent-mindmap/core", () => ({
   ensureStore: mocks.ensureStore,
   pushToTeam: mocks.pushToTeam,
   syncAiContext: mocks.syncAiContext,
-  cursorMcpConfigPath: mocks.cursorMcpConfigPath,
-  claudeMcpConfigPath: mocks.claudeMcpConfigPath,
+  resolveCursorMcpConfigPath: mocks.resolveCursorMcpConfigPath,
+  resolveClaudeMcpConfigPath: mocks.resolveClaudeMcpConfigPath,
   mergeAgentMindmapIntoConfig: mocks.mergeAgentMindmapIntoConfig,
+  writeJsonAtomic: mocks.writeJsonAtomic,
 }));
 
 vi.mock("@agent-mindmap/shared", () => ({
@@ -133,8 +135,9 @@ describe("team status (P5.2)", () => {
 describe("mcp status (P5.5)", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
-    mocks.cursorMcpConfigPath.mockReturnValue("/project/.cursor/mcp.json");
-    mocks.claudeMcpConfigPath.mockReturnValue("/project/.mcp.json");
+    mocks.resolveCursorMcpConfigPath.mockReturnValue("/project/.cursor/mcp.json");
+    mocks.resolveClaudeMcpConfigPath.mockReturnValue("/project/.mcp.json");
+    mocks.writeJsonAtomic.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
