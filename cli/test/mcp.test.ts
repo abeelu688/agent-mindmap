@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const capturedLogs: string[] = [];
 
 const mocks = vi.hoisted(() => ({
-  cursorMcpConfigPath: vi.fn(),
-  claudeMcpConfigPath: vi.fn(),
+  resolveCursorMcpConfigPath: vi.fn(),
+  resolveClaudeMcpConfigPath: vi.fn(),
   mergeAgentMindmapIntoConfig: vi.fn(),
+  writeJsonAtomic: vi.fn(),
   fsReadFile: vi.fn(),
   fsWriteFile: vi.fn(),
   fsMkdir: vi.fn(),
@@ -26,9 +27,10 @@ vi.mock("fs/promises", () => ({
 }));
 
 vi.mock("@agent-mindmap/core", () => ({
-  cursorMcpConfigPath: mocks.cursorMcpConfigPath,
-  claudeMcpConfigPath: mocks.claudeMcpConfigPath,
+  resolveCursorMcpConfigPath: mocks.resolveCursorMcpConfigPath,
+  resolveClaudeMcpConfigPath: mocks.resolveClaudeMcpConfigPath,
   mergeAgentMindmapIntoConfig: mocks.mergeAgentMindmapIntoConfig,
+  writeJsonAtomic: mocks.writeJsonAtomic,
 }));
 
 vi.mock("../../cli/src/config/configStore", () => ({
@@ -74,15 +76,29 @@ vi.mock("../../cli/src/ui/logger", () => ({
 
 import { runMcpInstall, runMcpUninstall, runMcpStatus } from "../../cli/src/commands/mcp";
 
+const CURSOR_PROJECT = "/tmp/cursor/mcp.json";
+const CURSOR_USER = "/tmp/home/.cursor/mcp.json";
+const CLAUDE_PROJECT = "/tmp/claude/mcp.json";
+const CLAUDE_USER = "/tmp/home/.claude.json";
+
+function mockResolvePaths(): void {
+  mocks.resolveCursorMcpConfigPath.mockImplementation((scope: string) =>
+    scope === "user" ? CURSOR_USER : CURSOR_PROJECT
+  );
+  mocks.resolveClaudeMcpConfigPath.mockImplementation((scope: string) =>
+    scope === "user" ? CLAUDE_USER : CLAUDE_PROJECT
+  );
+}
+
 describe("mcp install", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
     vi.clearAllMocks();
-    mocks.cursorMcpConfigPath.mockReturnValue("/tmp/cursor/mcp.json");
-    mocks.claudeMcpConfigPath.mockReturnValue("/tmp/claude/mcp.json");
+    mockResolvePaths();
     mocks.mergeAgentMindmapIntoConfig.mockReturnValue({
       mcpServers: { "agent-mindmap": { command: "node", args: ["/tmp/server.js"] } },
     });
+    mocks.writeJsonAtomic.mockResolvedValue(undefined);
     mocks.fsReadFile.mockRejectedValue(new Error("ENOENT"));
     mocks.fsWriteFile.mockResolvedValue(undefined);
     mocks.fsMkdir.mockResolvedValue(undefined);
@@ -91,23 +107,24 @@ describe("mcp install", () => {
     vi.restoreAllMocks();
   });
 
-  it("installs Cursor config when --targets cursor", async () => {
+  it("installs Cursor config when --targets cursor (project scope)", async () => {
     await runMcpInstall("/home/user/project", "/tmp/store", { targets: "cursor" });
 
-    expect(mocks.cursorMcpConfigPath).toHaveBeenCalledWith("/home/user/project");
+    expect(mocks.resolveCursorMcpConfigPath).toHaveBeenCalledWith("project", "/home/user/project");
     expect(mocks.fsWriteFile).toHaveBeenCalledWith(
-      "/tmp/cursor/mcp.json",
+      CURSOR_PROJECT,
       expect.stringContaining("agent-mindmap")
     );
+    expect(mocks.writeJsonAtomic).not.toHaveBeenCalled();
     expect(capturedLogs.some((l) => l.includes("Cursor MCP config updated"))).toBe(true);
   });
 
-  it("installs Claude Code config when --targets claude-code", async () => {
+  it("installs Claude Code config when --targets claude-code (project scope)", async () => {
     await runMcpInstall("/home/user/project", "/tmp/store", { targets: "claude-code" });
 
-    expect(mocks.claudeMcpConfigPath).toHaveBeenCalledWith("/home/user/project");
+    expect(mocks.resolveClaudeMcpConfigPath).toHaveBeenCalledWith("project", "/home/user/project");
     expect(mocks.fsWriteFile).toHaveBeenCalledWith(
-      "/tmp/claude/mcp.json",
+      CLAUDE_PROJECT,
       expect.stringContaining("agent-mindmap")
     );
     expect(capturedLogs.some((l) => l.includes("Claude Code MCP config updated"))).toBe(true);
@@ -119,6 +136,32 @@ describe("mcp install", () => {
     });
 
     expect(mocks.fsWriteFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes global config via atomic write when --scope user", async () => {
+    await runMcpInstall("/home/user/project", "/tmp/store", {
+      targets: "claude-code",
+      scope: "user",
+    });
+
+    expect(mocks.resolveClaudeMcpConfigPath).toHaveBeenCalledWith("user", "/home/user/project");
+    expect(mocks.writeJsonAtomic).toHaveBeenCalledWith(
+      CLAUDE_USER,
+      expect.objectContaining({ mcpServers: expect.any(Object) })
+    );
+    expect(mocks.fsWriteFile).not.toHaveBeenCalled();
+    expect(capturedLogs.some((l) => l.includes("Global config written"))).toBe(true);
+  });
+
+  it("warns on invalid --scope", async () => {
+    await runMcpInstall("/home/user/project", "/tmp/store", {
+      targets: "cursor",
+      scope: "bogus",
+    });
+
+    expect(mocks.fsWriteFile).not.toHaveBeenCalled();
+    expect(mocks.writeJsonAtomic).not.toHaveBeenCalled();
+    expect(capturedLogs.some((l) => l.includes("Invalid --scope"))).toBe(true);
   });
 
   it("warns when no targets selected via --targets flag", async () => {
@@ -154,8 +197,7 @@ describe("mcp uninstall", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
     vi.clearAllMocks();
-    mocks.cursorMcpConfigPath.mockReturnValue("/tmp/cursor/mcp.json");
-    mocks.claudeMcpConfigPath.mockReturnValue("/tmp/claude/mcp.json");
+    mockResolvePaths();
     mocks.fsReadFile.mockResolvedValue(
       JSON.stringify({
         mcpServers: {
@@ -166,12 +208,13 @@ describe("mcp uninstall", () => {
     );
     mocks.fsWriteFile.mockResolvedValue(undefined);
     mocks.fsMkdir.mockResolvedValue(undefined);
+    mocks.writeJsonAtomic.mockResolvedValue(undefined);
   });
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("removes agent-mindmap from Cursor config when present", async () => {
+  it("removes agent-mindmap from Cursor config when present (project)", async () => {
     mocks.fsReadFile.mockResolvedValue(
       JSON.stringify({
         mcpServers: {
@@ -184,10 +227,33 @@ describe("mcp uninstall", () => {
     await runMcpUninstall("/home/user/project", undefined, { targets: "cursor" });
 
     expect(mocks.fsWriteFile).toHaveBeenCalledWith(
-      "/tmp/cursor/mcp.json",
+      CURSOR_PROJECT,
       expect.not.stringContaining("agent-mindmap")
     );
     expect(capturedLogs.some((l) => l.includes("Removed agent-mindmap from Cursor"))).toBe(true);
+  });
+
+  it("removes agent-mindmap from global Claude config when --scope user", async () => {
+    mocks.fsReadFile.mockResolvedValue(
+      JSON.stringify({
+        mcpServers: {
+          "agent-mindmap": { command: "node" },
+          "other-tool": { command: "other" },
+        },
+      })
+    );
+
+    await runMcpUninstall("/home/user/project", undefined, {
+      targets: "claude-code",
+      scope: "user",
+    });
+
+    expect(mocks.resolveClaudeMcpConfigPath).toHaveBeenCalledWith("user", "/home/user/project");
+    expect(mocks.writeJsonAtomic).toHaveBeenCalledWith(
+      CLAUDE_USER,
+      expect.objectContaining({ mcpServers: expect.any(Object) })
+    );
+    expect(mocks.fsWriteFile).not.toHaveBeenCalled();
   });
 
   it("warns when Cursor config has no agent-mindmap entry", async () => {
@@ -233,21 +299,20 @@ describe("mcp status", () => {
   beforeEach(() => {
     capturedLogs.length = 0;
     vi.clearAllMocks();
-    mocks.cursorMcpConfigPath.mockReturnValue("/tmp/cursor/mcp.json");
-    mocks.claudeMcpConfigPath.mockReturnValue("/tmp/claude/mcp.json");
+    mockResolvePaths();
   });
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("reports installed state when both configs have agent-mindmap", async () => {
+  it("reports installed state when configs have agent-mindmap", async () => {
     mocks.fsReadFile.mockResolvedValue(
       JSON.stringify({ mcpServers: { "agent-mindmap": { command: "node" } } })
     );
 
     await runMcpStatus("/home/user/project", undefined);
 
-    expect(capturedLogs.some((l) => l.includes("Cursor:"))).toBe(true);
+    expect(capturedLogs.some((l) => l.includes("Cursor (project)"))).toBe(true);
     expect(capturedLogs.some((l) => l.includes("✓ installed"))).toBe(true);
   });
 
