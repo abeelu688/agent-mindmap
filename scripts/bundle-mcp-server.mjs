@@ -32,6 +32,7 @@ const buildOptions = (outfile) => ({
   },
   external: ["@vscode/sqlite3"],
   alias: {
+    "@agent-mindmap/core": path.join(ROOT, "core", "src", "index.ts"),
     "@agent-mindmap/shared": path.join(ROOT, "shared", "src", "index.ts"),
   },
 });

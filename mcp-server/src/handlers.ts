@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { checkRepoPrerequisites, normalizeRepoUriToSlug } from "@agent-mindmap/core";
 import {
   buildConceptTermIndex,
   buildRecordTokenSets,
@@ -14,7 +15,7 @@ import {
   type Staleness,
   type Store,
 } from "@agent-mindmap/shared";
-import { readProjectMode } from "./pathsMap";
+import { readProjectMode, type ResolvePathResult } from "./pathsMap";
 
 export type McpHandlerContext = {
   store: Store;
@@ -32,18 +33,63 @@ export type McpHandlerContext = {
    * Optional — absent when paths-map resolution is not wired (pre-Q4).
    */
   pathsResolver?: {
-    resolvePath: (slug: string, relPath: string) => import("./pathsMap").ResolvePathResult;
+    resolvePath: (slug: string, relPath: string) => ResolvePathResult;
     resolveSlugFromPath: (folderPath: string) => string | undefined;
     resetCache: () => void;
   };
+  /**
+   * Best-effort repo-slug detector for repo mode when the paths map and store
+   * have no entry for a folder. Probes `git remote.origin.url` and normalizes
+   * it to a repo slug. Results are cached in-process (positive forever,
+   * negative with a TTL) so repeated tool calls don't re-shell out to git.
+   * Optional - absent when repo self-detection is not wired.
+   */
+  repoSlugResolver?: (folderPath: string) => Promise<string | undefined>;
 };
+
+/** TTL for negative cache entries (folder not a git repo / no origin). Lets a
+ *  user `git init` + add origin and recover without restarting the server. */
+const REPO_SLUG_NEG_TTL_MS = 60_000;
+
+/** Build a process-cached repo-slug resolver backed by `git` probing. Positive
+ *  results (a slug was derived) are cached for the process lifetime because
+ *  git remotes don't change under us; negative results expire after
+ *  {@link REPO_SLUG_NEG_TTL_MS}. */
+function createDefaultRepoSlugResolver(): McpHandlerContext["repoSlugResolver"] {
+  const cache = new Map<string, { slug?: string; ts: number }>();
+  return async (folderPath) => {
+    const key = path.resolve(folderPath);
+    const now = Date.now();
+    const hit = cache.get(key);
+    if (hit) {
+      if (hit.slug !== undefined) return hit.slug;
+      if (now - hit.ts < REPO_SLUG_NEG_TTL_MS) return undefined;
+    }
+    let slug: string | undefined;
+    try {
+      const res = await checkRepoPrerequisites(key);
+      if (res.ok) slug = normalizeRepoUriToSlug(res.uri);
+    } catch {
+      // git unavailable / unexpected error -> treat as miss (negative cache)
+    }
+    cache.set(key, { slug, ts: now });
+    return slug;
+  };
+}
 
 export function createMcpHandlerContext(
   store: Store,
   storeDir?: string,
-  pathsResolver?: McpHandlerContext["pathsResolver"]
+  pathsResolver?: McpHandlerContext["pathsResolver"],
+  repoSlugResolver?: McpHandlerContext["repoSlugResolver"]
 ): McpHandlerContext {
-  return { store, storeDir, indexCache: new McpSearchIndexCache(), pathsResolver };
+  return {
+    store,
+    storeDir,
+    indexCache: new McpSearchIndexCache(),
+    pathsResolver,
+    repoSlugResolver: repoSlugResolver ?? createDefaultRepoSlugResolver(),
+  };
 }
 
 async function getLatestSourceMtime(ctx: McpHandlerContext, projectSlug: string): Promise<number> {
@@ -134,7 +180,11 @@ export async function resolveSlug(
   if (mode === "workspace") {
     return workspaceToSlug(projectPath);
   }
-  return undefined;
+  // Repo mode: paths map and store both missed. Probe git origin to derive
+  // the repo slug on demand so users don't have to run `mcp refresh-paths`
+  // for every new clone. Cached in-process by the resolver.
+  const detected = await ctx.repoSlugResolver?.(projectPath);
+  return detected;
 }
 
 export type RunProjectSearchResult =
